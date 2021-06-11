@@ -2,6 +2,10 @@
 
 This is a reference implementation of a stochastic, recurrent super-resolution GAN for downscaling time-evolving fields, intended for use in the weather and climate sciences domain. This code supports a paper to be submitted to IEEE Transactions in Geoscience and Remote Sensing.
 
+## Important note
+
+The above mentioned work serves as a starting point of this project where the focus is to downscale 2m temperature from ERA5-reanalysis data to IFS HRES (short-term) forecasts in the schope of WP 5 in MAELSTROM.
+
 ## Obtaining the data
 
 The radar precipitation dataset (MCH-RZC in the paper) can be downloaded at https://doi.org/10.7910/DVN/ZDWWMG by following the instructions there. The GOES cloud optical thickness dataset (GOES-COT) can be found [in this data repository](https://doi.org/10.5281/zenodo.3835849) as "goes-samples-2019-128x128.nc".
@@ -35,3 +39,4 @@ python main.py train --application=<application> --data_file=<data_file> --save_
 where `<application>` is either `mchrzc` (for the MCH-RZC dataset) or `goescod` (for the GOES-COT dataset), `<data_file>` is the training data file appropriate for the application, `<save_weights_root>` is the directory and file name root to which you want to save all model weights, and `<log_path>` is a path to a log directory where the logs and generator weights over time will be saved. 
 
 The above command will run the training loop for 400000 generator training sequences and save the weights after each 3200 sequences.
+
