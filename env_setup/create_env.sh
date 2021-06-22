@@ -39,6 +39,7 @@ if [[ -z "$1" ]]; then
 fi
 
 # set some variables
+SCR_NAME="%create_env:"
 HOST_NAME=`hostname`
 ENV_NAME=$1
 ENV_SETUP_DIR=`pwd`
@@ -50,8 +51,9 @@ ENV_DIR=${ENV_DIR_BASE}/${ENV_NAME}
 ## perform sanity checks
 # Check if singularity is running
 if [[ -z "${SINGULARITY_NAME}" ]]; then
-  echo "ERROR: create_env.sh must be executed in a running singularity on Juwels in conjuction with container-usage."
-  echo "Thus, execute 'singularity shell [my_docker_image]' first!"
+  echo "${SCR_NAME} ERROR: create_env.sh must be executed in a running singularity on Juwels
+        in conjuction with container-usage."
+  echo "${SCR_NAME} Thus, execute 'singularity shell [my_docker_image]' first!"
   return
 fi
 
@@ -60,12 +62,12 @@ fi
 # * check if virtual env has already been set up
 
 if [[ "${EXE_DIR}" != "env_setup"  ]]; then
-  echo "ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
+  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
   return
 fi
 
 if [[ -d ${ENV_DIR} ]]; then
-  echo "Virtual environment has already been set up under ${ENV_DIR} and is ready to use."
+  echo "${SCR_NAME} Virtual environment has already been set up under ${ENV_DIR} and is ready to use."
   echo "NOTE: If you wish to set up a new virtual environment, delete the existing one or provide a different name."
   
   ENV_EXIST=1
@@ -78,14 +80,14 @@ if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
   unset PYTHONPATH
 else
-  echo "ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
+  echo "${SCR_NAME} ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
   return
 fi
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
   # Activate virtual environment and install additional Python packages.
-  echo "Configuring and activating virtual environment on ${HOST_NAME}"
+  echo "${SCR_NAME} Configuring and activating virtual environment on ${HOST_NAME}"
 
   VIRTUAL_ENV_TOOL=${ENV_DIR_BASE}/virtualenv-\*dist-info
   echo $VIRTUAL_ENV_TOOL
@@ -93,17 +95,17 @@ if [[ "$ENV_EXIST" == 0 ]]; then
     if [[ ! -d ${ENV_DIR_BASE} ]]; then
       mkdir "${ENV_DIR_BASE}"
     fi
-    echo "Install virtualenv in base directory for virtual environments ${ENV_DIR_BASE}"
+    echo "${SCR_NAME} Install virtualenv in base directory for virtual environments ${ENV_DIR_BASE}"
     pip install --target="${ENV_DIR_BASE}" virtualenv
   fi
   # create virtual environment and install missing required packages
   cd "${ENV_DIR_BASE}"
-  echo "***** Create and activate virtual environment ${ENV_NAME}... *****"
+  echo "${SCR_NAME} Create and activate virtual environment ${ENV_NAME}..."
   python -m virtualenv -p /usr/bin/python --system-site-packages "${ENV_NAME}"
 
   activate_virt_env=${ENV_DIR}/bin/activate
   source "${activate_virt_env}"
-  echo "***** Start installing additional Python modules with pip... *****"
+  echo "${SCR_NAME} Start installing additional Python modules with pip..."
   req_file=${ENV_SETUP_DIR}/requirements_container.txt
   pip3 install --no-cache-dir -r "${req_file}"
   # expand PYTHONPATH...
@@ -116,9 +118,9 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "export PYTONPATH=${ENV_DIR}/lib/python3.8/site-packages/:\$PYTHONPATH" >> "${activate_virt_env}"
 
   if [[ -f "${activate_virt_env}" ]]; then
-    echo "Virtual environment ${ENV_DIR} has been set up successfully."
+    echo "${SCR_NAME} Virtual environment ${ENV_DIR} has been set up successfully."
   else
-    echo "***** ERROR: Cretaion of virtual environment was not successful. Check for preceiding error-messages! *****"
+    echo "${SCR_NAME} ERROR: Cretaion of virtual environment was not successful. Check for preceiding error-messages!"
   fi
 fi
 ## finally, deactivate virtual environment and clean up loaded modules
