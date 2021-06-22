@@ -113,8 +113,9 @@ class WGANGP(object):
                 optimizer=self.opt_disc
             )
 
-    def train(self, batch_gen, noise_gen, num_gen_batches=1, 
-        training_ratio=1, show_progress=True):
+    def train(self, batch_gen, noise_gen, num_gen_batches=1, training_ratio=1, show_progress=False):
+
+        method = WGANGP.train.__name__
 
         disc_target_real = None
         if show_progress:
@@ -132,7 +133,7 @@ class WGANGP(object):
         loss_log = []
 
         for k in range(num_gen_batches):
-        
+            print("%{0}: Start iteration step {1:d}/{2:d} of training...".format(method, k, num_gen_batches))
             # train discriminator
             disc_loss = None
             disc_loss_n = 0
@@ -163,14 +164,16 @@ class WGANGP(object):
 
             if show_progress:
                 losses = []
-                for (i,dl) in enumerate(disc_loss):
+                for (i, dl) in enumerate(disc_loss):
                     losses.append(("D{}".format(i), dl))
-                for (i,gl) in enumerate([gen_loss]):
+                for (i, gl) in enumerate([gen_loss]):
                     losses.append(("G{}".format(i), gl))
-                progbar.add(batch_gen.batch_size, 
-                    values=losses)
+                progbar.add(batch_gen.batch_size, values=losses)
 
-            loss_log.append(np.hstack((disc_loss,gen_loss)))
+            log_iter = np.hstack((disc_loss, gen_loss))
+            print("%{0}: Generator loss at iteration step {1:d}/{2:d}: {3:.5f}".format(method, k, num_gen_batches,
+                                                                                       log_iter[-1]))
+            loss_log.append(log_iter)
 
             gc.collect()
 
