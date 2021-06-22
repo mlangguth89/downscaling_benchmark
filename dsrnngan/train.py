@@ -79,7 +79,6 @@ def setup_batch_gen(data_file=None, test_data_file=None,
     return (batch_gen_train, batch_gen_valid, batch_gen_test)
 
 
-
 def setup_gan(data_file=None, test_data_file=None, application="mchrzc",
     steps_per_epoch=None,
     batch_size=32, sample_random=False,
@@ -114,17 +113,17 @@ def setup_gan(data_file=None, test_data_file=None, application="mchrzc",
 def train_gan(wgan, batch_gen_train, batch_gen_valid, noise_shapes,
     steps_per_epoch, num_epochs,
     plot_samples=8, plot_fn="../figures/progress.pdf"):
-    
+
+    method = train_gan.__name__
+
     img_shape = batch_gen_train.img_shape
     noise_gen = noise.NoiseGenerator(noise_shapes(img_shape),
         batch_size=batch_gen_train.batch_size)
 
     for epoch in range(num_epochs):
-        print("Epoch {}/{}".format(epoch+1,num_epochs))
-        loss_log = wgan.train(batch_gen_train, noise_gen,
-            steps_per_epoch, training_ratio=5)
-        plots.plot_sequences(wgan.gen, batch_gen_valid, noise_gen, 
-            num_samples=plot_samples, out_fn=plot_fn)
+        print("%{0}: Start training of epoch {1:d}/{2:d}".format(method, epoch+1, num_epochs))
+        loss_log = wgan.train(batch_gen_train, noise_gen, steps_per_epoch, training_ratio=5)
+        plots.plot_sequences(wgan.gen, batch_gen_valid, noise_gen, num_samples=plot_samples, out_fn=plot_fn)
 
     return loss_log
 
