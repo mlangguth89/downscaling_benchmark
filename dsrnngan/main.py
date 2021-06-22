@@ -71,19 +71,26 @@ if __name__ == "__main__":
         (wgan, batch_gen_train, batch_gen_valid, _, noise_shapes, _) = \
             train.setup_gan(data_fn, batch_size=batch_size, application=application)
 
+        epoch_curr = 1
+        epoch_max = int(np.ceil(num_samples/(steps_per_epoch * batch_size)))
+
         if load_weights_root:  # load weights and run status
             wgan.load(wgan.filenames_from_root(load_weights_root))
             with open(load_weights_root+"-run_status.json", 'r') as f:
                 run_status = json.load(f)
             training_samples = run_status["training_samples"]
+            epoch_curr = int(np.ceil(training_samples/(steps_per_epoch * batch_size)))
 
             # read logfile
             log_file = "{}/log-{}.txt".format(log_path, application)
             log = pd.read_csv(log_file)
 
-        else: # initialize run status
+            print("%{0}: Start training from pretrained model at epoch {1:d}/{2:d}".format(method, epoch_curr,
+                                                                                           epoch_max))
+        else:  # initialize run status
             # ML 2021-06-22: chars is not used at all (while string has not been assigned yet)
             # chars = string.ascii_lowercase + string.digits
+            print("%{0}: Start training from scratch...")
             training_samples = 0
 
             log_file = "{}/log-{}.txt".format(log_path, application)
@@ -94,7 +101,9 @@ if __name__ == "__main__":
             else path+"/../figures/progress.pdf"
         switched_opt = (training_samples >= opt_switch_point)
 
-        while (training_samples < num_samples): # main training loop
+        while training_samples < num_samples: # main training loop
+
+            print("%{0}: Start training of epoch {1:d}/{2:d}".format(method, epoch_curr, epoch_max))
 
             # check if we should switch optimizers
             if (training_samples >= opt_switch_point) and not switched_opt:
@@ -109,6 +118,7 @@ if __name__ == "__main__":
                 steps_per_epoch, 1, plot_fn=plot_fn)
             loss_log = np.mean(loss_log, axis=0)
             training_samples += steps_per_epoch * batch_gen_train.batch_size
+            epoch_curr += 1
 
             # save results
             wgan.save(save_weights_root)
