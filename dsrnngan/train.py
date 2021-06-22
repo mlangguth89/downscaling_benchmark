@@ -73,6 +73,8 @@ def setup_batch_gen(data_file=None, test_data_file=None,
             zeros_frac=0.0)
     else:
         seq_test = None
+        # ML 2021-06-21
+        batch_gen_test = None
 
     return (batch_gen_train, batch_gen_valid, batch_gen_test)
 
