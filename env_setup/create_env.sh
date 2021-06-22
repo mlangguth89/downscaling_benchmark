@@ -39,7 +39,7 @@ if [[ -z "$1" ]]; then
 fi
 
 # set some variables
-SCR_NAME="%create_env:"
+SCR_NAME="%create_env.sh:"
 HOST_NAME=`hostname`
 ENV_NAME=$1
 ENV_SETUP_DIR=`pwd`
@@ -90,7 +90,6 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "${SCR_NAME} Configuring and activating virtual environment on ${HOST_NAME}"
 
   VIRTUAL_ENV_TOOL=${ENV_DIR_BASE}/virtualenv-\*dist-info
-  echo $VIRTUAL_ENV_TOOL
   if ! ls $VIRTUAL_ENV_TOOL 1> /dev/null 2<&1; then
     if [[ ! -d ${ENV_DIR_BASE} ]]; then
       mkdir "${ENV_DIR_BASE}"
@@ -102,6 +101,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   cd "${ENV_DIR_BASE}"
   echo "${SCR_NAME} Create and activate virtual environment ${ENV_NAME}..."
   python -m virtualenv -p /usr/bin/python --system-site-packages "${ENV_NAME}"
+  cd -
 
   activate_virt_env=${ENV_DIR}/bin/activate
   source "${activate_virt_env}"
