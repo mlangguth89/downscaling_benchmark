@@ -95,7 +95,9 @@ class WGANGP(object):
         self.compile()
 
     def compile(self, opt_disc=None, opt_gen=None):
-        #create optimizers
+        method = WGANGP.compile.__name__
+
+        # create optimizers
         if opt_disc is None:
             opt_disc = Adam(self.lr_disc, beta_1=0.5, beta_2=0.9)
         self.opt_disc = opt_disc
@@ -103,9 +105,11 @@ class WGANGP(object):
             opt_gen = Adam(self.lr_gen, beta_1=0.5, beta_2=0.9)
         self.opt_gen = opt_gen
 
+        print("%{0}: Start compiling discrimnator...".format(method))
         with Nontrainable(self.disc):
             self.gen_trainer.compile(loss=wasserstein_loss,
                 optimizer=self.opt_gen)
+        print("%{0}: Start compiling generator...".format(method))
         with Nontrainable(self.gen):
             self.disc_trainer.compile(
                 loss=[wasserstein_loss, wasserstein_loss, 'mse'], 
