@@ -88,7 +88,8 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "Configuring and activating virtual environment on ${HOST_NAME}"
 
   VIRTUAL_ENV_TOOL=${ENV_DIR_BASE}/virtualenv-\*dist-info
-  if ! ls "$VIRTUAL_ENV_TOOL" 1> /dev/null 2<&1; then
+  echo $VIRTUAL_ENV_TOOL
+  if ! ls $VIRTUAL_ENV_TOOL 1> /dev/null 2<&1; then
     if [[ ! -d ${ENV_DIR_BASE} ]]; then
       mkdir "${ENV_DIR_BASE}"
     fi
