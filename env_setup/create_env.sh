@@ -119,9 +119,9 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   if [[ -f "${activate_virt_env}" ]]; then
     echo "${SCR_NAME} Virtual environment ${ENV_DIR} has been set up successfully."
+    # finally, deactivate virtual environment and clean up loaded modules
+    deactivate
   else
     echo "${SCR_NAME} ERROR: Cretaion of virtual environment was not successful. Check for preceiding error-messages!"
   fi
 fi
-## finally, deactivate virtual environment and clean up loaded modules
-deactivate
