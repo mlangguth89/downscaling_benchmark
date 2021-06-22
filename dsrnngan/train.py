@@ -121,7 +121,7 @@ def train_gan(wgan, batch_gen_train, batch_gen_valid, noise_shapes,
         batch_size=batch_gen_train.batch_size)
 
     for epoch in range(num_epochs):
-        print("%{0}: Start training of epoch {1:d}/{2:d}".format(method, epoch+1, num_epochs))
+        print("%{0}: Start training of sub-epoch {1:d}/{2:d}".format(method, epoch+1, num_epochs))
         loss_log = wgan.train(batch_gen_train, noise_gen, steps_per_epoch, training_ratio=5)
         plots.plot_sequences(wgan.gen, batch_gen_valid, noise_gen, num_samples=plot_samples, out_fn=plot_fn)
 
