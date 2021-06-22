@@ -76,7 +76,8 @@ if __name__ == "__main__":
                 log = pd.read_csv(log_file)
 
         else: # initialize run status
-            chars = string.ascii_lowercase + string.digits
+            # ML 2021-06-22: chars is not used at all (while string has not been assigned yet)
+            # chars = string.ascii_lowercase + string.digits
             training_samples = 0
 
             if log_path:
