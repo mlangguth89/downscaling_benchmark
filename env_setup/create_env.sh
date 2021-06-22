@@ -25,8 +25,6 @@ check_argin() {
 }
 ### auxiliary-function ###
 
-# init bool_container
-bool_container=0
 # some first sanity checks
 if [[ ${BASH_SOURCE[0]} == ${0} ]]; then
   echo "ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
@@ -35,13 +33,9 @@ fi
 
 # from now on, just return if something unexpected occurs instead of exiting
 # as the latter would close the terminal including logging out
-if [[ ! -n "$1" ]]; then
+if [[ -z "$1" ]]; then
   echo "ERROR: Provide a name to set up the virtual environment, i.e. execute by prompting 'source create_env.sh [virt_env_name]"
   return
-fi
-
-if [[ "$#" -gt 1 ]]; then
-  check_argin ${@:2}                 # sets exp_id if provided, always sets l_container 
 fi
 
 # set some variables
@@ -50,27 +44,15 @@ ENV_NAME=$1
 ENV_SETUP_DIR=`pwd`
 WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
 EXE_DIR="$(basename "$ENV_SETUP_DIR")"
-ENV_DIR=${WORKING_DIR}/${ENV_NAME}
+ENV_DIR_BASE=${WORKING_DIR}/virtual_envs/
+ENV_DIR=${ENV_DIR_BASE}/${ENV_NAME}
 
 ## perform sanity checks
-# correct bool_container if host is Juwels Booster and ensure running singularity
-if [[ "${bool_container}" == 0 ]] && [[ "${HOST_NAME}" == jwlogin2[1-4]* ]]; then
-  echo "******************************************** NOTE ********************************************"
-  echo "          Running on Juwels Booster is only possible inside a container environment.          "
-  echo "******************************************** NOTE ********************************************"
-  bool_container=1
-fi
-
-if [[ "${bool_container}" == 1 ]]; then
-  echo "******************************************** NOTE ********************************************"
-  echo "                Make use of dedicated Horovod-related working branches only!!!                "
-  echo "******************************************** NOTE ********************************************"
-  # Check if singularity is running
-  if [[ -z "${SINGULARITY_NAME}" ]]; then
-    echo "ERROR: create_env.sh must be executed in a running singularity on Juwels in conjuction with container-usage."
-    echo "Thus, execute 'singularity shell [my_docker_image]' first!"
-    return
-  fi
+# Check if singularity is running
+if [[ -z "${SINGULARITY_NAME}" ]]; then
+  echo "ERROR: create_env.sh must be executed in a running singularity on Juwels in conjuction with container-usage."
+  echo "Thus, execute 'singularity shell [my_docker_image]' first!"
+  return
 fi
 
 # further sanity checks:
@@ -83,7 +65,7 @@ if [[ "${EXE_DIR}" != "env_setup"  ]]; then
 fi
 
 if [[ -d ${ENV_DIR} ]]; then
-  echo "Virtual environment has already been set up under ${ENV_DIR}. The present virtual environment is activated now."
+  echo "Virtual environment has already been set up under ${ENV_DIR} and is ready to use."
   echo "NOTE: If you wish to set up a new virtual environment, delete the existing one or provide a different name."
   
   ENV_EXIST=1
@@ -93,96 +75,50 @@ fi
 
 ## check integratability of modules
 if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
-  if [[ "${bool_container}" > 0 ]]; then  
-    # on Juwels Booster, we are in a container environment -> loading modules is not possible	  
-    echo "***** Note for container environment! *****"
-    echo "Already checked the required modules?"
-    echo "To do so, run 'source modules_train.sh' after exiting the singularity."
-    echo "***** Note for container environment! *****"
-  else
-    # load modules and check for their availability
-    echo "***** Checking modules required during the workflow... *****"
-    source ${ENV_SETUP_DIR}/modules_preprocess.sh purge
-    source ${ENV_SETUP_DIR}/modules_train.sh purge
-    source ${ENV_SETUP_DIR}/modules_postprocess.sh
-  fi
-else 
-  # unset PYTHONPATH on every other machine that is not a known HPC-system	
+  # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
   unset PYTHONPATH
+else
+  echo "ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
+  return
 fi
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
   # Activate virtual environment and install additional Python packages.
   echo "Configuring and activating virtual environment on ${HOST_NAME}"
-    
-  python3 -m venv $ENV_DIR
-  
+
+  VIRTUAL_ENV_TOOL=${ENV_DIR_BASE}/virtualenv-\*dist-info
+  if ! ls "$VIRTUAL_ENV_TOOL" 1> /dev/null 2<&1; then
+    if [[ ! -d ${ENV_DIR_BASE} ]]; then
+      mkdir "${ENV_DIR_BASE}"
+    fi
+    echo "Install virtualenv in base directory for virtual environments ${ENV_DIR_BASE}"
+    pip install --target="${ENV_DIR_BASE}" virtualenv
+  fi
+  # create virtual environment and install missing required packages
+  cd "${ENV_DIR_BASE}"
+  echo "***** Create and activate virtual environment ${ENV_NAME}... *****"
+  python -m virtualenv -p /usr/bin/python --system-site-packages "${ENV_NAME}"
+
   activate_virt_env=${ENV_DIR}/bin/activate
-
-  echo "Entering virtual environment ${ENV_DIR} to install required Python modules..."
-  source ${activate_virt_env}
-  
-  # install some requirements and/or check for modules
-  if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
-    # Install packages depending on host 
-    echo "***** Start installing additional Python modules with pip... *****"
-    req_file=${ENV_SETUP_DIR}/requirements.txt 
-    if [[ "${bool_container}" > 0 ]]; then req_file=${ENV_SETUP_DIR}/requirements_container.txt; fi
-    
-    pip3 install --no-cache-dir -r ${req_file}
-  else
-    echo "***** Start installing additional Python modules with pip... *****"
-    pip3 install --upgrade pip
-    pip3 install -r ${ENV_SETUP_DIR}/requirements.txt
-    pip3 install  mpi4py 
-    pip3 install netCDF4
-    pip3 install  numpy
-    pip3 install h5py
-    pip3 install tensorflow-gpu==1.13.1
-  fi
-
+  source "${activate_virt_env}"
+  echo "***** Start installing additional Python modules with pip... *****"
+  req_file=${ENV_SETUP_DIR}/requirements_container.txt
+  pip3 install --no-cache-dir -r "${req_file}"
   # expand PYTHONPATH...
-  export PYTHONPATH=${WORKING_DIR}:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${WORKING_DIR}/utils:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${WORKING_DIR}/external_package/lpips-tensorflow:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${WORKING_DIR}/model_modules:$PYTHONPATH >> ${activate_virt_env}
-
-  if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
-     export PYTHONPATH=${ENV_DIR}/lib/python3.6/site-packages:$PYTHONPATH >> ${activate_virt_env}
-     if [[ "${bool_container}" > 0 ]]; then  
-       export PYTONPATH=/usr/locali/lib/python3.6/dist-packages:$PYTHONPATH
-     fi
-  fi
+  export PYTHONPATH=${WORKING_DIR}:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${ENV_DIR}/lib/python3.8/site-packages/:$PYTHONPATH >> "${activate_virt_env}"
   # ...and ensure that this also done when the 
-  echo "" >> ${activate_virt_env}
-  echo "# Expand PYTHONPATH..." >> ${activate_virt_env}
-  echo "export PYTHONPATH=${WORKING_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${WORKING_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${WORKING_DIR}/model_modules:$PYTHONPATH " >> ${activate_virt_env}
-  echo "export PYTHONPATH=${WORKING_DIR}/external_package/lpips-tensorflow:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "" >> "${activate_virt_env}"
+  echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${WORKING_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTONPATH=${ENV_DIR}/lib/python3.8/site-packages/:\$PYTHONPATH" >> "${activate_virt_env}"
 
-  if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *juwels* ]]; then
-    echo "export PYTHONPATH=${ENV_DIR}/lib/python3.6/site-packages:\$PYTHONPATH" >> ${activate_virt_env}
-    if [[ "${bool_container}" > 0 ]]; then  
-       echo "export PYTONPATH=/usr/locali/lib/python3.6/dist-packages:\$PYTHONPATH" >> ${activate_virt_env}
-     fi
+  if [[ -f "${activate_virt_env}" ]]; then
+    echo "Virtual environment ${ENV_DIR} has been set up successfully."
+  else
+    echo "***** ERROR: Cretaion of virtual environment was not successful. Check for preceiding error-messages! *****"
   fi
-  info_str="Virtual environment ${ENV_DIR} has been set up successfully."
-elif [[ "$ENV_EXIST" == 1 ]]; then
-  # activating virtual env is suifficient
-  source ${ENV_DIR}/bin/activate
-  info_str="Virtual environment ${ENV_DIR} has been activated successfully."
 fi
-
-echo "******************************************** NOTE ********************************************"
-echo ${info_str}
-echo "Make use of config_runscript.py to generate customized runscripts of the workflow steps."
-echo "******************************************** NOTE ********************************************"
-
 ## finally, deactivate virtual environment and clean up loaded modules
-# (if we on an HPC-system and not inside a running singularity)
 deactivate
-if [[ "${HOST_NAME}" == *hdfml* || "${HOST_NAME}" == *jwlogin* ]] && [[ "${bool_container}" == 0 ]]; then
-  module --force purge
-fi
