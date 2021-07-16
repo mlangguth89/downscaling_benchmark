@@ -118,6 +118,8 @@ virt_env*/
 **/results_test_samples
 **/logs
 **/vp
+**/models
+*.h5
 
 # Ignore (Batch) runscripts
 batch_scripts/**
