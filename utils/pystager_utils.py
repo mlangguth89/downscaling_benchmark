@@ -46,13 +46,13 @@ class PyStager(object):
 
         # sanity checks
         if not (isinstance(date_start, dt.datetime) and isinstance(date_end, dt.datetime)):
-            raise ValueError("date_start and date_end have to datetime objects!")
+            raise ValueError("%{0}: date_start and date_end have to datetime objects!".format(method))
 
         if not (date_start.strftime("%H") == "00" and date_end.strftime("%H") == "00"):
-            raise ValueError("date_start and date_end must be valid at 00 UTC.")
+            raise ValueError("%{0}: date_start and date_end must be valid at 00 UTC.".format(method))
 
         if not int((date_end - date_start).days) >= 1:
-            raise ValueError("date_end must be at least one day after date_start.")
+            raise ValueError("%{0}: date_end must be at least one day after date_start.".format(method))
 
         # init transfer dictionary
         transfer_dict = dict.fromkeys(list(range(1, self.num_processes)))
