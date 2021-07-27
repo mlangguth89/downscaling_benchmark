@@ -23,8 +23,71 @@ import platform
  
 # ======================= List of functions ====================================== #
 
+class Distributor(object):
 
-class PyStager(object):
+    class_name = "Distributor"
+
+    def __init__(self, distributor_name):
+        self.distributor_name = distributor_name
+
+    def distributor_engine(self, distributor_name: str):
+        """
+        Sets up distributor for organinzing parallelization.
+        :param distributor_name: Name of distributor
+        :return distributor: selected callable distributor
+        """
+        method = "{0}->{1}".format(Distributor.class_name, Distributor.distributor_engine.__name__)
+
+        if distributor_name.lower() == "date":
+            distributor = self.distributor_date
+        else:
+            raise ValueError("%{0}: The distributor named {1} is not implemented yet.".format(method, distributor_name))
+
+        return distributor
+
+    def distributor_date(self, date_start, date_end, freq="1D"):
+        """
+        Creates a transfer dictionary whose elements are lists for individual start and end dates for each processor
+        param date_start: first date to convert
+        param date_end: last date to convert
+        return: transfer_dictionary allowing date-based parallelization
+        """
+        method = "{0}->{1}".format(Distributor.class_name, Distributor.distributor_date.__name__)
+
+        # sanity checks
+        if not (isinstance(date_start, dt.datetime) and isinstance(date_end, dt.datetime)):
+            raise ValueError("%{0}: date_start and date_end have to datetime objects!".format(method))
+
+        if not (date_start.strftime("%H") == "00" and date_end.strftime("%H") == "00"):
+            raise ValueError("%{0}: date_start and date_end must be valid at 00 UTC.".format(method))
+
+        if not int((date_end - date_start).days) >= 1:
+            raise ValueError("%{0}: date_end must be at least one day after date_start.".format(method))
+
+        if not hasattr(self, "num_processes"):
+            print("%{0}: WARNING: Attribute num_processes is not set and thus no parallelization will take place.")
+            num_processes = 2
+        else:
+            num_processes = self.num_processes
+
+        # init transfer dictionary
+        transfer_dict = dict.fromkeys(list(range(1, num_processes)))
+
+        dates_req_all = pd.date_range(date_start, date_end, freq=freq)
+        ndates = len(dates_req_all)
+        days_per_node = int(np.ceil(np.float(ndates)/(num_processes-1)))
+
+        for node in np.arange(num_processes):
+            ind_max = np.minimum((node+1)*days_per_node-1, ndates -1)
+            transfer_dict[node+1] = [dates_req_all[node*days_per_node],
+                                     dates_req_all[ind_max]]
+            if ndates-1 == ind_max:
+                break
+
+        return transfer_dict
+
+
+class PyStager(Distributor):
     """
     Organizes parallelized execution of a job.
     The job must be wrapped into a function-object that can be fed with dynamical arguments provided by an available
@@ -55,6 +118,7 @@ class PyStager(object):
         :param nmax_warn: Maximal number of accepted warnings during job execution (default: 3)
         :param logdir: directory where logfile are stored (current working directory becomes the default if not set)
         """
+        super().__init__(distributor_name)
         method = PyStager.__init__.__name__
 
         self.cpu_name = platform.processor()
@@ -147,56 +211,6 @@ class PyStager(object):
             stat_worker = self.manage_worker_jobs(logger, *args)
 
         MPI.Finalize()
-
-    def distributor_engine(self, distributor_name: str):
-        """
-        Sets up distributor for organinzing parallelization.
-        :param distributor_name: Name of distributor
-        :return distributor: selected callable distributor
-        """
-        method = "{0}->{1}".format(PyStager.class_name, PyStager.distributor_engine.__name__)
-
-        if distributor_name.lower() == "date":
-            distributor = self.distributor_date
-        else:
-            raise ValueError("%{0}: The distributor named {1} is not implemented yet.".format(method, distributor_name))
-
-        return distributor
-
-    def distributor_date(self, date_start, date_end, freq="1D"):
-        """
-        Creates a transfer dictionary whose elements are lists for individual start and end dates for each processor
-        param date_start: first date to convert
-        param date_end: last date to convert
-        return: transfer_dictionary allowing date-based parallelization
-        """
-        method = "{0}->{1}".format(PyStager.class_name, PyStager.distributor_date.__name__)
-
-        # sanity checks
-        if not (isinstance(date_start, dt.datetime) and isinstance(date_end, dt.datetime)):
-            raise ValueError("%{0}: date_start and date_end have to datetime objects!".format(method))
-
-        if not (date_start.strftime("%H") == "00" and date_end.strftime("%H") == "00"):
-            raise ValueError("%{0}: date_start and date_end must be valid at 00 UTC.".format(method))
-
-        if not int((date_end - date_start).days) >= 1:
-            raise ValueError("%{0}: date_end must be at least one day after date_start.".format(method))
-
-        # init transfer dictionary
-        transfer_dict = dict.fromkeys(list(range(1, self.num_processes)))
-
-        dates_req_all = pd.date_range(date_start, date_end, freq=freq)
-        ndates = len(dates_req_all)
-        days_per_node = int(np.ceil(np.float(ndates)/(self.num_processes-1)))
-
-        for node in np.arange(self.num_processes):
-            ind_max = np.minimum((node+1)*days_per_node-1, ndates -1)
-            transfer_dict[node+1] = [dates_req_all[node*days_per_node],
-                                     dates_req_all[ind_max]]
-            if ndates-1 == ind_max:
-                break
-
-        return transfer_dict
 
     def manage_recv_mess(self, logger):
         """
