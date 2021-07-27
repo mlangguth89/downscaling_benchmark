@@ -75,11 +75,11 @@ class Distributor(object):
 
         dates_req_all = pd.date_range(date_start, date_end, freq=freq)
         ndates = len(dates_req_all)
-        days_per_node = int(np.ceil(np.float(ndates)/(num_processes-1)))
+        ndates_per_node = int(np.ceil(float(ndates)/(num_processes-1)))
 
         for node in np.arange(num_processes):
-            ind_max = np.minimum((node+1)*days_per_node-1, ndates -1)
-            transfer_dict[node+1] = [dates_req_all[node*days_per_node],
+            ind_max = np.minimum((node+1)*ndates_per_node-1, ndates -1)
+            transfer_dict[node+1] = [dates_req_all[node*ndates_per_node],
                                      dates_req_all[ind_max]]
             if ndates-1 == ind_max:
                 break
