@@ -20,10 +20,13 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 import platform
- 
-# ======================= List of functions ====================================== #
+
 
 class Distributor(object):
+    """
+    Class for defining (customized) distributors. The distributor selected by the distributor_engine must provide
+    the dynamical arguments for a parallelized job run by PyStager (see below) which inherits from this class.
+    """
 
     class_name = "Distributor"
 
@@ -78,7 +81,7 @@ class Distributor(object):
         ndates_per_node = int(np.ceil(float(ndates)/(num_processes-1)))
 
         for node in np.arange(num_processes):
-            ind_max = np.minimum((node+1)*ndates_per_node-1, ndates -1)
+            ind_max = np.minimum((node+1)*ndates_per_node-1, ndates-1)
             transfer_dict[node+1] = [dates_req_all[node*ndates_per_node],
                                      dates_req_all[ind_max]]
             if ndates-1 == ind_max:
@@ -190,7 +193,7 @@ class PyStager(Distributor):
                 broadcast_list = self.transfer_dict[proc]
                 self.comm.send(broadcast_list, dest=proc)
 
-            stat_mpi = self.manage_recv_mess(logger, allow_exit=False)
+            stat_mpi = self.manage_recv_mess(logger)
 
             if stat_mpi:
                 logger.info("Job has been executed successfully on {0:d} worker processes. Job exists normally at {1}"
@@ -221,8 +224,8 @@ class PyStager(Distributor):
         """
         method = "{0}->{1}".format(PyStager.class_name, PyStager.manage_recv_mess.__name__)
 
-        assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is of type '{1}'"\
-                                                .format(method, type(self.comm))
+        assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is type '{1}'"\
+                                                     .format(method, type(self.comm))
 
         assert isinstance(logger, logging.Logger), "%{0}: logger must be a Logger-instance, but is of type '{1}'"\
                                                    .format(method, type(logger))
@@ -277,8 +280,8 @@ class PyStager(Distributor):
         worker_stat_fail = 9999
 
         # sanity checks
-        assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is of type '{1}'"\
-                                                .format(method, type(self.comm))
+        assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is type '{1}'"\
+                                                     .format(method, type(self.comm))
 
         assert isinstance(logger, logging.Logger), "%{0}: logger must be a Logger-instance, but is of type '{1}'"\
                                                    .format(method, type(logger))
@@ -409,5 +412,3 @@ class PyStager(Distributor):
                     "total_num_directories": total_num_directories}
 
         return dir_info
-
-
