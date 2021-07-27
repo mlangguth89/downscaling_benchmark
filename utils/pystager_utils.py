@@ -9,6 +9,7 @@
 import sys, os
 import multiprocessing
 import subprocess
+import inspect
 from mpi4py import MPI
 import logging
 import numpy as np
@@ -22,8 +23,20 @@ import platform
 class PyStager(object):
     class_name = "PyStager"
 
-    def __init__(self, job_func: callable, distributor_name: str, num_proc: int, nmax_warn: int= 3,
-                 logdir: str = None ):
+    def __init__(self, job_func: callable, distributor_name: str, num_proc: int, nmax_warn: int = 3,
+                 logdir: str = None):
+        """
+        Initialize PyStager.
+        :param job_func: Function whose execution is meant to be parallelized. This function must accept arguments
+                         dynamical arguments provided by the distributor (see distributo_engine-method) and
+                         static arguments (see run-method) in the order mentioned here. Additionally, it must accept
+                         a logger instance. The argument 'nmax_warn' is optional.
+        :param distributor_name: Name of distributor which takes care for the paralelization (see distributo_engine
+                                 -method)
+        :param num_proc: total number of processes available for parallelization
+        :param nmax_warn: Maximal number of accepted warnings during job execution (default: 3)
+        :param logdir: directory where logfile are stored (current working directory becomes the default if not set)
+        """
         method = PyStager.__init__.__name__
 
         self.num_processes = num_proc
@@ -104,7 +117,7 @@ class PyStager(object):
                 broadcast_list = self.transfer_dict[proc]
                 self.comm.send(broadcast_list, dest=proc)
 
-            stat_mpi = self.manage_recv_mess(self.comm, logger, allow_exit=False)
+            stat_mpi = self.manage_recv_mess(logger, allow_exit=False)
 
             if stat_mpi:
                 logger.info("Job has been executed successfully on {0:d} worker processes. Job exists normally at {1}"
@@ -126,9 +139,12 @@ class PyStager(object):
             logger.info("==============Worker logger is activated ==============")
             logger.info("Start receiving message from master...")
 
+            lexit = self.manage_worker_jobs(logger, *args, allow_exit=False)
 
-            stat_worker = self.manage_worker_jobs(logger)
-
+            if lexit:
+                sys.exit(1)
+            else:
+                sys.exit(0)
 
     def distributor_engine(self, distributor_name: str):
         """
@@ -183,7 +199,8 @@ class PyStager(object):
 
     def manage_recv_mess(self, logger, allow_exit=True):
         """
-        Manages received messages from worker processes
+        Manages received messages from worker processes. Also accumulates warnings and aborts job if maximum number is
+        exceeded
         :param logger: logger instance to add logs according to received message from worker
         :param allow_exit: Boolean to allow job to exit on system-level (with sys.exit)
         :return stat: True if ok, else False
@@ -201,8 +218,8 @@ class PyStager(object):
         lexit = False
         while message_counter < self.num_processes:
             mess_in = self.comm.recv()
-            worker_stat = mess_in[:5]
-            worker_num = mess_in[5:7]
+            worker_stat = mess_in[0][:5]
+            worker_num = mess_in[0][5:7]
             worker_str = "Worker with ID {0}".format(worker_num)
             # check worker status
             if worker_stat == "IDLEE":
@@ -210,9 +227,9 @@ class PyStager(object):
             elif worker_stat == "PASSS":
                 logger.info("{0} has finished the job successfully".format(worker_str))
             elif worker_stat == "WARNN":
-                warn_counter += 1
+                warn_counter += int(mess_in[1])
                 logger.warning("{0} has seen a non-fatal error/warning. Number of marnings is now {1:d}"
-                            .format(worker_str, warn_counter))
+                               .format(worker_str, warn_counter))
             elif worker_stat == "FATAL":
                 logger.critical("{0} met a fatal error. System will be terminated".format(worker_str))
                 lexit = True
@@ -220,7 +237,7 @@ class PyStager(object):
                 logger.critical("{0} has sent an unknown message: '{1}'. System will be terminated."
                                 .format(method, worker_stat))
                 lexit = True
-
+            # sum of warnings exceeds allowed maximum
             if warn_counter > self.nmax_warn:
                 lexit = True
 
@@ -233,26 +250,27 @@ class PyStager(object):
 
         return True
 
-    def manage_worker_jobs(self, *args, logger, allow_exit=True):
+    def manage_worker_jobs(self, logger, *args, allow_exit=True):
         """
         Manages worker processes and runs job with passed arguments.
-        :param *args: the arguments passed to parallelized job (see self.job in __init__)
         :param logger: logger instance to add logs according to received message from master and from parallelized job
+        :param args: the arguments passed to parallelized job (see self.job in __init__)
         :param allow_exit: Boolean to allow job to exit on system-level (with sys.exit)
         """
-
         method = PyStager.manage_recv_mess.__name__
 
+        worker_stat_fail = 9999
+
+        # sanity checks
         assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is of type '{1}'"\
                                                 .format(method, type(self.comm))
 
         assert isinstance(logger, logging.Logger), "%{0}: logger must be a Logger-instance, but is of type '{1}'"\
                                                    .format(method, type(logger))
 
-        worker_str = "Worker with ID {0}".format(self.my_rank)
         mess_in = self.comm.recv()
         if mess_in is None:
-            mess_out = "{0} is idle".format(worker_str)
+            mess_out = ("IDLEE{0}: Worker {1} is idle".format(self.my_rank, self.my_rank), 0)
             logger.info(mess_out)
             logger.info("Thus, nothing to do. Job is terminated locally on rank {0}".format(self.my_rank))
             self.comm.send(mess_out, dest=0)
@@ -261,7 +279,40 @@ class PyStager(object):
             else:
                 return True
         else:
-            stat_paralllelized_job = self.job(zip(*(args+mess_in)), logger=logger)
+            if "nmax_warn" in inspect.getfullargspec(self.job).args:
+                worker_stat = self.job(zip(*(mess_in, args)), logger, nmax_warn=self.nmax_warn)
+            else:
+                worker_stat = self.job(zip(*(mess_in, args)), logger)
+
+        sys_stat = 0
+        if worker_stat == -1:
+            mess_out = ("ERROR{0}: Failure was triggered.".format(self.my_rank), worker_stat_fail)
+            logger.critical("Progress was unsuccessful due to a fatal error observed." +
+                            " Worker is terminating and communicating the termination of the job to main.")
+            sys_stat = 1
+        elif worker_stat == 0:
+            logger.debug('Progress was successful')
+            mess_out = ("PASSS{0}:was finished".format(self.my_rank), worker_stat)
+            logger.info('Worker {0} finished a task'.format(self.my_rank))
+        elif worker_stat > 0:
+            logger.debug("Progress faced {0:d} warnings which is still acceptable,".format(int(worker_stat)) +
+                         " but requires investigation of the processed dataset.")
+            mess_out = ("WARNN{0}: Several warnings ({1:d}) have been triggered "
+                        .format(self.my_rank, worker_stat), worker_stat)
+            logger.warning("Worker {0} has met relevant warnings, but still could continue...".format(self.my_rank))
+        else:
+            logger.critical("Unknown worker status received: {0:d}".format(worker_stat))
+            mess_out = ("WARNN{0}: Unknown worker status ({1:d}) received ".format(self.my_rank, worker_stat),
+                        worker_stat_fail)
+            logger.warning("Worker {0} has produced unknown worker status.".format(self.my_rank))
+            sys_stat = 1
+        # communicate to master process
+        self.comm.send(mess_out, dest=0)
+
+        if allow_exit:
+            sys.exit(sys_stat)
+        else:
+            return not bool(sys_stat)
 
     @staticmethod
     def set_and_check_logdir(logdir, distributor_name):
