@@ -25,6 +25,22 @@ import platform
 
 
 class PyStager(object):
+    """
+    Organizes parallelized execution of a job.
+    The job must be wrapped into a function-object that can be fed with dynamical arguments provided by an available
+    distributor and static arguments (see below).
+    Running PyStager constitutes a three-step approach. First PyStager must be instanciated, then it must be set-up by
+    calling the setup-method and finally, the job gets executed in a parallelized manner.
+    Example: Let the function 'process_data' be capable to process of hourly data files between date_start and date_end.
+             Thus, parallelization can be organized with distributor_date which only must be fed with a start and end
+             date (the freq-argument is optional and defaults to "1D" -> daily frequency (see pandas)).
+             With the data being stored under <data_dir>, PyStager can be called in a Python-script by:
+             pystager_obj = PyStager(process_data, "date")
+             pystager_obj.setup(<start_datetime_obj>, <end_datetime_obj>, freq="1H")
+             pystager_obj.run(<data_dir>, <static_arguments>)
+    By splitting up the setup-method from the execution, multiple job executions becomes possible.
+    """
+
     class_name = "PyStager"
 
     def __init__(self, job_func: callable, distributor_name: str, nmax_warn: int = 3, logdir: str = None):
@@ -53,14 +69,16 @@ class PyStager(object):
         self.num_processes = self.comm.Get_size()
 
         if not callable(self.job):
-            raise ValueError("%{0}: Passed method to be parallelized must be a callable function.".format(method))
+            raise ValueError("%{0}: Passed function to be parallelized must be a callable function for {1}."
+                             .format(method, PyStager.class_name))
 
         if self.nmax_warn <= 0:
-            raise ValueError("%{0}: nmax_warn must be larger than zero, but is set to {1:d}"
-                             .format(method, self.nmax_warn))
+            raise ValueError("%{0}: nmax_warn must be larger than zero for {1}, but is set to {2:d}"
+                             .format(method, PyStager.class_name, self.nmax_warn))
 
         if self.num_processes < 2:
-            raise ValueError("%{0}: Number of assigned MPI processes must be at least two.".format(method))
+            raise ValueError("%{0}: Number of assigned MPI processes must be at least two for {1}."
+                             .format(method, PyStager.class_name))
 
     def setup(self, *args):
         """
@@ -69,17 +87,20 @@ class PyStager(object):
         """
         method = PyStager.setup.__name__
 
-        try:
-            self.transfer_dict = self.distributor(*args)
-        except Exception as err:
-            print("%{0}: Failed to set up transfer dictionary of PyStager (see raised error below)".format(method))
-            raise err
+        if self.my_rank == 0:
+            try:
+                self.transfer_dict = self.distributor(*args)
+            except Exception as err:
+                print("%{0}: Failed to set up transfer dictionary of PyStager (see raised error below)".format(method))
+                raise err
+        else:
+            pass
 
     def run(self, data_dir, *args, job_name="dummy"):
         """
         Run PyStager.
         """
-        method = PyStager.run.__name__
+        method = "{0}->{1}".format(PyStager.class_name, PyStager.run.__name__)
 
         if self.transfer_dict is None:
             raise AttributeError("%{0}: transfer_dict is still None. Call setup beforehand!".format(method))
@@ -110,8 +131,6 @@ class PyStager(object):
             if stat_mpi:
                 logger.info("Job has been executed successfully on {0:d} worker processes. Job exists normally at {1}"
                             .format(self.num_processes, dt.datetime.now().strftime("%Y-%m%-d %H:%M:%S UTC")))
-            else:
-
         else:
             # worker logger file
             logger_worker = os.path.join(self.logdir, "{0}_job_worker_{1}.log".format(job_name, self.my_rank))
@@ -135,24 +154,23 @@ class PyStager(object):
         :param distributor_name: Name of distributor
         :return distributor: selected callable distributor
         """
-
-        method = PyStager.distributor_engine.__name__
+        method = "{0}->{1}".format(PyStager.class_name, PyStager.distributor_engine.__name__)
 
         if distributor_name.lower() == "date":
-            distributor = self.load_distributor_date
+            distributor = self.distributor_date
         else:
             raise ValueError("%{0}: The distributor named {1} is not implemented yet.".format(method, distributor_name))
 
         return distributor
 
-    def load_distributor_date(self, date_start, date_end):
+    def distributor_date(self, date_start, date_end, freq="1D"):
         """
         Creates a transfer dictionary whose elements are lists for individual start and end dates for each processor
         param date_start: first date to convert
         param date_end: last date to convert
         return: transfer_dictionary allowing date-based parallelization
         """
-        method = PyStager.load_distributor_date.__name__
+        method = "{0}->{1}".format(PyStager.class_name, PyStager.distributor_date.__name__)
 
         # sanity checks
         if not (isinstance(date_start, dt.datetime) and isinstance(date_end, dt.datetime)):
@@ -167,7 +185,7 @@ class PyStager(object):
         # init transfer dictionary
         transfer_dict = dict.fromkeys(list(range(1, self.num_processes)))
 
-        dates_req_all = pd.date_range(date_start, date_end, freq='1D')
+        dates_req_all = pd.date_range(date_start, date_end, freq=freq)
         ndates = len(dates_req_all)
         days_per_node = int(np.ceil(np.float(ndates)/(self.num_processes-1)))
 
@@ -187,7 +205,7 @@ class PyStager(object):
         :param logger: logger instance to add logs according to received message from worker
         :return stat: True if ok, else False
         """
-        method = PyStager.manage_recv_mess.__name__
+        method = "{0}->{1}".format(PyStager.class_name, PyStager.manage_recv_mess.__name__)
 
         assert isinstance(self.comm, MPI.Intracomm), "%{0}: comm must be a MPI Intracomm-instance, but is of type '{1}'"\
                                                 .format(method, type(self.comm))
@@ -240,7 +258,7 @@ class PyStager(object):
         :param args: the arguments passed to parallelized job (see self.job in __init__)
         :return stat: True if ok, else False
         """
-        method = PyStager.manage_recv_mess.__name__
+        method = "{0}->{1}".format(PyStager.class_name, PyStager.manage_worker_jobs.__name__)
 
         worker_stat_fail = 9999
 
@@ -335,7 +353,6 @@ class PyStager(object):
                           "total_num_files": total number of files under source_path
                           "total_num_directories": total number of directories under source_path
         """
-
         method = PyStager.directory_scanner.__name__
 
         dir_detail_list = []  # directories details
@@ -344,7 +361,7 @@ class PyStager(object):
         total_num_files = 0
 
         if not os.path.isdir(source_path):
-            raise NotADirectoryError("%{0}: The directory '' does not exist.".format(method, source_path))
+            raise NotADirectoryError("%{0}: The directory '{1}' does not exist.".format(method, source_path))
 
         list_directories = os.listdir(source_path)
 
@@ -362,7 +379,7 @@ class PyStager(object):
                 total_num_files = total_num_files + int(num_files)
                 total_size_source = total_size_source + int(size)
             else:
-                raise NotADirectoryError("%{0}: {1} does not exist".format(method, path))
+                raise NotADirectoryError("%{0}: '{1}' does not exist".format(method, path))
 
         total_num_directories = int(len(list_directories))
         total_size_source = float(total_size_source / 1000000)
