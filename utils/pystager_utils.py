@@ -1,7 +1,7 @@
 # ********** Info **********
-# @Creation: 2020-12-10
-# @Update: 2021-07-26
-# @Author: Amirpasha Mozaffari, Michael Langguth
+# @Creation: 2021-07-25
+# @Update: 2021-07-27
+# @Author: Michael Langguth, based on work by Amirpasha Mozaffari
 # @Site: Juelich supercomputing Centre (JSC) @ FZJ
 # @File: pystager_utils.py
 # ********** Info **********
@@ -27,7 +27,6 @@ class Distributor(object):
     Class for defining (customized) distributors. The distributor selected by the distributor_engine must provide
     the dynamical arguments for a parallelized job run by PyStager (see below) which inherits from this class.
     """
-
     class_name = "Distributor"
 
     def __init__(self, distributor_name):
