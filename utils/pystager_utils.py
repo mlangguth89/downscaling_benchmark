@@ -96,13 +96,13 @@ class PyStager(Distributor):
     distributor and static arguments (see below).
     Running PyStager constitutes a three-step approach. First PyStager must be instanciated, then it must be set-up by
     calling the setup-method and finally, the job gets executed in a parallelized manner.
-    Example: Let the function 'process_data' be capable to process of hourly data files between date_start and date_end.
+    Example: Let the function 'process_data' be capable to process hourly data files between date_start and date_end.
              Thus, parallelization can be organized with distributor_date which only must be fed with a start and end
              date (the freq-argument is optional and defaults to "1D" -> daily frequency (see pandas)).
              With the data being stored under <data_dir>, PyStager can be called in a Python-script by:
              pystager_obj = PyStager(process_data, "date")
              pystager_obj.setup(<start_datetime_obj>, <end_datetime_obj>, freq="1H")
-             pystager_obj.run(<data_dir>, <static_arguments>)
+             pystager_obj.run(<static_arguments>)
     By splitting up the setup-method from the execution, multiple job executions becomes possible.
     """
 
