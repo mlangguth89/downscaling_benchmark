@@ -1,6 +1,6 @@
 # ********** Info **********
 # @Creation: 2021-07-28
-# @Update: 2021-07-28
+# @Update: 2021-07-30
 # @Author: Michael Langguth
 # @Site: Juelich supercomputing Centre (JSC) @ FZJ
 # @File: helper.py
@@ -12,6 +12,7 @@ A collection of auxiliary functions.
 The following functions are provided:
     * ensure_datetime
     * extract_date
+    * subset_files_on_date
 """
 
 import os
@@ -59,3 +60,26 @@ def extract_date(date_str):
         raise err
     return date_extracted
 
+
+def subset_files_on_date(all_files_list: list, val: int, filter_basedir: bool = False, date_alias: str = "H"):
+    """
+    Subsets a list of files based on a time-pattern that must be part of the filename.
+    :param all_files_list: list of all files
+    :param val: time value (default meaning: hour of the day, see date_alias)
+    :param filter_basedir: flag for removing base-directory when subsetting, e.g. when dates are present in basedir
+    :param date_alias: also known as offset alias in pandas
+    (see https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#timeseries-offset-aliases)
+    """
+    method = subset_files_on_date.__name__
+
+    if filter_basedir:
+        all_files_dates = [(extract_date(os.path.dirname(dfile))).strftime(date_alias) for dfile in all_files_list]
+    else:
+        all_files_dates = [(extract_date(dfile)).strftime(date_alias) for dfile in all_files_list]
+    inds = [idx for idx, s in enumerate(all_files_dates) if "{0:02d}".format(int(val)) in s]
+
+    if not inds:
+        raise ValueError("%{0}: Could not find any file carrying the value of {1:02d} with date alias {2}"
+                         .format(method, val, date_alias))
+    else:
+        return list(np.asarray(all_files_list)[inds])
