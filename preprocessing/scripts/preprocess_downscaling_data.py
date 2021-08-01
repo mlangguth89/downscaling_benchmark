@@ -90,7 +90,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             raise NotADirectoryError(err_mess)
 
         year_str, month_str = str(year), "{0:02d}".format(int(month))
-        hh_str = "*" if hour is None else "{0:02d}".format(int(hour))
+        hh_str = "*[0-2][0-9]" if hour is None else "{0:02d}".format(int(hour))
 
         search_patt = os.path.join(dirr_curr, "sfc_{0}{1}*_{2}.nc".format(year_str, month_str, hh_str))
 
