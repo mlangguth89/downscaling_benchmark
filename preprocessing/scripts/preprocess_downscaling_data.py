@@ -110,7 +110,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
-                shutil.move(nc_file.replace(".nc", "_remapped.nc"), dest_dir)
+                nc_file_new = os.path.basename(nc_file)
+                shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_dir, nc_file_new))
             except Exception as err:
                 nwarns += 1
                 logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +
