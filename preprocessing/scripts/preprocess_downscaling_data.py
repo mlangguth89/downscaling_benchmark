@@ -59,7 +59,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
                       nmax_warn: int = 3, hour: int = None):
     """
     Function that runs job of an individual worker.
-    :param year_month: Datetime-objdect indicating year and month for which data should be preprocessed
+    :param year_months: Datetime-objdect indicating year and month for which data should be preprocessed
     :param dir_in: Top-level input directory for original IFS HRED netCDF-files
     :param dir_out: Top-level output directory wheer netCDF-files and TFRecords of remapped data will be stored
     :param logger: Logging instance for log process on worker
@@ -70,6 +70,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
     method = preprocess_worker.__name__
 
     nwarns = 0
+    this_dir = os.path.dirname(os.path.realpath(__file__))
 
     for year_month in year_months:
         assert isinstance(year_month, dt.datetime),\
@@ -104,7 +105,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         nwarns = 0
         # Perform remapping
         for nc_file in nc_files:
-            cmd = "./coarsen_ifs_hres.sh {0}".format(nc_file)
+            cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
             except Exception as err:
