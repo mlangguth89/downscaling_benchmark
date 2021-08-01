@@ -80,7 +80,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
         dirr_curr = os.path.join(dir_in, str(year), subdir)
 
-        assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance".format(method)
+        assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance"\
+            .format(method)
 
         if not os.path.isdir(dirr_curr):
             err_mess = "%{0}: Could not find directory '{1}'".format(method, dirr_curr)
@@ -90,13 +91,13 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         year_str, month_str = str(year), "{0:02d}".format(int(month))
         hh_str = "*" if hour is None else "{0:02d}".format(int(hour))
 
-        search_patt = os.path.join(dirr_curr, "sfc_${0}${1}*_{2}.nc".format(year_str, month_str, hh_str))
+        search_patt = os.path.join(dirr_curr, "sfc_{0}{1}*_{2}.nc".format(year_str, month_str, hh_str))
 
         nc_files = glob.glob(search_patt)
 
         if not nc_files:
-            err_mess = "%{0}: Could not find any netCDF-file in '{1}' with search pattern '{2}'".format(method, dirr_curr,
-                                                                                                        search_patt)
+            err_mess = "%{0}: Could not find any netCDF-file in '{1}' with search pattern '{2}'"\
+                .format(method, dirr_curr, search_patt)
             logger.critical(err_mess)
             raise FileNotFoundError(err_mess)
 
