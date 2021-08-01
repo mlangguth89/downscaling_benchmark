@@ -13,9 +13,9 @@ scr_name="%coarsen_ifs_hres.sh"
 HOST_NAME=`hostname`
 
 # grid descriptions 
-fine_grid_base_dscr="ifs_hres_grid_base"
-fine_grid_tar_dscr="ifs_hres_grid_tar"
-coarse_grid_dscr="ifs_hres_coarsened_grid"
+fine_grid_base_dscr="../grid_des/ifs_hres_grid_base"
+fine_grid_tar_dscr="../grid_des/ifs_hres_grid_tar"
+coarse_grid_dscr="../grid_des/ifs_hres_coarsened_grid"
 
 # start and end coordinates of target domain (must correspond to grid descriptions!)
 lon0="3.2"
