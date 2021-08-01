@@ -17,6 +17,7 @@ import shutil
 import argparse
 import logging
 import subprocess as sp
+import datetime as dt
 from tfrecords_utils import IFS2TFRecords
 from pystager_utils import PyStager
 
@@ -54,11 +55,25 @@ def main():
     ifs_hres_pystager.run(dir_in, dir_out)
 
 
-def preprocess_worker(year, month, dir_in, dir_out, logger, nmax_warn=3, hour=None):
-
+def preprocess_worker(year_month: dt.datetime, dir_in: str, dir_out: str, logger: logging.Logger,
+                      nmax_warn: int = 3, hour: int = None):
+    """
+    Function that runs job of an individual worker.
+    :param year_month: Datetime-objdect indicating year and month for which data should be preprocessed
+    :param dir_in: Top-level input directory for original IFS HRED netCDF-files
+    :param dir_out: Top-level output directory wheer netCDF-files and TFRecords of remapped data will be stored
+    :param logger: Logging instance for log process on worker
+    :param nmax_warn: maximu number of warnings/problems met during processing (default:3)
+    :param hour: hour of the dy for which data should be preprocessed (default: None)
+    :return: number of warnings/problems met during processing (if they do not trigger an error)
+    """
     method = preprocess_worker.__name__
 
-    subdir = "{0:d}-${1:02d}".format(int(year), int(month))
+    assert isinstance(year_month, dt.datetime),\
+        "%{0} year_month-argument must be a datetime-object, but is of type '{1}'".format(method, type(year_month))
+
+    subdir = year_month.strftime("%Y-%m")
+    year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
     dirr_curr = os.path.join(dir_in, str(year), subdir)
 
     assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance".format(method)
