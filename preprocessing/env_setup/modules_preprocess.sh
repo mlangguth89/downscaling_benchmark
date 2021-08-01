@@ -14,7 +14,7 @@ echo "${SCR_NAME}: Start loading modules on ${HOST_NAME} required for preprocess
 
 ml purge
 ml use $OTHERSTAGES
-ml Stages/2020a
+ml Stages/2020
 
 ml GCC/9.3.0
 ml GCCcore/.9.3.0
