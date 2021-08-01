@@ -55,7 +55,7 @@ def main():
     ifs_hres_pystager.run(dir_in, dir_out)
 
 
-def preprocess_worker(year_month: dt.datetime, dir_in: str, dir_out: str, logger: logging.Logger,
+def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logging.Logger,
                       nmax_warn: int = 3, hour: int = None):
     """
     Function that runs job of an individual worker.
@@ -69,60 +69,64 @@ def preprocess_worker(year_month: dt.datetime, dir_in: str, dir_out: str, logger
     """
     method = preprocess_worker.__name__
 
-    assert isinstance(year_month, dt.datetime),\
-        "%{0} year_month-argument must be a datetime-object, but is of type '{1}'".format(method, type(year_month))
-
-    subdir = year_month.strftime("%Y-%m")
-    year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
-    dirr_curr = os.path.join(dir_in, str(year), subdir)
-
-    assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance".format(method)
-
-    if not os.path.isdir(dirr_curr):
-        err_mess = "%{0}: Could not find directory '{1}'".format(method, dirr_curr)
-        logger.critical(err_mess)
-        raise NotADirectoryError(err_mess)
-
-    year_str, month_str = str(year), "{0:02d}".format(int(month))
-    hh_str = "*" if hour is None else "{0:02d}".format(int(hour))
-
-    search_patt = os.path.join(dirr_curr, "sfc_${0}${1}*_{2}.nc".format(year_str, month_str, hh_str))
-
-    nc_files = glob.glob(search_patt)
-
-    if not nc_files:
-        err_mess = "%{0}: Could not find any netCDF-file in '{1}' with search pattern '{2}'".format(method, dirr_curr,
-                                                                                                    search_patt)
-        logger.critical(err_mess)
-        raise FileNotFoundError(err_mess)
-
     nwarns = 0
-    # Perform remapping
-    for nc_file in nc_files:
-        cmd = "./coarsen_ifs_hres {0}".format(nc_file)
+
+    for year_month in year_months:
+        assert isinstance(year_month, dt.datetime),\
+            "%{0}: All year_months-argument must be a datetime-object. Current one is of type '{1}'"\
+            .format(method, type(year_month))
+
+        subdir = year_month.strftime("%Y-%m")
+        year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
+        dirr_curr = os.path.join(dir_in, str(year), subdir)
+
+        assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance".format(method)
+
+        if not os.path.isdir(dirr_curr):
+            err_mess = "%{0}: Could not find directory '{1}'".format(method, dirr_curr)
+            logger.critical(err_mess)
+            raise NotADirectoryError(err_mess)
+
+        year_str, month_str = str(year), "{0:02d}".format(int(month))
+        hh_str = "*" if hour is None else "{0:02d}".format(int(hour))
+
+        search_patt = os.path.join(dirr_curr, "sfc_${0}${1}*_{2}.nc".format(year_str, month_str, hh_str))
+
+        nc_files = glob.glob(search_patt)
+
+        if not nc_files:
+            err_mess = "%{0}: Could not find any netCDF-file in '{1}' with search pattern '{2}'".format(method, dirr_curr,
+                                                                                                        search_patt)
+            logger.critical(err_mess)
+            raise FileNotFoundError(err_mess)
+
+        nwarns = 0
+        # Perform remapping
+        for nc_file in nc_files:
+            cmd = "./coarsen_ifs_hres {0}".format(nc_file)
+            try:
+                _ = sp.check_output(cmd, shell=True)
+            except Exception as err:
+                nwarns += 1
+                logger.debug("%{0}: A problem was faced when handling file '{1}'".format(method, nc_file))
+                if nwarns > nmax_warn:
+                    logger.critical("%{0}: More warnings triggered than allowed ({1:d}). ".format(method, nmax_warn) +
+                                    "Job will be trerminated and see error below.")
+                    raise err
+                else:
+                    pass
+
+        # move remapped data to own directory
+        shutil.move(os.path.join(dirr_curr, "*_remapped.nc"),
+                    os.path.join(dir_out, "netcdf_data", year_str, "{0}-{1}".format(year_str, month_str)))
+
+        ifs_tfr = IFS2TFRecords(os.path.join(dir_out, "netcdf_data"), nc_files[0].replace(".nc", "_remapped.nc"))
+        ifs_tfr.get_and_write_metadata()
         try:
-            _ = sp.check_output(cmd, shell=True)
+            ifs_tfr.write_monthly_data_to_tfr(os.path.join(dir_out, "tfr_data"))
         except Exception as err:
-            nwarns += 1
-            logger.debug("%{0}: A problem was faced when handling file '{1}'".format(method, nc_file))
-            if nwarns > nmax_warn:
-                logger.critical("%{0}: More warnings triggered than allowed ({1:d}). ".format(method, nmax_warn) +
-                                "Job will be trerminated and see error below.")
-                raise err
-            else:
-                pass
-
-    # move remapped data to own directory
-    shutil.move(os.path.join(dirr_curr, "*_remapped.nc"),
-                os.path.join(dir_out, "netcdf_data", year_str, "{0}-{1}".format(year_str, month_str)))
-
-    ifs_tfr = IFS2TFRecords(os.path.join(dir_out, "netcdf_data"), nc_files[0].replace(".nc", "_remapped.nc"))
-    ifs_tfr.get_and_write_metadata()
-    try:
-        ifs_tfr.write_monthly_data_to_tfr(os.path.join(dir_out, "tfr_data"))
-    except Exception as err:
-        logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
-        raise err
+            logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
+            raise err
 
     return nwarns
 
