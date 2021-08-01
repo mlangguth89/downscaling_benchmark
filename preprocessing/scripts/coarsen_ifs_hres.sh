@@ -95,16 +95,16 @@ cdo remapbil,${fine_grid_tar_dscr} -setgrid,${coarse_grid_dscr} ${filename_crs} 
 
 # retransform dry static energy to t2m
 ncap2 -O -s "t2m=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped} 
-ncks --no_tmp_fl -O -x -v s ${filename_remapped} ${filename_remapped} 
+ncks -O -x -v s ${filename_remapped} ${filename_remapped} 
 
 
 ### Return and clean-up in case of success ###
 if [[ -f ${filename_remapped} ]]; then
   echo "${scr_name}: Processed data successfully from ${filename} to ${filename_remapped}. Cleaning-up..."
   rm $filename_sd $filename_dse $filename_crs 
-  return 0
+  exit 0
 else
   echo "${scr_name}: Something went wrong when processing ${filename}. Check intermediate files."
-  return 1
+  exit 1
 fi
 
