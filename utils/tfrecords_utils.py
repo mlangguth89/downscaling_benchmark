@@ -55,7 +55,7 @@ class IFS2TFRecords(object):
             lat, lon = da["lat"].values, da["lon"].values
             nlat, nlon, nvars = len(lat), len(lon), len(vars_nc)
 
-        meta_dict = {"coordinates": {"variable": vars_nc.to_list(),
+        meta_dict = {"coordinates": {"variable": vars_nc.tolist(),
                                      "lat": np.round(lat, decimals=2).tolist(),
                                      "lon": np.round(lon, decimals=2).tolist()},
                      "shape": {"nvars": nvars, "nlat": nlat, "nlon": nlon}}
