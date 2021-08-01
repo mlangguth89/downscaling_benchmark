@@ -104,7 +104,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         nwarns = 0
         # Perform remapping
         for nc_file in nc_files:
-            cmd = "./coarsen_ifs_hres {0}".format(nc_file)
+            cmd = "./coarsen_ifs_hres.sh {0}".format(nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
             except Exception as err:
