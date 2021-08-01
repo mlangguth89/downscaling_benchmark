@@ -14,6 +14,7 @@ if "mpi4py" not in sys.modules:
 import multiprocessing
 import subprocess
 import inspect
+from typing import Union, List
 from mpi4py import MPI
 import logging
 import numpy as np
@@ -42,12 +43,14 @@ class Distributor(object):
 
         if distributor_name.lower() == "date":
             distributor = self.distributor_date
+        elif distributor_name.lower() == "year_month_list":
+            distributor = self.distributor_year_month
         else:
             raise ValueError("%{0}: The distributor named {1} is not implemented yet.".format(method, distributor_name))
 
         return distributor
 
-    def distributor_date(self, date_start, date_end, freq="1D"):
+    def distributor_date(self, date_start: dt.datetime, date_end: dt.datetime, freq: str = "1D"):
         """
         Creates a transfer dictionary whose elements are lists for individual start and end dates for each processor
         param date_start: first date to convert
@@ -72,7 +75,8 @@ class Distributor(object):
         else:
             num_processes = self.num_processes
 
-        # init transfer dictionary
+        # init transfer dictionary (function create_transfer_dict_from_list does not work here since transfer dictionary
+        #                           consists of tuple with start and end-date instead of a number of elements)
         transfer_dict = dict.fromkeys(list(range(1, num_processes)))
 
         dates_req_all = pd.date_range(date_start, date_end, freq=freq)
@@ -84,6 +88,64 @@ class Distributor(object):
             transfer_dict[node+1] = [dates_req_all[node*ndates_per_node],
                                      dates_req_all[ind_max]]
             if ndates-1 == ind_max:
+                break
+
+        return transfer_dict
+
+    def distributor_year_month(self, years, months):
+
+        method = "{0}->{1}".format(Distributor.class_name, Distributor.distributor_year_month.__name__)
+
+        list_or_int = Union[List, int]
+
+        assert isinstance(years, list_or_int.__args__), "%{0}: Input years must be list of years or an integer."\
+                                                        .format(method)
+        assert isinstance(months, list_or_int.__args__), "%{0}: Input months must be list of months or an integer."\
+                                                         .format(method)
+
+        if not hasattr(self, "num_processes"):
+            print("%{0}: WARNING: Attribute num_processes is not set and thus no parallelization will take place.")
+            num_processes = 2
+        else:
+            num_processes = self.num_processes
+
+        if isinstance(years, int): years = [years]
+        if isinstance(months, int): months = [months]
+
+        all_years_months = []
+        for year in years:
+            for month in months:
+                all_years_months.append(dt.datetime.strptime("{0:d}-{1:02d}".format(int(year), int(month)), "%Y-%M"))
+
+        transfer_dict = Distributor.create_transfer_dict_from_list(all_years_months, num_processes)
+
+        return transfer_dict
+
+    @staticmethod
+    def create_transfer_dict_from_list(in_list: List, num_procs: int):
+        """
+        Splits up list to transfer dictionary for PyStager.
+        :param in_list: list of elements that can be distributed to workers
+        :param num_procs: Number of workers that are avaialable to operate on elements of list
+        :return: transfer dictionary for PyStager
+        """
+
+        method = Distributor.create_transfer_dict_from_list.__name__
+
+        assert isinstance(in_list, list), "%{0} Input argument in_list must be a list, but is of type '{1}'."\
+                                          .format(method, type(in_list))
+
+        assert int(num_procs) >= 2, "%{0}: Number of processes must be at least two.".format(method)
+
+        nelements = len(in_list)
+        nelements_per_node = int(np.ceil(float(nelements)/(num_procs-1)))
+
+        transfer_dict = dict.fromkeys(list(range(1, num_procs)))
+
+        for node in np.arange(num_procs):
+            ind_max = np.minimum((node+1)*nelements_per_node-1, nelements-1)
+            transfer_dict[node+1] = in_list[node*nelements_per_node:ind_max]
+            if nelements-1 == ind_max:
                 break
 
         return transfer_dict
