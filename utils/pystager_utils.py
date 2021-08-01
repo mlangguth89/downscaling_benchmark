@@ -118,7 +118,6 @@ class Distributor(object):
                 all_years_months.append(dt.datetime.strptime("{0:d}-{1:02d}".format(int(year), int(month)), "%Y-%m"))
 
         transfer_dict = Distributor.create_transfer_dict_from_list(all_years_months, num_processes)
-        print(transfer_dict)
 
         return transfer_dict
 
@@ -363,9 +362,10 @@ class PyStager(Distributor):
         else:
             logger.info("Worker {0} received input message: {1}".format(self.my_rank, mess_in[0]))
             if "nmax_warn" in inspect.getfullargspec(self.job).args:
-                worker_stat = self.job(zip(*(mess_in, args)), logger, nmax_warn=self.nmax_warn)
+                worker_stat = self.job(mess_in, *args, logger, nmax_warn=self.nmax_warn)
             else:
-                worker_stat = self.job(zip(*(mess_in, args)), logger)
+                worker_stat = self.job(mess_in, *args, logger)
+
 
         err_mess = None
         if worker_stat == -1:
