@@ -118,6 +118,7 @@ class Distributor(object):
                 all_years_months.append(dt.datetime.strptime("{0:d}-{1:02d}".format(int(year), int(month)), "%Y-%M"))
 
         transfer_dict = Distributor.create_transfer_dict_from_list(all_years_months, num_processes)
+        print(transfer_dict)
 
         return transfer_dict
 
@@ -231,7 +232,7 @@ class PyStager(Distributor):
         """
         method = "{0}->{1}".format(PyStager.class_name, PyStager.run.__name__)
 
-        if self.transfer_dict is None:
+        if self.my_rank == 0 and self.transfer_dict is None:
             raise AttributeError("%{0}: transfer_dict is still None. Call setup beforehand!".format(method))
 
         # if not os.path.isdir(data_dir):
@@ -349,6 +350,8 @@ class PyStager(Distributor):
                                                    .format(method, type(logger))
 
         mess_in = self.comm.recv()
+
+        logger.info("Worker {0} received input message: {1}".format(self.my_rank, ",".join(mess_in[0])))
         if mess_in is None:
             mess_out = ("IDLEE{0}: Worker {1} is idle".format(self.my_rank, self.my_rank), 0)
             logger.info(mess_out)
