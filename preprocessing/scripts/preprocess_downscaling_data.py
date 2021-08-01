@@ -77,9 +77,13 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             "%{0}: All year_months-argument must be a datetime-object. Current one is of type '{1}'"\
             .format(method, type(year_month))
 
-        subdir = year_month.strftime("%Y-%m")
         year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
+        year_str, month_str = str(year), "{0:02d}".format(int(month))
+        hh_str = "*[0-2][0-9]" if hour is None else "{0:02d}".format(int(hour))
+
+        subdir = year_month.strftime("%Y-%m")
         dirr_curr = os.path.join(dir_in, str(year), subdir)
+        dest_dir = os.path.join(dir_out, "netcdf_data", year_str, subdir)
 
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance"\
             .format(method)
@@ -88,9 +92,6 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             err_mess = "%{0}: Could not find directory '{1}'".format(method, dirr_curr)
             logger.critical(err_mess)
             raise NotADirectoryError(err_mess)
-
-        year_str, month_str = str(year), "{0:02d}".format(int(month))
-        hh_str = "*[0-2][0-9]" if hour is None else "{0:02d}".format(int(hour))
 
         search_patt = os.path.join(dirr_curr, "sfc_{0}{1}*_{2}.nc".format(year_str, month_str, hh_str))
 
@@ -108,9 +109,11 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
+                shutil.move(nc_file.replace(".nc", "_remapped.nc"), dest_dir)
             except Exception as err:
                 nwarns += 1
-                logger.debug("%{0}: A problem was faced when handling file '{1}'".format(method, nc_file))
+                logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +
+                             "Remapping of this file presumably failed.")
                 if nwarns > nmax_warn:
                     logger.critical("%{0}: More warnings triggered than allowed ({1:d}). ".format(method, nmax_warn) +
                                     "Job will be trerminated and see error below.")
@@ -119,10 +122,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
                     pass
 
         # move remapped data to own directory
-        shutil.move(os.path.join(dirr_curr, "*_remapped.nc"),
-                    os.path.join(dir_out, "netcdf_data", year_str, "{0}-{1}".format(year_str, month_str)))
-
-        ifs_tfr = IFS2TFRecords(os.path.join(dir_out, "netcdf_data"), nc_files[0].replace(".nc", "_remapped.nc"))
+        ifs_tfr = IFS2TFRecords(dest_dir, os.path.join(dest_dir, os.path.basename(nc_files[0])
+                                                       .replace(".nc", "_remapped.nc")))
         ifs_tfr.get_and_write_metadata()
         try:
             ifs_tfr.write_monthly_data_to_tfr(os.path.join(dir_out, "tfr_data"))
