@@ -115,7 +115,7 @@ class Distributor(object):
         all_years_months = []
         for year in years:
             for month in months:
-                all_years_months.append(dt.datetime.strptime("{0:d}-{1:02d}".format(int(year), int(month)), "%Y-%M"))
+                all_years_months.append(dt.datetime.strptime("{0:d}-{1:02d}".format(int(year), int(month)), "%Y-%m"))
 
         transfer_dict = Distributor.create_transfer_dict_from_list(all_years_months, num_processes)
         print(transfer_dict)
@@ -143,11 +143,14 @@ class Distributor(object):
 
         transfer_dict = dict.fromkeys(list(range(1, num_procs)))
 
-        for node in np.arange(num_procs):
-            ind_max = np.minimum((node+1)*nelements_per_node-1, nelements-1)
-            transfer_dict[node+1] = in_list[node*nelements_per_node:ind_max]
-            if nelements-1 == ind_max:
-                break
+        for i, element in enumerate(in_list):
+            ind = i % (num_procs-1) + 1
+            if i < num_procs:
+                transfer_dict[ind] = [element]
+            else:
+                transfer_dict[ind].append(element)
+
+        print(transfer_dict)
 
         return transfer_dict
 
