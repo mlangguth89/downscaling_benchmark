@@ -84,6 +84,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         subdir = year_month.strftime("%Y-%m")
         dirr_curr = os.path.join(dir_in, str(year), subdir)
         dest_dir = os.path.join(dir_out, "netcdf_data", year_str, subdir)
+        os.makedirs(dest_dir, exist_ok=True)
 
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance"\
             .format(method)
