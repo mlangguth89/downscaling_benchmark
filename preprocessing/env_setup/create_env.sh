@@ -84,7 +84,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   source "${activate_virt_env}"
   echo "${SCR_NAME} Start installing additional Python modules with pip..."
-  req_file=${ENV_SETUP_DIR}/requirements_preporcessing.txt
+  req_file=${ENV_SETUP_DIR}/requirements_preprocessing.txt
   pip3 install --no-cache-dir -r "${req_file}"
   
   # expand PYTHONPATH...
