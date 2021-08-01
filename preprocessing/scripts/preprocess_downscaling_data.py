@@ -47,7 +47,7 @@ def main():
         raise NotADirectoryError("%{0}: Parsed source directory does not exist.".format(scr_name))
 
     if not os.path.isdir(dir_out):
-        os.makedirs(dir_out)
+        os.makedirs(dir_out, exist_ok=True)
         print("%{0}: Created output-directory for remapped data '{1}'".format(scr_name, dir_out))
 
     ifs_hres_pystager = PyStager(preprocess_worker, "year_month_list", nmax_warn=3)
