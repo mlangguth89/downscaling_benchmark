@@ -162,7 +162,8 @@ class PyStager(Distributor):
         else:
             pass
 
-    def run(self, data_dir, *args, job_name="dummy"):
+    # def run(self, data_dir, *args, job_name="dummy"):
+    def run(self, *args, job_name="dummy"):
         """
         Run PyStager.
         """
@@ -171,8 +172,8 @@ class PyStager(Distributor):
         if self.transfer_dict is None:
             raise AttributeError("%{0}: transfer_dict is still None. Call setup beforehand!".format(method))
 
-        if not os.path.isdir(data_dir):
-            raise NotADirectoryError("%{0}: The passed data directory '{1}' does not exist.".format(method, data_dir))
+        # if not os.path.isdir(data_dir):
+        #    raise NotADirectoryError("%{0}: The passed data directory '{1}' does not exist.".format(method, data_dir))
 
         if self.my_rank == 0:
             logger_main = os.path.join(self.logdir, "{0}_job_main.log".format(job_name))
