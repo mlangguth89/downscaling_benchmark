@@ -246,7 +246,7 @@ class PyStager(Distributor):
             logging.basicConfig(filename=logger_main, level=logging.DEBUG,
                                 format="%(asctime)s:%(levelname)s:%(message)s")
             logger = logging.getLogger(__file__)
-            logger.addHandler(logging.StreamHandle(sys.stdout))
+            logger.addHandler(logging.StreamHandler(sys.stdout))
 
             logger.info("PyStager is started at {0}".format(dt.datetime.now().strftime("%Y-%m%-d %H:%M:%S UTC")))
 
