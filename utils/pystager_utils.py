@@ -362,6 +362,7 @@ class PyStager(Distributor):
             self.comm.send(mess_out, dest=0)
             return True
         else:
+            logger.info("Worker {0} received input message: {1}".format(self.my_rank, ",".join(mess_in[0])))
             if "nmax_warn" in inspect.getfullargspec(self.job).args:
                 worker_stat = self.job(zip(*(mess_in, args)), logger, nmax_warn=self.nmax_warn)
             else:
