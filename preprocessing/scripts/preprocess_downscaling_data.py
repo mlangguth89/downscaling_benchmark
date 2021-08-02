@@ -114,7 +114,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
-                nc_file_new = os.path.basename(nc_file)
+                nc_file_new = os.path.basename(nc_file).replace(".nc", "_remapped.nc")
                 shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_dir, nc_file_new))
                 logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
                             .format(method, dest_dir))
