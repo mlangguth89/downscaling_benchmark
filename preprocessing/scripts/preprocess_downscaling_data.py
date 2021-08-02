@@ -109,8 +109,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         logger.info("%{0}: Found {1:d} files under '{2}' for preprocessing.".format(method, nfiles, dirr_curr))
         nwarns = 0
         # Perform remapping
-        for nc_file in nc_files:
-            logger.info("%{0}: Start remapping of data from file '{1}'".format(method, nc_file))
+        for i, nc_file in enumerate(nc_files):
+            logger.info("%{0}: Start remapping of data from file '{1}' ({2:d}/{3:d})".format(method, nc_file, i, nfiles))
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
