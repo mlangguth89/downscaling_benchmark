@@ -30,9 +30,6 @@ class IFS2TFRecords(object):
         self.tfr_dir = tfr_dir
         self.meta_data = os.path.join(self.tfr_dir, "metadata.json")
         self.example_nc_data_file = example_nc_file
-        meta_dict = self.get_and_write_metadata()
-        self.variables = meta_dict["coordinates"]["variable"]
-        self.data_dim = (meta_dict["shape"]["nvars"], meta_dict["shape"]["nlat"], meta_dict["shape"]["nlon"])
 
         if not os.path.isdir(self.tfr_dir):
             if create_tfr_dir:
@@ -41,6 +38,10 @@ class IFS2TFRecords(object):
             else:
                 raise NotADirectoryError("%{0}: TFRecords-directory does not exist.".format(method) +
                                          "Either create it manually or set create_tfr_dir to True.")
+
+        meta_dict = self.get_and_write_metadata()
+        self.variables = meta_dict["coordinates"]["variable"]
+        self.data_dim = (meta_dict["shape"]["nvars"], meta_dict["shape"]["nlat"], meta_dict["shape"]["nlon"])
 
     def get_and_write_metadata(self):
 
