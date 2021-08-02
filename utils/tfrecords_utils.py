@@ -118,7 +118,7 @@ class IFS2TFRecords(object):
             data_arr_all = dataset.to_array()
             data_arr_all = data_arr_all.transpose("time", "variable", ...)
 
-        dims2check = data_arr_all.isel(time=0).squeeze().shape()
+        dims2check = data_arr_all.isel(time=0).squeeze().shape
         vars2check = list(data_arr_all["variables"].values)
         assert dims2check == self.data_dim, \
                "%{0}: Shape of data from netCDF-file list {1} does not match expected shape {2}"\
