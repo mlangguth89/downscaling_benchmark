@@ -23,5 +23,6 @@ ml CDO/1.9.8
 ml NCO/4.9.5
 ml mpi4py/3.0.3-Python-3.8.5
 ml SciPy-Stack/2020-Python-3.8.5
+ml dask/2.22.0-Python-3.8.5
 ml TensorFlow/2.3.1-Python-3.8.5
 
