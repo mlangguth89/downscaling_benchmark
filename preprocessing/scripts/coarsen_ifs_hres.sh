@@ -79,7 +79,9 @@ fi
 filename_sd="${filename_base}_subdom.nc"
 ncea -O -d time,0 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
 ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
+ncap2 -O -s "lat=double(lat); lon=double(lon)" ${filename_sd} ${filename_sd}
 
+# reset coordinates for later slicing
 lat0="45.0"
 lat1="54.5"
 lon0="4.0"
@@ -100,11 +102,13 @@ cdo remapcon,${coarse_grid_dscr} -setgrid,${fine_grid_base_dscr} ${filename_dse}
 filename_remapped="${filename_base}_remapped.nc"
 cdo remapbil,${fine_grid_tar_dscr} -setgrid,${coarse_grid_dscr} ${filename_crs} ${filename_remapped}
 
-# retransform dry static energy to t2m and copy over target t2m from original file
+# retransform dry static energy to t2m
 ncap2 -O -s "t2m_in=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped}
-ncks -O -x -v s ${filename_remapped} ${filename_remapped} 
-ncea -A -d lat,${lat0},${lat1} -d lon,${lon0},${lon1} -v t2m ${filename_sd} ${filename_remapped}
-ncrename -v t2m,t2m_tar ${filename_remapped}
+# finally rename data to distinguish between input and target data (the later must be copied over from previous files)
+ncrename -v z,z_in ${filename_remapped}
+ncks -O -x -v s ${filename_remapped} ${filename_remapped}
+ncea -A -d lat,${lat0},${lat1} -d lon,${lon0},${lon1} -v t2m,z ${filename_sd} ${filename_remapped}
+ncrename -v t2m,t2m_tar -v z,z_tar ${filename_remapped}
 
 ### Return and clean-up in case of success ###
 if [[ -f ${filename_remapped} ]]; then
