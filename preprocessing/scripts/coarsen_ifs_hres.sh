@@ -77,9 +77,12 @@ fi
 
 # shrink data to region of interest
 filename_sd="${filename_base}_subdom.nc"
-ncea -O -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd 
+ncea -O -d time,0 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
 
-
+lat0=$(expr ${lat0} - ${dx})
+lat1=$(expr ${lat1} + ${dx})
+lon0=$(expr ${lon0} - ${dx})
+lon1=$(expr ${lon1} + ${dx})
 
 # calculate dry static energy for first-order conservative remapping
 filename_dse="${filename_base}_dse.nc"
