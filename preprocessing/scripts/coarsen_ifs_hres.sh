@@ -22,6 +22,7 @@ lon0="3.2"
 lon1="17.5"
 lat0="44.2"
 lat1="55.3"
+dx="0.8"
 
 # some IFS-specific parameters (obtained from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)
 cpd="1004.709"
@@ -78,6 +79,8 @@ fi
 filename_sd="${filename_base}_subdom.nc"
 ncea -O -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd 
 
+
+
 # calculate dry static energy for first-order conservative remapping
 filename_dse="${filename_base}_dse.nc"
 ncap2 -O -s "s=${cpd}*t2m + z + ${g}*2" -v ${filename_sd} ${filename_dse} 
@@ -93,10 +96,11 @@ cdo remapcon,${coarse_grid_dscr} -setgrid,${fine_grid_base_dscr} ${filename_dse}
 filename_remapped="${filename_base}_remapped.nc"
 cdo remapbil,${fine_grid_tar_dscr} -setgrid,${coarse_grid_dscr} ${filename_crs} ${filename_remapped}
 
-# retransform dry static energy to t2m
-ncap2 -O -s "t2m=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped} 
+# retransform dry static energy to t2m and copy over target t2m from original file
+ncap2 -O -s "t2m_in=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped}
 ncks -O -x -v s ${filename_remapped} ${filename_remapped} 
-
+ncea -A -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} -v t2m ${filename_sd} ${filename_remapped}
+ncrename -v t2m,t2m_tar ${filename_remapped}
 
 ### Return and clean-up in case of success ###
 if [[ -f ${filename_remapped} ]]; then
