@@ -91,7 +91,7 @@ class IFS2TFRecords(object):
         method = "%{0}->{1}".format(IFS2TFRecords.class_name, IFS2TFRecords.write_monthly_data_to_tfr.__name__)
 
         if not os.path.isdir(dir_in):
-            raise NotADirectoryError("%{0}: Passed directory does not exist.".format(method))
+            raise NotADirectoryError("%{0}: Passed directory '{1}' does not exist.".format(method, dir_in))
 
         nc_files = glob.glob(os.path.join(dir_in, "*.nc"))
 
