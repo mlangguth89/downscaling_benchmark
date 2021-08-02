@@ -78,11 +78,12 @@ fi
 # shrink data to region of interest
 filename_sd="${filename_base}_subdom.nc"
 ncea -O -d time,0 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
+ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
 
-lat0=$(expr ${lat0} - ${dx})
-lat1=$(expr ${lat1} + ${dx})
-lon0=$(expr ${lon0} - ${dx})
-lon1=$(expr ${lon1} + ${dx})
+lat0="45.0"
+lat1="54.5"
+lon0="4.0"
+lon1="16.71"
 
 # calculate dry static energy for first-order conservative remapping
 filename_dse="${filename_base}_dse.nc"
@@ -102,7 +103,7 @@ cdo remapbil,${fine_grid_tar_dscr} -setgrid,${coarse_grid_dscr} ${filename_crs} 
 # retransform dry static energy to t2m and copy over target t2m from original file
 ncap2 -O -s "t2m_in=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped}
 ncks -O -x -v s ${filename_remapped} ${filename_remapped} 
-ncea -A -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} -v t2m ${filename_sd} ${filename_remapped}
+ncea -A -d lat,${lat0},${lat1} -d lon,${lon0},${lon1} -v t2m ${filename_sd} ${filename_remapped}
 ncrename -v t2m,t2m_tar ${filename_remapped}
 
 ### Return and clean-up in case of success ###
