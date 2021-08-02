@@ -83,8 +83,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
 
         subdir = year_month.strftime("%Y-%m")
         dirr_curr = os.path.join(dir_in, str(year), subdir)
-        dest_dir = os.path.join(dir_out, "netcdf_data", year_str, subdir)
-        os.makedirs(dest_dir, exist_ok=True)
+        dest_nc_dir = os.path.join(dir_out, "netcdf_data", year_str, subdir)
+        os.makedirs(dest_nc_dir, exist_ok=True)
 
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance"\
             .format(method)
@@ -115,9 +115,9 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             try:
                 _ = sp.check_output(cmd, shell=True)
                 nc_file_new = os.path.basename(nc_file).replace(".nc", "_remapped.nc")
-                shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_dir, nc_file_new))
+                shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_nc_dir, nc_file_new))
                 logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
-                            .format(method, dest_dir))
+                            .format(method, dest_nc_dir))
             except Exception as err:
                 nwarns += 1
                 logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +
@@ -130,13 +130,13 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
                     pass
 
         # move remapped data to own directory
-        ifs_tfr = IFS2TFRecords(dest_dir, os.path.join(dest_dir, os.path.basename(nc_files[0])
-                                                       .replace(".nc", "_remapped.nc")))
+        tfr_data_dir = os.path.join(dir_out, "tfr_data")
+        ifs_tfr = IFS2TFRecords(tfr_data_dir, os.path.join(dest_nc_dir, os.path.basename(nc_files[0])
+                                                           .replace(".nc", "_remapped.nc")))
         ifs_tfr.get_and_write_metadata()
         logger.info("%{0}: IFS2TFRecords-class instance has been initalized successully.".format(method))
         try:
-            tfr_data_dir = os.path.join(dir_out, "tfr_data")
-            ifs_tfr.write_monthly_data_to_tfr(tfr_data_dir)
+            ifs_tfr.write_monthly_data_to_tfr(dest_nc_dir)
         except Exception as err:
             logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
             raise err
