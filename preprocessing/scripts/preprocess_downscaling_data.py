@@ -95,7 +95,8 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             raise NotADirectoryError(err_mess)
 
         search_patt = os.path.join(dirr_curr, "sfc_{0}{1}*_{2}.nc".format(year_str, month_str, hh_str))
-
+        logger.info("%{0}: Serach for netCDF-files under '{1}' for year {2}, month {3} and hour {4}"
+                    .format(method, dirr_curr, year_str, month_str, hh_str))
         nc_files = glob.glob(search_patt)
 
         if not nc_files:
@@ -104,14 +105,19 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
             logger.critical(err_mess)
             raise FileNotFoundError(err_mess)
 
+        nfiles = len(nc_files)
+        logger.info("%{0}: Found {1:d} files under '{2}' for preprocessing.".format(method, nfiles, dirr_curr))
         nwarns = 0
         # Perform remapping
         for nc_file in nc_files:
+            logger.info("%{0}: Start remapping of data from file '{1}'".format(method, nc_file))
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
                 _ = sp.check_output(cmd, shell=True)
                 nc_file_new = os.path.basename(nc_file)
                 shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_dir, nc_file_new))
+                logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
+                            .format(method, dest_dir))
             except Exception as err:
                 nwarns += 1
                 logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +
@@ -127,11 +133,16 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         ifs_tfr = IFS2TFRecords(dest_dir, os.path.join(dest_dir, os.path.basename(nc_files[0])
                                                        .replace(".nc", "_remapped.nc")))
         ifs_tfr.get_and_write_metadata()
+        logger.info("%{0}: IFS2TFRecords-class instance has been initalized successully.".format(method))
         try:
-            ifs_tfr.write_monthly_data_to_tfr(os.path.join(dir_out, "tfr_data"))
+            tfr_data_dir = os.path.join(dir_out, "tfr_data")
+            ifs_tfr.write_monthly_data_to_tfr(tfr_data_dir)
         except Exception as err:
             logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
             raise err
+
+        logger.info("%{0}: TFRecord-files have been created succesfully under '{1}'".format(method, tfr_data_dir))
+        logger.info("%{0}: During processing {1:d} warnings have been faced.".format(method, nwarns))
 
     return nwarns
 
