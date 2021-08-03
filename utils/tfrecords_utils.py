@@ -83,7 +83,7 @@ class IFS2TFRecords(object):
 
         return data
 
-    def write_monthly_data_to_tfr(self, dir_in, hour=None):
+    def write_monthly_data_to_tfr(self, dir_in, hour=None, patt="*.nc"):
         """
         Use dates=pd.date_range(start_date, end_date, freq="M", normalize=True)
         and then dates_red = dates[dates.quarter.isin([2,3])] for generating year_months
@@ -94,7 +94,7 @@ class IFS2TFRecords(object):
         if not os.path.isdir(dir_in):
             raise NotADirectoryError("%{0}: Passed directory '{1}' does not exist.".format(method, dir_in))
 
-        nc_files = glob.glob(os.path.join(dir_in, "*.nc"))
+        nc_files = sorted(glob.glob(os.path.join(dir_in, patt)))
 
         if not nc_files:
             raise FileNotFoundError("%{0}: No netCDF-files found in '{1}'".format(method, dir_in))
@@ -114,12 +114,17 @@ class IFS2TFRecords(object):
 
         #_ = sp.check_output(cmd, shell=True)
 
-        with xr.open_mfdataset(nc_files) as dataset:
-            data_arr_all = dataset.to_array()
-            data_arr_all = data_arr_all.transpose("time", "variable", ...)
+        try:
+            with xr.open_mfdataset(nc_files) as dataset:
+                print("%{0}: Opening netCDF-files from directory '{1}'...".format(method, dir_in))
+                data_arr_all = dataset.to_array()
+                data_arr_all = data_arr_all.transpose("time", "variable", ...)
+        except Exception as err:
+            print("%{0}: Failed to open netCDF-files from directory '{1}'.".format(method, dir_in))
+            raise err
 
         dims2check = data_arr_all.isel(time=0).squeeze().shape
-        vars2check = list(data_arr_all["variables"].values)
+        vars2check = list(data_arr_all["variable"].values)
         assert dims2check == self.data_dim, \
                "%{0}: Shape of data from netCDF-file list {1} does not match expected shape {2}"\
                .format(method, dims2check, self.data_dim)
@@ -143,13 +148,13 @@ class IFS2TFRecords(object):
         try:
             times = data_arr["time"]
             ntimes = len(times)
-            date_start, date_end = ensure_datetime(times[0]), ensure_datetime(times[-1])
+            date_start, date_end = ensure_datetime(times[0].values), ensure_datetime(times[-1].values)
             tfr_file = os.path.join(dirout, "ifs_data_{0}_{1}.tfrecords".format(date_start.strftime(date_fmt),
                                                                                 date_end.strftime(date_fmt)))
 
             with tf.io.TFRecordWriter(tfr_file) as tfr_writer:
-                for time in times:
-                    out = IFS2TFRecords.parse_one_data_arr()
+                for itime in np.arange(ntimes):
+                    out = IFS2TFRecords.parse_one_data_arr(data_arr.isel(time=itime))
                     tfr_writer.write(out.SerializeToString())
 
             print("%{0}: Wrote {1:d} elements to TFRecord-file '{2}'".format(method, ntimes, tfr_file))
