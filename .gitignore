@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+# Byt-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -109,8 +109,8 @@ virt_env*/
 *.DS_Store
 
 # Ignore log- and errorfiles 
-*-err.[0-9]*
-*-out.[0-9]*
+*-err*.[0-9]*
+*-out*.[0-9]*
 
 
 #Ignore the results files
