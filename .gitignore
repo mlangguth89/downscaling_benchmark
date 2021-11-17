@@ -105,6 +105,7 @@ virt_env*/
 
 
 .idea/*
+*/.idea
 
 *.DS_Store
 
