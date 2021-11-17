@@ -2,15 +2,16 @@
 #
 # __authors__ = Michael Langguth
 # __date__  = '2021_03_25'
+# __update__= '2021-11-17'
 #
 # **************** Description ****************
-# This script can be used for setting up the virtual environment needed for AMBS-project
-# Add the flag -lcontainer for setting up the virtual environment inside a running cotainer environment.
+# This script can be used for setting up the virtual environment needed for downscaling with the GAN-network
+# developped by Leinonen et al., 2020 (DOI: https://doi.org/10.1109/TGRS.2020.3032790)
 # **************** Description ****************
 #
-### auxiliary-function ###
+### auxiliary-function S ###
 check_argin() {
-# Handle input arguments and check if one is equal to -lcontainer
+# Handle input arguments and check if one is equal to -lcontainer (not needed currently)
 # Can also be used to check for non-positional arguments (such as -exp_id=*, see commented lines)
     for argin in "$@"; do
         # if [[ $argin == *"-exp_id="* ]]; then
@@ -23,12 +24,22 @@ check_argin() {
         bool_container=0
     fi
 }
-### auxiliary-function ###
+### auxiliary-function E ###
 
-# some first sanity checks
+### MAIN S ###
+set -eu              # enforce abortion if a command is not re
+
+## some first sanity checks
+# script is sourced?
 if [[ ${BASH_SOURCE[0]} == ${0} ]]; then
   echo "ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
   exit 1
+fi
+
+# script is called from env_setup-directory?
+if [[ "${EXE_DIR}" != "env_setup"  ]]; then
+  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
+  return
 fi
 
 # from now on, just return if something unexpected occurs instead of exiting
@@ -47,35 +58,27 @@ WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
 EXE_DIR="$(basename "$ENV_SETUP_DIR")"
 ENV_DIR_BASE=${WORKING_DIR}/virtual_envs/
 ENV_DIR=${ENV_DIR_BASE}/${ENV_NAME}
+TF_CONTAINER=${WORKING_DIR}/env_setup/tensorflow_21.09-tf1-py3.sif
 
 ## perform sanity checks
-# Check if singularity is running
-if [[ -z "${SINGULARITY_NAME}" ]]; then
-  echo "${SCR_NAME} ERROR: create_env.sh must be executed in a running singularity on Juwels
-        in conjuction with container-usage."
-  echo "${SCR_NAME} Thus, execute 'singularity shell [my_docker_image]' first!"
-  return
-fi
-
-# further sanity checks:
-# * ensure execution from env_setup-directory
+# * ensure availability of singularity container
 # * check if virtual env has already been set up
+# Check if the required TF1.15-container is available
+  if [[  ! -f "${TF_CONTAINER}" ]]; then
+    echo "ERROR: Could not found required TensorFlow 1.15-container under ${TF_CONTAINER}"
+    return
+  fi
 
-if [[ "${EXE_DIR}" != "env_setup"  ]]; then
-  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
-  return
-fi
-
+# virtual environment already set-up?
 if [[ -d ${ENV_DIR} ]]; then
   echo "${SCR_NAME} Virtual environment has already been set up under ${ENV_DIR} and is ready to use."
   echo "NOTE: If you wish to set up a new virtual environment, delete the existing one or provide a different name."
-  
   ENV_EXIST=1
 else
   ENV_EXIST=0
 fi
 
-## check integratability of modules
+## check integratability of operating system
 if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
   unset PYTHONPATH
@@ -86,42 +89,16 @@ fi
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
-  # Activate virtual environment and install additional Python packages.
+  # Install virtualenv-package and set-up virtual environment with required additional Python packages.
   echo "${SCR_NAME} Configuring and activating virtual environment on ${HOST_NAME}"
 
-  VIRTUAL_ENV_TOOL=${ENV_DIR_BASE}/virtualenv-\*dist-info
-  if ! ls $VIRTUAL_ENV_TOOL 1> /dev/null 2<&1; then
-    if [[ ! -d ${ENV_DIR_BASE} ]]; then
-      mkdir "${ENV_DIR_BASE}"
-    fi
-    echo "${SCR_NAME} Install virtualenv in base directory for virtual environments ${ENV_DIR_BASE}"
-    pip install --target="${ENV_DIR_BASE}" virtualenv
-  fi
-  # create virtual environment and install missing required packages
-  cd "${ENV_DIR_BASE}"
-  echo "${SCR_NAME} Create and activate virtual environment ${ENV_NAME}..."
-  python -m virtualenv -p /usr/bin/python --system-site-packages "${ENV_NAME}"
-  cd -
+  singularity exec --nv "${TF_CONTAINER}" ./install_venv_container.sh "${ENV_DIR}"
 
-  activate_virt_env=${ENV_DIR}/bin/activate
-  source "${activate_virt_env}"
-  echo "${SCR_NAME} Start installing additional Python modules with pip..."
-  req_file=${ENV_SETUP_DIR}/requirements_container.txt
-  pip3 install --no-cache-dir -r "${req_file}"
-  # expand PYTHONPATH...
-  export PYTHONPATH=${WORKING_DIR}:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${ENV_DIR}/lib/python3.8/site-packages/:$PYTHONPATH >> "${activate_virt_env}"
-  # ...and ensure that this also done when the 
-  echo "" >> "${activate_virt_env}"
-  echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${WORKING_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTONPATH=${ENV_DIR}/lib/python3.8/site-packages/:\$PYTHONPATH" >> "${activate_virt_env}"
-
-  if [[ -f "${activate_virt_env}" ]]; then
-    echo "${SCR_NAME} Virtual environment ${ENV_DIR} has been set up successfully."
-    # finally, deactivate virtual environment and clean up loaded modules
-    deactivate
-  else
-    echo "${SCR_NAME} ERROR: Cretaion of virtual environment was not successful. Check for preceiding error-messages!"
-  fi
+  info_str="Virtual environment ${ENV_DIR} has been set up successfully."
+elif [[ "$ENV_EXIST" == 1 ]]; then
+  # simply activate virtual environment
+  info_str="Virtual environment ${ENV_DIR} has already been set up before. Nothing to be done."
 fi
+
+echo ${info_str}
+### MAIN E ###
