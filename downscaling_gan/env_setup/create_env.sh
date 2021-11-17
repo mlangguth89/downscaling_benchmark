@@ -27,7 +27,7 @@ check_argin() {
 ### auxiliary-function E ###
 
 ### MAIN S ###
-set -eu              # enforce abortion if a command is not re
+#set -eu              # enforce abortion if a command is not re
 
 ## some first sanity checks
 # script is sourced?
@@ -36,11 +36,6 @@ if [[ ${BASH_SOURCE[0]} == ${0} ]]; then
   exit 1
 fi
 
-# script is called from env_setup-directory?
-if [[ "${EXE_DIR}" != "env_setup"  ]]; then
-  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
-  return
-fi
 
 # from now on, just return if something unexpected occurs instead of exiting
 # as the latter would close the terminal including logging out
@@ -56,18 +51,25 @@ ENV_NAME=$1
 ENV_SETUP_DIR=`pwd`
 WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
 EXE_DIR="$(basename "$ENV_SETUP_DIR")"
-ENV_DIR_BASE=${WORKING_DIR}/virtual_envs/
+ENV_DIR_BASE=${WORKING_DIR}
 ENV_DIR=${ENV_DIR_BASE}/${ENV_NAME}
 TF_CONTAINER=${WORKING_DIR}/env_setup/tensorflow_21.09-tf1-py3.sif
 
 ## perform sanity checks
 # * ensure availability of singularity container
+# * check if script is called from env_setup-directory
 # * check if virtual env has already been set up
 # Check if the required TF1.15-container is available
   if [[  ! -f "${TF_CONTAINER}" ]]; then
     echo "ERROR: Could not found required TensorFlow 1.15-container under ${TF_CONTAINER}"
     return
   fi
+
+# script is called from env_setup-directory?
+if [[ "${EXE_DIR}" != "env_setup"  ]]; then
+  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
+  return
+fi
 
 # virtual environment already set-up?
 if [[ -d ${ENV_DIR} ]]; then
