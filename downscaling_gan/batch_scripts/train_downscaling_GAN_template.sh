@@ -17,15 +17,26 @@ echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
-# set some paths
+# set some paths and variables
+DATE_NOW=$(date +%Y%m%dT%H%M%S)
 WORK_DIR=`pwd`
 BASE_DIR=$(dirname "$WORK_DIR")
 # Name of virtual environment
-VIRT_ENV_NAME="/${WORK_DIR}/<my_venv>/<my_venv>"
+VIRT_ENV_NAME="${WORK_DIR}/virtual_envs/<my_venv>"
 # Name of container image (must be available in working directory)
 CONTAINER_IMG="${WORK_DIR}/tensorflow_21.09-tf1-py3.sif"
 
-DATE_NOW=$(date +%Y%m%dT%H%M%S)
+# simple sanity checks
+if ! [[ -f ${VIRT_ENV_NAME}/bin/activate ]]; then
+  echo "ERROR: Requested virtual environment ${VIRT_ENV_NAME} not found..."
+  exit 1
+fi
+
+if ! [[ -f ${CONTAINER_IMG} ]]; then
+  echo "ERROR: Required singularity containr ${CONTAINER_IMG} not found..."
+  exit 1
+fi
+
 # clean-up modules to avoid conflicts between host and container settings
 module purge
 
@@ -33,7 +44,7 @@ module purge
 application="mchrzc"
 data_in="<path_to_samples-2018-128x128.nc>"
 dest_file_wgt="<path_to_store_weights>"
-dest_file_log="<path_to_store_weights>/logging_${DATE_NOW}"
+dest_file_log="${dest_file_wgt}/logging_${DATE_NOW}"
 
 # Please uncomment the following CUDA configuration
 export CUDA_VISIBLE_DEVICES=1
