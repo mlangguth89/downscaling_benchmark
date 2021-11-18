@@ -123,9 +123,9 @@ virt_env*/
 
 # Ignore (Batch) runscripts
 **/batch_scripts/*.sh
-!batch_scripts/*_template.sh
+!*_template.sh
 
-!batch_scripts/wrapper_container.sh
+!*wrapper_container.sh
 
 # Ignore singularity containers (typically existing as symbolic link)
 *.sif
