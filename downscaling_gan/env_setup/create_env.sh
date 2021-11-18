@@ -49,8 +49,8 @@ SCR_NAME="%create_env.sh:"
 HOST_NAME=$(hostname)
 ENV_NAME=$1
 SETUP_DIR=$(pwd)
-SETUP_DIR_NAME="$(basename "$THIS_DIR")"
-BASE_DIR="$(dirname "$THIS_DIR")"
+SETUP_DIR_NAME="$(basename "${SETUP_DIR}")"
+BASE_DIR="$(dirname "${SETUP_DIR}")"
 VENV_DIR="${BASE_DIR}/virtual_envs/${ENV_NAME}"
 TF_CONTAINER="${SETUP_DIR}/tensorflow_21.09-tf1-py3.sif"
 
@@ -67,6 +67,7 @@ TF_CONTAINER="${SETUP_DIR}/tensorflow_21.09-tf1-py3.sif"
 # script is called from env_setup-directory?
 if [[ "${SETUP_DIR_NAME}" != "env_setup"  ]]; then
   echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
+  echo ${SETUP_DIR_NAME}
   return
 fi
 
