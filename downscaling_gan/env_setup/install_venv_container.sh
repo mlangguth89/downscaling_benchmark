@@ -9,10 +9,10 @@
 # **************** Description ****************
 
 # set some basic variables
-BASE_DIR=`pwd`
-VENV_BASE=$1
+BASE_DIR=$(pwd)
+VENV_DIR=$1
 VENV_NAME="$(basename "${VENV_BASE}")"
-VENV_DIR=${VENV_BASE}/${VENV_NAME}
+VENV_BASE="$(dirname "${VENV_DIR}")"
 
 # sanity checks
 # check if we are running in a container
@@ -39,14 +39,25 @@ if [ ! -f "${BASE_DIR}/requirements_container.txt" ]; then
   return
 fi
 
+# remove dependancies from system packages
+export PYTHONPATH=
+
 # create basic target directory for virtual environment
-mkdir "${VENV_BASE}"
-# Install virtualenv in this directory
-echo "Installing virtualenv under ${VENV_BASE}..."
-pip install --target="${VENV_BASE}/" virtualenv
-# Change into the directory...
-cd "${VENV_BASE}" || exit
-# .. to set-up virtual environment therein
+if ! [[ -d "${VENV_BASE}" ]]; then
+  mkdir "${VENV_BASE}"
+  # Install virtualenv in this directory
+  echo "Installing virtualenv under ${VENV_BASE}..."
+  pip install --target="${VENV_BASE}/" virtualenv
+  # Change into the base-directory of virtual environments...
+  cd "${VENV_BASE}" || return
+else
+  # Change into the base-directory of virtual environments...
+  cd "${VENV_BASE}" || return
+  if ! python -m virtualenv --version >/dev/null; then
+    echo "ERROR: Base directory for virtual environment exists, but virtualenv-module is unavailable."
+  fi
+fi
+# ... and set-up virtual environment therein
 python -m virtualenv -p /usr/bin/python "${VENV_NAME}"
 # Activate virtual environment and install required packages
 echo "Actiavting virtual environment ${VENV_NAME} to install required Python modules..."
