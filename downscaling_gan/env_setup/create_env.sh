@@ -31,7 +31,7 @@ check_argin() {
 
 ## some first sanity checks
 # script is sourced?
-if [[ ${BASH_SOURCE[0]} == ${0} ]]; then
+if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
   echo "ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
   exit 1
 fi
@@ -46,14 +46,13 @@ fi
 
 # set some variables
 SCR_NAME="%create_env.sh:"
-HOST_NAME=`hostname`
+HOST_NAME=$(hostname)
 ENV_NAME=$1
-ENV_SETUP_DIR=`pwd`
-WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
-EXE_DIR="$(basename "$ENV_SETUP_DIR")"
-ENV_DIR_BASE=${WORKING_DIR}
-ENV_DIR=${ENV_DIR_BASE}/${ENV_NAME}
-TF_CONTAINER=${WORKING_DIR}/env_setup/tensorflow_21.09-tf1-py3.sif
+SETUP_DIR=$(pwd)
+SETUP_DIR_NAME="$(basename "$THIS_DIR")"
+BASE_DIR="$(dirname "$THIS_DIR")"
+VENV_DIR="${BASE_DIR}/virtual_envs/${ENV_NAME}"
+TF_CONTAINER="${SETUP_DIR}/tensorflow_21.09-tf1-py3.sif"
 
 ## perform sanity checks
 # * ensure availability of singularity container
@@ -66,14 +65,14 @@ TF_CONTAINER=${WORKING_DIR}/env_setup/tensorflow_21.09-tf1-py3.sif
   fi
 
 # script is called from env_setup-directory?
-if [[ "${EXE_DIR}" != "env_setup"  ]]; then
+if [[ "${SETUP_DIR_NAME}" != "env_setup"  ]]; then
   echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
   return
 fi
 
 # virtual environment already set-up?
-if [[ -d ${ENV_DIR} ]]; then
-  echo "${SCR_NAME} Virtual environment has already been set up under ${ENV_DIR} and is ready to use."
+if [[ -d ${VENV_DIR} ]]; then
+  echo "${SCR_NAME} Virtual environment has already been set up under ${VENV_DIR} and is ready to use."
   echo "NOTE: If you wish to set up a new virtual environment, delete the existing one or provide a different name."
   ENV_EXIST=1
 else
@@ -94,13 +93,13 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   # Install virtualenv-package and set-up virtual environment with required additional Python packages.
   echo "${SCR_NAME} Configuring and activating virtual environment on ${HOST_NAME}"
 
-  singularity exec --nv "${TF_CONTAINER}" ./install_venv_container.sh "${ENV_DIR}"
+  singularity exec --nv "${TF_CONTAINER}" ./install_venv_container.sh "${VENV_DIR}"
 
-  info_str="Virtual environment ${ENV_DIR} has been set up successfully."
+  info_str="Virtual environment ${VENV_DIR} has been set up successfully."
 elif [[ "$ENV_EXIST" == 1 ]]; then
   # simply activate virtual environment
-  info_str="Virtual environment ${ENV_DIR} has already been set up before. Nothing to be done."
+  info_str="Virtual environment ${VENV_DIR} has already been set up before. Nothing to be done."
 fi
 
-echo ${info_str}
+echo "${info_str}"
 ### MAIN E ###
