@@ -2,7 +2,7 @@
 #
 # __authors__ = Michael Langguth
 # __date__  = '2021_03_25'
-# __update__= '2021-11-17'
+# __update__= '2021-11-18'
 #
 # **************** Description ****************
 # This script can be used for setting up the virtual environment needed for downscaling with the GAN-network
@@ -29,10 +29,12 @@ check_argin() {
 ### MAIN S ###
 #set -eu              # enforce abortion if a command is not re
 
+SCR_SETUP="%create_env.sh: "
+
 ## some first sanity checks
 # script is sourced?
 if [[ ${BASH_SOURCE[0]} == "${0}" ]]; then
-  echo "ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
+  echo "${SCR_SETUP}ERROR: 'create_env.sh' must be sourced, i.e. execute by prompting 'source create_env.sh [virt_env_name]'"
   exit 1
 fi
 
@@ -40,12 +42,11 @@ fi
 # from now on, just return if something unexpected occurs instead of exiting
 # as the latter would close the terminal including logging out
 if [[ -z "$1" ]]; then
-  echo "ERROR: Provide a name to set up the virtual environment, i.e. execute by prompting 'source create_env.sh [virt_env_name]"
+  echo "${SCR_SETUP}ERROR: Provide a name to set up the virtual environment, i.e. execute by prompting 'source create_env.sh [virt_env_name]"
   return
 fi
 
 # set some variables
-SCR_NAME="%create_env.sh:"
 HOST_NAME=$(hostname)
 ENV_NAME=$1
 SETUP_DIR=$(pwd)
@@ -60,20 +61,20 @@ TF_CONTAINER="${SETUP_DIR}/tensorflow_21.09-tf1-py3.sif"
 # * check if virtual env has already been set up
 # Check if the required TF1.15-container is available
   if [[  ! -f "${TF_CONTAINER}" ]]; then
-    echo "ERROR: Could not found required TensorFlow 1.15-container under ${TF_CONTAINER}"
+    echo "${SCR_SETUP}ERROR: Could not found required TensorFlow 1.15-container under ${TF_CONTAINER}"
     return
   fi
 
 # script is called from env_setup-directory?
 if [[ "${SETUP_DIR_NAME}" != "env_setup"  ]]; then
-  echo "${SCR_NAME} ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
+  echo "${SCR_SETUP}ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
   echo ${SETUP_DIR_NAME}
   return
 fi
 
 # virtual environment already set-up?
 if [[ -d ${VENV_DIR} ]]; then
-  echo "${SCR_NAME} Virtual environment has already been set up under ${VENV_DIR} and is ready to use."
+  echo "${SCR_SETUP}Virtual environment has already been set up under ${VENV_DIR} and is ready to use."
   echo "NOTE: If you wish to set up a new virtual environment, delete the existing one or provide a different name."
   ENV_EXIST=1
 else
@@ -85,14 +86,14 @@ if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
   unset PYTHONPATH
 else
-  echo "${SCR_NAME} ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
+  echo "${SCR_SETUP}ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
   return
 fi
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
   # Install virtualenv-package and set-up virtual environment with required additional Python packages.
-  echo "${SCR_NAME} Configuring and activating virtual environment on ${HOST_NAME}"
+  echo "${SCR_SETUP}Configuring and activating virtual environment on ${HOST_NAME}"
 
   singularity exec --nv "${TF_CONTAINER}" ./install_venv_container.sh "${VENV_DIR}"
 
@@ -102,5 +103,5 @@ elif [[ "$ENV_EXIST" == 1 ]]; then
   info_str="Virtual environment ${VENV_DIR} has already been set up before. Nothing to be done."
 fi
 
-echo "${info_str}"
+echo "${SCR_SETUP}${info_str}"
 ### MAIN E ###
