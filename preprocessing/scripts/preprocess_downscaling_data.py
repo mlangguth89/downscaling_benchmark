@@ -63,7 +63,7 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
     :param dir_in: Top-level input directory for original IFS HRED netCDF-files
     :param dir_out: Top-level output directory wheer netCDF-files and TFRecords of remapped data will be stored
     :param logger: Logging instance for log process on worker
-    :param nmax_warn: maximu number of warnings/problems met during processing (default:3)
+    :param nmax_warn: allowed maximum number of warnings/problems met during processing (default:3)
     :param hour: hour of the dy for which data should be preprocessed (default: None)
     :return: number of warnings/problems met during processing (if they do not trigger an error)
     """
@@ -110,15 +110,16 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
         nwarns = 0
         # Perform remapping
         for i, nc_file in enumerate(nc_files):
-            logger.info("%{0}: Start remapping of data from file '{1}' ({2:d}/{3:d})".format(method, nc_file, i+1, nfiles))
+            logger.info("%{0}: Start remapping of data from file '{1}' ({2:d}/{3:d})"
+                        .format(method, nc_file, i+1, nfiles))
             cmd = "{0} {1}".format(os.path.join(this_dir, "coarsen_ifs_hres.sh"), nc_file)
             try:
-                logger.info("%{0}: Processing of netCDF-files already done.".format(method))
-                #_ = sp.check_output(cmd, shell=True)
-                #nc_file_new = os.path.basename(nc_file).replace(".nc", "_remapped.nc")
-                #shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_nc_dir, nc_file_new))
-                #logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
-                #            .format(method, dest_nc_dir))
+                #logger.info("%{0}: Processing of netCDF-files already done.".format(method))
+                _ = sp.check_output(cmd, shell=True)
+                nc_file_new = os.path.basename(nc_file).replace(".nc", "_remapped.nc")
+                shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_nc_dir, nc_file_new))
+                logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
+                            .format(method, dest_nc_dir))
             except Exception as err:
                 nwarns += 1
                 logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +

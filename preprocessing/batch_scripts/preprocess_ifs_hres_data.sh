@@ -37,6 +37,7 @@ out_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/preprocessed/
 years=( 2016 2017 2018 2019 2020 )
 months=( 4 5 6 7 8 9 )
 
-srun python -m mpi4py ../scripts/preprocess_downscaling_data.py -src_dir ${src_dir} -out_dir ${out_dir} -y "${years[@]}" -m "${months[@]}"
+srun python -m mpi4py ../scripts/preprocess_downscaling_data.py -src_dir ${src_dir} -out_dir ${out_dir} \
+                                                                -y "${years[@]}" -m "${months[@]}"
 
 
