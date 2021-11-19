@@ -10,13 +10,14 @@
 SCR_NAME_MOD="modules_preprocess.sh"
 HOST_NAME=`hostname`
 
+# start loading modules
 echo "%${SCR_NAME_MOD}: Start loading modules on ${HOST_NAME} required for preprocessing IFS HRES data."
 
 ml purge
 ml use $OTHERSTAGES
 ml Stages/2020
 
-if [[ ${HOST_NAME} == "hdfml*" ]]; then
+if [[ "${HOST_NAME}" == hdfml* ]]; then
   ml GCC/10.3.0
   ml GCCcore/.10.3.0
   ml ParaStationMPI/5.4.9-1
@@ -26,7 +27,7 @@ if [[ ${HOST_NAME} == "hdfml*" ]]; then
   ml SciPy-Stack/2021-Python-3.8.5
   ml dask/2.22.0-Python-3.8.5
   ml TensorFlow/2.5.0-Python-3.8.5
-elif [[ ${HOST_NAME} == "jwlogin*" ]]; then
+elif [[ "${HOST_NAME}" == jwlogin* ]]; then
   ml GCC/9.3.0
   ml GCCcore/.9.3.0
   ml ParaStationMPI/5.4.7-1
@@ -36,5 +37,8 @@ elif [[ ${HOST_NAME} == "jwlogin*" ]]; then
   ml SciPy-Stack/2020-Python-3.8.5
   ml dask/2.22.0-Python-3.8.5
   ml TensorFlow/2.3.1-Python-3.8.5
+else 
+  echo "%${SCR_NAME_MOD}: Operating host system ${HOST_NAME} is unknown. Please work on HDF-ML or Juwels (Booster)..."
+  exit
 fi
 
