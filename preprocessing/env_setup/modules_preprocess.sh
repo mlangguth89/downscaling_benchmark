@@ -22,6 +22,7 @@ if [[ ${HOST_NAME} == "hdfml*" ]]; then
   ml ParaStationMPI/5.4.9-1
   ml CDO/2.0.0rc3
   ml NCO/4.9.5
+  ml mpi4py/3.0.3-Python-3.8.5
   ml SciPy-Stack/2021-Python-3.8.5
   ml dask/2.22.0-Python-3.8.5
   ml TensorFlow/2.5.0-Python-3.8.5
