@@ -131,20 +131,21 @@ def preprocess_worker(year_months: list, dir_in: str, dir_out: str, logger: logg
                 else:
                     pass
 
+        # Conversion to TFRecords does not work yet (2021-11-19)
         # move remapped data to own directory
-        tfr_data_dir = os.path.join(dir_out, "tfr_data")
-        ifs_tfr = IFS2TFRecords(tfr_data_dir, os.path.join(dest_nc_dir, os.path.basename(nc_files[0])
-                                                           .replace(".nc", "_remapped.nc")))
-        ifs_tfr.get_and_write_metadata()
-        logger.info("%{0}: IFS2TFRecords-class instance has been initalized successully.".format(method))
-        try:
-            ifs_tfr.write_monthly_data_to_tfr(dest_nc_dir, patt="*remapped.nc")
-        except Exception as err:
-            logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
-            raise err
-
-        logger.info("%{0}: TFRecord-files have been created succesfully under '{1}'".format(method, tfr_data_dir))
-        logger.info("%{0}: During processing {1:d} warnings have been faced.".format(method, nwarns))
+        # tfr_data_dir = os.path.join(dir_out, "tfr_data")
+        # ifs_tfr = IFS2TFRecords(tfr_data_dir, os.path.join(dest_nc_dir, os.path.basename(nc_files[0])
+        #                                                    .replace(".nc", "_remapped.nc")))
+        # ifs_tfr.get_and_write_metadata()
+        # logger.info("%{0}: IFS2TFRecords-class instance has been initalized successully.".format(method))
+        # try:
+        #     ifs_tfr.write_monthly_data_to_tfr(dest_nc_dir, patt="*remapped.nc")
+        # except Exception as err:
+        #     logger.critical("%{0}: Error when writing TFRecord-file. Investigate error-message below.".format(method))
+        #     raise err
+        # 
+        # logger.info("%{0}: TFRecord-files have been created succesfully under '{1}'".format(method, tfr_data_dir))
+        # logger.info("%{0}: During processing {1:d} warnings have been faced.".format(method, nwarns))
 
     return nwarns
 

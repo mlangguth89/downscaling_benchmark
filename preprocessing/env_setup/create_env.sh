@@ -94,7 +94,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "" >> "${activate_virt_env}"
   echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
   echo "export PYTHONPATH=${WORKING_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTONPATH=${WORKING_DIR}/../utils/:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${WORKING_DIR}/../utils/:\$PYTHONPATH" >> "${activate_virt_env}"
 
   if [[ -f "${activate_virt_env}" ]]; then
     echo "${SCR_NAME} Virtual environment ${ENV_DIR} has been set up successfully."
