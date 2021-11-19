@@ -105,6 +105,7 @@ virt_env*/
 
 
 .idea/*
+*/.idea
 
 *.DS_Store
 
@@ -114,7 +115,6 @@ virt_env*/
 
 
 #Ignore the results files
-
 **/results_test_samples
 **/logs
 **/vp
@@ -122,8 +122,10 @@ virt_env*/
 *.h5
 
 # Ignore (Batch) runscripts
-batch_scripts/**
-!batch_scripts/*_template.sh
+**/batch_scripts/*.sh
+!*_template.sh
 
-!batch_scripts/wrapper_container.sh
+!*wrapper_container.sh
 
+# Ignore singularity containers (typically existing as symbolic link)
+*.sif

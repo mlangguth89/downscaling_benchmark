@@ -41,16 +41,14 @@ fi
 module purge
 
 # variables for settings
-application="mchrzc"
-data_in="<path_to_data>/${application}_2018-128x128.nc"     # replace 2018 by 2019 for goes-application
-dest_file_wgt="<path_to_store_weights>"
-dest_file_log="${dest_file_wgt}/logging_${DATE_NOW}"
+data_dir="<path_to_data>"
+mchrzc_file="mchrzc_samples-2018-128x128.nc"
+goes_file="goes_samples-2019-128x128.nc"
 
 # Please uncomment the following CUDA configuration
 export CUDA_VISIBLE_DEVICES=1
 
 # run training
 srun --mpi=pspmix --cpu-bind=none \
-singularity exec --nv ${CONTAINER_IMG} ./wrapper_container.sh ${VIRT_ENV_NAME}  python3 ${BASE_DIR}/dsrnngan/main.py train \
-                                      --application=${application} --data_file=${data_in} \
-                                      --save_weights_root=${dest_file_wgt} --log_path ${dest_file_log} 
+singularity exec --nv ${CONTAINER_IMG} ./wrapper_container.sh ${VIRT_ENV_NAME}  python3 ${BASE_DIR}/dsrnngan/main.py plot \
+                                      --mchrzc_data_file=${data_dir}/${mchrzc_file} --goescod_data_file=${data_dir}/${goes_file}
