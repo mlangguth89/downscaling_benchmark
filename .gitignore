@@ -1,4 +1,4 @@
-# Byte-compiled / optimized / DLL files
+# Byt-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -105,16 +105,16 @@ virt_env*/
 
 
 .idea/*
+*/.idea
 
 *.DS_Store
 
 # Ignore log- and errorfiles 
-*-err.[0-9]*
-*-out.[0-9]*
+*-err*.[0-9]*
+*-out*.[0-9]*
 
 
 #Ignore the results files
-
 **/results_test_samples
 **/logs
 **/vp
@@ -122,8 +122,10 @@ virt_env*/
 *.h5
 
 # Ignore (Batch) runscripts
-batch_scripts/**
-!batch_scripts/*_template.sh
+**/batch_scripts/*.sh
+!*_template.sh
 
-!batch_scripts/wrapper_container.sh
+!*wrapper_container.sh
 
+# Ignore singularity containers (typically existing as symbolic link)
+*.sif
