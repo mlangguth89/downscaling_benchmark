@@ -45,7 +45,7 @@ ENV_NAME=$1
 ENV_SETUP_DIR=`pwd`
 WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
 EXE_DIR="$(basename "$ENV_SETUP_DIR")"
-ENV_DIR=${WORKING_DIR}/${ENV_NAME}
+ENV_DIR=${WORKING_DIR}/virtual_envs/${ENV_NAME}
 
 ## perform sanity checks
 
