@@ -56,7 +56,7 @@ cp train_downscaling_GAN_template.sh train_downscaling_GAN_<some_string>.sh     
 sbatch train_downscaling_GAN_<some_string>.sh 
 ```  
 Please choose again an output-directory that 
-1. provides suifficient space for the output (> some GBs) and
+1. provides sufficient space for the output (> some GBs) and
 2. is accessible for the computing nodes (e.g. under `/p/project/[...]`)
 
 ### Producing plots
@@ -68,7 +68,7 @@ Important note: If you want to evaluate your own model, set the variables `mchrz
 cd models
 ln -s <training_outdir>/<trained_model_for_mchrzc>.h5 ./<trained_model_for_mchrzc>.h5
 ln -s <training_outdir>/<trained_model_for_goes>.h5 ./<trained_model_for_goes>.h5
-# Changge to batch_scripts-directory
+# Change to batch_scripts-directory
 cd ../batch_scripts
 cp plot_downscaling_GAN_template.sh plot_downscaling_GAN_<some_string>.sh     # please set <some_string>
 # Modify the created batch-script analogous to above
