@@ -10,7 +10,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --partition=batch
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=m.langguth@fz-juelich.de
+#SBATCH --mail-user=me@somewhere.de
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"
@@ -22,12 +22,12 @@ DATE_NOW=$(date +%Y%m%dT%H%M%S)
 WORK_DIR=`pwd`
 BASE_DIR=$(dirname "$WORK_DIR")
 # Name of virtual environment
-VIRT_ENV_NAME="${WORK_DIR}/virtual_envs/<my_venv>"
+VIRT_ENV_NAME="<my_venv>"
 # Name of container image (must be available in working directory)
-CONTAINER_IMG="${WORK_DIR}/tensorflow_21.09-tf1-py3.sif"
+CONTAINER_IMG="${BASE_DIR}/env_setup/tensorflow_21.09-tf1-py3.sif"
 
 # simple sanity checks
-if ! [[ -f ${VIRT_ENV_NAME}/bin/activate ]]; then
+if ! [[ -f ${BASE_DIR}/virtual_envs/${VIRT_ENV_NAME}/bin/activate ]]; then
   echo "ERROR: Requested virtual environment ${VIRT_ENV_NAME} not found..."
   exit 1
 fi
