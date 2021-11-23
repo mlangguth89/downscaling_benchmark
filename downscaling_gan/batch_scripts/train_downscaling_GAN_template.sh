@@ -42,7 +42,7 @@ module purge
 
 # variables for settings
 application="mchrzc"
-data_in="<path_to_data>/${application}_2018-128x128.nc"     # replace 2018 by 2019 for goes-application
+data_in="<path_to_data>/${application}_samples-2018-128x128.nc"     # replace 2018 by 2019 for goes-application
 dest_file_wgt="<path_to_store_weights>"
 dest_file_log="${dest_file_wgt}/logging_${DATE_NOW}"
 
