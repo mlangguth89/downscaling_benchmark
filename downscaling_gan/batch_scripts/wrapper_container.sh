@@ -4,7 +4,7 @@
 ENV_SETUP_DIR=`pwd`
 WORKING_DIR="$(dirname "$ENV_SETUP_DIR")"
 EXE_DIR="$(basename "$ENV_SETUP_DIR")"
-VENV_DIR=${WORKING_DIR}/$1/$1
+VENV_DIR="${WORKING_DIR}/virtual_envs/$1"
 shift                     # replaces $1 by $2, so that $@ does not include the name of the virtual environment anymore
 
 # sanity checks
