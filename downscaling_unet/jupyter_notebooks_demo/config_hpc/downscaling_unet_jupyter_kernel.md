@@ -25,10 +25,15 @@ To run the downscaling application published with deliverable 1.2 in the scope o
     pip install --no-cache-dir numpy==1.19.4 xarray==0.18.2
     pip install --no-cache-dir climetlab==0.8.16 climetlab-maelstrom-downscaling
     ```
-- some datails on the pip-instructions above:
+- **Note**: 
+    - `numpy` v1.19.4 is explictly added to `pip install` even though it is available from the modules loaded above. However, not fixing this version would trigger an installation of more recent numpy versions (>v1.20) which are incompatible with TensorFlow
+    - pip throws a few errors when installing the Python packages such as claiming an incompatability of the `six`-package. However, these errors can be ignored and mostly relate to a bug of `pip` (You may verify in a Python shell that `six` v0.15.0 is indeed loaded instead of v0.16.0).
+    
+- some details on the pip-instructions above:
     - fixing the `numpy` version avoids that a more recent numpy version is installed to `site-packages`. This is mandatory since TensorFlow is incompatible with `numpy`-versions newer than 1.20.
     - We must also fix the `climetlab`-version since the latest versions are also incompatible with `climetlab-maelstrom-downscaling` (to be fixed!)
-- finalize the kernel creation by running all cells; take care that you load the same modules under step `2.1` as listed above
+- finalize the kernel creation by running all cells
+    - **Note**: Ensure that you load the same modules under step `2.1` as listed above
 - The created kernel called `${KERNEL_NAME}` (see Notebook) should now appear as available kernel when you open a Jupyter Notebook
     - check if the new kernel can be activated successfully
     - check if you can import `xarray` and `climetlab` to ensure that basic data handling can be undertaken
