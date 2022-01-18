@@ -23,9 +23,9 @@ VIRT_ENV_NAME="venv_juwels"
 
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
-   if [[ -f ../${VIRT_ENV_NAME}/bin/activate ]]; then
+   if [[ -f ../virtual_env/${VIRT_ENV_NAME}/bin/activate ]]; then
       echo "Activating virtual environment..."
-      source ../${VIRT_ENV_NAME}/bin/activate
+      source ../virtual_env/${VIRT_ENV_NAME}/bin/activate
    else 
       echo "ERROR: Cannot find requested virtual environment ${VIRT_ENV_NAME}..."
       exit 1
