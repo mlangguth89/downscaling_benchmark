@@ -1,4 +1,5 @@
 import os, sys
+import socket
 from timeit import default_timer as timer
 import climetlab as cml
 import numpy as np
@@ -24,8 +25,10 @@ class InputDataClass(object):
             raise NotADirectoryError("%{0}: input data directory '{1}' does not exist.")
 
         self.ldownload, self.data_dict = self.set_download_flag()
-        ds_train, ds_val, ds_test, self.loading_time = self.get_data()
+        ds_train, ds_val, ds_test, loading_time = self.get_data()
         self.data = {"train": ds_train, "val": ds_val, "test": ds_test}
+        self.timing = {"loading": loading_time}
+        self.data_info = {"memory_datasets": {"train": ds_train.nbytes, "val": ds_val.nbytes, "test": ds_test.nbytes}}
 
     def set_download_flag(self):
         """

@@ -23,8 +23,11 @@ class DownscalingData(InputDataClass):
         super().__init__(datadir, app, fname_base=prefix_nc)
 
         self.status_ok = True
+        sdim = "time"
+        self.data_info["nsamples"] = {"train": self.data["train"].dims[sdim], "val": self.data["val"].dims[sdim],
+                                      "test": self.data["test"].dims[sdim]}
 
-    def preprocess_data(self, ds_name: str, daytime: int =12, opt_norm: dict ={}):
+    def preprocess_data(self, ds_name: str, daytime: int = 12, opt_norm: dict ={}):
         """
         Preprocess the data for feeding into the U-net, i.e. conversion to data arrays incl. z-score normalization
         :param ds_name: name of the dataset, i.e. one of the following "train", "val", "test"
@@ -32,6 +35,8 @@ class DownscalingData(InputDataClass):
         :param opt_norm: dictionary holding data for z-score normalization of data ("mu_in", "std_in", "mu_tar", "std_tar")
         :return: normalized data ready to be fed to U-net model
         """
+        t0 = timer()
+
         norm_dims_t = ["time"]  # normalization of 2m temperature for each grid point
         norm_dims_z = ["time", "lat", "lon"]  # 'global' normalization of surface elevation
 
@@ -57,11 +62,11 @@ class DownscalingData(InputDataClass):
         if not opt_norm:
             opt_norm = {"mu_in": t2m_in_mu, "std_in": t2m_in_std,
                         "mu_tar": t2m_tar_mu, "std_tar": t2m_tar_std}
-            t_elapsed = t0 - timer()
-            return in_data, tar_data, t_elapsed, opt_norm
+            self.timing["preprocessing"] = timer() - t0
+            return in_data, tar_data, opt_norm
         else:
-            t_elapsed = t0 - timer()
-            return in_data, tar_data, t_elapsed
+            self.timing["preprocessing"] = timer() - t0
+            return in_data, tar_data
 
     @staticmethod
     def z_norm_data(data: xr.Dataset, mu=None, std=None, dims=None, return_stat: bool =False):
