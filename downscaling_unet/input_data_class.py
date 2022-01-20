@@ -15,7 +15,7 @@ class InputDataClass(object):
         """
         method = InputDataClass.__init__.__name__
 
-        self.host = os.getenv("HOSTNAME")
+        self.host = os.getenv("HOSTNAME") if os.getenv("HSOTNAME") is not None else "unknown"
         self.fname_base = fname_base
         self.application = application
         if os.path.isdir(datadir):
@@ -36,7 +36,7 @@ class InputDataClass(object):
         """
         method = InputDataClass.set_download_flag.__name__
 
-        ldownload = True if "login" in self.host else False
+        ldownload = True if self.has_internet() else False
 
         ncf_train, ncf_val, ncf_test = os.path.join(self.datadir, self.fname_base+"_train.nc"), \
                                        os.path.join(self.datadir, self.fname_base+"_val.nc"), \
@@ -121,7 +121,20 @@ class InputDataClass(object):
 
         return True
 
-
+    @staticmethod
+    def has_internet():
+        """
+        Checks if Internet connection is available.
+        :return: True if connected, False else.
+        """
+        try:
+            # connect to the host -- tells us if the host is actually
+            # reachable
+            socket.create_connection(("1.1.1.1", 53))
+            return True
+        except OSError:
+            pass
+        return False
 
 
 
