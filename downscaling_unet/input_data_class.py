@@ -92,8 +92,9 @@ class InputDataClass(object):
 
                 ds_train, ds_val, ds_test = ds_train.load(), ds_val.load(), ds_test.load()
             except Exception as err:
-                raise RuntimeError("%{0}: Failed to read all required files '{1}' from '{2}'"
-                                   .format(method, ",".join(self.data_dict.keys()), self.datadir))
+                print("%{0}: Failed to read all required files '{1}' from '{2}'"
+                                   .format(method, ", ".join(self.data_dict.values()), self.datadir))
+                raise err
 
             t_load = timer() - t0
 
