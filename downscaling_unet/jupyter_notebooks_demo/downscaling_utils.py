@@ -19,7 +19,7 @@ from input_data_class import InputDataClass
 
 class DownscalingData(InputDataClass):
 
-    def __init__(self, datadir: str, app: str = "maelstrom_downscaling", prefix_nc: str = "downscaling_unet") -> None:
+    def __init__(self, datadir: str, app: str = "maelstrom-downscaling", prefix_nc: str = "downscaling_unet") -> None:
         super().__init__(datadir, app, fname_base=prefix_nc)
 
         self.status_ok = True
