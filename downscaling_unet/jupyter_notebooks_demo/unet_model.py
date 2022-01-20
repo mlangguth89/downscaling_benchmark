@@ -1,4 +1,4 @@
-# import tensorflow and required stuff from Keras API
+import numpy as np
 import tensorflow as tf
 
 # all the layers used for U-net
@@ -8,6 +8,7 @@ from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate
 from tensorflow.keras.models import Model
 
 # building blocks for Unet
+
 
 def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), padding: str = "same",
                activation: str = "relu", kernel_init: str = "he_normal", l_batch_normalization: bool = True):
@@ -93,3 +94,18 @@ def build_unet(input_shape, channels_start=56, z_branch=False):
         model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
     return model
+
+
+def get_lr_scheduler():
+    # define a learning-rate scheduler
+    def lr_scheduler(epoch, lr):
+        if epoch < 5:
+            return lr
+        elif 5 <= epoch < 30:
+            return lr * tf.math.exp(-0.1)
+        elif epoch >= 30:
+            return lr
+
+    lr_scheduler_cb = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
+
+    return lr_scheduler_cb
