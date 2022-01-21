@@ -7,10 +7,10 @@ from timeit import default_timer as timer
 import datetime as dt
 import numpy as np
 import xarray as xr
-from handle_data import HandleDataClass
+from handle_data_class import HandleDataClass
 
 # basic data types
-arr_xr_np = Union[xr.Data, xr.Dataset, np.ndarray]
+arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]
 
 
 class HandleUnetData(HandleDataClass):
@@ -58,10 +58,10 @@ class HandleUnetData(HandleDataClass):
         if not opt_norm:
             opt_norm = {"mu_in": t2m_in_mu, "std_in": t2m_in_std,
                         "mu_tar": t2m_tar_mu, "std_tar": t2m_tar_std}
-            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
+            self.timing["normalizing_{0}".format(ds_name)] = timer() - t0
             return in_data, tar_data, opt_norm
         else:
-            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
+            self.timing["normalizing_{0}".format(ds_name)] = timer() - t0
             return in_data, tar_data
 
     @staticmethod
