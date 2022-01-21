@@ -1,11 +1,16 @@
+__author__ = "Michael Langguth"
+__email__ = "m.langguth@fz-juelich.de"
+__date__ = "2022-01-20"
+__update__ = "2022-01-22"
+
 import os, sys
 import socket
 from timeit import default_timer as timer
 import climetlab as cml
-import numpy as np
 import xarray as xr
 
-class InputDataClass(object):
+
+class HandleDataClass(object):
 
     def __init__(self, datadir: str, application: str, fname_base: str = "") -> None:
         """
@@ -14,7 +19,7 @@ class InputDataClass(object):
         :param application: name of application (must coincide with name in s3-bucket)
         :param fname_base: prefix for naming the netCDF-files on disk
         """
-        method = InputDataClass.__init__.__name__
+        method = HandleDataClass.__init__.__name__
 
         self.host = os.getenv("HOSTNAME") if os.getenv("HOSTNAME") is not None else "unknown"
         self.fname_base = fname_base
@@ -23,7 +28,6 @@ class InputDataClass(object):
             self.datadir = datadir
         else:
             raise NotADirectoryError("%{0}: input data directory '{1}' does not exist.")
-            
 
         self.ldownload, self.data_dict = self.set_download_flag()
         ds_train, ds_val, ds_test, loading_time = self.get_data()
@@ -38,7 +42,7 @@ class InputDataClass(object):
         respective netCDF-filenames.
         :return: Boolean flag for downloading and dictionary of data-filenames
         """
-        method = InputDataClass.set_download_flag.__name__
+        method = HandleDataClass.set_download_flag.__name__
 
         ldownload = True if "login" in self.host else False
 
@@ -64,7 +68,7 @@ class InputDataClass(object):
         :return: xarray-Datasets for training, validation and testing (loaded to memory) and elapsed time
         """
 
-        method = InputDataClass.get_data.__name__
+        method = HandleDataClass.get_data.__name__
 
         ncf_train, ncf_val, ncf_test = self.data_dict["train_datafile"], self.data_dict["val_datafile"], \
                                        self.data_dict["test_datafile"]
@@ -114,7 +118,7 @@ class InputDataClass(object):
         :param comp_lvl: the compression level
         :return: True in case of success
         """
-        method = InputDataClass.ds_to_netcdf.__name__
+        method = HandleDataClass.ds_to_netcdf.__name__
 
         comp = dict(zlib=True, complevel=comp_lvl)
         try:
