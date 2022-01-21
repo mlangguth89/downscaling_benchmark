@@ -62,10 +62,10 @@ class DownscalingData(InputDataClass):
         if not opt_norm:
             opt_norm = {"mu_in": t2m_in_mu, "std_in": t2m_in_std,
                         "mu_tar": t2m_tar_mu, "std_tar": t2m_tar_std}
-            self.timing["preprocessing"] = timer() - t0
+            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
             return in_data, tar_data, opt_norm
         else:
-            self.timing["preprocessing"] = timer() - t0
+            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
             return in_data, tar_data
 
     @staticmethod
