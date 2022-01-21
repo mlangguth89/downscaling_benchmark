@@ -16,13 +16,14 @@ class InputDataClass(object):
         """
         method = InputDataClass.__init__.__name__
 
-        self.host = os.getenv("HOSTNAME") if os.getenv("HSOTNAME") is not None else "unknown"
+        self.host = os.getenv("HOSTNAME") if os.getenv("HOSTNAME") is not None else "unknown"
         self.fname_base = fname_base
         self.application = application
         if os.path.isdir(datadir):
             self.datadir = datadir
         else:
             raise NotADirectoryError("%{0}: input data directory '{1}' does not exist.")
+            
 
         self.ldownload, self.data_dict = self.set_download_flag()
         ds_train, ds_val, ds_test, loading_time = self.get_data()
@@ -39,7 +40,7 @@ class InputDataClass(object):
         """
         method = InputDataClass.set_download_flag.__name__
 
-        ldownload = True if self.has_internet() else False
+        ldownload = True if "login" in self.host else False
 
         ncf_train, ncf_val, ncf_test = os.path.join(self.datadir, self.fname_base+"_train.nc"), \
                                        os.path.join(self.datadir, self.fname_base+"_val.nc"), \
@@ -100,6 +101,7 @@ class InputDataClass(object):
                 raise err
 
             t_load = timer() - t0
+            print("%{0}: Dataset was retrieved succesfully.".format(method))
 
         return ds_train, ds_val, ds_test, t_load
 
@@ -134,7 +136,7 @@ class InputDataClass(object):
         try:
             # connect to the host -- tells us if the host is actually
             # reachable
-            socket.create_connection(("1.1.1.1", 53))
+            socket.create_connection(("1.1.1.1", 53), timeout=5)
             return True
         except OSError:
             pass
