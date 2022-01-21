@@ -1,3 +1,8 @@
+__author__ = "Michael Langguth"
+__email__ = "m.langguth@fz-juelich.de"
+__date__ = "2022-01-20"
+__update__ = "2022-01-22"
+
 import os, sys
 from timeit import default_timer as timer
 import datetime as dt
@@ -14,108 +19,8 @@ import cartopy.crs as ccrs
 sys.path.append("../")
 from input_data_class import InputDataClass
 
-# class for getting data
-
-
-class DownscalingData(InputDataClass):
-
-    def __init__(self, datadir: str, app: str = "maelstrom-downscaling", prefix_nc: str = "downscaling_unet") -> None:
-        super().__init__(datadir, app, fname_base=prefix_nc)
-
-        self.status_ok = True
-        sdim = "time"
-        self.data_info["nsamples"] = {"train": self.data["train"].dims[sdim], "val": self.data["val"].dims[sdim],
-                                      "test": self.data["test"].dims[sdim]}
-
-    def preprocess_data(self, ds_name: str, daytime: int = 12, opt_norm: dict ={}):
-        """
-        Preprocess the data for feeding into the U-net, i.e. conversion to data arrays incl. z-score normalization
-        :param ds_name: name of the dataset, i.e. one of the following "train", "val", "test"
-        :param daytime: daytime in UTC for temporal slicing
-        :param opt_norm: dictionary holding data for z-score normalization of data ("mu_in", "std_in", "mu_tar", "std_tar")
-        :return: normalized data ready to be fed to U-net model
-        """
-        t0 = timer()
-
-        norm_dims_t = ["time"]  # normalization of 2m temperature for each grid point
-        norm_dims_z = ["time", "lat", "lon"]  # 'global' normalization of surface elevation
-
-        # slice the dataset
-        dsf = self.data[ds_name].sel(time=dt.time(daytime))
-
-        # retrieve and normalize input and target data
-        if not opt_norm:
-            t2m_in, t2m_in_mu, t2m_in_std = self.z_norm_data(dsf["t2m_in"], dims=norm_dims_t, return_stat=True)
-            t2m_tar, t2m_tar_mu, t2m_tar_std = self.z_norm_data(dsf["t2m_tar"], dims=norm_dims_t, return_stat=True)
-        else:
-            t2m_in = self.z_norm_data(dsf["t2m_in"], mu=opt_norm["mu_in"], std=opt_norm["std_in"])
-            t2m_tar = self.z_norm_data(dsf["t2m_tar"], mu=opt_norm["mu_tar"], std=opt_norm["std_tar"])
-
-        z_in, z_tar = self.z_norm_data(dsf["z_in"], dims=norm_dims_z), self.z_norm_data(dsf["z_tar"], dims=norm_dims_z)
-
-        in_data = xr.concat([t2m_in, z_in, z_tar], dim="variable")
-        tar_data = xr.concat([t2m_tar, z_tar], dim="variable")
-
-        # re-order data
-        in_data = in_data.transpose("time",...,"variable")
-        tar_data = tar_data.transpose("time",...,"variable")
-        if not opt_norm:
-            opt_norm = {"mu_in": t2m_in_mu, "std_in": t2m_in_std,
-                        "mu_tar": t2m_tar_mu, "std_tar": t2m_tar_std}
-            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
-            return in_data, tar_data, opt_norm
-        else:
-            self.timing["preprocessing_{0}".format(ds_name)] = timer() - t0
-            return in_data, tar_data
-
-    @staticmethod
-    def z_norm_data(data: xr.Dataset, mu=None, std=None, dims=None, return_stat: bool =False):
-        """
-        Perform z-score normalization on the data
-        :param data: the data as xarray-Dataset
-        :param mu: the mean used for normalization (set to False if calculation from data is desired)
-        :param std: the standard deviation used for normalization (set to False if calculation from data is desired)
-        :param dims: list of dimension over which statistical quantities for normalization are calculated
-        :param return_stat: flag if normalization statistics are returned
-        :return: the normalized data
-        """
-        if mu is None and std is None:
-            if not dims:
-                dims = list(data.dims)
-            mu = data.mean(dim=dims)
-            std = data.std(dim=dims)
-
-        data_out = (data - mu) / std
-
-        if return_stat:
-            return data_out, mu, std
-        else:
-            return data_out
 
 # further auxiliary functions
-
-def provide_default(dict_in, keyname, default=None, required=False):
-    """
-    Returns values of key from input dictionary or alternatively its default
-
-    :param dict_in: input dictionary
-    :param keyname: name of key which should be added to dict_in if it is not already existing
-    :param default: default value of key (returned if keyname is not present in dict_in)
-    :param required: Forces existence of keyname in dict_in (otherwise, an error is returned)
-    :return: value of requested key or its default retrieved from dict_in
-    """
-
-    if not required and default is None:
-        raise ValueError("Provide default when existence of key in dictionary is not required.")
-
-    if keyname not in dict_in.keys():
-        if required:
-            print(dict_in)
-            raise ValueError("Could not find '{0}' in input dictionary.".format(keyname))
-        return default
-    else:
-        return dict_in[keyname]
-
 
 # auxiliary function for colormap
 def get_colormap_temp(levels=None):
