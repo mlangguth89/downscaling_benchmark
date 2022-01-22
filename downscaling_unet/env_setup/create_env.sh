@@ -111,6 +111,16 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   export PYTHONPATH=${WORKING_DIR}/models:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${WORKING_DIR}/postprocess:$PYTHONPATH >> ${activate_virt_env}
 
+  # ...and ensure that this also done when the
+  echo "" >> ${activate_virt_env}
+  echo "# Expand PYTHONPATH..." >> ${activate_virt_env}
+  echo "export PYTHONPATH=${VENV_DIR}/lib/python3.9/site-packages:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "export PYTHONPATH=${WORKING_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "export PYTHONPATH=${WORKING_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "export PYTHONPATH=${WORKING_DIR}/models:$PYTHONPATH " >> ${activate_virt_env}
+  echo "export PYTHONPATH=${WORKING_DIR}/handle_data:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "export PYTHONPATH=${WORKING_DIR}/postprocess:$PYTHONPATH" >> ${activate_virt_env}
+
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
 elif [[ "$ENV_EXIST" == 1 ]]; then
   # simply activate virtual environment
