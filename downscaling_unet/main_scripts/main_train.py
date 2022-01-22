@@ -6,16 +6,19 @@ __update__ = "2022-01-22"
 import os, sys
 import argparse
 import time
+import json
+from timeit import default_timer as timer
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
 import tensorflow.keras.utils as ku
 from handle_data_unet import *
 from unet_model import build_unet, get_lr_scheduler
 import numpy as np
-import datetime as dt
 
 
 def main(parser_args):
+
+    method = main.__name__
 
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
@@ -29,7 +32,9 @@ def main(parser_args):
     int_data, tart_data, opt_norm = data_obj.normalize("train", daytime=hour)
     inv_data, tarv_data = data_obj.normalize("val", daytime=hour, opt_norm=opt_norm)
 
-    print(data_obj.timing)
+    benchmark_dict = data_obj.timing
+
+    print(benchmark_dict)
     print(data_obj.data_info["memory_datasets"])
     print(data_obj.data_info["nsamples"])
 
@@ -45,7 +50,7 @@ def main(parser_args):
             self.epoch_times = []
 
         def on_epoch_begin(self, epoch, logs={}):
-            self.epoch_time_start = time.time()mkdi
+            self.epoch_time_start = time.time()
 
         def on_epoch_end(self, epoch, logs={}):
             self.epoch_times.append(time.time() - self.epoch_time_start)
@@ -64,13 +69,21 @@ def main(parser_args):
                        loss={"output_temp": "mae", "output_z": "mae"},
                        loss_weights={"output_temp": 1.0, "output_z": 1.0})
 
-    history = unet_model.fit(x=int_data.values, y={"output_temp": tart_data.isel(variable=0).values,
-                                                   "output_z": tart_data.isel(variable=1).values},
-                             batch_size=32, epochs=nepochs, callbacks=callback_list,
-                             validation_data=(inv_data.values, {"output_temp": tarv_data.isel(variable=0).values,
-                                                                "output_z": tarv_data.isel(variable=1).values}))
+        history = unet_model.fit(x=int_data.values, y={"output_temp": tart_data.isel(variable=0).values,
+                                                       "output_z": tart_data.isel(variable=1).values},
+                                 batch_size=32, epochs=nepochs, callbacks=callback_list,
+                                 validation_data=(inv_data.values, {"output_temp": tarv_data.isel(variable=0).values,
+                                                                    "output_z": tarv_data.isel(variable=1).values}))
+    else:
+        unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)), loss="mae")
+
+
+        history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=32,
+                                 epochs=nepochs, callbacks=callback_list,
+                                 validation_data=(inv_data.values, tarv_data.isel(variable=0).values))
 
     epoch_times = time_tracker.epoch_times
+    benchmark_dict = {**benchmark_dict, **epoch_times}
 
     print(history.history["output_temp_loss"][-1])
     print(history.history["val_output_temp_loss"][-1])
@@ -79,13 +92,15 @@ def main(parser_args):
     print("Max. time per epoch: {0:.4f}s, min. time per epoch: {1:.4f}s".format(np.amax(epoch_times),
                                                                                 np.amin(epoch_times)))
 
-    else:
-        unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)), loss="mae")
+    # save trained model
+    time0_save = timer()
+    unet_model.save(outdir, save_format="h5")
+    save_time = timer() - time0_save
+    benchmark_dict = {**benchmark_dict, "save_time": save_time}
+    print("%{0}: Saving trained model to '{1}' took {2:.2f}s.".format(method, outdir, save_time))
 
-
-        history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=32,
-                                 epochs=nepochs, callbacks=callback_list,
-                                 validation_data=(inv_data.values, tarv_data.isel(variable=0).values))
+    with open(os.path.join(outdir, "benchmark_times.json"), "w") as f:
+        json.dump(benchmark_dict, f)
 
 
 if __name__ == "__main__":
