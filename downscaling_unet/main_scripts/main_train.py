@@ -83,7 +83,11 @@ def main(parser_args):
                                  validation_data=(inv_data.values, tarv_data.isel(variable=0).values))
 
     epoch_times = time_tracker.epoch_times
-    benchmark_dict = {**benchmark_dict, **epoch_times}
+
+    training_times = {"training" : {"total_training_time": np.sum(epoch_times), "avg_epoch_time": np.avg(epoch_times),
+                      "min_training_time": np.amin(epoch_times), "max_training_time": np.amax(epoch_times[1:]),
+                      "first_epoch_time": epoch_times[0], "number_samples": np.shape(int_data)[0]}}
+    benchmark_dict = {**benchmark_dict, **training_times}
 
     print(history.history["output_temp_loss"][-1])
     print(history.history["val_output_temp_loss"][-1])
