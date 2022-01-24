@@ -32,12 +32,15 @@ class BenchmarkCSV(object):
 
     def populate_csv_from_dict(self, benchmark_dict: dict):
 
-        dict_keys = dict.keys()
+        dict_keys = benchmark_dict.keys()
         dict_keys[BenchmarkCSV.expected_cols[0]] = self.exp_number
 
-        _ = BenchmarkCSV.check_for_cols(dict_keys)
+        _ = BenchmarkCSV.check_for_cols(dict_keys, ignore_case=True)
 
-        benchmark_tuples = [(key, benchmark_dict[key]) for key in BenchmarkCSV.expected_cols]
+        # to allow for generic key-value queries, lowercase all keys
+        benchmark_dict_l = {k.lower(): v for k, v in benchmark_dict.items()}
+
+        benchmark_tuples = [(key, benchmark_dict_l[key.lower()]) for key in BenchmarkCSV.expected_cols]
         benchmark_dict_ordered = OrderedDict(benchmark_tuples)
 
         df_benchmark = pd.DataFrame.from_dict(benchmark_dict_ordered)
@@ -72,11 +75,16 @@ class BenchmarkCSV(object):
         return csvfile, mode, data
 
     @staticmethod
-    def check_for_cols(cols2check):
+    def check_for_cols(cols2check, ignore_case: bool = False):
 
         method = BenchmarkCSV.check_for_cols.__name__
 
-        stat = [True if expected_col in cols2check else False for expected_col in BenchmarkCSV.expected_cols]
+        if ignore_case:
+            cols2check_l = {k.lower(): v for k, v in cols2check.items()}
+            stat = [True if expected_col.lower() in cols2check_l else False
+                    for expected_col in BenchmarkCSV.expected_cols]
+        else:
+            stat = [True if expected_col in cols2check else False for expected_col in BenchmarkCSV.expected_cols]
 
         if np.all(stat):
             return True
