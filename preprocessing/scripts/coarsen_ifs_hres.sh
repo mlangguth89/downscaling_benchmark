@@ -77,22 +77,29 @@ fi
 
 # shrink data to region of interest
 filename_sd="${filename_base}_subdom.nc"
-ncea -O -d time,0 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
-ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
-ncap2 -O -s "lat=double(lat); lon=double(lon)" ${filename_sd} ${filename_sd}
 
-# reset coordinates for later slicing
+ncea -O -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
+#Change the variables names from latitude to lat and longitud to lon
+ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
+#change the precision, but why ?
+ncap2 -O -s "lat=double(lat); lon=double(lon)" ${filename_sd} ${filename_sd}
+#input solutio has 0.1 degree, and coarse the inputs to 0.8 degree grid. 
+# reset coordinates for later slicingß
 lat0="45.0"
 lat1="54.5"
 lon0="4.0"
 lon1="16.71"
 
-# calculate dry static energy for first-order conservative remapping
-filename_dse="${filename_base}_dse.nc"
-ncap2 -O -s "s=${cpd}*t2m + z + ${g}*2" -v ${filename_sd} ${filename_dse} 
 
-# add surface geopotential to file 
-ncks -A -v z $filename_sd $filename_dse 
+filename_dse="${filename_base}_dse.nc"
+filename_dset="${filename_base}_dset.nc"
+
+
+# add precipitation to file 
+ncks -A -v lsp,cp,z $filename_sd $filename_dset
+
+#calculate the total precipitation to a new file
+cdo  expr,"tp=cp+lsp;z=z;"  $filename_dset $filename_dse
 
 # remap the data (first-order conservative approach)
 filename_crs="${filename_base}_coarse.nc"
@@ -103,12 +110,12 @@ filename_remapped="${filename_base}_remapped.nc"
 cdo remapbil,${fine_grid_tar_dscr} -setgrid,${coarse_grid_dscr} ${filename_crs} ${filename_remapped}
 
 # retransform dry static energy to t2m
-ncap2 -O -s "t2m_in=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped}
+#ncap2 -O -s "t2m_in=(s-z-${g}*2)/${cpd}" -o ${filename_remapped} ${filename_remapped}
 # finally rename data to distinguish between input and target data (the later must be copied over from previous files)
-ncrename -v z,z_in ${filename_remapped}
-ncks -O -x -v s ${filename_remapped} ${filename_remapped}
-ncea -A -d lat,${lat0},${lat1} -d lon,${lon0},${lon1} -v t2m,z ${filename_sd} ${filename_remapped}
-ncrename -v t2m,t2m_tar -v z,z_tar ${filename_remapped}
+ncrename -v tp,tp_in  -v z,z_in ${filename_remapped}
+#ncks -O -x -v s ${filename_remapped} ${filename_remapped}
+ncea -A -d lat,${lat0},${lat1} -d lon,${lon0},${lon1} -v tp,z ${filename_dse} ${filename_remapped}
+ncrename -v tp,tp_tar -v z,z_tar ${filename_remapped}
 
 ### Return and clean-up in case of success ###
 if [[ -f ${filename_remapped} ]]; then
