@@ -30,7 +30,7 @@ def main(parser_args):
     nepochs = parser_args.nepochs
 
     # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.getcwd(), "benchmark_training.csv")
+    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
     data_obj = HandleUnetData(datadir)
 
@@ -96,7 +96,7 @@ def main(parser_args):
     benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
 
     # save trained model
-    model_name =  "trained_downscaling_unet_t2m_hour{0:0d}_exp{1:d}".format(hour, benchmark_dict["Experiment number"])
+    model_name =  "trained_downscaling_unet_t2m_hour{0:0d}_exp{1:d}".format(hour, bm_obj.exp_number)
     print("%{0}: Save trained model '{1}' to '{2}'".format(method, model_name, outdir))
     t0_save = timer()
     unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")
