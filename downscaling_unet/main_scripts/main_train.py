@@ -100,7 +100,7 @@ def main(parser_args):
 
     # save trained model
     time0_save = timer()
-    unet_model.save(outdir, save_format="h5")
+    unet_model.save(os.path.join(outdir, "trained_downscaling_unet_t2m_hour{0:0d}.h5".format(hour)), save_format="h5")
     save_time = timer() - time0_save
     benchmark_dict = {**benchmark_dict, "save_time": save_time}
     print("%{0}: Saving trained model to '{1}' took {2:.2f}s.".format(method, outdir, save_time))
