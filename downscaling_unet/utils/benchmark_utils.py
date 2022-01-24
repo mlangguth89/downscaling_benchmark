@@ -4,9 +4,18 @@ __date__ = "2022-01-24"
 __update__ = "2022-01-24"
 
 import os
+from collections import OrderedDict
+import numpy as np
 import pandas as pd
 
 class BenchmarkCSV(object):
+
+    expected_cols = ["Experiment Number", "Job ID", "#Nodes", "#CPUs", "#MPI tasks", "#CPUs",
+                     "Loading data time [s]", "Total runtime [s]", "Total training time [s]",
+                     "Average training time per epoch [s]", "Training time first epoch [s]",
+                     "Min. training time per epoch [s]", "Max. training time per epoch [s]",
+                     "Average training time per iteration", "Final training loss", "Final validation loss",
+                     "Saving model time [s]"]
 
     def __init__(self, csvfile):
         self.csv_file, self.mode, self.data = BenchmarkCSV.check_csvfile(csvfile)
@@ -17,21 +26,29 @@ class BenchmarkCSV(object):
             self.exp_number = 1
 
     def get_exp_number(self):
-        all_exps = self.data["Experiment number"].values
+        all_exps = self.data["Experiment number"].values.sort()
 
         return all_exps[-1]
+
+    def populate_csv_from_dict(self, benchmark_dict: dict):
+
+        dict_keys = dict.keys()
+        dict_keys[BenchmarkCSV.expected_cols[0]] = self.exp_number
+
+        _ = BenchmarkCSV.check_for_cols(dict_keys)
+
+        benchmark_tuples = [(key, benchmark_dict[key]) for key in BenchmarkCSV.expected_cols]
+        benchmark_dict_ordered = OrderedDict(benchmark_tuples)
+
+        df_benchmark = pd.DataFrame.from_dict(benchmark_dict_ordered)
+
+        df_benchmark.to_csv(self.csv_file, mode="a", header=not os.path.exists(self.csv_file))
+
 
     @staticmethod
     def check_csvfile(csvfile: str):
 
         method = BenchmarkCSV.check_csvfile.__name__
-
-        expected_cols = ["Experiment Number", "Job ID", "# Nodes", "# CPUs", "#MPI tasks", "#CPUs",
-                         "Loading data time [s]", "Total runtime [s]", "Total training time [s]",
-                         "Average training time per epoch [s]", "Training time first epoch [s]",
-                         "Min. training time per epoch [s]", "Max. training time per epoch [s]",
-                         "Average training time per iteration", "Final training loss", "Final validation loss" ,
-                         "Saving model time [s]"]
 
         # sanity
         assert csvfile.endswith(".csv"), "%{0}: Parsed file must be a csv-file".format(method)
@@ -45,13 +62,7 @@ class BenchmarkCSV(object):
 
             # check if expected columns are present
             columns = list(data.columns)
-            for expected_col in expected_cols:
-                if expected_col in columns:
-                    pass
-                else:
-                    raise ValueError("%{0}: Expected column '{1}' not found in data from csv-file '{2}'."
-                                     .format(method, expected_col, csvfile) + "The following columns are required: {0}"
-                                     .format(", ".join(expected_cols)))
+            _ = BenchmarkCSV.check_for_cols(columns)
 
             mode = "a"
         else:
@@ -59,6 +70,21 @@ class BenchmarkCSV(object):
             data = None
 
         return csvfile, mode, data
+
+    @staticmethod
+    def check_for_cols(cols2check):
+
+        method = BenchmarkCSV.check_for_cols.__name__
+
+        stat = [True if expected_col in cols2check else False for expected_col in BenchmarkCSV.expected_cols]
+
+        if np.all(stat):
+            return True
+        else:
+            misses = [BenchmarkCSV.expected_cols[i] for i in range(len(stat)) if not stat[i]]
+            raise ValueError("%{0}: The following keys/columns are missing: {1}".format(method, ", ".format(misses)))
+
+
 
 
 
