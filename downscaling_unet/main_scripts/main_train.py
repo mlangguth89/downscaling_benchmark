@@ -22,6 +22,7 @@ def main(parser_args):
     method = main.__name__
 
     # parse arguments
+    job_id = parser.job_id
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
 
@@ -96,7 +97,7 @@ def main(parser_args):
     benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
 
     # save trained model
-    model_name =  "trained_downscaling_unet_t2m_hour{0:0d}_exp{1:d}".format(hour, benchmark_dict["Experiment number"])
+    model_name = "trained_downscaling_unet_t2m_hour{0:0d}_exp{1:d}".format(hour, bm_obj.exp_number)
     print("%{0}: Save trained model '{1}' to '{2}'".format(method, model_name, outdir))
     t0_save = timer()
     unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")
@@ -104,6 +105,10 @@ def main(parser_args):
 
     # finally, track total runtime...
     benchmark_dict["total runtime"] = timer() - t0
+    benchmark_dict["job id"] = job_id
+    # currently untracked variables
+    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"]= None, None, None
+    benchmark_dict["#mpi tasks"] = None
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
@@ -126,6 +131,7 @@ if __name__ == "__main__":
                         type=str, required=True, help="Output directory where model is savded.")
     parser.add_argument("--number_epochs", "-nepochs", dest="nepochs", type=int, default=70,
                         help="Number of epochs for training.")
+    parser.add_argument("--job_id", "-id", dest="job_id", type=int, help="Job-id from Slurm.")
     parser.add_argument("--hour", "-hour", dest="hour", type=int, default=12,
                         help="Daytime hour for which model will be trained.")
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
