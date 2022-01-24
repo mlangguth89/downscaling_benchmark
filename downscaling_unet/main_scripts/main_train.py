@@ -73,18 +73,20 @@ def main(parser_args):
                                                        "output_z": tart_data.isel(variable=1).values},
                                  batch_size=32, epochs=nepochs, callbacks=callback_list,
                                  validation_data=(inv_data.values, {"output_temp": tarv_data.isel(variable=0).values,
-                                                                    "output_z": tarv_data.isel(variable=1).values}))
+                                                                    "output_z": tarv_data.isel(variable=1).values}), 
+                                 verbose=2)
     else:
         unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)), loss="mae")
 
 
         history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=32,
                                  epochs=nepochs, callbacks=callback_list,
-                                 validation_data=(inv_data.values, tarv_data.isel(variable=0).values))
+                                 validation_data=(inv_data.values, tarv_data.isel(variable=0).values), 
+                                 verbose=2)
 
     epoch_times = time_tracker.epoch_times
 
-    training_times = {"training" : {"total_training_time": np.sum(epoch_times), "avg_epoch_time": np.avg(epoch_times),
+    training_times = {"training" : {"total_training_time": np.sum(epoch_times), "avg_epoch_time": np.mean(epoch_times),
                       "min_training_time": np.amin(epoch_times), "max_training_time": np.amax(epoch_times[1:]),
                       "first_epoch_time": epoch_times[0], "number_samples": np.shape(int_data)[0]}}
     benchmark_dict = {**benchmark_dict, **training_times}
