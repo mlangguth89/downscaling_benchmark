@@ -31,7 +31,7 @@ def main(parser_args):
     nepochs = parser_args.nepochs
 
     # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.getcwd(), "benchmark_training.csv")
+    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
     data_obj = HandleUnetData(datadir)
 
