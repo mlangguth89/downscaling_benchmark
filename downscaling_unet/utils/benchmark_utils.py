@@ -10,12 +10,12 @@ import pandas as pd
 
 class BenchmarkCSV(object):
 
-    expected_cols = ["Experiment Number", "Job ID", "#Nodes", "#CPUs", "#MPI tasks", "#CPUs",
-                     "Loading data time [s]", "Total runtime [s]", "Total training time [s]",
-                     "Average training time per epoch [s]", "Training time first epoch [s]",
-                     "Min. training time per epoch [s]", "Max. training time per epoch [s]",
-                     "Average training time per iteration", "Final training loss", "Final validation loss",
-                     "Saving model time [s]"]
+    expected_cols = ["Experiment number", "Job ID", "#Nodes", "#GPUs", "#MPI tasks", "#CPUs",
+                     "Loading data time", "Total runtime", "Total training time",
+                     "Avg. training time per epoch", "Training time first epoch",
+                     "Min. training time per epoch", "Max. training time per epoch",
+                     "Avg. training time per iteration", "Final training loss", "Final validation loss",
+                     "Saving model time"]
 
     def __init__(self, csvfile):
         self.csv_file, self.mode, self.data = BenchmarkCSV.check_csvfile(csvfile)
@@ -26,12 +26,13 @@ class BenchmarkCSV(object):
             self.exp_number = 1
 
     def get_exp_number(self):
-        all_exps = self.data["Experiment number"].values.sort()
+        
+        all_exps = sorted(self.data["Experiment number"].values)
 
-        return all_exps[-1]
+        return all_exps[-1] + 1
 
     def populate_csv_from_dict(self, benchmark_dict: dict):
-
+        
         benchmark_dict[BenchmarkCSV.expected_cols[0]] = self.exp_number
         dict_keys = benchmark_dict.keys()
 
@@ -40,12 +41,12 @@ class BenchmarkCSV(object):
         # to allow for generic key-value queries, lowercase all keys
         benchmark_dict_l = {k.lower(): v for k, v in benchmark_dict.items()}
 
-        benchmark_tuples = [(key, benchmark_dict_l[key.lower()]) for key in BenchmarkCSV.expected_cols]
+        benchmark_tuples = [(key, [benchmark_dict_l[key.lower()]]) for key in BenchmarkCSV.expected_cols]
         benchmark_dict_ordered = OrderedDict(benchmark_tuples)
 
         df_benchmark = pd.DataFrame.from_dict(benchmark_dict_ordered)
 
-        df_benchmark.to_csv(self.csv_file, mode="a", header=not os.path.exists(self.csv_file))
+        df_benchmark.to_csv(self.csv_file, mode="a", header=not os.path.exists(self.csv_file), index=False)
 
     @staticmethod
     def check_csvfile(csvfile: str):
@@ -89,7 +90,7 @@ class BenchmarkCSV(object):
             return True
         else:
             misses = [BenchmarkCSV.expected_cols[i] for i in range(len(stat)) if not stat[i]]
-            raise ValueError("%{0}: The following keys/columns are missing: {1}".format(method, ", ".format(misses)))
+            raise ValueError("%{0}: The following keys/columns are missing: {1}".format(method, ", ".join(misses)))
 
 
 
