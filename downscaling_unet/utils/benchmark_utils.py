@@ -32,10 +32,10 @@ class BenchmarkCSV(object):
 
     def populate_csv_from_dict(self, benchmark_dict: dict):
 
+        benchmark_dict[BenchmarkCSV.expected_cols[0]] = self.exp_number
         dict_keys = benchmark_dict.keys()
-        dict_keys[BenchmarkCSV.expected_cols[0]] = self.exp_number
 
-        _ = BenchmarkCSV.check_for_cols(dict_keys, ignore_case=True)
+        _ = BenchmarkCSV.check_collist(dict_keys, ignore_case=True)
 
         # to allow for generic key-value queries, lowercase all keys
         benchmark_dict_l = {k.lower(): v for k, v in benchmark_dict.items()}
@@ -46,7 +46,6 @@ class BenchmarkCSV(object):
         df_benchmark = pd.DataFrame.from_dict(benchmark_dict_ordered)
 
         df_benchmark.to_csv(self.csv_file, mode="a", header=not os.path.exists(self.csv_file))
-
 
     @staticmethod
     def check_csvfile(csvfile: str):
@@ -65,7 +64,7 @@ class BenchmarkCSV(object):
 
             # check if expected columns are present
             columns = list(data.columns)
-            _ = BenchmarkCSV.check_for_cols(columns)
+            _ = BenchmarkCSV.check_collist(columns)
 
             mode = "a"
         else:
@@ -75,16 +74,16 @@ class BenchmarkCSV(object):
         return csvfile, mode, data
 
     @staticmethod
-    def check_for_cols(cols2check, ignore_case: bool = False):
+    def check_collist(column_list, ignore_case: bool = False):
 
-        method = BenchmarkCSV.check_for_cols.__name__
+        method = BenchmarkCSV.check_collist.__name__
 
         if ignore_case:
-            cols2check_l = {k.lower(): v for k, v in cols2check.items()}
-            stat = [True if expected_col.lower() in cols2check_l else False
+            column_list_l = [col.lower() for col in column_list]
+            stat = [True if expected_col.lower() in column_list_l else False
                     for expected_col in BenchmarkCSV.expected_cols]
         else:
-            stat = [True if expected_col in cols2check else False for expected_col in BenchmarkCSV.expected_cols]
+            stat = [True if expected_col in column_list else False for expected_col in BenchmarkCSV.expected_cols]
 
         if np.all(stat):
             return True
