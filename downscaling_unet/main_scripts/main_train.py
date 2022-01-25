@@ -6,9 +6,11 @@ __update__ = "2022-01-24"
 import os, sys
 import argparse
 from timeit import default_timer as timer
+import json as js
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
 import tensorflow.keras.utils as ku
+from tensorflow.python.keras.utils.layer_utils import count_params
 from handle_data_unet import HandleUnetData
 from unet_model import build_unet, get_lr_scheduler
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
@@ -112,14 +114,16 @@ def main(parser_args):
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
-    js_file = os.path.join(os.getcwd(), "data_info.json")
+    js_file = os.path.join(os.getcwd(), "benchmark_training_static.json")
     if not os.path.isfile(js_file):
         data_mem = data_obj.data_info["memory_datasets"]
-        data_info = {"training data size": data_mem["train"], "validation data size": data_mem["val"],
-                     "nsamples": nsamples, "shape_samples": shape_in}
+        static_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
+                                             "non-trainable_parameters": count_params(unet_model.non_trainable_weights)}, 
+                       "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
+                       "nsamples": nsamples, "shape_samples": shape_in}}
 
         with open(js_file, "w") as jsf:
-            json.dump(data_info, jsf)
+            js.dump(static_info, jsf)
 
 
 
