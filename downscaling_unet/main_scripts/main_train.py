@@ -22,7 +22,7 @@ def main(parser_args):
     method = main.__name__
 
     # parse arguments
-    job_id = parser.job_id
+    job_id = parser_args.job_id
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
 
@@ -119,7 +119,7 @@ def main(parser_args):
                      "nsamples": nsamples, "shape_samples": shape_in}
 
         with open(js_file, "w") as jsf:
-            jsf.dump(data_info)
+            json.dump(data_info, jsf)
 
 
 
