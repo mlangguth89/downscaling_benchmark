@@ -6,13 +6,12 @@ __update__ = "2022-01-22"
 import os, sys
 import socket
 from timeit import default_timer as timer
-import climetlab as cml
 import xarray as xr
 
 
 class HandleDataClass(object):
 
-    def __init__(self, datadir: str, application: str, fname_base: str = "") -> None:
+    def __init__(self, datadir: str, application: str, query: str, purpose: str = None) -> None:
         """
         Initialize Input data object by reading data from netCDF-files
         :param datadir: the directory from where netCDF-files are located (or should be located if downloaded)
@@ -22,20 +21,53 @@ class HandleDataClass(object):
         method = HandleDataClass.__init__.__name__
 
         self.host = os.getenv("HOSTNAME") if os.getenv("HOSTNAME") is not None else "unknown"
-        self.fname_base = fname_base
+        purpose = query if purpose is None else purpose
         self.application = application
-        if os.path.isdir(datadir):
-            self.datadir = datadir
+        if not os.path.isdir(datadir):
+            os.makedirs(datadir)
+
+        ds = self.handle_data_req(query, purpose)
+        self.ldownload = self.set_download_flag()
+        self.datafile = os.path.join(datadir, "{0}_{1}.nc".format(application, self.purpose))
+        t0_load = timer()
+        ds = self.get_data()
+        load_time = t0_load - timer()
+        if self.ldownload:
+            print("%{0}: Downloading the data took {0:.2f}s.".format(method, load_time))
+            _ = HandleDataClass.ds_to_netcdf(ds, self.datafile)
         else:
-            raise NotADirectoryError("%{0}: input data directory '{1}' does not exist.")
+            self.timing = {"loading_times": purpose: load_time}
+            self.data = {purpose: ds}
+        self.data_info = {"memory_datasets": {self.purpose: ds.nbytes}}
 
-        self.ldownload, self.data_dict = self.set_download_flag()
-        ds_train, ds_val, ds_test, loading_time = self.get_data()
-        self.data = {"train": ds_train, "val": ds_val, "test": ds_test}
-        self.timing = {"loading data time": loading_time}
-        self.data_info = {"memory_datasets": {"train": ds_train.nbytes, "val": ds_val.nbytes, "test": ds_test.nbytes}}
+    def handle_data_req(self, query: str, purpose):
+        datafile = os.path.join(self.datadir, "{0}_{1}.nc".format(self.application))
+        self.ldownload_last = HandleDataClass.set_download_flag(datafile)
+        # time data retrieval
+        t0_load = timer()
+        ds = self.get_data(query, datafile)
+        load_time = timer() - t0_load
+        if self.ldownload_last:
+            print("%{0}: Downloading took {1:.2f}s.".format(method, load_time))
+            _ = HandleDataClass.ds_to_netcdf(ds, self.datafile)
 
-    def set_download_flag(self):
+
+        return ds
+
+            self.timing = {"loading_times": purpose: load_time}
+            self.data = {purpose: ds}
+        self.data_info = {"memory_datasets": {self.purpose: ds.nbytes}}
+
+    def append_data(self, query: str, purpose: str = None):
+
+        self.purpose = query if purpose is None else purpose
+        self.ldownload = self.set_download_flag()
+        self.datafile = os.path.join(datadir, "{0}_{1}.nc".format(application, self.purpose))
+        t0_load = timer()
+        ds = self.get_data()
+
+
+    def set_download_flag(self, datafile):
         """
         Depending on the hosting system and on the availability of the dataset on the filesystem
         (stored under self.datadir), the download flag is set to False or True. Also returns a dictionary for the
@@ -46,68 +78,22 @@ class HandleDataClass(object):
 
         ldownload = True if "login" in self.host else False
 
-        ncf_train, ncf_val, ncf_test = os.path.join(self.datadir, self.fname_base+"_train.nc"), \
-                                       os.path.join(self.datadir, self.fname_base+"_val.nc"), \
-                                       os.path.join(self.datadir, self.fname_base+"_test.nc")
+        stat_file = os.path.isfile(datafile)
 
-        stat_files = all(list(map(os.path.isfile, [ncf_train, ncf_val, ncf_test])))
-
-        if stat_files and ldownload:
+        if stat_file and ldownload:
             print("%{0}: Datafiles are already available under '{1}'".format(method, self.datadir))
             ldownload = False
-        elif not stat_files and not ldownload:
-            raise ValueError("%{0}: Datafiles are not complete under '{1}',".format(method, self.datadir) +
+        elif not stat_file and not ldownload:
+            raise ValueError("%{0}: Data is not available under '{1}',".format(method, self.datadir) +
                              "but downloading on computing node '{0}' is not possible.".format(self.host))
 
-        return ldownload, {"train_datafile": ncf_train, "val_datafile": ncf_val, "test_datafile": ncf_test}
+        return ldownload
 
     def get_data(self):
         """
-        Depending on the flag ldownload, data is either downloaded from the s3-bucket or read from the file system.
-        The time for the latter process is measured.
-        :return: xarray-Datasets for training, validation and testing (loaded to memory) and elapsed time
+        Function to either downlaod data from the s3-bucket or to read from file.
         """
-
-        method = HandleDataClass.get_data.__name__
-
-        ncf_train, ncf_val, ncf_test = self.data_dict["train_datafile"], self.data_dict["val_datafile"], \
-                                       self.data_dict["test_datafile"]
-
-        if self.ldownload:
-            try:
-                print("%{0}: Start downloading the data...".format(method))
-                # download the data from ECMWF's s3-bucket
-                cmlds_train = cml.load_dataset(self.application, dataset="training")
-                cmlds_val = cml.load_dataset(self.application, dataset="validation")
-                cmlds_test = cml.load_dataset(self.application, dataset="testing")
-                # convert to xarray datasets and...
-                ds_train, ds_val, ds_test = cmlds_train.to_xarray(), cmlds_val.to_xarray(), cmlds_test.to_xarray()
-                # ...save to disk
-                _, _, _ = self.ds_to_netcdf(ds_train, ncf_train), self.ds_to_netcdf(ds_val, ncf_val),\
-                          self.ds_to_netcdf(ds_test, ncf_test)
-
-                t_load = None
-            except Exception as err:
-                print("%{0}: Failed to download data files '{1}' for application {2} from s3-bucket."
-                      .format(method, ",".join(self.data_dict.keys()), self.application))
-                raise err
-        else:
-            t0 = timer()
-            try:
-                print("%{0}: Start reading the data from '{1}'...".format(method, self.datadir))
-                ds_train, ds_val, ds_test = xr.open_dataset(ncf_train), xr.open_dataset(ncf_val),\
-                                            xr.open_dataset(ncf_test)
-
-                ds_train, ds_val, ds_test = ds_train.load(), ds_val.load(), ds_test.load()
-            except Exception as err:
-                print("%{0}: Failed to read all required files '{1}' from '{2}'"
-                                   .format(method, ", ".join(self.data_dict.values()), self.datadir))
-                raise err
-
-            t_load = timer() - t0
-            print("%{0}: Dataset was retrieved succesfully.".format(method))
-
-        return ds_train, ds_val, ds_test, t_load
+        raise NotImplementedError("Please set-up a customized get_data-function.")
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):

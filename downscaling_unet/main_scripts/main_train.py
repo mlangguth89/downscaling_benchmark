@@ -31,6 +31,7 @@ def main(parser_args):
     z_branch = not parser_args.no_z_branch
     hour = parser_args.hour
     nepochs = parser_args.nepochs
+    batch_size = parser_args.batch_size
 
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
@@ -78,7 +79,7 @@ def main(parser_args):
 
         history = unet_model.fit(x=int_data.values, y={"output_temp": tart_data.isel(variable=0).values,
                                                        "output_z": tart_data.isel(variable=1).values},
-                                 batch_size=32, epochs=nepochs, callbacks=callback_list,
+                                 batch_size=batch_size, epochs=nepochs, callbacks=callback_list,
                                  validation_data=(inv_data.values, {"output_temp": tarv_data.isel(variable=0).values,
                                                                     "output_z": tarv_data.isel(variable=1).values}), 
                                  verbose=2)
@@ -86,7 +87,7 @@ def main(parser_args):
         print("%{0}: Start training without optimization on surface topography (with z_branch).".format(method))
         unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)), loss="mae")
 
-        history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=32,
+        history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=batch_size,
                                  epochs=nepochs, callbacks=callback_list,
                                  validation_data=(inv_data.values, tarv_data.isel(variable=0).values), 
                                  verbose=2)
@@ -117,13 +118,13 @@ def main(parser_args):
     js_file = os.path.join(os.getcwd(), "benchmark_training_static.json")
     if not os.path.isfile(js_file):
         data_mem = data_obj.data_info["memory_datasets"]
-        static_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
-                                             "non-trainable_parameters": count_params(unet_model.non_trainable_weights)}, 
-                       "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
-                       "nsamples": nsamples, "shape_samples": shape_in}}
+        stat_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
+                                           "non-trainable_parameters": count_params(unet_model.non_trainable_weights)},
+                     "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
+                                   "nsamples" : nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
 
         with open(js_file, "w") as jsf:
-            js.dump(static_info, jsf)
+            js.dump(stat_info, jsf)
 
 
 
@@ -135,6 +136,8 @@ if __name__ == "__main__":
                         type=str, required=True, help="Output directory where model is savded.")
     parser.add_argument("--number_epochs", "-nepochs", dest="nepochs", type=int, default=70,
                         help="Number of epochs for training.")
+    parser.add_argument("--batch_size", "-bs", dest="batch_size", type=int, default=32,
+                        help = "Batch size during model training.")
     parser.add_argument("--job_id", "-id", dest="job_id", type=int, help="Job-id from Slurm.")
     parser.add_argument("--hour", "-hour", dest="hour", type=int, default=12,
                         help="Daytime hour for which model will be trained.")
