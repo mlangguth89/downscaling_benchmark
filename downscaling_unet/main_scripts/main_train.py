@@ -43,7 +43,8 @@ def main(parser_args):
     inv_data, tarv_data = data_obj.normalize("val", daytime=hour, opt_norm=opt_norm)
 
     # get dictionary for tracking benchmark parameters
-    benchmark_dict = data_obj.timing
+    tot_time_load = data_obj.timing["loading_times"]["train"] + data_obj.timing["loading_times"]["val"]
+    benchmark_dict = {"loading data time": tot_time_load}
 
     # some information on training data
     nsamples = int_data.shape[0]
