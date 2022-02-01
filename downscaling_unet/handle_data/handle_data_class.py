@@ -57,7 +57,7 @@ class HandleDataClass(object):
 
         return data, timing, data_info
 
-    def append_data(self, query: str, purpose: str = None):
+    def append_data(self, query: str, purpose: str = None, **kwargs):
         """
         Appends data-dictionary of the class and also tracks basic benchmark parameters
         :param query: the query-string to submit to the climetlab-API of the application
