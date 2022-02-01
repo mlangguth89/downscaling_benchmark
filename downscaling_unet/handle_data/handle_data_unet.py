@@ -16,11 +16,12 @@ arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]
 
 class HandleUnetData(HandleDataClass):
 
-    def __init__(self, datadir: str, query: str, purpose: str = None) -> None:
+    def __init__(self, datadir: str, query: str, purpose: str = None, hour: int = 12) -> None:
         app = "maelstrom-downscaling"
-        super().__init__(datadir, app, query, purpose)
+        super().__init__(datadir, app, query, purpose, hour=12)
 
         self.status_ok = True
+        self.hour = hour
         self.sample_dim = "time"
         self.data_info["nsamples"] = {key: ds.dims[self.sample_dim] for (key, ds) in self.data.items()}
 
@@ -31,11 +32,11 @@ class HandleUnetData(HandleDataClass):
         :param purpose: the name/purpose of the retireved data (used to append the data-dictionary)
         :return: appended self.data-dictionary with {purpose: xr.Dataset}
         """
-        super().append_data(query, purpose)
+        super().append_data(query, purpose, hour=self.hour)
 
         self.data_info["nsamples"] = {key: ds.dims[self.sample_dim] for (key, ds) in self.data.items()}
 
-    def get_data(self, query: str, datafile: str):
+    def get_data(self, query: str, datafile: str, hour: int = 12):
         """
         Depending on the flag ldownload_last, data is either downloaded from the s3-bucket or read from the file system.
         :param query: a query-string to retrieve the data from the s3-bucket
@@ -51,7 +52,7 @@ class HandleUnetData(HandleDataClass):
                 # download the data from ECMWF's s3-bucket
                 cmlds = cml.load_dataset(self.application, dataset=query)
                 # convert to xarray datasets and...
-                ds = cmlds.to_xarray()
+                ds = cmlds.to_xarray().sel(time=dt.time(hour))
                 # ...save to disk
                 _ = self.ds_to_netcdf(ds, datafile)
             except Exception as err:
