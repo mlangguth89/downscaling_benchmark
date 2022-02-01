@@ -52,7 +52,7 @@ class HandleUnetData(HandleDataClass):
                 # download the data from ECMWF's s3-bucket
                 cmlds = cml.load_dataset(self.application, dataset=query)
                 # convert to xarray datasets and...
-                ds = cmlds.to_xarray().sel(time=dt.time(hour))
+                ds = cmlds.to_xarray()
                 # ...save to disk
                 _ = self.ds_to_netcdf(ds, datafile)
             except Exception as err:
@@ -63,7 +63,7 @@ class HandleUnetData(HandleDataClass):
             try:
                 print("%{0}: Start reading the data from '{1}'...".format(method, self.datadir))
                 ds = xr.open_dataset(datafile)
-                ds = ds.load()
+                ds = ds.sel(time=dt.time(hour)).load()
             except Exception as err:
                 print("%{0}: Failed to read file '{1}' corresponding to query '{2}'"
                                    .format(method, datafile, query))
