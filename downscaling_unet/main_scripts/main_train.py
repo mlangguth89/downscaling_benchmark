@@ -36,7 +36,8 @@ def main(parser_args):
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
-    data_obj = HandleUnetData(datadir)
+    data_obj = HandleUnetData(datadir, "training", purpose="train")
+    data_obj.append_data("validation", purpose="val")
 
     int_data, tart_data, opt_norm = data_obj.normalize("train", daytime=hour)
     inv_data, tarv_data = data_obj.normalize("val", daytime=hour, opt_norm=opt_norm)
