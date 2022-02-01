@@ -12,7 +12,7 @@ import xarray as xr
 
 class HandleDataClass(object):
 
-    def __init__(self, datadir: str, application: str, query: str, purpose: str = None) -> None:
+    def __init__(self, datadir: str, application: str, query: str, purpose: str = None, **kwargs) -> None:
         """
         Initialize Input data object by reading data from netCDF-files
         :param datadir: the directory from where netCDF-files are located (or should be located if downloaded)
@@ -30,9 +30,9 @@ class HandleDataClass(object):
             os.makedirs(datadir)
         self.ldownload_last = None
 
-        self.data, self.timing, self.data_info = self.handle_data_req(query, purpose)
+        self.data, self.timing, self.data_info = self.handle_data_req(query, purpose, **kwargs)
 
-    def handle_data_req(self, query: str, purpose):
+    def handle_data_req(self, query: str, purpose, **kwargs):
         """
         Handles a data-query by parsing it to the get_data function
         :param query: the query-string to submit to the climetlab-API of the application
@@ -45,7 +45,7 @@ class HandleDataClass(object):
         self.ldownload_last = self.set_download_flag(datafile)
         # time data retrieval
         t0_load = timer()
-        ds = self.get_data(query, datafile)
+        ds = self.get_data(query, datafile, **kwargs)
         load_time = timer() - t0_load
         if self.ldownload_last:
             print("%{0}: Downloading took {1:.2f}s.".format(method, load_time))
@@ -65,12 +65,12 @@ class HandleDataClass(object):
         :return: appended self.data-dictionary with {purpose: xr.Dataset}
         """
         purpose = query if purpose is None else purpose
-        ds_app, timing_app, data_info_app = self.handle_data_req(query, purpose)
+        ds_app, timing_app, data_info_app = self.handle_data_req(query, purpose, **kwargs)
 
         self.data.update(ds_app)
-        self.timing.update(timing_app)
-        self.data_info.update(data_info_app)
-
+        self.timing["loading_times"].update(timing_app["loading_times"])
+        self.data_info["memory_datasets"].update(data_info_app["memory_datasets"])
+        
     def set_download_flag(self, datafile):
         """
         Depending on the hosting system and on the availability of the dataset on the filesystem
@@ -80,8 +80,7 @@ class HandleDataClass(object):
         """
         method = HandleDataClass.set_download_flag.__name__
 
-        ldownload = True if "login" in self.host else False
-
+        ldownload = True if "login" in self.host else False        
         stat_file = os.path.isfile(datafile)
 
         if stat_file and ldownload:
