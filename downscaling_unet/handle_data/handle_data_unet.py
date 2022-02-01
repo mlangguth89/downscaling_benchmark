@@ -1,6 +1,6 @@
 __author__ =  "Michael Langguth"
 __date__ = "2022-01-20"
-__update__ = "2022-01-22"
+__update__ = "2022-02-01"
 
 from typing import Union, List
 from timeit import default_timer as timer
@@ -63,7 +63,8 @@ class HandleUnetData(HandleDataClass):
             try:
                 print("%{0}: Start reading the data from '{1}'...".format(method, self.datadir))
                 ds = xr.open_dataset(datafile)
-                ds = ds.sel(time=dt.time(hour)).load()
+                # Note 2022-02-01: don't slice here since this is done during preprocessing
+                ds = ds.load()#.sel(time=dt.time(hour)).load()
             except Exception as err:
                 print("%{0}: Failed to read file '{1}' corresponding to query '{2}'"
                                    .format(method, datafile, query))
