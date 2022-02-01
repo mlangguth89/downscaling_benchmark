@@ -16,61 +16,61 @@ arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]
 
 class HandleUnetData(HandleDataClass):
 
-    def __init__(self, datadir: str, app: str = "maelstrom-downscaling", prefix_nc: str = "downscaling_unet") -> None:
-        super().__init__(datadir, app, fname_base=prefix_nc)
+    def __init__(self, datadir: str, query: str, purpose: str = None) -> None:
+        app = "maelstrom-downscaling"
+        super().__init__(datadir, app, query, purpose)
 
         self.status_ok = True
-        sdim = "time"
-        self.data_info["nsamples"] = {"train": self.data["train"].dims[sdim], "val": self.data["val"].dims[sdim],
-                                      "test": self.data["test"].dims[sdim]}
+        self.sample_dim = "time"
+        self.data_info["nsamples"] = {key: ds.dims[self.sample_dim] for (key, ds) in self.data.items()}
 
-    def get_data(self):
+    def append_data(self, query: str, purpose: str = None):
         """
-        Depending on the flag ldownload, data is either downloaded from the s3-bucket or read from the file system.
-        The time for the latter process is measured.
+        Appends data-dictionary of the class and also tracks basic benchmark parameters
+        :param query: the query-string to submit to the climetlab-API of the application
+        :param purpose: the name/purpose of the retireved data (used to append the data-dictionary)
+        :return: appended self.data-dictionary with {purpose: xr.Dataset}
+        """
+        super().append_data(query, purpose)
+
+        self.data_info["nsamples"] = {key: ds.dims[self.sample_dim] for (key, ds) in self.data.items()}
+
+    def get_data(self, query: str, datafile: str):
+        """
+        Depending on the flag ldownload_last, data is either downloaded from the s3-bucket or read from the file system.
+        :param query: a query-string to retrieve the data from the s3-bucket
+        :param datafile: the name of the datafile in which the retireved data is stored (will be either read or created)
         :return: xarray-Datasets for training, validation and testing (loaded to memory) and elapsed time
         """
 
         method = HandleDataClass.get_data.__name__
 
-        ncf_train, ncf_val, ncf_test = self.data_dict["train_datafile"], self.data_dict["val_datafile"], \
-                                       self.data_dict["test_datafile"]
-
-        if self.ldownload:
+        if self.ldownload_last:
             try:
                 print("%{0}: Start downloading the data...".format(method))
                 # download the data from ECMWF's s3-bucket
-                cmlds_train = cml.load_dataset(self.application, dataset="training")
-                cmlds_val = cml.load_dataset(self.application, dataset="validation")
-                cmlds_test = cml.load_dataset(self.application, dataset="testing")
+                cmlds = cml.load_dataset(self.application, dataset=query)
                 # convert to xarray datasets and...
-                ds_train, ds_val, ds_test = cmlds_train.to_xarray(), cmlds_val.to_xarray(), cmlds_test.to_xarray()
+                ds = cmlds.to_xarray()
                 # ...save to disk
-                _, _, _ = self.ds_to_netcdf(ds_train, ncf_train), self.ds_to_netcdf(ds_val, ncf_val),\
-                          self.ds_to_netcdf(ds_test, ncf_test)
-
-                t_load = None
+                _ = self.ds_to_netcdf(ds, datafile)
             except Exception as err:
-                print("%{0}: Failed to download data files '{1}' for application {2} from s3-bucket."
-                      .format(method, ",".join(self.data_dict.keys()), self.application))
+                print("%{0}: Failed to download data files for query '{1}' for application {2} from s3-bucket."
+                      .format(method, query, self.application))
                 raise err
         else:
-            t0 = timer()
             try:
                 print("%{0}: Start reading the data from '{1}'...".format(method, self.datadir))
-                ds_train, ds_val, ds_test = xr.open_dataset(ncf_train), xr.open_dataset(ncf_val),\
-                                            xr.open_dataset(ncf_test)
-
-                ds_train, ds_val, ds_test = ds_train.load(), ds_val.load(), ds_test.load()
+                ds = xr.open_dataset(datafile)
+                ds = ds.load()
             except Exception as err:
-                print("%{0}: Failed to read all required files '{1}' from '{2}'"
-                                   .format(method, ", ".join(self.data_dict.values()), self.datadir))
+                print("%{0}: Failed to read file '{1}' corresponding to query '{2}'"
+                                   .format(method, datafile, query))
                 raise err
 
-            t_load = timer() - t0
             print("%{0}: Dataset was retrieved succesfully.".format(method))
 
-        return ds_train, ds_val, ds_test, t_load
+        return ds
 
     def normalize(self, ds_name: str, daytime: int = 12, opt_norm: dict ={}):
         """

@@ -5,6 +5,7 @@ __update__ = "2022-01-31"
 
 import os, sys
 import socket
+from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
 
@@ -41,7 +42,7 @@ class HandleDataClass(object):
         method = HandleDataClass.handle_data_req.__name__
 
         datafile = os.path.join(self.datadir, "{0}_{1}.nc".format(self.application, purpose))
-        self.ldownload_last = HandleDataClass.set_download_flag(datafile)
+        self.ldownload_last = self.set_download_flag(datafile)
         # time data retrieval
         t0_load = timer()
         ds = self.get_data(query, datafile)
@@ -50,7 +51,7 @@ class HandleDataClass(object):
             print("%{0}: Downloading took {1:.2f}s.".format(method, load_time))
             _ = HandleDataClass.ds_to_netcdf(ds, datafile)
 
-        data = {purpose: ds},
+        data = OrderedDict({purpose: ds})
         timing = {"loading_times": {purpose: load_time}}
         data_info = {"memory_datasets": {purpose: ds.nbytes}}
 
@@ -92,7 +93,7 @@ class HandleDataClass(object):
 
         return ldownload
 
-    def get_data(self):
+    def get_data(self, *args):
         """
         Function to either downlaod data from the s3-bucket or to read from file.
         """
