@@ -39,6 +39,10 @@ def main(parser_args):
     data_obj = HandleUnetData(datadir, "training", purpose="train")
     data_obj.append_data("validation", purpose="val")
 
+    if "login" in data_obj.host:
+        raise EnvironmentError("%{0}: Training is only supported on the computing nodes, not on the login-node ('{1}')"
+                               .format(method, data_obj.host))
+
     int_data, tart_data, opt_norm = data_obj.normalize("train", daytime=hour)
     inv_data, tarv_data = data_obj.normalize("val", daytime=hour, opt_norm=opt_norm)
 
@@ -113,7 +117,8 @@ def main(parser_args):
     benchmark_dict["job id"] = job_id
     # currently untracked variables
     benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"]= None, None, None
-    benchmark_dict["#mpi tasks"] = None
+    benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gu power"] = None, None, None
+    benchmark_dict["GPU energy consumption"] = None
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
@@ -127,7 +132,6 @@ def main(parser_args):
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
-
 
 
 if __name__ == "__main__":
