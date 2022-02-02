@@ -24,7 +24,7 @@ class BenchmarkCSV(object):
                      "Avg. training time per epoch", "First epoch training time",
                      "Min. training time per epoch", "Max. training time per epoch",
                      "Avg. training time per iteration", "Final training loss", "Final validation loss",
-                     "Saving model time"]
+                     "Saving model time", "Node ID", "Max. GPU power", "GPU energy consumption"]
 
     def __init__(self, csvfile: str):
         """
