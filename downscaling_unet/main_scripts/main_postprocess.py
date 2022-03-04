@@ -14,7 +14,9 @@ class TimeHistory(keras.callbacks.Callback):
 
     def on_predict_batch_end(self,batch,logs={}):
         self.batch_times.append(timer() - self.batch_time_start)
-        print("the time for one batch",self.batch_times)
+
+    def on_predict_end(self,logs={}):
+        print("the time for inference per batch",self.batch_times)
 
 def main(parser_args):
 
@@ -39,9 +41,12 @@ def main(parser_args):
     int_data, tart_data, opt_norm = data_obj.normalize("test", daytime=hour)
     time_tracker = TimeHistory()
     callback_list = [time_tracker]
+    
     #inferences
     preds = model_recon.predict(int_data.values,batch_size=batch_size,verbose=2,callbacks=callback_list)
-    print("Time", time_tracker.__dict__)
+   
+    inf_total_time  = timer() - t0
+    print("The total inference time is",inf_total_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
