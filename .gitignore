@@ -115,11 +115,17 @@ virt_env*/
 
 
 #Ignore the results files
+**/trained_models
 **/results_test_samples
 **/logs
 **/vp
 **/models
 *.h5
+
+# ignore file for diagnosis
+*.json
+*.csv
+*.png
 
 # Ignore (Batch) runscripts
 **/batch_scripts/*.sh
