@@ -128,7 +128,7 @@ def main(parser_args):
         stat_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
                                            "non-trainable_parameters": count_params(unet_model.non_trainable_weights)},
                      "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
-                                   "nsamples" : nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
+                                   "nsamples": nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
