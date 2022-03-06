@@ -38,37 +38,37 @@ filename_base="${filename%.*}"
 
 if ! command -v cdo &> /dev/null; then
   echo "${scr_name}: CDO is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if ! command -v ncap2 &> /dev/null; then
   echo "${scr_name}: ncap2 is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if ! command -v ncea &> /dev/null; then
   echo "${scr_name}: ncea is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if [[ ! -f "$1" ]]; then
   echo "${scr_name}: The file $1 does not exist.";
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${fine_grid_base_dscr} ]]; then
   echo "${scr_name}: ERROR: The basic grid description for IFS HRES ${fine_grid_base_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${coarse_grid_dscr} ]]; then
   echo "${scr_name}: ERROR: The grid description for the coarse grid ${coarse_grid_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${fine_grid_tar_dscr} ]]; then
   echo "${scr_name}: ERROR: The target grid description for IFS HRES ${fine_grid_tar_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 #return 0
