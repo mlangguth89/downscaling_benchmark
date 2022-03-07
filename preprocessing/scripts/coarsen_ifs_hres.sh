@@ -77,7 +77,7 @@ fi
 
 # shrink data to region of interest
 filename_sd="${filename_base}_subdom.nc"
-ncea -O -d time,0,12 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
+ncea -O -d time,0,11 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
 ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
 ncap2 -O -s "lat=double(lat); lon=double(lon)" ${filename_sd} ${filename_sd}
 
