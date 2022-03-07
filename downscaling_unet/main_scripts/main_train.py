@@ -36,8 +36,8 @@ def main(parser_args):
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
-    data_obj = HandleUnetData(datadir, "training", purpose="train")
-    data_obj.append_data("validation", purpose="val")
+    data_obj = HandleUnetData(datadir, "training", purpose="train_aug")
+    data_obj.append_data("validation", purpose="val_aug")
 
     if "login" in data_obj.host:
         raise EnvironmentError("%{0}: Training is only supported on the computing nodes, not on the login-node ('{1}')"
