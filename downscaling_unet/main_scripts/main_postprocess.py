@@ -5,6 +5,8 @@ import tensorflow.keras as keras
 import xarray as xr
 from handle_data_unet import HandleUnetData
 import json
+
+
 class TimeHistory(keras.callbacks.Callback):
     def on_predict_begin(self,logs={}):
         self.batch_times = []
@@ -18,7 +20,8 @@ class TimeHistory(keras.callbacks.Callback):
     def on_predict_end(self,logs={}):
         print("The time for inference per batch",self.batch_times)
         print("The average of inference time per batch is",sum(self.batch_times)/len(self.batch_times))
-
+        print("The maximum time per iteration",max(self.batch_times))
+        print("The minmum time per iteration",min(self.batch_times))
 
 def main(parser_args):
      
@@ -46,16 +49,21 @@ def main(parser_args):
     #obtain the test dataset
     data_obj = HandleUnetData(input_dir, "test", purpose="test_aug")
     int_data, tart_data = data_obj.normalize("test_aug",  daytime=None, opt_norm=opt_norm_js)
-
+    print("total test samples:", int_data.shape)
     
     time_tracker = TimeHistory()
     callback_list = [time_tracker]
     
     #inferences
+    time_st_inf = timer()
     preds = model_recon.predict(int_data.values,batch_size=batch_size,verbose=2,callbacks=callback_list)
-   
+    print("The total inference time is", timer()-time_st_inf)
+    #Evalution
+    results = model_recon.evaluate(int_data.values,tart_data.values,batch_size=batch_size)
+    
+
     inf_total_time  = timer() - t0
-    print("The total inference time is",inf_total_time)
+    print("The total run time is",inf_total_time)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
