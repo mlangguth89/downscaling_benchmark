@@ -46,7 +46,7 @@ def main(parser_args):
 
     int_data, tart_data, opt_norm = data_obj.normalize("train_aug", daytime=None)
     inv_data, tarv_data = data_obj.normalize("val_aug", daytime=None, opt_norm=opt_norm)
-
+     
     print(np.shape(int_data))
 
     # get dictionary for tracking benchmark parameters
@@ -135,6 +135,15 @@ def main(parser_args):
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
+
+    opt_norm_new = {"mu_in": opt_norm["mu_in"].values.tolist(), "std_in":opt_norm["std_in"].values.tolist(),
+                    "mu_tar": opt_norm["mu_tar"].values.tolist(), "std_tar":opt_norm["std_tar"].values.tolist()} 
+
+
+    #save the opt_norm in the output directory, which will be used for inference step
+    with open(os.path.join(outdir,"opt_norm.json"),"w") as outfile:
+        js.dump(opt_norm_new, outfile)
+
 
 
 if __name__ == "__main__":
