@@ -6,14 +6,14 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=train_unet-model-out.%j
 #SBATCH --error=train_unet-model-err.%j
-#SBATCH --time=00:10:00
+#SBATCH --time=00:40:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=m.langguth@fz-juelich.de
+#SBATCH --mail-user=b.gong@fz-juelich.de
 
 # Name of virtual environment
-VIRT_ENV_NAME="test"
+VIRT_ENV_NAME="venv_juwels_test"
 
 # Loading mouldes
 source ../env_setup/modules_train.sh
@@ -30,6 +30,6 @@ fi
 
 # declare directory-variables which will be modified by config_runscript.py
 source_dir=/p/project/deepacf/maelstrom/data/downscaling_unet/
-destination_dir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_unet/trained_models/
+destination_dir=/p/home/jusers/gong1/juwels/bing_folder/downscaling_maelstrom/downscaling_unet/HPC_batch_scripts/results
 
 srun python3 ../main_scripts/main_train.py -in ${source_dir} -out ${destination_dir} -id ${SLURM_JOBID}
