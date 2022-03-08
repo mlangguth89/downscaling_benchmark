@@ -74,7 +74,7 @@ class HandleUnetData(HandleDataClass):
 
         return ds
 
-    def normalize(self, ds_name: str, daytime: int = 12, opt_norm: dict ={}):
+    def normalize(self, ds_name: str, daytime: int = None, opt_norm: dict ={}):
         """
         Preprocess the data for feeding into the U-net, i.e. conversion to data arrays incl. z-score normalization
         :param ds_name: name of the dataset, i.e. one of the following "train", "val", "test"
@@ -88,7 +88,9 @@ class HandleUnetData(HandleDataClass):
         norm_dims_z = ["time", "lat", "lon"]  # 'global' normalization of surface elevation
 
         # slice the dataset
-        dsf = self.data[ds_name].sel(time=dt.time(daytime))
+        dsf = self.data[ds_name]
+        if daytime is not None:
+            dsf = dsf.sel(time=dt.time(daytime))
 
         # retrieve and normalize input and target data
         if not opt_norm:

@@ -7,6 +7,7 @@ import os, sys
 import argparse
 from timeit import default_timer as timer
 import json as js
+import numpy as np
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
 import tensorflow.keras.utils as ku
@@ -36,18 +37,20 @@ def main(parser_args):
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
-    data_obj = HandleUnetData(datadir, "training", purpose="train")
-    data_obj.append_data("validation", purpose="val")
+    data_obj = HandleUnetData(datadir, "training", purpose="train_aug")
+    data_obj.append_data("validation", purpose="val_aug")
 
     if "login" in data_obj.host:
         raise EnvironmentError("%{0}: Training is only supported on the computing nodes, not on the login-node ('{1}')"
                                .format(method, data_obj.host))
 
-    int_data, tart_data, opt_norm = data_obj.normalize("train", daytime=hour)
-    inv_data, tarv_data = data_obj.normalize("val", daytime=hour, opt_norm=opt_norm)
+    int_data, tart_data, opt_norm = data_obj.normalize("train_aug", daytime=None)
+    inv_data, tarv_data = data_obj.normalize("val_aug", daytime=None, opt_norm=opt_norm)
+
+    print(np.shape(int_data))
 
     # get dictionary for tracking benchmark parameters
-    tot_time_load = data_obj.timing["loading_times"]["train"] + data_obj.timing["loading_times"]["val"]
+    tot_time_load = data_obj.timing["loading_times"]["train_aug"] + data_obj.timing["loading_times"]["val_aug"]
     benchmark_dict = {"loading data time": tot_time_load}
 
     # some information on training data
@@ -128,7 +131,7 @@ def main(parser_args):
         stat_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
                                            "non-trainable_parameters": count_params(unet_model.non_trainable_weights)},
                      "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
-                                   "nsamples" : nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
+                                   "nsamples": nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
@@ -146,7 +149,7 @@ if __name__ == "__main__":
                         help = "Batch size during model training.")
     parser.add_argument("--job_id", "-id", dest="job_id", type=int, help="Job-id from Slurm.")
     parser.add_argument("--hour", "-hour", dest="hour", type=int, default=12,
-                        help="Daytime hour for which model will be trained.")
+                        help="Daytime hour for which model will be trained. Currently not used!!!")
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")

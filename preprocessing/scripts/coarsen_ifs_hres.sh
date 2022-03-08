@@ -38,37 +38,37 @@ filename_base="${filename%.*}"
 
 if ! command -v cdo &> /dev/null; then
   echo "${scr_name}: CDO is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if ! command -v ncap2 &> /dev/null; then
   echo "${scr_name}: ncap2 is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if ! command -v ncea &> /dev/null; then
   echo "${scr_name}: ncea is not available on ${HOST_NAME}";
-  return 1
+  exit 1
 fi
 
 if [[ ! -f "$1" ]]; then
   echo "${scr_name}: The file $1 does not exist.";
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${fine_grid_base_dscr} ]]; then
   echo "${scr_name}: ERROR: The basic grid description for IFS HRES ${fine_grid_base_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${coarse_grid_dscr} ]]; then
   echo "${scr_name}: ERROR: The grid description for the coarse grid ${coarse_grid_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 if [[ ! -f ${fine_grid_tar_dscr} ]]; then
   echo "${scr_name}: ERROR: The target grid description for IFS HRES ${fine_grid_tar_dscr} is missing."
-  return 1
+  exit 1
 fi
 
 #return 0
@@ -77,7 +77,7 @@ fi
 
 # shrink data to region of interest
 filename_sd="${filename_base}_subdom.nc"
-ncea -O -d time,0 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
+ncea -O -d time,0,11 -d latitude,${lat0},${lat1} -d longitude,${lon0},${lon1} $filename $filename_sd
 ncrename -d latitude,lat -v latitude,lat -d longitude,lon -v longitude,lon ${filename_sd}
 ncap2 -O -s "lat=double(lat); lon=double(lon)" ${filename_sd} ${filename_sd}
 

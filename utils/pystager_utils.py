@@ -144,11 +144,12 @@ class Distributor(object):
 
         for i, element in enumerate(in_list):
             ind = i % (num_procs-1) + 1
-            if i < num_procs:
+            if i < num_procs -1:
                 transfer_dict[ind] = [element]
             else:
                 transfer_dict[ind].append(element)
 
+        print("%{0}: Generated transfer_dict:".format(method))
         print(transfer_dict)
 
         return transfer_dict
