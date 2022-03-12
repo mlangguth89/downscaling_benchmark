@@ -124,7 +124,7 @@ def main(parser_args):
     # currently untracked variables
     benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"]= None, None, None
     benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
-    benchmark_dict["GPU energy consumption"] = None
+    benchmark_dict["gpu energy consumption"] = None
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
