@@ -121,7 +121,7 @@ def main(parser_args):
     # currently untracked variables
     benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"]= None, None, None
     benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
-    benchmark_dict["GPU energy consumption"] = None
+    benchmark_dict["gpu energy consumption"] = None
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
@@ -130,7 +130,7 @@ def main(parser_args):
         data_mem = data_obj.data_info["memory_datasets"]
         stat_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
                                            "non-trainable_parameters": count_params(unet_model.non_trainable_weights)},
-                     "data_info": {"training data size": data_mem["train"]/2., "validation data size": data_mem["val"]/2.,
+                     "data_info": {"training data size": data_mem["train_aug"], "validation data size": data_mem["val_aug"],
                                    "nsamples": nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
 
         with open(js_file, "w") as jsf:
