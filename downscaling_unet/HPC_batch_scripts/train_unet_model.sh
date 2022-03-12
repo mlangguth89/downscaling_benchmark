@@ -6,14 +6,14 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=train_unet-model-out.%j
 #SBATCH --error=train_unet-model-err.%j
-#SBATCH --time=00:10:00
+#SBATCH --time=01:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develbooster
+#SBATCH --partition=develgpus
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=m.langguth@fz-juelich.de
 
 # Name of virtual environment
-VIRT_ENV_NAME="test"
+VIRT_ENV_NAME="venv_juwels"
 
 # Loading mouldes
 source ../env_setup/modules_train.sh
