@@ -145,7 +145,7 @@ def main(parser_args):
 
 if __name__ == "__main__":
     # date format for logging
-    fmt_t = "%Y-%m-%d %H:%M%S"
+    fmt_t = "%Y-%m-%d %H:%:%S"
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", "-in", dest="input_dir", type=str, required=True,
