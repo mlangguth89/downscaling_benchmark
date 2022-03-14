@@ -32,6 +32,7 @@ class RunTool(object):
         self.tool = tool_name
         self.version = self.check_tool()
         self.op_sep = op_sep
+        self.known_operators = None
 
     def check_tool(self):
         """
@@ -84,3 +85,29 @@ class RunTool(object):
             raise err
 
         return True
+
+    def check_operator(self, operator: str, lbreak: bool = True):
+        """
+        :param operator: name of operator to be checked
+        :param lbreak: flag if unknown operator results into ValueError
+        :return: boolean flag (True: operator is known)
+        """
+        method = RunTool.check_operator.__name__
+
+        if self.known_operators is None:
+            print("%{0}: known_operator-list uninitialized. Cannot check '{1}' for availability."
+                  .format(method, operator))
+        else:
+            if operator in self.known_operators:
+                return True
+            else:
+                if lbreak:
+                    raise ValueError("%{0}: '{1}' is not a knwon operator of {2}.".format(method, operator, self.tool))
+                else:
+                    return False
+
+    def set_known_operators(self):
+        method = RunTool.set_known_operators.__name__
+        raise NotImplementedError("{0} is not implemented yet. Please add this function in child class.".format(method))
+
+
