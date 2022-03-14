@@ -44,20 +44,21 @@ class RunTool(object):
         cmd_exists = shutil.which("{0}".format(self.tool)) is not None
         if cmd_exists:
             try:
-                version = sp.check_output([self.tool, "--version"])
+                version = str(sp.check_output("{0} --version 2<&1".format(self.tool), shell=True))
             except Exception as err:
                 # version cannot be determined
                 version = None
-            return version
+            return version.lstrip("b").strip("'").replace("\n", " ")
         else:
             raise NotImplementedError("%{0}: The tool '{1}' does not seem to be an executable on your machine."
                                       .format(method, self.tool))
 
-    def run(self, args: List, operator_dict: dict = None):
+    def run(self, args: List, operator_dict: dict = None, check_operators: bool = True):
         """
         Run tool tith arguments and optional operators.
         :param args: List of arguments to be parsed to tool.
         :param operator_dict: dictionary of operators with key as operators and values as corresponding values
+        :param check_operators: boolean if operators are checked
         """
         method = RunTool.run.__name__
 
@@ -70,6 +71,7 @@ class RunTool(object):
                                                     .format(method, type(operator_dict))
 
             for oper, val in operator_dict.items():
+                if check_operators: self.check_operator(oper)
                 oper_str += "{0}{1}{2}".format(oper, self.op_sep, val)
 
         # run command
@@ -110,4 +112,26 @@ class RunTool(object):
         method = RunTool.set_known_operators.__name__
         raise NotImplementedError("{0} is not implemented yet. Please add this function in child class.".format(method))
 
+
+class CDO(RunTool):
+    """
+    Child class for CDO commands.
+    """
+    def __init__(self):
+        super().__init__("cdo")
+
+        self.known_operators = self.set_known_operators()
+
+    def set_known_operators(self):
+        """
+        Retrieves all known CDO operators.
+        """
+        try:
+            output = sp.check_output("cdo --operators 2>&1", shell=True, stderr=sp.STDOUT)
+        except Exception as e:
+            output = str(e.output).lstrip("b").strip("'").split("\\n")
+
+        known_operators = [oper.partition(" ")[0] for oper in output]
+
+        return known_operators
 
