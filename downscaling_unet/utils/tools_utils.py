@@ -72,8 +72,13 @@ class RunTool(object):
                                                     .format(method, type(operator_dict))
 
             for oper, val in operator_dict.items():
-                if check_operators: self.check_operator(oper)
-                oper_str += "{0}{1}{2}".format(oper, self.op_sep, val)
+                # check operator; splitting is done to allow operators without value or that are parsed specially,
+                # e.g. cdo -z zip_6 remapcon,<tar_grid> <infile> <outfile> where -z zip_6 is not parsed ordinary.
+                stat = self.check_operator(oper.split()[0], lbreak=False)
+                if not stat:  # try if the operator without leading minus is known (happens e.g. for CDO)
+                    _ = self.check_operator(oper.lstrip("-").split()[0])
+
+                oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
 
         # run command
         cmd = "{0} {1} {2}".format(self.tool, oper_str, " ".join(args))
@@ -134,8 +139,10 @@ class CDO(RunTool):
             output = str(e.output).lstrip("b").strip("'").split("\\n")
 
         known_operators = [oper.partition(" ")[0] for oper in output]
+        known_operators.extend(["-z", "-v", "-V", "-O", "-s"])
 
         return known_operators
+
 
 class NCRENAME(RunTool):
     """
@@ -173,6 +180,7 @@ class NCAP2(RunTool):
         known_operators = ["-A", "-C", "-c", "-D", "-d", "-F", "-f", "-h", "-I", "-O", "-o", "-p", "-R", "-r", "-S",
                            "-s", "-t", "-v"]
         return known_operators
+
 
 class NCKS(RunTool):
     """
