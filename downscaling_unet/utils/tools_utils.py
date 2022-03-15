@@ -33,6 +33,7 @@ class RunTool(object):
         self.version = self.check_tool()
         self.op_sep = op_sep
         self.known_operators = None
+        self.doc_url = None
 
     def check_tool(self):
         """
@@ -121,6 +122,7 @@ class CDO(RunTool):
         super().__init__("cdo")
 
         self.known_operators = self.set_known_operators()
+        self.doc_url = "https://code.mpimet.mpg.de/projects/cdo/"
 
     def set_known_operators(self):
         """
@@ -135,3 +137,79 @@ class CDO(RunTool):
 
         return known_operators
 
+class NCRENAME(RunTool):
+    """
+    Child class for ncrename commands.
+    """
+    def __init__(self):
+        super().__init__("ncrename", op_sep=" ")
+
+        self.known_operators = self.set_known_operators()
+        self.doc_url = "https://linux.die.net/man/1/ncrename"
+
+    def set_known_operators(self):
+        """
+        Set a list of known ncrename-operators.
+        """
+        known_operators = ["-a", "-d", "-v", "-i"]
+
+        return known_operators
+
+
+class NCAP2(RunTool):
+    """
+    Child class for ncap2 commands.
+    """
+    def __init__(self):
+        super().__init__("ncap2", op_sep=" ")
+
+        self.known_operators = self.set_known_operators()
+        self.doc_url = "https://linux.die.net/man/1/ncap2"
+
+    def set_known_operators(self):
+        """
+        Set a list of known ncrename-operators.
+        """
+        known_operators = ["-A", "-C", "-c", "-D", "-d", "-F", "-f", "-h", "-I", "-O", "-o", "-p", "-R", "-r", "-S",
+                           "-s", "-t", "-v"]
+        return known_operators
+
+class NCKS(RunTool):
+    """
+    Child class for NCKS commands.
+    """
+
+    def __init__(self):
+        super().__init__("ncks", op_sep=" ")
+
+        self.known_operators = self.set_known_operators()
+        self.doc_url = "https://linux.die.net/man/1/ncks"
+
+    def set_known_operators(self):
+        """
+        Set a list of known NCKS-operators.
+        """
+        known_operators = ["-a", "-A", "-d", "-H", "-M", "-m", "-O", "-q", "-s", "-u", "-v", "-x"]
+
+        return known_operators
+
+
+class NCEA(RunTool):
+    """
+    Child class for NCKS commands.
+    """
+
+    def __init__(self):
+        super().__init__("ncea", op_sep=" ")
+
+        self.known_operators = self.set_known_operators()
+        self.doc_url = "https://linux.die.net/man/1/ncea"
+
+    def set_known_operators(self):
+        """
+        Set a list of known NCKS-operators.
+        """
+        known_operators = ["-A", "-C", "-c", "-D", "-d", "-F", "-h", "-L", "-I", "-n", "-O", "-p", "-R", "-r", "-t",
+                           "-v", "-X", "-x", "-y"]
+
+        return known_operators
