@@ -3,6 +3,13 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
 __update__ = "2022-01-22"
 
+from typing import Any, List
+
+# doc-string
+"""
+Some auxiliary functions for the project.
+"""
+# doc-string
 
 def provide_default(dict_in, keyname, default=None, required=False):
     """
@@ -25,3 +32,17 @@ def provide_default(dict_in, keyname, default=None, required=False):
         return default
     else:
         return dict_in[keyname]
+
+
+def to_list(obj: Any) -> List:
+    """
+    Method from MLAIR!
+    Transform given object to list if obj is not already a list. Sets are also transformed to a list.
+    :param obj: object to transform to list
+    :return: list containing obj, or obj itself (if obj was already a list)
+    """
+    if isinstance(obj, (set, tuple)):
+        obj = list(obj)
+    elif not isinstance(obj, list):
+        obj = [obj]
+    return obj
