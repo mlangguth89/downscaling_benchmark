@@ -61,7 +61,7 @@ class Abstract_Preprocessing(object):
             raise FileNotFoundError("%{0}: Cannot find grid description file '{1}'.".format(method, grid_des_file))
 
         # read the file ...
-        with open(grid_des_file) as fgdes:
+        with open(grid_des_file, "r") as fgdes:
             lines = fgdes.readlines()
 
         # and put data into dictionary
@@ -72,6 +72,25 @@ class Abstract_Preprocessing(object):
                              .format(method, grid_des_file))
 
         return grid_des_dict
+
+    @staticmethod
+    def write_grid_des_from_dict(grid_des_dict: dict, filename: str):
+        """
+        Write CDO grid description file from a dictionary.
+        :param grid_des_dict: dictionary whose keys and values are to be written into CDO's grid description file.
+        :param filename: name of grid description file to be created
+        """
+        method = Abstract_Preprocessing.write_grid_des_from_dict.__name__
+
+        # sanity checks
+        assert isinstance(grid_des_dict, dict), "%{0}: grid_des_dict must be a dictionary.".format(method)
+        assert isinstance(filename, str), "%{0}: filename must be a string.".format(method)
+
+        with open(filename) as grid_des_file:
+            for key, value in grid_des_dict.items():
+                grid_des_file.write("{0} = {1}".format(key, value))
+
+        print("%{0}: Grid description file '{1}' was created successfully.".format(method, filename))
 
     @staticmethod
     def griddes_lines_to_dict(lines):
