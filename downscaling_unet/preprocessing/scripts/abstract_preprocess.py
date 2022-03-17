@@ -46,3 +46,44 @@ class Abstract_Preprocessing(object):
             pass
 
         return target_dir
+
+    @staticmethod
+    def read_grid_des(grid_des_file):
+        """
+        Read CDO grid description file and put data into dictionary.
+        :param grid_des_file: the grid description file to be read
+        :return: dictionary with key-values from grid description parameters
+                 (e.g. gridtype = lonlat -> {"gridtype": "lonlat"}).
+        """
+        method = Abstract_Preprocessing.read_grid_des.__name__
+
+        if not os.path.isfile(grid_des_file):
+            raise FileNotFoundError("%{0}: Cannot find grid description file '{1}'.".format(method, grid_des_file))
+
+        # read the file ...
+        with open(grid_des_file) as fgdes:
+            lines = fgdes.readlines()
+
+        # and put data into dictionary
+        grid_des_dict = Abstract_Preprocessing.griddes_lines_to_dict(lines)
+
+        if not grid_des_file:
+            raise ValueError("%{0}: Dictionary from grid description file '{1}' is empty. Please check input."
+                             .format(method, grid_des_file))
+
+        return grid_des_dict
+
+    @staticmethod
+    def griddes_lines_to_dict(lines):
+        """
+        Converts lines read from CDO grid description files into dictionary.
+        :param lines: the lines-list obtained from readlines-method on grid description file.
+        :return: dictionary with data from file
+        """
+        dict_out = {}
+        for line in lines:
+            splitted = line.replace("\n", "").split("=")
+            if len(splitted) == 2:
+                dict_out[splitted[0].strip()] = splitted[1].strip()
+
+        return dict_out
