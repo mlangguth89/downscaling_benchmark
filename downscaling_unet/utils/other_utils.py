@@ -11,6 +11,7 @@ Some auxiliary functions for the project.
 """
 # doc-string
 
+
 def provide_default(dict_in, keyname, default=None, required=False):
     """
     Returns values of key from input dictionary or alternatively its default
@@ -46,3 +47,22 @@ def to_list(obj: Any) -> List:
     elif not isinstance(obj, list):
         obj = [obj]
     return obj
+
+
+def griddes_lines_to_dict(lines):
+    """
+    Converts the lines that were read from a CDO grid description file to a dictionary.
+    The lines must follow the convention '<key> = <value>' to be recognized. Other lines will be ignored
+    :param lines: lines from grid description
+    :return: dictionary carrying keys with corresponding values as string from lines of grid description file.
+    """
+    dict_out = {}
+
+    lines = to_list(lines)
+    for line in lines:
+        splitted = line.replace("\n", "").split("=")
+        if len(splitted) == 2:
+            dict_out[splitted[0].strip()] = splitted[1].strip()
+
+    return dict_out
+
