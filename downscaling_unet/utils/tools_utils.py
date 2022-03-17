@@ -6,6 +6,7 @@ __update__ = "2022-03-16"
 import os
 import shutil
 import subprocess as sp
+from collections import OrderedDict
 from typing import List
 
 
@@ -54,12 +55,11 @@ class RunTool(object):
             raise NotImplementedError("%{0}: The tool '{1}' does not seem to be an executable on your machine."
                                       .format(method, self.tool))
 
-    def run(self, args: List, operator_dict: dict = None, check_operators: bool = True):
+    def run(self, args: List, operator_dict: dict = None):
         """
         Run tool tith arguments and optional operators.
         :param args: List of arguments to be parsed to tool.
         :param operator_dict: dictionary of operators with key as operators and values as corresponding values
-        :param check_operators: boolean if operators are checked
         """
         method = RunTool.run.__name__
 
@@ -68,17 +68,19 @@ class RunTool(object):
 
         oper_str = ""
         if operator_dict:
-            assert isinstance(operator_dict, dict), "%{0}: operator_dict must be a dictionary, but is of type '{1}'"\
-                                                    .format(method, type(operator_dict))
+            assert isinstance(operator_dict, OrderedDict), \
+                "%{0}: operator_dict must be an OrderedDict, but is of type '{1}'".format(method, type(operator_dict))
 
-            for oper, val in operator_dict.items():
+            for oper, vals in operator_dict.items():
                 # check operator; splitting is done to allow operators without value or that are parsed specially,
                 # e.g. cdo -z zip_6 remapcon,<tar_grid> <infile> <outfile> where -z zip_6 is not parsed ordinary.
                 stat = self.check_operator(oper.split()[0], lbreak=False)
                 if not stat:  # try if the operator without leading minus is known (happens e.g. for CDO)
                     _ = self.check_operator(oper.lstrip("-").split()[0])
 
-                oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
+                val_list = list(vals)
+                for val in val_list:
+                    oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
 
         # run command
         cmd = "{0} {1} {2}".format(self.tool, oper_str, " ".join(args))
