@@ -19,11 +19,14 @@ import logging
 import numbers
 import subprocess as sp
 import datetime as dt
+import numpy as np
+from collections import OrderedDict
 from typing import Union, List
 from tfrecords_utils import IFS2TFRecords
 from tools_utils import to_list
 from pystager_utils import PyStager
 from abstract_preprocess import Abstract_Preprocessing
+from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 
 number = Union[float, int]
 num_or_List = Union[number, List[number]]
@@ -31,6 +34,9 @@ list_or_tuple = Union[List, tuple]
 
 
 class Preprocess_Unet_Tier1(Abstract_Preprocessing):
+
+    # expected key of grid description files
+    expected_keys_gdes = ["lonlat", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
 
     def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str):
         """
@@ -43,7 +49,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
 
-    def __call__(self, years: List, months: List, logger: logging.Logger = None):
+    def __call__(self, years: List, months: List, logger: logging.Logger = None, **kwargs):
         """
         Run preprocessing.
         :param years: List of years to be processed.
@@ -65,7 +71,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         months = [int(month) for month in months]
 
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_grid_des, coarse_grid_des, sw_xy, nxy, dx_c = Preprocess_Unet_Tier1.process_tar_grid_des(tar_grid_des_dict)
+        base_gdes, coa_gdes, sw_xy, nxy, dx = Preprocess_Unet_Tier1.process_tar_grid_des(tar_grid_des_dict, **kwargs)
 
         preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
         preprocess_pystager.setup(years, months)
@@ -101,7 +107,6 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
             dirr_curr = os.path.join(dir_in, str(year), subdir)
             dest_nc_dir = os.path.join(dir_out, "netcdf_data", year_str, subdir)
             os.makedirs(dest_nc_dir, exist_ok=True)
-
 
             assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance"\
                 .format(method)
@@ -167,13 +172,157 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         return nwarns
 
+    def process_tar_grid_des(self, tar_grid_des: dict, downscaling_fac: int = 8):
+        """
+        Process target grid description to get all releavnt parameters for preprocessing chain
+        """
+
+        method = Preprocess_Unet_Tier1.process_tar_grid_des.__name__
+
+        # sanity checks
+        assert isinstance(tar_grid_des, dict), "%{0}: tar_grid_des must be a dictionary, but is of type '{1}'"\
+                                               .format(method, type(tar_grid_des))
+
+        if not all([key_req in tar_grid_des.keys() for key_req in Preprocess_Unet_Tier1.expected_keys]):
+            raise ValueError("%{0}: Not all required keys found in parsed dictionary.".format(method) +
+                             " Make sure that the following keys are provided: {0}"
+                             .format(", ".join(Preprocess_Unet_Tier1.expected_keys)))
+
+        # retrieve key information from grid description files
+        nxy_tar = [int(tar_grid_des["xsize"]), int(tar_grid_des["ysize"])]
+        dx_tar = [float(tar_grid_des["xinc"]), float(tar_grid_des["yinc"])]
+
+        xyfirst = [float(tar_grid_des["xfirst"]), float(tar_grid_des["yfirst"])]
+        sw_lon, sw_lat = xyfirst
+        if dx_tar[0] < 0:
+            sw_lon += (nxy_tar[0] - 1)*dx_tar[0]
+
+        if dx_tar[1] < 0:
+            sw_lat += (nxy_tar[1] - 1)*dx_tar[1]
+
+        sw_xy_tar = [sw_lon, sw_lat]
+        gridtype = tar_grid_des["gridtype"]
+
+        # create auxiliary CDO grid description files and copy original one
+        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
+        shutil.copy(self.grid_des_tar, self.target_dir)
+
+        return base_grid_des, coarse_grid_des, sw_xy_tar, nxy_tar, dx_tar
+
+    def create_aux_grid_des(self, xy_first: List, nxy: List, dx: List, downscaling_fac: int, gridtype: str):
+        """
+        Create auxiliary grid description files for xxx-function in preprocess_worker-method
+        """
+        method = Preprocess_Unet_Tier1.create_aux_grid_des.__name__
+
+        downscaling_fac = int(downscaling_fac)
+        nxy_coarse = [np.divmod(n, downscaling_fac) for n in nxy]
+        # sanity check
+        if not all([n_c[1] == 0 for n_c in nxy_coarse]):
+            raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
+                             .format(method, ",".join(nxy), downscaling_fac))
+
+        # get parameters for auxiliary grid description files
+        dx_coarse = dx*int(downscaling_fac)
+        nxy_coarse = [n[0] for n in nxy_coarse]
+
+        dx_base = dx
+        nxy_base = [n + 2*downscaling_fac for n in nxy]
+
+        # create data for auxiliary grid description files
+        base_grid_des_dict = {"gridtype": gridtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
+                              "xfirst": xy_first[0] - dx_coarse[0], "xinc": dx_base[0],
+                              "yfirst": xy_first[1] - dx_coarse[1], "yinc": dx_base[1]}
+
+        coarse_grid_des_dict = {"gridtype": gridtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
+                                "xfirst": xy_first[0] - dx_coarse[0]/2., "xinc": dx_coarse[0],
+                                "yfirst": xy_first[1] - dx_coarse[1]/2., "yinc": dx_coarse[1]}
+
+        # construct filenames and...
+        base_grid_des = os.path.join(self.target_dir, "ifs_hres_grid_base")
+        coarse_grid_des = os.path.join(self.target_dir, "ifs_hred_coarsened_grid")
+        # write data to CDO's grid description files
+        self.write_grid_des_from_dict(base_grid_des_dict, base_grid_des)
+        self.write_grid_des_from_dict(coarse_grid_des_dict, coarse_grid_des)
+
+        return base_grid_des, coarse_grid_des
+
     @staticmethod
-    def process_tar_grid_des(tar_grid_des: dict):
+    def process_one_file(nc_file_in: str, grid_des_tar: dict, grid_des_coarse: dict, grid_des_base:dict):
+        """
+        Process one netCDF-datafile
+        """
+        method = Preprocess_Unet_Tier1.process_one_file.__name__
 
-        expected_keys = ["lonlat", "xsize", "ysize", "xfirst", "xinc", "yfirst"]
+        # sanity check
+        if not os.path.isfile(nc_file_in):
+            raise FileNotFoundError("%{0}: Could not find netCDF-file '{1}'.".format(method, nc_file_in))
+
+        # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
+        cpd = 1004.709
+        g = 9.80665
+
+        # get path to grid description files
+        kf = "file"
+        fgrid_des_base, fgrid_des_coarse, fgrid_des_tar = grid_des_base[kf], grid_des_coarse[kf], grid_des_tar[kf]
+
+        # get parameters
+        lon0_b, lon1_b = Preprocess_Unet_Tier1.get_slice_coords(grid_des_base["xfirst"], grid_des_base["xinc"],
+                                                                grid_des_base["xsize"])
+
+        lat0_b, lat1_b = Preprocess_Unet_Tier1.get_slice_coords(grid_des_base["yfirst"], grid_des_base["yinc"],
+                                                                grid_des_base["ysize"])
+
+        lon0_tar, lon1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["xfirst"], grid_des_tar["xinc"],
+                                                                    grid_des_tar["xsize"])
+
+        lat0_tar, lat1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["yfirst"], grid_des_tar["yinc"],
+                                                                    grid_des_tar["ysize"])
+        # initialize tools
+        cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
+
+        fname_base = nc_file_in.rstrip(".nc")
+
+        # start processing chain
+        # slice data to region of interest and relevant lead times
+        nc_file_sd = fname_base + "_subdomain.nc"
+        ncea.run([nc_file_in, nc_file_sd],
+                 OrderedDict([("-O", ""), ("-d", ["time,0,11", "latitude,{0},{1}".format(lat0_b, lat1_b),
+                                                  "longitude,{0},{1}".format(lon0_b, lon1_b)])]))
+
+        ncrename.run([nc_file_sd], OrderedDict([("-d", ["latitude,lat", "longitude","lon"]),
+                                                ("-v", ["latitude,lat", "longitude,lon"])]))
+        ncap2.run([nc_file_sd, nc_file_sd], OrderedDict([("-O", ""), ("-s", "lat=double(lat); lon=double(lon)")]))
+
+        # calculate dry static energy fir first-order conservative remapping
+        nc_file_dse = fname_base + "_dse.nc"
+        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "s={0}*t2m + z + {1}*2"), ("-v", "")]))
+
+        # add surface geopotential to file
+        ncks.run([nc_file_sd, nc_file_dse], OrderedDict([("-A", ""), ("-v", "z")]))
+
+        # remap the data (first-order conservative approach)
+        nc_file_crs = fname_base + "_coarse.nc"
+        cdo.run([nc_file_dse, nc_file_crs], OrderedDict([("remapcon", fgrid_des_coarse), ("-setgrid", fgrid_des_base)]))
+
+        # remap with extrapolation on the target high-resolved grid with bilinear remapping
+        nc_file_remapped = fname_base + "_remapped.nc"
+        cdo.run([nc_file_crs, nc_file_remapped], OrderedDict([("remapbil", fgrid_des_tar),
+                                                              ("-setgrid", fgrid_des_coarse)]))
+
+        # retransform dry static energy to t2m
+        ncap2.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""), ("-s", "t2m_in=(s-z-{0}*2)/{1}"),
+                                                                     ("-o", "")]))
 
 
 
 
 
+    @staticmethod
+    def get_slice_coords(coord0, dx, n):
+        """
+        Small helper to get coords for slicing
+        """
+        coords = (coord0, (n-1)*dx)
+        return np.amin(coords), np.amax(coords)
 
