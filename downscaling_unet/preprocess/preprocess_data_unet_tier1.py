@@ -291,13 +291,13 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                  OrderedDict([("-O", ""), ("-d", ["time,0,11", "latitude,{0},{1}".format(lat0_b, lat1_b),
                                                   "longitude,{0},{1}".format(lon0_b, lon1_b)])]))
 
-        ncrename.run([nc_file_sd], OrderedDict([("-d", ["latitude,lat", "longitude","lon"]),
+        ncrename.run([nc_file_sd], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
                                                 ("-v", ["latitude,lat", "longitude,lon"])]))
-        ncap2.run([nc_file_sd, nc_file_sd], OrderedDict([("-O", ""), ("-s", "lat=double(lat); lon=double(lon)")]))
+        ncap2.run([nc_file_sd, nc_file_sd], OrderedDict([("-O", ""), ("-s", "\"lat=double(lat); lon=double(lon)\"")]))
 
         # calculate dry static energy fir first-order conservative remapping
         nc_file_dse = fname_base + "_dse.nc"
-        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "s={0}*t2m + z + {1}*2".format(cpd, g)),
+        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "\"s={0}*t2m + z + {1}*2\"".format(cpd, g)),
                                                           ("-v", "")]))
         # add surface geopotential to file
         ncks.run([nc_file_sd, nc_file_dse], OrderedDict([("-A", ""), ("-v", "z")]))
@@ -312,7 +312,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                                               ("-setgrid", fgrid_des_coarse)]))
         # retransform dry static energy to t2m
         ncap2.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""),
-                                                                     ("-s", "t2m_in=(s-z-{0}*2)/{1}".format(g, cpd)),
+                                                                     ("-s", "\"t2m_in=(s-z-{0}*2)/{1}\"".format(g, cpd)),
                                                                      ("-o", "")]))
         # finally rename data to distinguish between input and target data
         # (the later must be copied over from previous files)
@@ -320,8 +320,8 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         ncks.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""), ("-x", ""), ("-v", "s")]))
         ncea.run([nc_file_sd, nc_file_remapped], OrderedDict([("-A", ""),
                                                               ("-d", ["lat,{0},{1}".format(lat0_tar, lat1_tar),
-                                                                      "lon,{0},{1}".format(lon0_tar, lon1_tar)],
-                                                               ("-v", "t2m,z"))]))
+                                                                      "lon,{0},{1}".format(lon0_tar, lon1_tar)]),
+                                                               ("-v", "t2m,z")]))
         ncrename.run([nc_file_remapped], OrderedDict([("-v", ["t2m,t2m_var", "z,z_tar"])]))
 
         if os.path.isfile(nc_file_remapped):
