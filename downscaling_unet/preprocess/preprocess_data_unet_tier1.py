@@ -344,6 +344,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         """
         Small helper to get coords for slicing
         """
-        coords = (np.round(np.float(coord0), decimals=d), np.round((np.int(n) - 1) * np.float(dx), decimals=d))
+        coord0 = np.float(coord0)
+        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
         return np.amin(coords), np.amax(coords)
 
