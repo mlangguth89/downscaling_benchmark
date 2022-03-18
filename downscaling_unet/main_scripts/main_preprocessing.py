@@ -20,8 +20,6 @@ import subprocess as sp
 import datetime as dt
 from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1
 
-
-
 scr_name = "preprocess_downsclaing_data"
 
 known_methods = {"Unet_Tier1": Preprocess_Unet_Tier1}

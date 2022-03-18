@@ -68,11 +68,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         years = [int(year) for year in years]
         months = [int(month) for month in months]
 
+        preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
+
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, **kwargs)
+        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, preprocess_pystager.my_rank, **kwargs)
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
 
-        preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
         preprocess_pystager.setup(years, months)
         preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, jobname)
 
@@ -172,7 +173,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         return nwarns
 
-    def process_tar_grid_des(self, tar_grid_des: dict, downscaling_fac: int = 8):
+    def process_tar_grid_des(self, tar_grid_des: dict, rank: int, downscaling_fac: int = 8):
         """
         Process target grid description to get all releavnt parameters for preprocessing chain
         """
@@ -202,8 +203,9 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         sw_xy_tar = [sw_lon, sw_lat]
         gridtype = tar_grid_des["gridtype"]
         # create auxiliary CDO grid description files and copy original one
-        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
-        shutil.copy(self.grid_des_tar, self.target_dir)
+        if rank == 0:
+            base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
+            shutil.copy(self.grid_des_tar, self.target_dir)
 
         return base_grid_des, coarse_grid_des
 
