@@ -277,12 +277,8 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                                                 grid_des_base["ysize"])
         lon0_tar, lon1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["xfirst"], grid_des_tar["xinc"],
                                                                     grid_des_tar["xsize"])
-        print(grid_des_tar["yfirst"])
-        print(grid_des_tar["yinc"])
-        print(grid_des_tar["ysize"])
         lat0_tar, lat1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["yfirst"], grid_des_tar["yinc"],
                                                                     grid_des_tar["ysize"])
-        print(lat0_tar, lat1_tar)
         # initialize tools
         cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
 
