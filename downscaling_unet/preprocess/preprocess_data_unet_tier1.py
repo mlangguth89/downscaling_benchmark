@@ -21,7 +21,7 @@ import numpy as np
 from collections import OrderedDict
 from typing import Union, List
 #from tfrecords_utils import IFS2TFRecords
-from tools_utils import to_list
+from other_utils import to_list
 from pystager_utils import PyStager
 from abstract_preprocess import Abstract_Preprocessing
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
@@ -34,7 +34,7 @@ list_or_tuple = Union[List, tuple]
 class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
     # expected key of grid description files
-    expected_keys_gdes = ["lonlat", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
+    expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
 
     def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = None):
         """
@@ -69,7 +69,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         months = [int(month) for month in months]
 
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_gdes_d, coa_gdes_d = Preprocess_Unet_Tier1.process_tar_grid_des(tar_grid_des_dict, **kwargs)
+        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, **kwargs)
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
 
         preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
@@ -182,10 +182,10 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         assert isinstance(tar_grid_des, dict), "%{0}: tar_grid_des must be a dictionary, but is of type '{1}'"\
                                                .format(method, type(tar_grid_des))
 
-        if not all([key_req in tar_grid_des.keys() for key_req in Preprocess_Unet_Tier1.expected_keys]):
+        if not all([key_req in tar_grid_des.keys() for key_req in Preprocess_Unet_Tier1.expected_keys_gdes]):
             raise ValueError("%{0}: Not all required keys found in parsed dictionary.".format(method) +
                              " Make sure that the following keys are provided: {0}"
-                             .format(", ".join(Preprocess_Unet_Tier1.expected_keys)))
+                             .format(", ".join(Preprocess_Unet_Tier1.expected_keys_gdes)))
 
         # retrieve key information from grid description files
         nxy_tar = [int(tar_grid_des["xsize"]), int(tar_grid_des["ysize"])]
