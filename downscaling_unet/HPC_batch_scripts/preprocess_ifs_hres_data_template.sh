@@ -37,12 +37,13 @@ source ../env_setup/modules_preprocess.sh
 # set variables to be parsed 
 src_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/orig/
 out_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/preprocessed/
+grid_des_tar=../grid_des/ifs_hres_grid_tar
 
 years=( 2016 2017 2018 2019 2020 )
 months=( 4 5 6 7 8 9 )
 method=Unet_Tier1
 
-srun python -m mpi4py ../main_scripts/main_preprocessing.py -src_dir ${src_dir} -out_dir ${out_dir} \
+srun python -m mpi4py ../main_scripts/main_preprocessing.py -src_dir ${src_dir} -out_dir ${out_dir} -grid_des_tar ${grid_des_tar} \
                                                             -y "${years[@]}" -m "${months[@]}" -method ${method}
 
 
