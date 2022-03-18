@@ -4,8 +4,8 @@
 #SBATCH --ntasks=12
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --output=preprocess_ifs_hres-out_data.%j
-#SBATCH --error=preprocess_ifs_hres-err_data.%j
+#SBATCH --output=preprocess_ifs_hres_data-out.%j
+#SBATCH --error=preprocess_ifs_hres_data-err.%j
 #SBATCH --time=01:00:00
 #SBATCH --gres=gpu:0
 #SBATCH --partition=devel
