@@ -336,10 +336,10 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         return True
 
     @staticmethod
-    def get_slice_coords(coord0, dx, n):
+    def get_slice_coords(coord0, dx, n, d=4):
         """
         Small helper to get coords for slicing
         """
-        coords = (coord0, (n-1)*dx)
+        coords = (np.round(np.float(coord0), decimals=d), np.round((np.int(n) - 1) * np.float(dx), decimals=d))
         return np.amin(coords), np.amax(coords)
 
