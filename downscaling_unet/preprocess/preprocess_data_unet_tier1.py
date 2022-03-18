@@ -224,7 +224,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                              .format(method, ",".join(nxy), downscaling_fac))
 
         # get parameters for auxiliary grid description files
-        dx_coarse = dx*int(downscaling_fac)
+        dx_coarse = [d*int(downscaling_fac) for d in dx]
         nxy_coarse = [n[0] for n in nxy_coarse]
 
         dx_base = dx
@@ -277,8 +277,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                                                 grid_des_base["ysize"])
         lon0_tar, lon1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["xfirst"], grid_des_tar["xinc"],
                                                                     grid_des_tar["xsize"])
+        print(grid_des_tar["yfirst"])
+        print(grid_des_tar["yinc"])
+        print(grid_des_tar["ysize"])
         lat0_tar, lat1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["yfirst"], grid_des_tar["yinc"],
                                                                     grid_des_tar["ysize"])
+        print(lat0_tar, lat1_tar)
         # initialize tools
         cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
 
@@ -297,7 +301,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         # calculate dry static energy fir first-order conservative remapping
         nc_file_dse = fname_base + "_dse.nc"
-        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "\"s={0}*t2m + z + {1}*2\"".format(cpd, g)),
+        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "\"s={0}*t2m+z+{1}*2\"".format(cpd, g)),
                                                           ("-v", "")]))
         # add surface geopotential to file
         ncks.run([nc_file_sd, nc_file_dse], OrderedDict([("-A", ""), ("-v", "z")]))
