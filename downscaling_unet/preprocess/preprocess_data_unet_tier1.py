@@ -46,6 +46,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
+        self.my_rank = None                     # to be set in __call__
 
     def __call__(self, years: List, months: List, jobname: str = "dummy", **kwargs):
         """
@@ -69,9 +70,10 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         months = [int(month) for month in months]
 
         preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
+        self.my_rank = preprocess_pystager.my_rank
 
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, preprocess_pystager.my_rank, **kwargs)
+        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, **kwargs)
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
 
         preprocess_pystager.setup(years, months)
@@ -173,7 +175,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         return nwarns
 
-    def process_tar_grid_des(self, tar_grid_des: dict, rank: int, downscaling_fac: int = 8):
+    def process_tar_grid_des(self, tar_grid_des: dict, downscaling_fac: int = 8):
         """
         Process target grid description to get all releavnt parameters for preprocessing chain
         """
@@ -203,15 +205,14 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         sw_xy_tar = [sw_lon, sw_lat]
         gridtype = tar_grid_des["gridtype"]
         # create auxiliary CDO grid description files and copy original one
-        if rank == 0:
-            base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
-            shutil.copy(self.grid_des_tar, self.target_dir)
+        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
+        shutil.copy(self.grid_des_tar, self.target_dir)
 
         return base_grid_des, coarse_grid_des
 
     def create_aux_grid_des(self, xy_first: List, nxy: List, dx: List, downscaling_fac: int, gridtype: str):
         """
-        Create auxiliary grid description files for xxx-function in preprocess_worker-method
+        Create auxiliary grid description files for use in preprocess_worker-method
         """
         method = Preprocess_Unet_Tier1.create_aux_grid_des.__name__
 
@@ -241,8 +242,9 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         base_grid_des = os.path.join(self.target_dir, "ifs_hres_grid_base")
         coarse_grid_des = os.path.join(self.target_dir, "ifs_hred_coarsened_grid")
         # write data to CDO's grid description files
-        self.write_grid_des_from_dict(base_grid_des_dict, base_grid_des)
-        self.write_grid_des_from_dict(coarse_grid_des_dict, coarse_grid_des)
+        if self.my_rank == 0:
+            self.write_grid_des_from_dict(base_grid_des_dict, base_grid_des)
+            self.write_grid_des_from_dict(coarse_grid_des_dict, coarse_grid_des)
         # add grid description filenames to dictionary
         base_grid_des_dict["file"] = base_grid_des
         coarse_grid_des_dict["file"] = coarse_grid_des
