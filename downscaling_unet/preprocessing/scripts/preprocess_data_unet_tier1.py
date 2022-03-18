@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-03-16"
+__update__ = "2022-03-18"
 
 # doc-string
 """
@@ -14,10 +14,8 @@ https://www.maelstrom-eurohpc.eu/content/docs/upload/doc6.pdf
 
 import os, glob
 import shutil
-import argparse
 import logging
 import numbers
-import subprocess as sp
 import datetime as dt
 import numpy as np
 from collections import OrderedDict
@@ -38,7 +36,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
     # expected key of grid description files
     expected_keys_gdes = ["lonlat", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
 
-    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str):
+    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = None):
         """
         Initialize class for tier-1 downscaling dataset.
         """
@@ -49,12 +47,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
 
-    def __call__(self, years: List, months: List, logger: logging.Logger = None, **kwargs):
+    def __call__(self, years: List, months: List, jobname: str = "dummy", **kwargs):
         """
         Run preprocessing.
         :param years: List of years to be processed.
         :param months: List of months to be processed.
-        :param logger: logger-object
+        :param jobname: jobname-identifier for PyStager
         """
         method = Preprocess_Unet_Tier1.__call__.__name__
 
@@ -71,13 +69,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         months = [int(month) for month in months]
 
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_gdes_d, coa_gdes_d, sw_xy, nxy, dx = Preprocess_Unet_Tier1.process_tar_grid_des(tar_grid_des_dict,
-                                                                                             **kwargs)
+        base_gdes_d, coa_gdes_d = Preprocess_Unet_Tier1.process_tar_grid_des(tar_grid_des_dict, **kwargs)
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
 
         preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
         preprocess_pystager.setup(years, months)
-        preprocess_pystager.run(self.source_dir, self.target_dir)
+        preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, jobname)
 
     @staticmethod
     def preprocess_worker(year_months: list, dir_in: str, dir_out: str, gdes_dict: dict, logger: logging.Logger,
@@ -146,10 +143,10 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                 except Exception as err:
                     nwarns += 1
                     logger.debug("%{0}: A problem was faced when handling file '{1}'.".format(method, nc_file) +
-                                 "Remapping of this file presumably failed.")
+                                 " Remapping of this file presumably failed.")
                     if nwarns > nmax_warn:
                         logger.debug("%{0}: More warnings triggered than allowed ({1:d}).".format(method, nmax_warn) +
-                                        " Job will be trerminated and see error below.")
+                                     " Job will be trerminated and see error below.")
                         raise err
                     else:
                         pass
@@ -208,7 +205,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
         shutil.copy(self.grid_des_tar, self.target_dir)
 
-        return base_grid_des, coarse_grid_des, sw_xy_tar, nxy_tar, dx_tar
+        return base_grid_des, coarse_grid_des
 
     def create_aux_grid_des(self, xy_first: List, nxy: List, dx: List, downscaling_fac: int, gridtype: str):
         """
