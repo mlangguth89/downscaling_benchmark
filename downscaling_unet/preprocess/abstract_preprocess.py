@@ -90,7 +90,7 @@ class Abstract_Preprocessing(object):
 
         with open(filename, "w") as grid_des_file:
             for key, value in grid_des_dict.items():
-                grid_des_file.write("{0} = {1}".format(key, value))
+                grid_des_file.write("{0} = {1} \n".format(key, value))
 
         print("%{0}: Grid description file '{1}' was created successfully.".format(method, filename))
 
