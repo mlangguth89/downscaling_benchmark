@@ -56,7 +56,8 @@ def main():
         preproc_class = known_methods[preprocess_method]
         preproc_instance = preproc_class(dir_in, dir_out, grid_des_tar)
         print("Preprocessing starts at: {0}".format(time_str.replace("T", " ")))
-        preproc_instance(years, months, "{0}_{1}".format(preprocess_method, time_str.replace("-", "").replace(":", "")))
+        preproc_instance(years, months, 
+                         jobname = "{0}_{1}".format(preprocess_method, time_str.replace("-", "").replace(":", "")))
     else:
         raise ValueError("Preprocessing method '{0}' is unknown. Please choose a known method: {1}."
                          .format(preprocess_method, ", ".join(known_methods.keys())))

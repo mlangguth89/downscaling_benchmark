@@ -77,7 +77,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
 
         preprocess_pystager.setup(years, months)
-        preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, jobname)
+        preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, job_name=jobname)
 
     @staticmethod
     def preprocess_worker(year_months: list, dir_in: str, dir_out: str, gdes_dict: dict, logger: logging.Logger,
