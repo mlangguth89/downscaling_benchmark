@@ -70,6 +70,8 @@ class Abstract_Preprocessing(object):
         if not grid_des_file:
             raise ValueError("%{0}: Dictionary from grid description file '{1}' is empty. Please check input."
                              .format(method, grid_des_file))
+        else:
+            grid_des_dict["file"] = grid_des_file
 
         return grid_des_dict
 
