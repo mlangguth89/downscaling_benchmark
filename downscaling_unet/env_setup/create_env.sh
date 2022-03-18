@@ -110,6 +110,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> ${activate_virt_env}
+  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH >> ${activate_virt_env}
 
   # ...and ensure that this also done when the
   echo "" >> ${activate_virt_env}
@@ -120,6 +121,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> ${activate_virt_env}
 
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
 elif [[ "$ENV_EXIST" == 1 ]]; then
