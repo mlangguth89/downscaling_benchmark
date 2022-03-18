@@ -88,7 +88,7 @@ class Abstract_Preprocessing(object):
         assert isinstance(grid_des_dict, dict), "%{0}: grid_des_dict must be a dictionary.".format(method)
         assert isinstance(filename, str), "%{0}: filename must be a string.".format(method)
 
-        with open(filename) as grid_des_file:
+        with open(filename, "w") as grid_des_file:
             for key, value in grid_des_dict.items():
                 grid_des_file.write("{0} = {1}".format(key, value))
 
