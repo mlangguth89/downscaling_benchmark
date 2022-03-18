@@ -6,6 +6,7 @@ __update__ = "2022-03-16"
 import os
 import shutil
 import subprocess as sp
+from other_utils import to_list
 from collections import OrderedDict
 from typing import List
 
@@ -78,7 +79,7 @@ class RunTool(object):
                 if not stat:  # try if the operator without leading minus is known (happens e.g. for CDO)
                     _ = self.check_operator(oper.lstrip("-").split()[0])
 
-                val_list = list(vals)
+                val_list = to_list(vals)
                 for val in val_list:
                     oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
 
