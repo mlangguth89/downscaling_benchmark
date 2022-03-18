@@ -327,7 +327,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         if os.path.isfile(nc_file_remapped):
             print("%{0}: Processed data successfully from '{1}' to '{2}'. Cleaning-up..."
                   .format(method, nc_file_in, nc_file_remapped))
-            for f in [nc_file_sd, nc_file_dse, nc_file_remapped]:
+            for f in [nc_file_sd, nc_file_dse, nc_file_crs]:
                 os.remove(f)
         else:
             raise RuntimeError("%{0}: Something went wrong when processing '{1}'. Check intermediate files."
