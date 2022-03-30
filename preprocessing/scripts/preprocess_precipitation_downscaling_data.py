@@ -12,10 +12,11 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 class PreciProcess(object):
 
     def __init__(self, src_dir: str = None, out_dir=None, month: int = 1, year: int = 2011, seq_len: int = 24,
-                 shift: int = 6, threshold: float = 0.1):
+                 shift: int = 6, threshold: float = 0.1, km: int = 1):
 
         self.month = month
         self.year = year
@@ -24,6 +25,7 @@ class PreciProcess(object):
         self.seq_len = seq_len
         self.shift = shift
         self.threshold = threshold
+        self.km = km
 
         avail_years = list(range(2011, 2019))
         if year not in avail_years:
@@ -40,7 +42,8 @@ class PreciProcess(object):
         """
 
         self.input_dir = os.path.join(self.src_dir, str(self.year), '{}-{:02}/'.format(self.year, self.month))
-        self.output_dir = os.path.join(self.out_dir, str(self.year))
+
+        self.output_dir = os.path.join(self.out_dir, "km" + str(self.km), str(self.year))
         self.output_nc_fl = os.path.join(self.output_dir, '{}-{:02}.nc'.format(self.year, self.month))
 
         if not os.path.isdir(self.input_dir):
@@ -70,21 +73,32 @@ class PreciProcess(object):
         remainder = (self.seq_len - self.shift)
         self.ts = (self.timestamps)[:-remainder][::self.shift]
 
-        # Get the sequeneces of data and calculate the mean values, and save to list
-        exp_list = []
-        counts = 0
-        for next_element in dataset.take(20000):
-            exp = np.nanmean(next_element.numpy())
-            exp_list.append(exp)
-            counts = counts + 1
+        if self.km == 1:
+            # Get the sequeneces of data and calculate the mean values, and save to list
+            self.exp_list = []
+            counts = 0
+            for next_element in dataset.take(20000):
+                exp = np.nanmean(next_element.numpy())
+                self.exp_list.append(exp)
+                counts = counts + 1
+            print("{} sequences are generated from original dataset".format(counts))
 
-        print("{} sequences are generated for year {}, month {}".format(counts, self.year, self.month))
+            # pos_min_2_max = np.argsort(exp_list) #sort the mean values and get the position of the order
 
-        # pos_min_2_max = np.argsort(exp_list) #sort the mean values and get the position of the order
+            sel_examples_pos = [x > 0.1 for x in
+                                self.exp_list]  # get the position that the mean of sequence is large than 0.1 mm h-1
+            # The position must be saved for processing the coarsed data (use the same position from the list)
 
-        sel_examples_pos = [x > 0.1 for x in
-                            exp_list]  # get the position that the mean of sequence is large than 0.1 mm h-1
-        # The position must be saved for processing the coarsed data (use the same position from the list)
+        else:
+            # if using coarsed dataset, we use the same inital times from 1km dataset
+            output_dir_1km = os.path.join(self.out_dir, "km1", str(self.year))
+            output_nc_fl_1km = os.path.join(output_dir_1km, '{}-{:02}.nc'.format(self.year, self.month))
+            if not os.path.isfile(output_nc_fl_1km):
+                raise ("Please process the 1km data for the year {}, month{}".format(self.year, self.month))
+            with xr.open_dataset(output_nc_fl_1km) as f:
+                init_times = f["init_time"]
+
+            sel_examples_pos = [True if t in init_times else False for t in self.ts]
 
         pos = 0
         sequences = []
@@ -99,10 +113,12 @@ class PreciProcess(object):
                 pass
             pos = pos + 1
 
-        print("{} sequences larger than threshold {} are saved out of the total sequences {} for  year {}, month {}".format(sequences.shape[0], self.threshold, counts, self.year,self.month))
+        print("{} sequences shape".format(np.array(sequences).shape))
         # sanity check, compare the example from sequences and from netcdf files
-        seq_ck = sequences[2][0]
-        ts_ck = sequences_ts[2]
+        if np.array(sequences).shape[0] == 0:
+            print("There is not sequence that the mean value is higher than 0.1 mm h-1")
+        seq_ck = sequences[0][0]
+        ts_ck = sequences_ts[0]
         da_ck = da.sel(time = ts_ck)
         print("da_ck", da_ck)
         print("ts_ck", ts_ck)
@@ -127,13 +143,6 @@ class PreciProcess(object):
         ds.to_netcdf(self.output_nc_fl)
         print("The file {} is saved!".format(self.output_nc_fl))
 
-        #plot the mean of sqeuences
-        plt_name = os.path.join(self.output_dir, "means_seq_year_{}_month_{}.img")
-        plt.ylim(0, 0.8)
-        plt.plot(np.sort(exp_list))
-        plt.savefig(plt_name)
-        print("The mean value of sequence ")
-
 
 
 if __name__ == "__main__":
@@ -143,19 +152,27 @@ if __name__ == "__main__":
                         default="/p/largedata/slmet/slmet111/met_data/dwd/radklim-yw/netcdf/orig_grid/yw_hourly",
                         help="Top-level directory under which radklim data are stored with subdirectories " +
                              "<year>/<month>.")
+
     parser.add_argument("--out_parent_dir", "-out_dir", dest="out_dir", type=str, required=True,
                         help="Top-level directory under which remapped data will be stored.")
+
     parser.add_argument("--years", "-y", dest="years", type=int, nargs="+", default=[2016, 2017, 2018, 2019, 2020],
                         help="Years of data to be preprocessed.")
+
     parser.add_argument("--months", "-m", dest="months", type=int, nargs="+", default=range(3, 10),
                         help="Months of data to be preprocessed.")
+
     parser.add_argument("--prep_threshold", "-threshold", dest="p_threshold", type=float,  default=0.1,
                         help="The precipitation threshold to filter the data.")
 
     parser.add_argument("--sequence_length", "-seq_len", dest="seq_len", type=int,  default=24,
                         help="The sequence length per sample")
-    parser.add_argument("--shift", "-s", dest="shift", type=int,  default=6,
+
+    parser.add_argument("--shift", "-s", dest="shift", type=int, default=6,
                         help="The shift for preprocessing the image to sequences, the sequence_length should be divided by this the number of shift")
+                        help="The sequence length per sample")
+
+    parser.add_argument("--km", "-km", dest="km", type=int,  default=6,help="The kilometers (1,4,8,16)")
 
     args = parser.parse_args()
     dir_in = args.src_dir
@@ -165,8 +182,9 @@ if __name__ == "__main__":
     seq_len = args.seq_len
     threshold = args.threshold
     shift = args.shift
+    km = args.km
 
-    PreciProcessObj =PreciProcess(src_dir=dir_in, out_dir=dir_out, month=args.months, year=years, seq_len=seq_len, shift=shift, threshold=threshold)
+    PreciProcessObj =PreciProcess(src_dir=dir_in, out_dir=dir_out, month=args.months, year=years, seq_len=seq_len, shift=shift, threshold=threshold, km=km)
     PreciProcessObj.preprocess_to_sequences()
 
 
