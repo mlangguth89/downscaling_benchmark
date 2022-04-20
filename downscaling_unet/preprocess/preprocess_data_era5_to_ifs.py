@@ -25,6 +25,7 @@ from collections import OrderedDict
 from other_utils import to_list
 from pystager_utils import PyStager
 from abstract_preprocess import Abstract_Preprocessing
+from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 
 number = Union[float, int]
@@ -35,3 +36,75 @@ class Preprocess_ERA5_to_IFS(Abstract_Preprocessing):
 
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
+
+    def __init__(self, source_dir: str, output_dir: str, grid_des_in: str, downscaling_fac: int = None):
+        """
+        Initialize class for tier-1 downscaling dataset.
+        """
+        super().__init__("preprocess_ERA5_to_IFS", source_dir, output_dir)
+
+        if not os.path.isfile(grid_des_tar):
+            raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
+                                    .format(grid_des_tar))
+        self.grid_des_tar = grid_des_tar
+        self.my_rank = None                     # to be set in __call__
+
+    def __call__(self, years: List, season: str, jobname: str = "dummy", **kwargs):
+        """
+        Run preprocessing.
+        :param years: List of years to be processed.
+        :param months: List of months to be processed.
+        :param jobname: jobname-identifier for PyStager
+        """
+        method = Preprocess_ERA5_to_IFS.__call__.__name__
+
+        years = to_list(years)
+        # sanity checks on years and season arguments
+        assert all([isinstance(year, numbers.Number) for year in years]), \
+            "%{0}: All elements of years must be numbers".format(method)
+
+        years = [int(year) for year in years]
+        months = Preprocess_ERA5_to_IFS.check_season(season)
+
+        # instantiate PyStager
+        preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
+        self.my_rank = preprocess_pystager.my_rank
+
+        tar_grid_des_dict = Preprocess_ERA5_to_IFS.read_grid_des(self.grid_des_tar)
+        # use process_tar_grid_des-method from Preprocess_Unet_Tier1
+        base_gdes_d, coa_gdes_d = Preprocess_Unet_Tier1.process_tar_grid_des(self, tar_grid_des_dict, **kwargs)
+        gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
+
+        preprocess_pystager.setup(years, months)
+        preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, job_name=jobname)
+
+    @staticmethod
+    def check_season(season: str):
+        """
+        Check if season-string is known.
+        :param season: the seson string identifier
+        :return: corresponding months as list of integers
+        """
+        method = Preprocess_ERA5_to_IFS.check_season.__name__
+
+        known_seasons = ["DJF", "MMA", "JJA", "SON", "summer", "winter", "all"]
+
+        if season == "DJF":
+            months = [12, 1, 2]
+        elif season == "MMA":
+            months = [3, 4, 5]
+        elif season == "JJA":
+            months = [6, 7, 8]
+        elif season == "SON":
+            months = [9, 10, 11]
+        elif season == "summer":
+            months = list(np.arange(4, 10))
+        elif season == "winter":
+            months = list(np.arange(1, 4)) + list(np.arange(10, 13))
+        elif season == "all":
+            months = list(np.arange(1, 13))
+        else:
+            raise ValueError("%{0}: Parsed season-string '{1}' is unknown. Handle one of the following known ones: {1}"
+                             .format(method, ", ".join(known_seasons)))
+
+        return months
