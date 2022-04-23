@@ -37,7 +37,7 @@ class Preprocess_ERA5_to_IFS(Abstract_Preprocessing):
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
 
-    def __init__(self, source_dir: str, output_dir: str, grid_des_in: str, downscaling_fac: int = None):
+    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = None):
         """
         Initialize class for tier-1 downscaling dataset.
         """
@@ -77,6 +77,53 @@ class Preprocess_ERA5_to_IFS(Abstract_Preprocessing):
 
         preprocess_pystager.setup(years, months)
         preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, job_name=jobname)
+
+    @staticmethod
+    def preprocess_worker(year_months: List, dirin_era5: str, dirin_ifs: str, dirout: str, gdes_dict: dict,
+                          logger: logging.Logger, nmax_warn: int = 3):
+        """
+        Function that preprocesses ERA5 (input) - and IFS (output)-data on individual workers
+        :param year_months: List of Datetime-objects indicating year and month for which data should be preprocessed
+        :param dirin_era5: input directory of ERA5-dataset (top-level directory)
+        :param dirin_ifs: input directory of IFS-forecasts
+        :param dirout: output directoty to store preprocessed data
+        :param gdes_dict: dictionary containing grid description dictionaries for target, base and coarse grid
+        :param logger: Logging instance for log process on worker
+        :param nmax_warn: allowed maximum number of warnings/problems met during processing (default:3)
+        :return: -
+        """
+        method = Preprocess_ERA5_to_IFS.preprocess_worker.__name__
+
+        # sanity checks
+        assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance" \
+                                                   .format(method)
+
+        grid_des_tar, grid_des_base, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["base_grid_des"], \
+                                                       gdes_dict["coa_grid_des"]
+        for year_month in year_months:
+            assert isinstance(year_month, dt.datetime),\
+                "%{0}: All year_months-argument must be a datetime-object. Current one is of type '{1}'"\
+                .format(method, type(year_month))
+
+            year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
+            year_str, month_str = str(year), "{0:02d}".format(int(month))
+
+            subdir = year_month.strftime("%Y-%m")
+            dirr_curr_era5 = os.path.join(dirin_era5, str(year), subdir)
+            dirr_curr_ifs = dirr_curr_era5.replace(dirin_era5, dirin_ifs)
+            dest_nc_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
+            os.makedirs(dest_nc_dir, exist_ok=True)
+
+            # further sanity checks
+            if not os.path.isdir(dirr_curr_era5):
+                err_mess = "%{0}: Could not find directory for ERA5-data '{1}'".format(method, dirr_curr_era5)
+                logger.critical(err_mess)
+                raise NotADirectoryError(err_mess)
+
+            if not os.path.isdir(dirr_curr_ifs):
+                err_mess = "%{0}: Could not find directory for IFS-data '{1}'".format(method, dirr_curr_ifs)
+                logger.critical(err_mess)
+                raise NotADirectoryError(err_mess)
 
     @staticmethod
     def check_season(season: str):
