@@ -4,8 +4,9 @@ __date__ = "2022-03-16"
 __update__ = "2022-03-16"
 
 import os
+from abc import ABC
 
-class Abstract_Preprocessing(object):
+class Abstract_Preprocessing(ABC):
     """
     Abstract class for preprocessing
     """
@@ -30,6 +31,20 @@ class Abstract_Preprocessing(object):
         method = Abstract_Preprocessing.__call__.__name__
 
         raise NotImplementedError("Method {0} is not implemented yet. Cannot continue.".format(method))
+
+    def prepare_worker(self):
+        """
+        Method to prepare worker, i.e. required work to run parallelized preprocessing.
+        :return: -
+        """
+        raise NotImplementedError(self.print_implement_err(Abstract_Preprocessing.prepare_worker.__name__))
+
+    def preprocess_worker(self):
+        """
+        Worker task to perform (parallelized) preprocessing.
+        :return: -
+        """
+        raise NotImplementedError(self.print_implement_err(Abstract_Preprocessing.prepare_worker.__name__))
 
     @staticmethod
     def check_target_dir(target_dir):
@@ -108,3 +123,14 @@ class Abstract_Preprocessing(object):
                 dict_out[splitted[0].strip()] = splitted[1].strip()
 
         return dict_out
+
+    @classmethod
+    def print_implement_err(cls, method):
+        """
+        Return error sring for required functions that are not implemented yet.
+        :param method: Name of method
+        :return: error-string
+        """
+        err_str = "%{0}: Method {1} not implemented yet. Cannot continue.".format(cls.__name__, method)
+
+        return err_str
