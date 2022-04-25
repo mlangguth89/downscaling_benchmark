@@ -3,6 +3,7 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
 __update__ = "2022-01-22"
 
+import inspect
 from typing import Any, List
 
 # doc-string
@@ -66,3 +67,15 @@ def griddes_lines_to_dict(lines):
 
     return dict_out
 
+
+def get_func_kwargs(func, kwargs):
+    """
+    Returns dictonary of keyword arguments that can be used for method
+    :param func: callable method
+    :param kwargs: dictionary of keyword arguments from which to extract keyword arguments of interest
+    :return: method_kwargs
+    """
+    func_args = list(inspect.signature(func).parameters)
+    func_kwargs = {k: kwargs.pop(k) for k in dict(kwargs) if k in func_args}
+
+    return func_kwargs
