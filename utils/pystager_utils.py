@@ -199,6 +199,7 @@ class PyStager(Distributor):
         self.comm = MPI.COMM_WORLD
         self.my_rank = self.comm.Get_rank()
         self.num_processes = self.comm.Get_size()
+        self.is_setup = False
 
         if not callable(self.job):
             raise ValueError("%{0}: Passed function to be parallelized must be a callable function for {1}."
@@ -227,6 +228,8 @@ class PyStager(Distributor):
                 raise err
         else:
             pass
+
+        self.is_setup = True
 
     # def run(self, data_dir, *args, job_name="dummy"):
     def run(self, *args, job_name="dummy"):
