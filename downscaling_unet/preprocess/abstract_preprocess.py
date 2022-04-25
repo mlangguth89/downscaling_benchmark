@@ -5,12 +5,13 @@ __update__ = "2022-03-16"
 
 import os
 from abc import ABC
+from other_utils import get_func_kwargs
 
 class Abstract_Preprocessing(ABC):
     """
     Abstract class for preprocessing
     """
-    def __init__(self, name_preprocess: str, source_dir: str, target_dir: str, *args, **kwargs):
+    def __init__(self, name_preprocess: str, source_dir: str, target_dir: str):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
@@ -24,18 +25,27 @@ class Abstract_Preprocessing(ABC):
         self.source_dir = source_dir
         self.target_dir = Abstract_Preprocessing.check_target_dir(target_dir)
 
-    def __call__(self):
+    def __call__(self, *args, **kwargs):
         """
         To be defined in child class.
         """
         method = Abstract_Preprocessing.__call__.__name__
 
-        raise NotImplementedError("Method {0} is not implemented yet. Cannot continue.".format(method))
+        # get keyword-arguments to initialize PyStager
+        prepare_kwargs = get_func_kwargs(self.prepare_worker, kwargs)
+        pystager_instance, run_dict = self.prepare_worker(*args, **prepare_kwargs)
 
-    def prepare_worker(self):
+        assert pystager_instance.is_setup, "%{0}: PyStager was not set up by prepare_worker-method. Cannot continue."\
+                                           .format(method)
+
+        # get keyword-arguments to run PyStager and run it
+        run_kwargs = get_func_kwargs(self.preprocess_worker, kwargs)
+        pystager_instance.run(*run_dict["args"], **run_dict["kwargs"], **run_kwargs)
+
+    def prepare_worker(self, worker, *args, **kwargs):
         """
-        Method to prepare worker, i.e. required work to run parallelized preprocessing.
-        :return: -
+        Method to prepare worker, i.e. required work to run parallelized preprocessing (see also __call__-method).
+        :return: Initialized PyStager-instance as well as arguments and keyword arguments to set-up PyStager
         """
         raise NotImplementedError(self.print_implement_err(Abstract_Preprocessing.prepare_worker.__name__))
 
