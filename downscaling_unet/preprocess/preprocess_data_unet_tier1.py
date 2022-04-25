@@ -48,12 +48,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         self.grid_des_tar = grid_des_tar
         self.my_rank = None                     # to be set in __call__
 
-    def __call__(self, years: List, months: List, jobname: str = "dummy", **kwargs):
+    def prepare_worker(self, years: List, months: List, **kwargs):
         """
         Run preprocessing.
         :param years: List of years to be processed.
         :param months: List of months to be processed.
-        :param jobname: jobname-identifier for PyStager
+        :param kwargs:
         """
         method = Preprocess_Unet_Tier1.__call__.__name__
 
@@ -69,15 +69,20 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         years = [int(year) for year in years]
         months = [int(month) for month in months]
 
+        # initialize and set-up Pystager
         preprocess_pystager = PyStager(self.preprocess_worker, "year_month_list", nmax_warn=3)
-        self.my_rank = preprocess_pystager.my_rank
+        preprocess_pystager.setup(years, months)
 
+        # Create grid description files needed for preprocessing (requires rank-information)
+        self.my_rank = preprocess_pystager.my_rank
         tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
         base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, **kwargs)
         gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
+        # define arguments and keyword arguments for running PyStager later
+        run_dict = {"args": [self.source_dir, self.target_dir, gdes_dict],
+                    "kwargs": {"job_name": kwargs.get("jobname", "Preproc_Unet_tier1")}}
 
-        preprocess_pystager.setup(years, months)
-        preprocess_pystager.run(self.source_dir, self.target_dir, gdes_dict, job_name=jobname)
+        return preprocess_pystager, run_dict
 
     @staticmethod
     def preprocess_worker(year_months: list, dir_in: str, dir_out: str, gdes_dict: dict, logger: logging.Logger,
@@ -205,7 +210,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         sw_xy_tar = [sw_lon, sw_lat]
         gridtype = tar_grid_des["gridtype"]
         # create auxiliary CDO grid description files and copy original one
-        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
+        base_grid_des, coarse_grid_des = self.create_aux_grid_des(sw_xy_tar, nxy_tar, dx_tar, downscaling_fac, gridtype)
         shutil.copy(self.grid_des_tar, self.target_dir)
 
         return base_grid_des, coarse_grid_des
