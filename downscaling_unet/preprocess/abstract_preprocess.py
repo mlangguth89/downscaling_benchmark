@@ -244,7 +244,7 @@ class CDOGridDes(ABC):
         :return: dictionary with key-values from grid description parameters
                  (e.g. gridtype = lonlat -> {"gridtype": "lonlat"}).
         """
-        method = AbstractPreprocessing.read_grid_des.__name__
+        method = CDOGridDes.read_grid_des.__name__
 
         if not os.path.isfile(grid_des_file):
             raise FileNotFoundError("%{0}: Cannot find grid description file '{1}'.".format(method, grid_des_file))
@@ -254,7 +254,7 @@ class CDOGridDes(ABC):
             lines = fgdes.readlines()
 
         # and put data into dictionary
-        grid_des_dict = AbstracrPreprocessing.griddes_lines_to_dict(lines)
+        grid_des_dict = CDOGridDes.griddes_lines_to_dict(lines)
 
         if not grid_des_file:
             raise ValueError("%{0}: Dictionary from grid description file '{1}' is empty. Please check input."
