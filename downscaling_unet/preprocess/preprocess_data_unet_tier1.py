@@ -36,7 +36,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
 
-    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = None):
+    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = 8):
         """
         Initialize class for tier-1 downscaling dataset.
         """

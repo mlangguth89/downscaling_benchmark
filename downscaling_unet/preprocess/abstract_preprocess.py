@@ -6,7 +6,7 @@ __update__ = "2022-03-16"
 import os
 from abc import ABC
 import numpy as np
-from other_utils import get_func_kwargs
+from other_utils import get_func_kwargs, remove_key_from_dict
 
 
 class AbstractPreprocessing(ABC):
@@ -114,8 +114,9 @@ class CDOGridDes(ABC):
         else:
             raise ValueError("%{0}: Either pass gdes_fiel (path to grid descrition file)".format(method) +
                              " or gdes_dict (grid description dictionary).")
-
-        CDOGridDes.check_gdes_dict(self.grid_des_dict, lbreak=True)
+        
+        # use dictionary comprehension to remove 
+        CDOGridDes.check_gdes_dict(remove_key_from_dict(self.grid_des_dict, "file") , lbreak=True)
 
     def write_grid_des_from_dict(self, filename: str, other_dict: dict = None):
         """
@@ -157,13 +158,13 @@ class CDOGridDes(ABC):
 
         required_keys = ["xfirst", "yfirst", "xsize", "ysize", "xinc", "yinc", "gridtype"]
 
-        if not all(key in required_keys for key in self.grid_des_dict):
+        if not all(req_key in self.grid_des_dict for req_key in required_keys):
             raise ValueError("%{0}: Not all required keys ({1}) found in grid description dictionary."
                              .format(method, ", ".join(required_keys)))
         else:
-            nxy_in = (self.grid_des_dict["xsize"], self.grid_des_dict["ysize"])
-            dx_in = (self.grid_des_dict["xinc"], self.grid_des_dict["yinc"])
-            xyf_in = (self.grid_des_dict["xfirst"], self.grid_des_dict["yfirst"])
+            nxy_in = (int(self.grid_des_dict["xsize"]), int(self.grid_des_dict["ysize"]))
+            dx_in = (np.around(float(self.grid_des_dict["xinc"]), 3), np.around(float(self.grid_des_dict["yinc"]), 3))
+            xyf_in = (np.around(float(self.grid_des_dict["xfirst"]), 3), np.around(float(self.grid_des_dict["yfirst"]), 3))
             gtype = self.grid_des_dict["gridtype"]
 
         downscaling_fac = int(downscaling_fac)
@@ -194,7 +195,7 @@ class CDOGridDes(ABC):
         # add grid description filenames to dictionary
         coarse_grid_des_dict["file"] = coarse_grid_des
 
-        if not lextrapolate:
+        if lextrapolate:
             nxy_base = [n + 2 * downscaling_fac for n in nxy_in]
 
             # create data for auxiliary grid description file
