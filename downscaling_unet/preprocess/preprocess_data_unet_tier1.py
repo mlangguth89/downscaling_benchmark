@@ -250,11 +250,14 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
         # (the later must be copied over from previous files)
         ncrename.run([nc_file_remapped], OrderedDict([("-v", "z,z_in")]))
         ncks.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""), ("-x", ""), ("-v", "s")]))
+        # NCEA-bug with NCO/4.9.5: Add slide offset to lon1_tar to avoid corrupted data in appended file
+        # (does not affect slicing at all)
+        lon1_tar = lon1_tar + grid_des_tar["xinc"]/10.
         ncea.run([nc_file_sd, nc_file_remapped], OrderedDict([("-A", ""),
                                                               ("-d", ["lat,{0},{1}".format(lat0_tar, lat1_tar),
                                                                       "lon,{0},{1}".format(lon0_tar, lon1_tar)]),
                                                                ("-v", "t2m,z")]))
-        ncrename.run([nc_file_remapped], OrderedDict([("-v", ["t2m,t2m_var", "z,z_tar"])]))
+        ncrename.run([nc_file_remapped], OrderedDict([("-v", ["t2m,t2m_tar", "z,z_tar"])]))
 
         if os.path.isfile(nc_file_remapped):
             print("%{0}: Processed data successfully from '{1}' to '{2}'. Cleaning-up..."
