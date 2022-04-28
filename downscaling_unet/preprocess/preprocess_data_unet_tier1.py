@@ -23,7 +23,7 @@ from typing import Union, List
 #from tfrecords_utils import IFS2TFRecords
 from other_utils import to_list
 from pystager_utils import PyStager
-from abstract_preprocess import Abstract_Preprocessing, CDOGridDes
+from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 
 number = Union[float, int]
@@ -31,7 +31,7 @@ num_or_List = Union[number, List[number]]
 list_or_tuple = Union[List, tuple]
 
 
-class Preprocess_Unet_Tier1(Abstract_Preprocessing):
+class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
