@@ -171,7 +171,7 @@ class CDOGridDes(ABC):
         # sanity check
         if not all([n_c[1] == 0 for n_c in nxy_coarse]):
             raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
-                             .format(method, ",".join(nxy_in), downscaling_fac))
+                             .format(method, ", ".join(nxy_in), downscaling_fac))
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
@@ -229,8 +229,8 @@ class CDOGridDes(ABC):
         gdes_keys_stat = [key_req in CDOGridDes.valid_keys for key_req in gdes_keys]
 
         if not all(gdes_keys_stat):
-            invalid_keys = [gdes_keys[i] for i in range(len(gdes_keys)) if gdes_keys_stat[i]]
-            err_str = "%{0}: The following keys are not valid: {1}".format(method, ",".join(invalid_keys))
+            invalid_keys = [gdes_keys[i] for i in range(len(gdes_keys)) if not gdes_keys_stat[i]]
+            err_str = "%{0}: The following keys are not valid: {1}".format(method, ", ".join(invalid_keys))
             if lbreak:
                 raise ValueError(err_str)
             else:
