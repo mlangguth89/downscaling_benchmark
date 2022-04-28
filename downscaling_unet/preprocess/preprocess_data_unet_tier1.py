@@ -210,7 +210,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         sw_xy_tar = [sw_lon, sw_lat]
         gridtype = tar_grid_des["gridtype"]
         # create auxiliary CDO grid description files and copy original one
-        base_grid_des, coarse_grid_des = self.create_aux_grid_des(sw_xy_tar, nxy_tar, dx_tar, downscaling_fac, gridtype)
+        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
         shutil.copy(self.grid_des_tar, self.target_dir)
 
         return base_grid_des, coarse_grid_des
