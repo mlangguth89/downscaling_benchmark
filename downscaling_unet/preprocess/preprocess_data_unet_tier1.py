@@ -80,7 +80,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
         ifs_grid_des = CDOGridDes(self.grid_des_tar)
         base_gdes_d, coa_gdes_d = ifs_grid_des.create_coarsened_grid_des(self.target_dir, self.downscaling_fac,
                                                                          self.my_rank, name_base="ifs_hres_")
-        gdes_dict = {"tar_grid_des": self.grid_des_tar, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
+        gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
         # define arguments and keyword arguments for running PyStager later
         run_dict = {"args": [self.source_dir, self.target_dir, gdes_dict],
                     "kwargs": {"job_name": kwargs.get("jobname", "Preproc_Unet_tier1")}}
