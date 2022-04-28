@@ -23,7 +23,7 @@ from typing import Union, List
 #from tfrecords_utils import IFS2TFRecords
 from other_utils import to_list
 from pystager_utils import PyStager
-from abstract_preprocess import Abstract_Preprocessing
+from abstract_preprocess import Abstract_Preprocessing, CDOGridDes
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 
 number = Union[float, int]
@@ -47,6 +47,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
         self.my_rank = None                     # to be set in __call__
+        self.downscaling_fac = downscaling_fac
 
     def prepare_worker(self, years: List, months: List, **kwargs):
         """
@@ -75,9 +76,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         # Create grid description files needed for preprocessing (requires rank-information)
         self.my_rank = preprocess_pystager.my_rank
-        tar_grid_des_dict = Preprocess_Unet_Tier1.read_grid_des(self.grid_des_tar)
-        base_gdes_d, coa_gdes_d = self.process_tar_grid_des(tar_grid_des_dict, **kwargs)
-        gdes_dict = {"tar_grid_des": tar_grid_des_dict, "base_grid_des": base_gdes_d, "coa_grid_des": coa_gdes_d}
+
+        ifs_grid_des = CDOGridDes(self.grid_des_tar)
+        base_gdes_d, coa_gdes_d = ifs_grid_des.create_coarsened_grid_des(self.target_dir, self.downscaling_fac,
+                                                                         self.my_rank, name_base="ifs_hres_")
+        gdes_dict = {"tar_grid_des": self.grid_des_tar, "base_grid_des": base_gdes_d["file"],
+                     "coa_grid_des": coa_gdes_d["file"]}
         # define arguments and keyword arguments for running PyStager later
         run_dict = {"args": [self.source_dir, self.target_dir, gdes_dict],
                     "kwargs": {"job_name": kwargs.get("jobname", "Preproc_Unet_tier1")}}
@@ -180,82 +184,6 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         return nwarns
 
-    def process_tar_grid_des(self, tar_grid_des: dict, downscaling_fac: int = 8):
-        """
-        Process target grid description to get all releavnt parameters for preprocessing chain
-        """
-        method = Preprocess_Unet_Tier1.process_tar_grid_des.__name__
-
-        # sanity checks
-        assert isinstance(tar_grid_des, dict), "%{0}: tar_grid_des must be a dictionary, but is of type '{1}'"\
-                                               .format(method, type(tar_grid_des))
-
-        if not all([key_req in tar_grid_des.keys() for key_req in Preprocess_Unet_Tier1.expected_keys_gdes]):
-            raise ValueError("%{0}: Not all required keys found in parsed dictionary.".format(method) +
-                             " Make sure that the following keys are provided: {0}"
-                             .format(", ".join(Preprocess_Unet_Tier1.expected_keys_gdes)))
-
-        # retrieve key information from grid description files
-        nxy_tar = [int(tar_grid_des["xsize"]), int(tar_grid_des["ysize"])]
-        dx_tar = [float(tar_grid_des["xinc"]), float(tar_grid_des["yinc"])]
-
-        xyfirst = [float(tar_grid_des["xfirst"]), float(tar_grid_des["yfirst"])]
-        sw_lon, sw_lat = xyfirst
-        if dx_tar[0] < 0:
-            sw_lon += (nxy_tar[0] - 1)*dx_tar[0]
-
-        if dx_tar[1] < 0:
-            sw_lat += (nxy_tar[1] - 1)*dx_tar[1]
-
-        sw_xy_tar = [sw_lon, sw_lat]
-        gridtype = tar_grid_des["gridtype"]
-        # create auxiliary CDO grid description files and copy original one
-        base_grid_des, coarse_grid_des = self.create_aux_grid_des(xyfirst, nxy_tar, dx_tar, downscaling_fac, gridtype)
-        shutil.copy(self.grid_des_tar, self.target_dir)
-
-        return base_grid_des, coarse_grid_des
-
-    def create_aux_grid_des(self, xy_first: List, nxy: List, dx: List, downscaling_fac: int, gridtype: str):
-        """
-        Create auxiliary grid description files for use in preprocess_worker-method
-        """
-        method = Preprocess_Unet_Tier1.create_aux_grid_des.__name__
-
-        downscaling_fac = int(downscaling_fac)
-        nxy_coarse = [np.divmod(n, downscaling_fac) for n in nxy]
-        # sanity check
-        if not all([n_c[1] == 0 for n_c in nxy_coarse]):
-            raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
-                             .format(method, ",".join(nxy), downscaling_fac))
-
-        # get parameters for auxiliary grid description files
-        dx_coarse = [d*int(downscaling_fac) for d in dx]
-        nxy_coarse = [n[0] + 2 for n in nxy_coarse]
-
-        dx_base = dx
-        nxy_base = [n + 2*downscaling_fac for n in nxy]
-        # create data for auxiliary grid description files
-        base_grid_des_dict = {"gridtype": gridtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
-                              "xfirst": xy_first[0] - dx_coarse[0], "xinc": dx_base[0],
-                              "yfirst": xy_first[1] - dx_coarse[1], "yinc": dx_base[1]}
-
-        coarse_grid_des_dict = {"gridtype": gridtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
-                                "xfirst": xy_first[0] - (downscaling_fac+1)/2*dx[0], "xinc": dx_coarse[0],
-                                "yfirst": xy_first[1] - (downscaling_fac+1)/2*dx[1], "yinc": dx_coarse[1]}
-
-        # construct filenames and...
-        base_grid_des = os.path.join(self.target_dir, "ifs_hres_grid_base")
-        coarse_grid_des = os.path.join(self.target_dir, "ifs_hres_coarsened_grid")
-        # write data to CDO's grid description files
-        if self.my_rank == 0:
-            self.write_grid_des_from_dict(base_grid_des_dict, base_grid_des)
-            self.write_grid_des_from_dict(coarse_grid_des_dict, coarse_grid_des)
-        # add grid description filenames to dictionary
-        base_grid_des_dict["file"] = base_grid_des
-        coarse_grid_des_dict["file"] = coarse_grid_des
-
-        return base_grid_des_dict, coarse_grid_des_dict
-
     @staticmethod
     def process_one_file(nc_file_in: str, grid_des_tar: dict, grid_des_coarse: dict, grid_des_base: dict):
         """
@@ -348,4 +276,6 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
         coord0 = np.float(coord0)
         coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
         return np.amin(coords), np.amax(coords)
+
+
 
