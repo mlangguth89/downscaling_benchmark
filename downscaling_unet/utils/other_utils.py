@@ -36,6 +36,14 @@ def provide_default(dict_in, keyname, default=None, required=False):
         return dict_in[keyname]
 
 
+def remove_key_from_dict(dict_in: dict, key: str) -> dict:
+    """
+    Remove single key from dictionary if it is present. Returns a new dict.
+    :param dict_in: input dictionary
+    :param key: key to be removed
+    """
+    return {k: v for k, v in dict_in.items() if k != key}
+
 def to_list(obj: Any) -> List:
     """
     Method from MLAIR!
