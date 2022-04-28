@@ -230,7 +230,7 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
 
         # get parameters for auxiliary grid description files
         dx_coarse = [d*int(downscaling_fac) for d in dx]
-        nxy_coarse = [n[0] for n in nxy_coarse]
+        nxy_coarse = [n[0] + 2 for n in nxy_coarse]
 
         dx_base = dx
         nxy_base = [n + 2*downscaling_fac for n in nxy]
@@ -240,12 +240,12 @@ class Preprocess_Unet_Tier1(Abstract_Preprocessing):
                               "yfirst": xy_first[1] - dx_coarse[1], "yinc": dx_base[1]}
 
         coarse_grid_des_dict = {"gridtype": gridtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
-                                "xfirst": xy_first[0] - dx_coarse[0]/2., "xinc": dx_coarse[0],
-                                "yfirst": xy_first[1] - dx_coarse[1]/2., "yinc": dx_coarse[1]}
+                                "xfirst": xy_first[0] - (downscaling_fac+1)/2*dx[0], "xinc": dx_coarse[0],
+                                "yfirst": xy_first[1] - (downscaling_fac+1)/2*dx[1], "yinc": dx_coarse[1]}
 
         # construct filenames and...
         base_grid_des = os.path.join(self.target_dir, "ifs_hres_grid_base")
-        coarse_grid_des = os.path.join(self.target_dir, "ifs_hred_coarsened_grid")
+        coarse_grid_des = os.path.join(self.target_dir, "ifs_hres_coarsened_grid")
         # write data to CDO's grid description files
         if self.my_rank == 0:
             self.write_grid_des_from_dict(base_grid_des_dict, base_grid_des)
