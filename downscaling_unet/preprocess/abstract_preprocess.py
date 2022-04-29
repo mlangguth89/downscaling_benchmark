@@ -143,7 +143,7 @@ class CDOGridDes(ABC):
         print("%{0}: Grid description file '{1}' was created successfully.".format(method, filename))
 
     def create_coarsened_grid_des(self, target_dir: str, downscaling_fac: int, rank: int = None,
-                                  lextrapolate: bool = True, name_base: str = ""):
+                                  lextrapolate: bool = False, name_base: str = ""):
         """
         Create grid description for coarsening data (to be used for remapping).
         :param target_dir: Directory to save the grid description file
@@ -176,16 +176,16 @@ class CDOGridDes(ABC):
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n = 2
+            add_n, prefac_first = 0, (downscaling_fac-1)/2
         else:
-            add_n = 0
+            add_n, prefac_first = 2, -(downscaling_fac+1)/2
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 
         # create data for auxiliary grid description file
         coarse_grid_des_dict = {"gridtype": gtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
-                                "xfirst": xyf_in[0] - (downscaling_fac+1) / 2 * dx_in[0], "xinc": dx_coarse[0],
-                                "yfirst": xyf_in[1] - (downscaling_fac+1) / 2 * dx_in[1], "yinc": dx_coarse[1]}
+                                "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
+                                "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
 
         # construct filename
         coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
@@ -195,7 +195,7 @@ class CDOGridDes(ABC):
         # add grid description filenames to dictionary
         coarse_grid_des_dict["file"] = coarse_grid_des
 
-        if lextrapolate:
+        if not lextrapolate:
             nxy_base = [n + 2 * downscaling_fac for n in nxy_in]
 
             # create data for auxiliary grid description file
