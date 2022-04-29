@@ -252,7 +252,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
         ncks.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""), ("-x", ""), ("-v", "s")]))
         # NCEA-bug with NCO/4.9.5: Add slide offset to lon1_tar to avoid corrupted data in appended file
         # (does not affect slicing at all)
-        lon1_tar = lon1_tar + grid_des_tar["xinc"]/10.
+        lon1_tar = lon1_tar + np.float(grid_des_tar["xinc"])/10.
         ncea.run([nc_file_sd, nc_file_remapped], OrderedDict([("-A", ""),
                                                               ("-d", ["lat,{0},{1}".format(lat0_tar, lat1_tar),
                                                                       "lon,{0},{1}".format(lon0_tar, lon1_tar)]),
