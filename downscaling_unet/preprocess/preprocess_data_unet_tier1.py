@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-03-18"
+__update__ = "2022-04-29"
 
 # doc-string
 """
@@ -39,19 +39,23 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
     def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = 8):
         """
         Initialize class for tier-1 downscaling dataset.
+        Pure downscaling task. Thus, pass None for source_dir_out to initializer.
+        Following Sha et al., 2020, 2m temperature and surface elevation act as predictors and predictands.
         """
-        super().__init__("preprocess_unet_tier1", source_dir, output_dir)
+        super().__init__("preprocess_unet_tier1", source_dir, None, {"sf": {"2t": None, "z": None}},
+                         {"sf": {"2t": None, "z": None}}, output_dir)
 
         if not os.path.isfile(grid_des_tar):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
                                     .format(grid_des_tar))
+        self.source_dir = self.source_dir_in        # set source_dir for backwards compatability
         self.grid_des_tar = grid_des_tar
         self.my_rank = None                     # to be set in __call__
         self.downscaling_fac = downscaling_fac
 
     def prepare_worker(self, years: List, months: List, **kwargs):
         """
-        Run preprocessing.
+        Prepare workers for preprocessing.
         :param years: List of years to be processed.
         :param months: List of months to be processed.
         :param kwargs:
