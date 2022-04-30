@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-03-16"
+__update__ = "2022-04-29"
 
 import os
 from abc import ABC
@@ -13,19 +13,39 @@ class AbstractPreprocessing(ABC):
     """
     Abstract class for preprocessing
     """
-    def __init__(self, name_preprocess: str, source_dir: str, target_dir: str):
+    def __init__(self, name_preprocess: str, source_dir_in: str, source_dir_out: str, predictors: dict,
+                 predictands: dict, target_dir: str):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
+        :param source_dir_in: diretory where input data for downscaling is saved
+        :param source_dir_out: directory where output/target data for downscaling is saved
+                               (= source_dir_in or None for pure downscaling task)
+        :param predictors: dictionary defining predictors for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
+        :param predictands: dictionary defining predictands for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
+        :param target_dir: directory to store preprocessed data
         """
         method = AbstractPreprocessing.__init__.__name__
         # sanity check
         assert isinstance(name_preprocess, str), "%{0}: name_preprocess must be a string.".format(method)
-        assert os.path.isdir(source_dir), "%{0}: Parsed source_dir '{1}' does not exist.".format(method, source_dir)
+        assert os.path.isdir(source_dir_in), "%{0}: Parsed directory for downscaling input '{1}' does not exist."\
+                                             .format(method, source_dir_in)
+        if source_dir_out is not None:
+            assert os.path.isdir(source_dir_out), "%{0}: Parsed directory for downscaling target '{1}' does not exist."\
+                                                  .format(method, source_dir_out)
+        assert isinstance(predictors, dict), '%{0}: Predictors must be a dictionary, e.g {{"sf": {{"2t": None}}}}'\
+                                             .format(method)
+        assert isinstance(predictands, dict), '%{0}: Predictands must be a dictionary, e.g {{"sf": {{"2t": None}}}}'\
+                                             .format(method)
 
         self.name_preprocess = name_preprocess
-        self.source_dir = source_dir
+        self.source_dir_in = source_dir_in
+        self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
+        self.predictors, self.predictands = predictors, predictands
+        self.downscaling_task = "real"
+        if self.source_dir_in == self.source_dir_out:
+            self.downscaling_task = "pure"
 
     def __call__(self, *args, **kwargs):
         """
