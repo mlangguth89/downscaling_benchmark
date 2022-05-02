@@ -1,14 +1,25 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-01-22"
+__update__ = "2022-05-02"
 
 import inspect
 from typing import Any, List
+try:
+    from collections import Iterable
+except ImportError:
+    from typing import Iterable
+import datetime as dt
 
 # doc-string
 """
-Some auxiliary functions for the project.
+Some auxiliary functions for the project:
+    * provide_default
+    * remove_key_from_dict
+    * to_list
+    * get_func_kwargs
+    * last_day_of_month
+    * flatten
 """
 # doc-string
 
@@ -44,6 +55,7 @@ def remove_key_from_dict(dict_in: dict, key: str) -> dict:
     """
     return {k: v for k, v in dict_in.items() if k != key}
 
+
 def to_list(obj: Any) -> List:
     """
     Method from MLAIR!
@@ -58,24 +70,6 @@ def to_list(obj: Any) -> List:
     return obj
 
 
-def griddes_lines_to_dict(lines):
-    """
-    Converts the lines that were read from a CDO grid description file to a dictionary.
-    The lines must follow the convention '<key> = <value>' to be recognized. Other lines will be ignored
-    :param lines: lines from grid description
-    :return: dictionary carrying keys with corresponding values as string from lines of grid description file.
-    """
-    dict_out = {}
-
-    lines = to_list(lines)
-    for line in lines:
-        splitted = line.replace("\n", "").split("=")
-        if len(splitted) == 2:
-            dict_out[splitted[0].strip()] = splitted[1].strip()
-
-    return dict_out
-
-
 def get_func_kwargs(func, kwargs):
     """
     Returns dictonary of keyword arguments that can be used for method
@@ -87,3 +81,26 @@ def get_func_kwargs(func, kwargs):
     func_kwargs = {k: kwargs.pop(k) for k in dict(kwargs) if k in func_args}
 
     return func_kwargs
+
+
+def last_day_of_month(any_day):
+    """
+    Returns the last day of a month
+    :param any_day : datetime object with any day of the month
+    :return: datetime object of lat day of month
+    """
+    next_month = any_day.replace(day=28) + dt.timedelta(days=4)  # this will never fail
+    return next_month - dt.timedelta(days=next_month.day)
+
+
+def flatten(nested_iterable):
+    """
+    Yield items from any nested iterable.
+    :return Any nested iterable.
+    """
+    for x in nested_iterable:
+        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+            for sub_x in flatten(x):
+                yield sub_x
+        else:
+            yield x
