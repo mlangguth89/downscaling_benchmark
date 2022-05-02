@@ -17,7 +17,7 @@ class RunTool(object):
     Python-scripts.
     """
 
-    def __init__(self, tool_name: str, op_sep: str = ","):
+    def __init__(self, tool_name: str, op_sep: str = ",", tool_envs: dict = None):
         """
         Initialize class-object for specific tool.
         :param tool_name: The name of the tool with should be called from the command-line
@@ -36,6 +36,8 @@ class RunTool(object):
         self.op_sep = op_sep
         self.known_operators = None
         self.doc_url = None
+        if tool_envs is not None:
+            RunTool.set_envs(tool_envs)
 
     def check_tool(self):
         """
@@ -116,6 +118,16 @@ class RunTool(object):
                     raise ValueError("%{0}: '{1}' is not a knwon operator of {2}.".format(method, operator, self.tool))
                 else:
                     return False
+
+    @staticmethod
+    def set_envs(env_vars: dict):
+        """
+        Set environmental variables to configure tool.
+        :param env_vars: dictionary of environmental variables to set.
+        :return:
+        """
+        for env_var, value in env_vars.items():
+            os.environ[env_var] = value
 
     def set_known_operators(self):
         method = RunTool.set_known_operators.__name__
