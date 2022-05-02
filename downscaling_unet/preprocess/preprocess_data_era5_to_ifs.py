@@ -20,23 +20,29 @@ import logging
 import numbers
 import datetime as dt
 import numpy as np
+import pandas as pd
 from collections import OrderedDict
 #from tfrecords_utils import IFS2TFRecords
-from other_utils import to_list
+from other_utils import to_list, last_day_of_month, flatten
 from pystager_utils import PyStager
-from abstract_preprocess import Abstract_Preprocessing
+from abstract_preprocess import AbstractPreprocessing
 from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 
 number = Union[float, int]
 num_or_List = Union[number, List[number]]
 list_or_tuple = Union[List, tuple]
+list_or_dict = Union[List, dict]
 
 
 class PreprocessERA5toIFS(AbstractPreprocessing):
 
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
+    # get required tool-instances
+    cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
+    # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
+    cpd, g = 1004.709, 9.80665
 
     def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, grid_des_tar: str, predictors : dict,
                  predictands: dict, downscaling_fac: int = 8):
@@ -89,7 +95,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
     @staticmethod
     def preprocess_worker(year_months: List, dirin_era5: str, dirin_ifs: str, dirout: str, gdes_dict: dict,
-                          logger: logging.Logger, nmax_warn: int = 3):
+                          predictors: dict, predictands: dict, logger: logging.Logger, nmax_warn: int = 3):
         """
         Function that preprocesses ERA5 (input) - and IFS (output)-data on individual workers
         :param year_months: List of Datetime-objects indicating year and month for which data should be preprocessed
@@ -107,8 +113,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance" \
                                                    .format(method)
 
-        grid_des_tar, grid_des_base, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["base_grid_des"], \
-                                                       gdes_dict["coa_grid_des"]
+        sfvars, mlvars, fcvars = PreprocessERA5toIFS.get_vars(predictors)
+
+        grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
+
         for year_month in year_months:
             assert isinstance(year_month, dt.datetime),\
                 "%{0}: All year_months-argument must be a datetime-object. Current one is of type '{1}'"\
@@ -116,6 +124,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
             year, month = int(year_month.strftime("%Y")), int(year_month.strftime("%m"))
             year_str, month_str = str(year), "{0:02d}".format(int(month))
+            last_day = last_day_of_month(year_month)
 
             subdir = year_month.strftime("%Y-%m")
             dirr_curr_era5 = os.path.join(dirin_era5, str(year), subdir)
@@ -133,6 +142,112 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 err_mess = "%{0}: Could not find directory for IFS-data '{1}'".format(method, dirr_curr_ifs)
                 logger.critical(err_mess)
                 raise NotADirectoryError(err_mess)
+
+            dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%M%D%H"),
+                                     last_day, freq="H")
+
+            for date2op in dates2op:
+                # process surface variables
+                if sfvars is not None:
+                    PreprocessERA5toIFS.process_sf_file(dirr_curr_era5, target_dir, date2op, sfvars)
+                # process multi-level files
+                if mlvars is not None:
+                    PreprocessERA5toIFS.process_ml_file(dirr_curr_era5, target_dir, date2op, mlvars)
+                # process forecats files
+                if fcvars is not None:
+                    PreprocessERA5toIFS.process_fc_file(dirr_curr_era5, target_dir, date2op, fcvars)
+
+
+
+
+
+    @staticmethod
+    def organize_predictors(predictors: dict):
+        """
+        Checks predictors for variables to process and returns condensed information for further processing
+        :param predictors: dictionary for predictors
+        :return: list of surface and forecast variables and dictionary of multi-level variables to interpolate
+        """
+
+        method = PreprocessERA5toIFS.organize_predictors.__name__
+
+        known_vartypes =["sf", "ml", "sf_fc"]
+
+        pred_vartypes = list(predictors.keys())
+        lpred_vartypes = [pred_vartype in known_vartypes for pred_vartype in pred_vartypes]
+        if not all(lpred_vartypes):
+            unknown_vartypes = [pred_vartypes[i] for i, flag in enumerate(lpred_vartypes) if not flag]
+            raise ValueError("%{0}: The following variables types in the predictor-dictionary are unknown: {1}"
+                             .format(method, ", ".join(unknown_vartypes)))
+
+        sfvars, mlvars, fcvars = predictors.get("sf", None), predictors.get("ml", None), predictors.get("fc_sf", None)
+
+        # some checks (level information redundant for surface-variables)
+        if any(i is not None for i in sfvars.values()):
+            print("%{0}: Some values of sf-variables are not None, but do not have any effect.".format(method))
+
+        if any(i is not None for i in fcvars.values()):
+            print("%{0}: Some values of fc_sf-variables are not None, but do not have any effect.".format(method))
+
+        sfvars, fcvars = list(sfvars), list(fcvars)
+        # Process get list of unique target levels for interpolation
+        lvls = set(list(flatten(mlvars.values())))
+        plvls = [int(float(lvl.lstrip("p"))) for lvl in lvls if lvl.startswith("p")]
+        # Currently only pressure-level interpolation is supported. Thus, we stop here if sth. unknown was parsed
+        if len(lvls) != len(plvls):
+            raise ValueError("%{0}: Could not retrieve all parsed level imformation. Check the folllowing: {1}"
+                             .format(method, ", ".join(lvls)))
+        mlvars["plvls"] = plvls
+
+        return sfvars, mlvars, fcvars
+
+    @staticmethod
+    def process_sf_file(dirr_curr_era5: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
+                        fgdes_tar: dict, sfvars: List):
+
+        method = PreprocessERA5toIFS.process_sf_file.__name__
+
+        cdo = PreprocessERA5toIFS.cdo
+
+        cpd, g = PreprocessERA5toIFS.cpd, PreprocessERA5toIFS.g
+
+        # handle date and create tmp-directory and -files
+        date_str = date2op.strftime("%Y%M%D%H")
+        sf_file = os.path.join(dirr_curr_era5, "{0}_sf.grb".format(date_str))
+        tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        if not os.path.isfile(sf_file):
+            raise FileNotFoundError("%{0}: Could not find required surface-file '{1}'".format(method, sf_file))
+
+        ftmp_coarse = os.path.join(tmp_dir, "{0}_sf_coarse.nc".format(date_str))
+        ftmp_hres = ftmp_coarse.replace("sf_coarse", "sf_hres")
+
+        l2t = False
+        if "2t" in sfvars:
+            sfvars.remove("2t")
+            l2t = True
+
+        # run remapping
+        cdo.run([sf_file, ftmp_coarse], OrderedDict([("-f", "nc"), ("copy", ""), ("remapcon", fgdes_coarse),
+                                                     ("-selname", ",".join(sfvars))]))
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
+
+        # special handling of 2m temperature
+        if l2t:
+            ftmp_coarse2 = ftmp_coarse.replace(".nc", "_tmp.nc")
+            ftmp_hres2 = ftmp_hres.replace(".nc", "_tmp.nc")
+            cdo.run([sf_file, ftmp_coarse2], OrderedDict([("-f", "nc"), ("copy", ""), ("-selname", "z"),
+                                                          ("-expr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
+            cdo.run([ftmp_coarse2, ftmp_coarse], OrderedDict([("remapcon", fgdes_coarse)]))
+            cdo.run([ftmp_coarse, ftmp_hres2], OrderedDict([("remapbil", fgdes_tar),
+                                                            ("-expr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
+            cdo.run([ftmp_hres2, ftmp_hres, ftmp_hres], OrderedDict([("cat", "")]))
+
+        return ftmp_hres
+
+
+
 
     @staticmethod
     def check_season(season: str):
