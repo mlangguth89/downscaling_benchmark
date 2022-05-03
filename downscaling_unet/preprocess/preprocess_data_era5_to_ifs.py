@@ -39,12 +39,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
     # expected key of grid description files
     expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
-    # get required tool-instances
-    cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
+    # get required tool-instances (cdo with activated extrapolation)
+    cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE", "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
     # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
     cpd, g = 1004.709, 9.80665
 
-    def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, grid_des_tar: str, predictors : dict,
+    def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, grid_des_tar: str, predictors: dict,
                  predictands: dict, downscaling_fac: int = 8):
         """
         Initialize class for tier-1 downscaling dataset.
@@ -229,8 +229,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             l2t = True
 
         # run remapping
-        cdo.run([sf_file, ftmp_coarse], OrderedDict([("-f", "nc"), ("copy", ""), ("remapcon", fgdes_coarse),
-                                                     ("-selname", ",".join(sfvars))]))
+        cdo.run([sf_file, ftmp_coarse], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
+                                                     ("remapcon", fgdes_coarse), ("-selname", ",".join(sfvars))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
 
         # special handling of 2m temperature
@@ -245,6 +245,44 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             cdo.run([ftmp_hres2, ftmp_hres, ftmp_hres], OrderedDict([("cat", "")]))
 
         return ftmp_hres
+
+    @staticmethod
+    def process_ml_file(dirr_curr_era5: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
+                        fgdes_tar: dict, mlvars: dict):
+
+        method = PreprocessERA5toIFS.process_ml_file.__name__
+
+        cdo = PreprocessERA5toIFS.cdo
+        ncrename = PreprocessERA5toIFS.ncrename
+
+        cpd, g = PreprocessERA5toIFS.cpd, PreprocessERA5toIFS.g
+
+        # handle date and create tmp-directory and -files
+        date_str = date2op.strftime("%Y%M%D%H")
+        ml_file = os.path.join(dirr_curr_era5, "{0}_ml.grb".format(date_str))
+        tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        if not os.path.isfile(ml_file):
+            raise FileNotFoundError("%{0}: Could not find required multi level-file '{1}'".format(method, ml_file))
+
+        ftmp_plvl = os.path.join(tmp_dir, "{0}_plvl.nc".format(date_str))
+        ftmp_coarse = os.path.join(tmp_dir, "{0}_ml_coarse.nc".format(date_str))
+        ftmp_hres = ftmp_coarse.replace("ml_coarse", "ml_hres")
+
+        mlvars_interp = set(list(mlvars.keys()) + ["t", "lnsp", "z"])
+
+        cdo.run([ml_file, ftmp_plvl], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
+                                                   ("-selname", ",".join(mlvars)), ("-ml2plx,{0}".format(plvl_strs)),
+                                                    ("-selname", ",".join(mlvars_interp))]))
+
+        cdo.run([ftmp_plvl, ftmp_plvl.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
+
+        for plvl in mlvars["plvl"]:
+            for var in mlvars:
+                var_new = "{0}{1:d}".format(var, int(plvl/100.))
+                ncrename.run([ftmp_plvl.replace(".nc", "{0:0d}.nc".format(int(plvl)))],
+                             OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
 
 
 
