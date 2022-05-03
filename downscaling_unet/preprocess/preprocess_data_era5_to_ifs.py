@@ -266,23 +266,39 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         if not os.path.isfile(ml_file):
             raise FileNotFoundError("%{0}: Could not find required multi level-file '{1}'".format(method, ml_file))
 
-        ftmp_plvl = os.path.join(tmp_dir, "{0}_plvl.nc".format(date_str))
+        # construct filenames for all temporary files
+        ftmp_plvl1 = os.path.join(tmp_dir, "{0}_plvl.nc".format(date_str))
+        ftmp_plvl2 = ftmp_plvl1.replace("plvl.nc", "plvl_all")
         ftmp_coarse = os.path.join(tmp_dir, "{0}_ml_coarse.nc".format(date_str))
         ftmp_hres = ftmp_coarse.replace("ml_coarse", "ml_hres")
 
+        # List of variables required for pressure interpolation
+        # problem: mlvars holds plvls as key
         mlvars_interp = set(list(mlvars.keys()) + ["t", "lnsp", "z"])
+        plvl_strs = ",".join(["{0:d}".format(int(plvl)) for plvl in mlvars["plvls"]])
+        var_new_req = ["{0}{1}".format(var, int(int(plvl.lstrip("p"))/100))
+                       for var in mlvars.keys() for plvl in mlvars[var]]
 
-        cdo.run([ml_file, ftmp_plvl], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
-                                                   ("-selname", ",".join(mlvars)), ("-ml2plx,{0}".format(plvl_strs)),
+        # interpolate variables of interest onto pressure levels
+        cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
+                                                    ("-selname", ",".join(mlvars)), ("-ml2plx,{0}".format(plvl_strs)),
                                                     ("-selname", ",".join(mlvars_interp))]))
 
-        cdo.run([ftmp_plvl, ftmp_plvl.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
-
+        # Split pressure-levels into seperate files and ...
+        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
+        # ... rename variables accordingly in each resulting file
         for plvl in mlvars["plvl"]:
             for var in mlvars:
                 var_new = "{0}{1:d}".format(var, int(plvl/100.))
-                ncrename.run([ftmp_plvl.replace(".nc", "{0:0d}.nc".format(int(plvl)))],
-                             OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
+                ncrename.run([ftmp_plvl1.replace(".nc", "{0:0d}.nc".format(int(plvl)))],
+                              OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
+
+        # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
+        cdo.run([ftmp_plvl2], ("cat", ftmp_plvl1.replace(".nc", "??????.nc")))
+        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("remapcon,{0}".format(fgdes_coarse)),
+                                                        ("-selname", ",".join(var_new_req))]))
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
+
 
 
 
