@@ -138,8 +138,8 @@ class CDO(RunTool):
     """
     Child class for CDO commands.
     """
-    def __init__(self):
-        super().__init__("cdo")
+    def __init__(self, **kwargs):
+        super().__init__("cdo", **kwargs)
 
         self.known_operators = self.set_known_operators()
         self.doc_url = "https://code.mpimet.mpg.de/projects/cdo/"
