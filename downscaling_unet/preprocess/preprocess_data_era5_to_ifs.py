@@ -157,10 +157,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 if fcvars is not None:
                     PreprocessERA5toIFS.process_fc_file(dirr_curr_era5, target_dir, date2op, fcvars)
 
-
-
-
-
     @staticmethod
     def organize_predictors(predictors: dict):
         """
@@ -255,8 +251,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo = PreprocessERA5toIFS.cdo
         ncrename = PreprocessERA5toIFS.ncrename
 
-        cpd, g = PreprocessERA5toIFS.cpd, PreprocessERA5toIFS.g
-
         # handle date and create tmp-directory and -files
         date_str = date2op.strftime("%Y%M%D%H")
         ml_file = os.path.join(dirr_curr_era5, "{0}_ml.grb".format(date_str))
@@ -291,7 +285,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             for var in mlvars:
                 var_new = "{0}{1:d}".format(var, int(plvl/100.))
                 ncrename.run([ftmp_plvl1.replace(".nc", "{0:0d}.nc".format(int(plvl)))],
-                              OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
+                             OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
 
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
         cdo.run([ftmp_plvl2], ("cat", ftmp_plvl1.replace(".nc", "??????.nc")))
@@ -299,6 +293,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                         ("-selname", ",".join(var_new_req))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
 
+    @staticmethod
+    def process_fc_file(dirr_curr_era5: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
+                        fgdes_tar: dict, fcvars: List):
 
 
 
