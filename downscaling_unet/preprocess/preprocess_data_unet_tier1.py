@@ -33,8 +33,7 @@ list_or_tuple = Union[List, tuple]
 
 class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
-    # expected key of grid description files
-    expected_keys_gdes = ["gridtype", "xsize", "ysize", "xfirst", "xinc", "yfirst", "yinc"]
+    get_slice_coords = CDOGridDes.get_slice_coords
 
     def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = 8):
         """
@@ -274,14 +273,6 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
         return True
 
-    @staticmethod
-    def get_slice_coords(coord0, dx, n, d=4):
-        """
-        Small helper to get coords for slicing
-        """
-        coord0 = np.float(coord0)
-        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
-        return np.amin(coords), np.amax(coords)
 
 
 
