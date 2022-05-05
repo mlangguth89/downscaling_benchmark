@@ -300,3 +300,12 @@ class CDOGridDes(ABC):
 
         return dict_out
 
+    @staticmethod
+    def get_slice_coords(coord0, dx, n, d=4):
+        """
+        Small helper to get coords for slicing
+        """
+        coord0 = np.float(coord0)
+        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
+        return np.amin(coords), np.amax(coords)
+
