@@ -3,6 +3,7 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
 __update__ = "2022-05-02"
 
+import os
 import inspect
 from typing import Any, List
 try:
@@ -20,6 +21,7 @@ Some auxiliary functions for the project:
     * get_func_kwargs
     * last_day_of_month
     * flatten
+    * remove_files
 """
 # doc-string
 
@@ -104,3 +106,20 @@ def flatten(nested_iterable):
                 yield sub_x
         else:
             yield x
+
+
+def remove_files(files: List, lbreak: True):
+    """
+    Remove files from a list
+    :param files: list of file names
+    :return: -
+    """
+    for file in files:
+        if os.path.isfile(file):
+            os.remove(file)
+        else:
+            mess = "File '{0}' does not exist and thus cannot be removed.".format(file)
+            if lbreak:
+                raise ValueError(mess)
+            else:
+                print(mess)
