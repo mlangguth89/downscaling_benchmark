@@ -112,6 +112,7 @@ def remove_files(files: List, lbreak: True):
     """
     Remove files from a list
     :param files: list of file names
+    :param lbreak: flag of error is risen if non-existing files are encountered
     :return: -
     """
     for file in files:
