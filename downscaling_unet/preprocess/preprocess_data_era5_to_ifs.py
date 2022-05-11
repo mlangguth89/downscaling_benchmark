@@ -41,11 +41,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE", "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
     # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
     cpd, g = 1004.709, 9.80665
+    # invariant variables expected in the invarinat files
+    const_vars = ["z", "lsm"]
 
-    def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, grid_des_tar: str, predictors: dict,
-                 predictands: dict, downscaling_fac: int = 8):
+    def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, invar_file: str, grid_des_tar: str,
+                 predictors: dict, predictands: dict, downscaling_fac: int = 8):
         """
-        Initialize class for tier-1 downscaling dataset.
+        Initialize class for ERA5-to-IFS downscaling class.
         """
         super().__init__("preprocess_ERA5_to_IFS", source_dir_era5, source_dir_ifs, predictors, predictands, output_dir)
 
@@ -53,8 +55,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
-        self.my_rank = None                     # to be set in __call__
+        self.invar_file = PreprocessERA5toIFS.check_invar_file(invar_file)
         self.downscaling_fac = downscaling_fac
+
+        self.my_rank = None                     # to be set in __call__
 
     def prepare_worker(self, years: List, season: str, **kwargs):
         """
@@ -86,7 +90,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict, "coa_grid_des": coa_gdes_d}
         # define arguments and keyword arguments for running PyStager later
-        run_dict = {"args": [self.source_dir_in, self.source_dir_out, self.target_dir, gdes_dict],
+        run_dict = {"args": [self.source_dir_in, self.source_dir_out, self.target_dir, gdes_dict, self.predictors,
+                             self.predictands],
                     "kwargs": {"job_name": kwargs.get("jobname", "Preproce_ERA5_to_IFS")}}
 
         return preprocess_pystager, run_dict
@@ -100,9 +105,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         :param dirin_era5: input directory of ERA5-dataset (top-level directory)
         :param dirin_ifs: input directory of IFS-forecasts
         :param dirout: output directoty to store preprocessed data
+        :param predictors: nested dictionary of predictors, where the first-level key denotes the variable type,
+                           and the second-level key-value pairs denote the variable as well as interpolation info
+                           Example: { "sf": {"2t", "blh"}, "ml_fc": { "t", ["p85000", "p925000"]}}
+        :param predictands: Same as predictors, but for predictands
         :param gdes_dict: dictionary containing grid description dictionaries for target, base and coarse grid
         :param logger: Logging instance for log process on worker
-        :param nmax_warn: allowed maximum number of warnings/problems met during processing (default:3)
+        :param max_warn: allowed maximum number of warnings/problems met during processing (default:3)
         :return: -
         """
         method = PreprocessERA5toIFS.preprocess_worker.__name__
@@ -112,7 +121,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance" \
                                                    .format(method)
 
-        sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.get_vars(predictors)
+        sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.organize_predictors(predictors)
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
 
@@ -217,6 +226,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             remove_files(all_daily_files, lbreak=True)
 
     @staticmethod
+    def check_invar_file(invar_file):
+
+
+    @staticmethod
     def organize_predictors(predictors: dict) -> (List, dict, List):
         """
         Checks predictors for variables to process and returns condensed information for further processing
@@ -303,12 +316,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return filelist
 
     @staticmethod
-    def process_sf_file(sf_file: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
+    def process_sf_file(sf_file: str, invar_file, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
                         fgdes_tar: str, sfvars: List) -> str:
         """
         Process surface ERA5-file, i.e. remap conservatively on coarsened grid followed by bilinear remapping
         onto the target (high-resolved) grid.
         :param sf_file: ERA5-file with surface variables to process
+        :param invar_file: ERA5-file with invariant variables
         :param target_dir: Target directory to store the processed data in netCDF-files
         :param date2op: Date for which data should be processed
         :param fgdes_coarse: grid description file for coarse grid
