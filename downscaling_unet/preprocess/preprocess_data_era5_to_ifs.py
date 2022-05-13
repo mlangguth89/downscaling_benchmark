@@ -90,20 +90,22 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict, "coa_grid_des": coa_gdes_d}
         # define arguments and keyword arguments for running PyStager later
-        run_dict = {"args": [self.source_dir_in, self.source_dir_out, self.target_dir, gdes_dict, self.predictors,
-                             self.predictands],
+        run_dict = {"args": [self.source_dir_in, self.source_dir_out, self.invar_file, self.target_dir, gdes_dict,
+                             self.predictors, self.predictands],
                     "kwargs": {"job_name": kwargs.get("jobname", "Preproce_ERA5_to_IFS")}}
 
         return preprocess_pystager, run_dict
 
     @staticmethod
-    def preprocess_worker(year_months: List, dirin_era5: str, dirin_ifs: str, dirout: str, gdes_dict: dict,
-                          predictors: dict, predictands: dict, logger: logging.Logger, max_warn: int = 3):
+    def preprocess_worker(year_months: List, dirin_era5: str, dirin_ifs: str, invar_file: str, dirout: str,
+                          gdes_dict: dict, predictors: dict, predictands: dict, logger: logging.Logger,
+                          max_warn: int = 3):
         """
         Function that preprocesses ERA5 (input) - and IFS (output)-data on individual workers
         :param year_months: List of Datetime-objects indicating year and month for which data should be preprocessed
         :param dirin_era5: input directory of ERA5-dataset (top-level directory)
         :param dirin_ifs: input directory of IFS-forecasts
+        :param invar_file: data file providing invariant variables
         :param dirout: output directoty to store preprocessed data
         :param predictors: nested dictionary of predictors, where the first-level key denotes the variable type,
                            and the second-level key-value pairs denote the variable as well as interpolation info
@@ -120,6 +122,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         # sanity checks
         assert isinstance(logger, logging.Logger), "%{0}: logger-argument must be a logging.Logger instance" \
                                                    .format(method)
+        if not os.path.isfile(invar_file):
+            raise FileNotFoundError("File providing invariant data '{0}' cannot be found.".format(invar_file))
 
         sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.organize_predictors(predictors)
 
@@ -169,7 +173,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                     sf_file = os.path.join(dir_curr_era5, "{0}_sf.grb".format(date_str))
                     logger.info("Preprocess predictor from surface file '{0}' of ERA5-dataset".format(sf_file))
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_sf_file,
-                                                                             [sf_file, dest_dir, date2op,
+                                                                             [sf_file, invar_file, dest_dir, date2op,
                                                                               grid_des_coarse, grid_des_tar, sfvars],
                                                                              {}, logger, nwarn, max_warn)
                     filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
@@ -190,7 +194,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                 .format(fc_sfvars))
                     fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="sf_fc")
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_sf_file,
-                                                                             [fc_file, dest_dir, date2op,
+                                                                             [fc_file, invar_file, dest_dir, date2op,
                                                                               grid_des_coarse, grid_des_tar, fc_sfvars],
                                                                              logger, nwarn, max_warn)
                     filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
@@ -219,12 +223,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 logger.info("Merge temporary files to daily netCDF-file '{0}'".format(daily_file))
                 cdo.run([daily_file], OrderedDict([("merge", " ".join(filelist))]))
 
-            # merge all time steps to monthly file
+            # merge all time steps to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
             cdo.run([final_file], OrderedDict([("mergetime", " ".join(all_daily_files))]))
             remove_files(all_daily_files, lbreak=True)
-
 
     @staticmethod
     def organize_predictors(predictors: dict) -> (List, dict, List):
