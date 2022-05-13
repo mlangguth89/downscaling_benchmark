@@ -376,19 +376,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return ftmp_hres
 
     @staticmethod
-    def split_dyn_static(sfvars: List):
-        """
-        Split list of surface variables into lists of static and dynamical variables (see const_vars-variable of class).
-        :param sfvars: input list of surface variables
-        :return: two lists where the first holds the static and the second holds the dynamical variables
-        """
-        sfvars_stat = [sfvar for sfvar in sfvars if sfvar in PreprocessERA5toIFS.const_vars]
-        sfvars_dyn = [sfvar for sfvar in sfvars if sfvar not in sfvars_stat]
-
-        return sfvars_stat, sfvars_dyn
-
-
-    @staticmethod
     def process_ml_file(ml_file: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
                         fgdes_tar: str, mlvars: dict, interp: bool = True) -> str:
         """
@@ -512,7 +499,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         Remap 2m temperature by transforming to dry static energy and concatenate outfile with the result.
         First, data is conservative remapping onto the coarse grid is performed, followed by bilinear remapping onto the
         target grid.
-        :param infile: input data file with 2m temperature (2t) and surface geopotential (z)
+        :param infile: input data file with 2m temperature (2t)
+        :param invar_file: invariant data file providing geopotential z
         :param outfile: output-file which will be concatenated
         :param grid_des_coarse: grid description file for coarse grid
         :param grid_des_tar: grid description file for target (high-resolved) grid.
@@ -544,6 +532,18 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # clean-up temporary files
         remove_files([ftmp_in, ftmp_coarse, ftmp_hres], lbreak=False)
+
+    @staticmethod
+    def split_dyn_static(sfvars: List):
+        """
+        Split list of surface variables into lists of static and dynamical variables (see const_vars-variable of class).
+        :param sfvars: input list of surface variables
+        :return: two lists where the first holds the static and the second holds the dynamical variables
+        """
+        sfvars_stat = [sfvar for sfvar in sfvars if sfvar in PreprocessERA5toIFS.const_vars]
+        sfvars_dyn = [sfvar for sfvar in sfvars if sfvar not in sfvars_stat]
+
+        return sfvars_stat, sfvars_dyn
 
     @staticmethod
     def get_fc_file(dirin_base: str, date: dt.datetime, offset: int = 6,  model: str = "era5", suffix="",
