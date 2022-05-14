@@ -35,14 +35,14 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
     get_slice_coords = CDOGridDes.get_slice_coords
 
-    def __init__(self, source_dir: str, output_dir: str, grid_des_tar: str, downscaling_fac: int = 8):
+    def __init__(self, tar_datadir: str, out_dir: str, grid_des_tar: str, downscaling_fac: int = 8):
         """
         Initialize class for tier-1 downscaling dataset.
         Pure downscaling task. Thus, pass None for source_dir_out to initializer.
         Following Sha et al., 2020, 2m temperature and surface elevation act as predictors and predictands.
         """
-        super().__init__("preprocess_unet_tier1", source_dir, None, {"sf": {"2t": None, "z": None}},
-                         {"sf": {"2t": None, "z": None}}, output_dir)
+        super().__init__("preprocess_unet_tier1", tar_datadir, None, {"sf": {"2t": None, "z": None}},
+                         {"sf": {"2t": None, "z": None}}, out_dir)
 
         if not os.path.isfile(grid_des_tar):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"

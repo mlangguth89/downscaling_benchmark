@@ -44,18 +44,18 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     # invariant variables expected in the invarinat files
     const_vars = ["z", "lsm"]
 
-    def __init__(self, source_dir_era5: str, source_dir_ifs, output_dir: str, invar_file: str, grid_des_tar: str,
+    def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, grid_des_tar: str,
                  predictors: dict, predictands: dict, downscaling_fac: int = 8):
         """
         Initialize class for ERA5-to-IFS downscaling class.
         """
-        super().__init__("preprocess_ERA5_to_IFS", source_dir_era5, source_dir_ifs, predictors, predictands, output_dir)
+        super().__init__("preprocess_ERA5_to_IFS", in_datadir, tar_datadir, predictors, predictands, out_dir)
 
         if not os.path.isfile(grid_des_tar):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
                                     .format(grid_des_tar))
         self.grid_des_tar = grid_des_tar
-        self.invar_file = PreprocessERA5toIFS.check_invar_file(invar_file)
+        self.invar_file = PreprocessERA5toIFS.check_invar_file(in_constfile)
         self.downscaling_fac = downscaling_fac
 
         self.my_rank = None                     # to be set in __call__
