@@ -38,7 +38,7 @@ list_or_dict = Union[List, dict]
 class PreprocessERA5toIFS(AbstractPreprocessing):
 
     # get required tool-instances (cdo with activated extrapolation)
-    cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE", "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
+    cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE": "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
     # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
     cpd, g = 1004.709, 9.80665
     # invariant variables expected in the invarinat files
@@ -51,11 +51,15 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         """
         super().__init__("preprocess_ERA5_to_IFS", in_datadir, tar_datadir, predictors, predictands, out_dir)
 
+        # sanity checks
         if not os.path.isfile(grid_des_tar):
             raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
                                     .format(grid_des_tar))
+        if not os.path.isfile(in_constfile): 
+            raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(in_constfile))
+
         self.grid_des_tar = grid_des_tar
-        self.invar_file = PreprocessERA5toIFS.check_invar_file(in_constfile)
+        self.invar_file = in_constfile
         self.downscaling_fac = downscaling_fac
 
         self.my_rank = None                     # to be set in __call__
@@ -238,7 +242,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         """
         method = PreprocessERA5toIFS.organize_predictors.__name__
 
-        known_vartypes = ["sf", "ml", "sf_fc"]
+        known_vartypes = ["sf", "ml", "fc_sf", "fc_pl"]
 
         pred_vartypes = list(predictors.keys())
         lpred_vartypes = [pred_vartype in known_vartypes for pred_vartype in pred_vartypes]
@@ -477,7 +481,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # get variables to retrieve from predictands-dictionary
         # ! TO-DO: Allow for variables given on pressure levels (in pl-files!) !
-        if any(predictands[vartype] != "sf" for vartype in predictands.keys())
+        if any(predictands[vartype] != "sf" for vartype in predictands.keys()):
             raise ValueError("Only surface variables (i.e. vartype 'sf') are currently supported for IFS data.")
         ifsvars = list(predictands["sf"].keys())
 
