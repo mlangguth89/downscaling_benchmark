@@ -22,7 +22,7 @@ from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 
 scr_name = "preprocess_downscaling_data"
 
-known_methods = {"Unet_Tier1": Preprocess_Unet_Tier1
+known_methods = {"Unet_Tier1": Preprocess_Unet_Tier1,
                  "ERA5_to_IFS": PreprocessERA5toIFS}
 
 
@@ -72,7 +72,8 @@ def main():
         preproc_cls = known_methods[preprocess_method]
         preproc_instance = preproc_cls(**{k: v for k, v in args_dict.items() if v is not None})  # only parse valid args
         print("Preprocessing starts at: {0}".format(time_str.replace("T", " ")))
-        preproc_instance(years, months, 
+        # !!!!! ML 2022-05-14: Season is hard coded! To be made generic !!!!!
+        preproc_instance(years, "all", 
                          jobname = "{0}_{1}".format(preprocess_method, time_str.replace("-", "").replace(":", "")))
     else:
         raise ValueError("Preprocessing method '{0}' is unknown. Please choose a known method: {1}."
