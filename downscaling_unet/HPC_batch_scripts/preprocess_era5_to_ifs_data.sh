@@ -36,8 +36,8 @@ src_dir_ifs=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/orig/
 out_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/
 invar_file=/p/fastdata/slmet/slmet111/met_data/ecmwf/era5/grib/invariants/2020010100_invariants.grb
 # predictors, predictands and grid description file for target domain
-predictors='{"fc_sf": {"2t": None, "10u": None, "10v": None, "blh": None}, "fc_pl": {"t": ["p85000","p92500"]}}'
-predictands='{"fc_sf": {"2t": None, "z": None}}'
+predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
+predictands='{"fc_sf": {"2t": "", "z": ""}}'
 grid_des_tar=../grid_des/ifs_hres_grid_tar
 
 years=( 2016 )
@@ -46,6 +46,6 @@ method=ERA5_to_IFS
 
 srun --overlap python -m mpi4py ../main_scripts/main_preprocessing.py \
    -in_datadir ${src_dir_era5} -tar_datadir ${src_dir_ifs} -out_dir ${out_dir} -grid_des_tar ${grid_des_tar} -in_constfile ${invar_file} \
-   -predictors ${predictors} -predictands ${predictands} -y "${years[@]}" -m "${months[@]}" -method ${method}
+   -predictors "${predictors}" -predictands "${predictands}" -y "${years[@]}" -m "${months[@]}" -method ${method}
 
 
