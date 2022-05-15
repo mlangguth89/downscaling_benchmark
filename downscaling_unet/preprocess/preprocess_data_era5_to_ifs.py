@@ -143,8 +143,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             last_day = last_day_of_month(year_month)
 
             subdir = year_month.strftime("%Y-%m")
-            dir_curr_era5 = os.path.join(dirin_era5, str(year), subdir)
-            dir_curr_ifs = dir_curr_era5.replace(dirin_era5, dirin_ifs)
+            dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
+            dir_curr_ifs = os.path.join(dirin_ifs, year_str, subdir)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
             final_file =  os.path.join(dest_dir, "preproc_{0}".format(subdir))
             os.makedirs(dest_dir, exist_ok=True)
@@ -160,7 +160,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 logger.fatal(err_mess)
                 raise NotADirectoryError(err_mess)
 
-            dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%M%D%H"),
+            dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
                                      last_day, freq="H")
 
             # Perform logging, reset warning counter and loop over dates...
@@ -255,16 +255,22 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                predictors.get("fc_sf", None), predictors.get("fc_pl", None)
 
         # some checks (level information redundant for surface-variables)
-        if any(i is not None for i in sfvars.values()):
-            print("%{0}: Some values of sf-variables are not None, but do not have any effect.".format(method))
+        if sfvars:
+            if any([i is not None for i in sfvars.values()]):
+                print("%{0}: Some values of sf-variables are not None, but do not have any effect.".format(method))
+            sfvars = list(sfvars)
 
-        if any(i is not None for i in fc_sfvars.values()):
-            print("%{0}: Some values of fc_sf-variables are not None, but do not have any effect.".format(method))
 
-        sfvars, fcvars = list(sfvars), list(fc_sfvars)
-        # Get list of unique target levels for interpolation
-        mlvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(mlvars)
-        fc_plvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(fc_plvars)
+        if fc_sfvars:
+            if any([i is not None for i in fc_sfvars.values()]):
+                print("%{0}: Some values of fc_sf-variables are not None, but do not have any effect.".format(method))
+            fc_sfvars = list(fc_sfvars)
+
+        if mlvars:
+            mlvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(mlvars)
+
+        if fc_plvars:
+            fc_plvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(fc_plvars)
 
         return sfvars, mlvars, fc_sfvars, fc_plvars
 
@@ -593,9 +599,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                              .format(init_model[0], init_model[1], offset))
         # construct resulting filenames
         if model == "era5":
-            nc_file = os.path.join(dirin_base, run_init.strftime("%Y"), run_init.strftime("%Y-%m"),
+            nc_file = os.path.join(dirin_base, run_init.strftime("%Y"), run_init.strftime("%m"),
                                    "fc_{0}".format(run_init.strftime("%H")),
-                                   "{0}_{1:d}00_{2:d}_{3}.grb".format(run_init.strftime("%Y%m%d%H"),
+                                   "{0}_{1:d}00_{2:d}_{3}.grb".format(run_init.strftime("%Y%m%d"),
                                                                       int(run_init.strftime("%H")), fh, prefix))
         elif model == "ifs":
             nc_file = os.path.join(dirin_base, run_init.strftime("%Y"), run_init.strftime("%Y-%m"),
