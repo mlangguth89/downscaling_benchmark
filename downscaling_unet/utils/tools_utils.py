@@ -83,7 +83,10 @@ class RunTool(object):
 
                 val_list = to_list(vals)
                 for val in val_list:
-                    oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
+                    if val:
+                        oper_str += "{0}{1}{2} ".format(oper, self.op_sep, val)
+                    else:
+                        oper_str += "{0} ".format(oper) 
 
         # run command
         cmd = "{0} {1} {2}".format(self.tool, oper_str, " ".join(args))
@@ -154,7 +157,7 @@ class CDO(RunTool):
             output = str(e.output).lstrip("b").strip("'").split("\\n")
 
         known_operators = [oper.partition(" ")[0] for oper in output]
-        known_operators.extend(["-z", "-v", "-V", "-O", "-s"])
+        known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes"])
 
         return known_operators
 
