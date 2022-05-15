@@ -90,9 +90,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         ifs_grid_des = CDOGridDes(self.grid_des_tar)
         coa_gdes_d = ifs_grid_des.create_coarsened_grid_des(self.target_dir, self.downscaling_fac, self.my_rank,
-                                                            name_base="era5_", lextrapolate=False)
+                                                            name_base="era5_", lextrapolate=True)
 
-        gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict, "coa_grid_des": coa_gdes_d}
+        gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict["file"], "coa_grid_des": coa_gdes_d}
         # define arguments and keyword arguments for running PyStager later
         run_dict = {"args": [self.source_dir_in, self.source_dir_out, self.invar_file, self.target_dir, gdes_dict,
                              self.predictors, self.predictands],
@@ -132,6 +132,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.organize_predictors(predictors)
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
+        print(type(grid_des_tar))
+        print(grid_des_tar)
+        print(type(grid_des_coarse))
+        print(grid_des_coarse)
 
         for year_month in year_months:
             assert isinstance(year_month, dt.datetime),\
@@ -200,7 +204,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_sf_file,
                                                                              [fc_file, invar_file, dest_dir, date2op,
                                                                               grid_des_coarse, grid_des_tar, fc_sfvars],
-                                                                             logger, nwarn, max_warn)
+                                                                             {}, logger, nwarn, max_warn)
                     filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
                     if not file2merge: continue                           # skip day if some data is missing
 
@@ -225,12 +229,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 if not file2merge: continue  # skip day if some data is missing
                 # finally all temporary files for each time step
                 logger.info("Merge temporary files to daily netCDF-file '{0}'".format(daily_file))
-                cdo.run([daily_file], OrderedDict([("merge", " ".join(filelist))]))
+                cdo.run(filelist + [daily_file], OrderedDict([("merge", "")]))
 
             # merge all time steps to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
-            cdo.run([final_file], OrderedDict([("mergetime", " ".join(all_daily_files))]))
+            cdo.run(all_daily_files + [final_file], OrderedDict([("mergetime", "")]))
             remove_files(all_daily_files, lbreak=True)
 
     @staticmethod
@@ -322,7 +326,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             filelist.append(file2merge)
         else:
             remove_list = glob.iglob(os.path.join(tmp_dir, search_patt))
-            remove_files(remove_list)
+            remove_files(remove_list, lbreak=True)
         return filelist
 
     @staticmethod
@@ -365,15 +369,15 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             l2t = True
 
         # run remapping
-        cdo.run([sf_file, ftmp_coarse], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
-                                                     ("remapcon", fgdes_coarse), ("-selname", ",".join(sfvars_dyn))]))
+        cdo.run([sf_file, ftmp_coarse], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                     ("-remapcon", fgdes_coarse), ("-selname", ",".join(sfvars_dyn))]))
         if sfvars_stat:
             ftmp_coarse2 = ftmp_coarse.replace("sf", "sf_stat")
             if not os.path.isfile(ftmp_coarse2):   # has only to be done once
-                cdo.run([invar_file, ftmp_coarse2], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
-                                                                 ("remapcon", fgdes_coarse),
+                cdo.run([invar_file, ftmp_coarse2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                                 ("-remapcon", fgdes_coarse),
                                                                  ("-selname", ",".join(sfvars_stat))]))
-            cdo.run([ftmp_coarse], OrderedDict([("merge", ftmp_coarse2)]))
+            cdo.run([ftmp_coarse2, ftmp_coarse, ftmp_coarse], OrderedDict([("-O", ""), ("merge", "")]))
 
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
 
@@ -433,12 +437,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # interpolate variables of interest onto pressure levels
         if interp:
-            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
+            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
                                                         ("-ml2plx,{0}".format(plvl_strs)),
                                                         ("-selname", ",".join(mlvars_list_interp))]))
         else:
-            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f", "nc"), ("copy", ""),
+            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", "nc"), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
                                                         ("-sellevel", ",".join(plvl_strs))]))
 
@@ -452,8 +456,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                              OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
 
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
-        cdo.run([ftmp_plvl2], ("merge", ftmp_plvl1.replace(".nc", "??????.nc")))
-        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("remapcon,{0}".format(fgdes_coarse)),
+        cdo.run([ftmp_plvl1.replace(".nc", "??????.nc"), ftmp_plvl2, ftmp_plvl2], OrderedDict([("-O", ""), ("merge", "")]))
+        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remapcon,{0}".format(fgdes_coarse)),
                                                         ("-selname", ",".join(var_new_req))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
 
@@ -530,16 +534,16 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         ftmp_hres = outfile.replace(".nc", "_2t_tmp.nc")
 
         # run CDO-command chain
-        if not ftmp_invar:   # extract geopotential from invariant datafile
-            cdo.run([invar_file, ftmp_invar], OrderedDict([("-f", "nc"), ("copy", ""), ("-selname", "z")]))
+        if not os.path.isfile(ftmp_invar):   # extract geopotential from invariant datafile
+            cdo.run([invar_file, ftmp_invar], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "z")]))
 
         # extract 2m temperature from datafile of interest, merge with invariant geopotential file and...
-        cdo.run([infile, ftmp_in], OrderedDict([("-f", "nc"), ("copy", ""), ("-selname", "2t")]))
-        cdo.run([ftmp_in], OrderedDict([("merge", " ".join([ftmp_invar, ftmp_in]))]))
+        cdo.run([infile, ftmp_in], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "2t")]))
+        cdo.run([ftmp_invar, ftmp_in, ftmp_in], OrderedDict([("-O", ""), ("merge", "")]))
         # ... finally do the remapping
-        cdo.run([ftmp_coarse, ftmp_in], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
+        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
                                                      ("-expr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", grid_des_tar),
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", grid_des_tar),
                                                         ("-expr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
         cdo.run([ftmp_hres, infile, infile], OrderedDict([("-O", ""), ("merge", "")]))
 
