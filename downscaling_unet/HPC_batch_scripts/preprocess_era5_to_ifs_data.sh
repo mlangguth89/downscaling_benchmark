@@ -40,7 +40,7 @@ predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": ""}, "fc_pl": {"t"
 predictands='{"fc_sf": {"2t": "", "z": ""}}'
 grid_des_tar=../grid_des/ifs_hres_grid_tar
 
-years=( 2016 )
+years=( 2017 )
 months=( 4 5 6 7 8 9 )
 method=ERA5_to_IFS
 
