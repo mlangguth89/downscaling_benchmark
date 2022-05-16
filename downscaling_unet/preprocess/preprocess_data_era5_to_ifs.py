@@ -492,9 +492,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # get slicing coordinates from target grid description file
         gdes_tar = CDOGridDes(fgdes_tar)
+        gdes_dict = gdes_tar.grid_des_dict
 
-        lonlatbox = (*gdes_tar.get_slice_coords(gdes_tar["xfirst"], gdes_tar["xinc"], gdes_tar["xsize"]),
-                     *gdes_tar.get_slice_coords(gdes_tar["yfirst"], gdes_tar["yinc"], gdes_tar["ysize"]))
+        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]),
+                     *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
 
         cdo.run([ifs_file, ftmp_hres],
                 OrderedDict([("-seltimestep", "7/12"), ("-selname", ",".join(ifsvars)),
