@@ -194,7 +194,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                     if not file2merge: continue                           # skip day if some data is missing
                 # process forecasted surface variables of ERA5 (predictors)
                 if fc_sfvars:
-                    fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="sf_fc")
+                    fc_file, _ = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="sf_fc")
                     logger.info("Preprocess predictor from surface forecast file '{0}' of ERA5-dataset"
                                 .format(fc_file))
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_sf_file,
@@ -205,7 +205,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                     if not file2merge: continue                           # skip day if some data is missing
                 # process forecasted multi-level variables of ERA5 (predictors)
                 if fc_mlvars:
-                    fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="ml_fc")
+                    fc_file, _ = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="ml_fc")
                     logger.info("Preprocess predictor from surface forecast file '{0}' of ERA5-dataset"
                                 .format(fc_file))
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_ml_file,
@@ -477,7 +477,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # handle date and create tmp-directory and -files
         date_str = date2op.strftime("%Y%m%d%H")
-        ifs_file = PreprocessERA5toIFS.get_fc_file(dirin_ifs, date2op, model="ifs", suffix="sfc")
+        ifs_file,fh = PreprocessERA5toIFS.get_fc_file(dirin_ifs, date2op, model="ifs", suffix="sfc")
         tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
         os.makedirs(tmp_dir, exist_ok=True)
 
@@ -497,7 +497,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                      *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
 
         cdo.run([ifs_file, ftmp_hres],
-                OrderedDict([("-seltimestep", "7/12"), ("-selname", ",".join(ifsvars)),
+                OrderedDict([("-seltimestep", "{0:d}".format(fh)), ("-selname", ",".join(ifsvars)),
                              ("-sellonlatbox", "{0:.2f},{1:.2f},{2:.2f},{3:.2f}".format(*lonlatbox))]))
 
         # clean-up temporary files and rename variables
@@ -580,7 +580,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         elif model == "ifs":
             init_model = [0, 12]
         else:
-            raise "Model {0} is not supported. Only IFS and ERA5 are valid models.".format(model)
+            raise ValueError("Model {0} is not supported. Only IFS and ERA5 are valid models.".format(model))
         # get daytime hour
         hour = int(date.strftime("%H"))
 
@@ -591,7 +591,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         elif offset + init_model[0] <= hour < offset + init_model[1]:
             fh = hour - init_model[0]
             run_init = date.replace(hour=init_model[0])
-        elif hour > init_model[1] + offset and init_model[1] + offset < 24:
+        elif hour >= init_model[1] + offset and init_model[1] + offset < 24:
             fh = hour - init_model[1]
             run_init = date.replace(hour=init_model[1])
         else:
@@ -611,7 +611,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         if not os.path.isfile(nc_file):
             raise FileNotFoundError("Could not find requested forecast file '{0}'".format(nc_file))
 
-        return nc_file
+        return nc_file, fh
 
     @staticmethod
     def add_varname_suffix(nc_file: str, varnames: List, suffix: str):
