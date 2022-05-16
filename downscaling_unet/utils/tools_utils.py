@@ -157,7 +157,7 @@ class CDO(RunTool):
             output = str(e.output).lstrip("b").strip("'").split("\\n")
 
         known_operators = [oper.partition(" ")[0] for oper in output]
-        known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes"])
+        known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
 
