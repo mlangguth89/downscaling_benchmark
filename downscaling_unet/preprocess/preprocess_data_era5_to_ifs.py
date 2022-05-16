@@ -542,10 +542,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_invar, ftmp_in, ftmp_in], OrderedDict([("-O", ""), ("merge", "")]))
         # ... finally do the remapping
         cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
-                                                     ("-expr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", grid_des_tar),
-                                                        ("-expr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
-        cdo.run([ftmp_hres, infile, infile], OrderedDict([("-O", ""), ("merge", "")]))
+                                                     ("-aexpr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", grid_des_tar), ("-selname", "2t"),
+                                                       ("-aexpr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
+        cdo.run([ftmp_hres, outfile, outfile], OrderedDict([("-O", ""), ("merge", "")]))
 
         # clean-up temporary files
         remove_files([ftmp_in, ftmp_coarse, ftmp_hres], lbreak=False)
