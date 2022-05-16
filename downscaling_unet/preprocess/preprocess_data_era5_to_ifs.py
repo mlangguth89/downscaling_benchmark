@@ -132,10 +132,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.organize_predictors(predictors)
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
-        print(type(grid_des_tar))
-        print(grid_des_tar)
-        print(type(grid_des_coarse))
-        print(grid_des_coarse)
 
         for year_month in year_months:
             assert isinstance(year_month, dt.datetime),\
@@ -150,7 +146,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
             dir_curr_ifs = os.path.join(dirin_ifs, year_str, subdir)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
-            final_file =  os.path.join(dest_dir, "preproc_{0}".format(subdir))
+            final_file = os.path.join(dest_dir, "preproc_{0}".format(subdir))
             os.makedirs(dest_dir, exist_ok=True)
 
             # further sanity checks
@@ -175,7 +171,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 date_str = date2op.strftime("%Y%m%d%H")
                 tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
-                logger.info("Start preprocessing data for {0}".format(date2op.strftime("%Y-%m%-%d %H:00")))
+                logger.info("Start preprocessing data for {0}".format(date2op.strftime("%Y-%m-%d %H:00")))
                 # process surface variables of ERA5 (predictors)
                 if sfvars:
                     sf_file = os.path.join(dir_curr_era5, "{0}_sf.grb".format(date_str))
@@ -198,19 +194,18 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                     if not file2merge: continue                           # skip day if some data is missing
                 # process forecasted surface variables of ERA5 (predictors)
                 if fc_sfvars:
-                    logger.info("Preprocess predictor from surface forecast file '{0}' of ERA5-dataset"
-                                .format(fc_sfvars))
                     fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="sf_fc")
+                    logger.info("Preprocess predictor from surface forecast file '{0}' of ERA5-dataset"
+                                .format(fc_file))
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_sf_file,
                                                                              [fc_file, invar_file, dest_dir, date2op,
                                                                               grid_des_coarse, grid_des_tar, fc_sfvars],
                                                                              {}, logger, nwarn, max_warn)
                     filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
                     if not file2merge: continue                           # skip day if some data is missing
-
-                 # process forecasted multi-level variables of ERA5 (predictors)
+                # process forecasted multi-level variables of ERA5 (predictors)
                 if fc_mlvars:
-                    fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="pl_fc")
+                    fc_file = PreprocessERA5toIFS.get_fc_file(dirin_era5, date2op, model="era5", prefix="ml_fc")
                     logger.info("Preprocess predictor from surface forecast file '{0}' of ERA5-dataset"
                                 .format(fc_file))
                     nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_ml_file,
@@ -222,7 +217,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 # process predictand variables of IFS
                 logger.info("Preprocess predictands from IFS forecast files under '{0}'".format(dir_curr_ifs))
                 nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_ifs_file,
-                                                                         [dir_curr_ifs, dest_dir, date2op,
+                                                                         [dirin_ifs, dest_dir, date2op,
                                                                           grid_des_tar, predictands], {}, logger,
                                                                          nwarn, max_warn)
                 filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
@@ -384,10 +379,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         # special handling of 2m temperature
         if l2t:
             PreprocessERA5toIFS.remap2t_and_cat(sf_file, invar_file, ftmp_hres, fgdes_coarse, fgdes_tar)
-            sfvars.append("2t")
+            sfvars_dyn.append("2t")
 
         # clean-up temporary files and rename variables
         remove_files([ftmp_coarse], lbreak=False)
+        print(sfvars)
         PreprocessERA5toIFS.add_varname_suffix(ftmp_hres, sfvars, "_in")
 
         return ftmp_hres
@@ -414,7 +410,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         ncrename = PreprocessERA5toIFS.ncrename
 
         # handle date and create tmp-directory and -files
-        date_str = date2op.strftime("%Y%M%D%H")
+        date_str = date2op.strftime("%Y%m%d%H")
         tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
         os.makedirs(tmp_dir, exist_ok=True)
 
@@ -423,7 +419,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # construct filenames for all temporary files
         ftmp_plvl1 = os.path.join(tmp_dir, "{0}_plvl.nc".format(date_str))
-        ftmp_plvl2 = ftmp_plvl1.replace("plvl.nc", "plvl_all")
+        ftmp_plvl2 = ftmp_plvl1.replace("plvl.nc", "plvl_all.nc")
         ftmp_coarse = os.path.join(tmp_dir, "{0}_ml_coarse.nc".format(date_str))
         ftmp_hres = ftmp_coarse.replace("ml_coarse", "ml_hres")
 
@@ -442,22 +438,22 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                         ("-ml2plx,{0}".format(plvl_strs)),
                                                         ("-selname", ",".join(mlvars_list_interp))]))
         else:
-            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", "nc"), ("copy", ""),
+            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
-                                                        ("-sellevel", ",".join(plvl_strs))]))
+                                                        ("-sellevel", plvl_strs)]))
 
         # Split pressure-levels into seperate files and ...
         cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
         for plvl in mlvars["plvls"]:
-            for var in mlvars:
+            for var in mlvars_list:
                 var_new = "{0}{1:d}".format(var, int(plvl/100.))
-                ncrename.run([ftmp_plvl1.replace(".nc", "{0:0d}.nc".format(int(plvl)))],
+                ncrename.run([ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))],
                              OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
 
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
-        cdo.run([ftmp_plvl1.replace(".nc", "??????.nc"), ftmp_plvl2, ftmp_plvl2], OrderedDict([("-O", ""), ("merge", "")]))
-        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remapcon,{0}".format(fgdes_coarse)),
+        cdo.run([ftmp_plvl1.replace(".nc", "??????.nc"), ftmp_plvl2], OrderedDict([("-O", ""), ("merge", "")]))
+        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remapcon", fgdes_coarse),
                                                         ("-selname", ",".join(var_new_req))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
 
@@ -491,8 +487,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # get variables to retrieve from predictands-dictionary
         # ! TO-DO: Allow for variables given on pressure levels (in pl-files!) !
-        if any(predictands[vartype] != "sf" for vartype in predictands.keys()):
-            raise ValueError("Only surface variables (i.e. vartype 'sf') are currently supported for IFS data.")
+        if any(vartype != "sf" for vartype in predictands.keys()):
+            raise ValueError("Only surface variables (i.e. vartype 'sf', not '{0}') are currently supported for IFS data."
+                             .format(vartype))
         ifsvars = list(predictands["sf"].keys())
 
         # get slicing coordinates from target grid description file
@@ -535,7 +532,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # run CDO-command chain
         if not os.path.isfile(ftmp_invar):   # extract geopotential from invariant datafile
-            cdo.run([invar_file, ftmp_invar], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "z")]))
+            cdo.run([invar_file, ftmp_invar], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                           ("-selname", "z")]))
 
         # extract 2m temperature from datafile of interest, merge with invariant geopotential file and...
         cdo.run([infile, ftmp_in], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "2t")]))
