@@ -382,7 +382,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # clean-up temporary files and rename variables
         remove_files([ftmp_coarse], lbreak=False)
-        print(sfvars)
         PreprocessERA5toIFS.add_varname_suffix(ftmp_hres, sfvars, "_in")
 
         return ftmp_hres
@@ -477,7 +476,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo = PreprocessERA5toIFS.cdo
 
         # handle date and create tmp-directory and -files
-        date_str = date2op.strftime("%Y%M%D%H")
+        date_str = date2op.strftime("%Y%m%d%H")
         ifs_file = PreprocessERA5toIFS.get_fc_file(dirin_ifs, date2op, model="ifs", suffix="sfc")
         tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
         os.makedirs(tmp_dir, exist_ok=True)
