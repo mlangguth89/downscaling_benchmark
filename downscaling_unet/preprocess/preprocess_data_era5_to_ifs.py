@@ -259,7 +259,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 print("%{0}: Some values of sf-variables are not None, but do not have any effect.".format(method))
             sfvars = list(sfvars)
 
-
         if fc_sfvars:
             if any([i is not None for i in fc_sfvars.values()]):
                 print("%{0}: Some values of fc_sf-variables are not None, but do not have any effect.".format(method))
@@ -308,7 +307,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return nwarns, outfile
 
     @staticmethod
-    def manage_filemerge(filelist:List, file2merge: str, tmp_dir: str, search_patt: str= "*.nc"):
+    def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
         """
         Add file2merge to list of files or clean-up temp-dirctory if file2merge is None
         :param filelist: list of files to be updated
@@ -488,15 +487,14 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         # get variables to retrieve from predictands-dictionary
         # ! TO-DO: Allow for variables given on pressure levels (in pl-files!) !
         if any(vartype != "sf" for vartype in predictands.keys()):
-            raise ValueError("Only surface variables (i.e. vartype 'sf', not '{0}') are currently supported for IFS data."
-                             .format(vartype))
+            raise ValueError("Only surface variables (i.e. vartype 'sf') are currently supported for IFS data.")
         ifsvars = list(predictands["sf"].keys())
 
         # get slicing coordinates from target grid description file
-        gdes_tar_dict = CDO(fgdes_tar)
+        gdes_tar = CDOGridDes(fgdes_tar)
 
-        lonlatbox = (*CDO.get_slice_coords(gdes_tar_dict["xfirst"], gdes_tar_dict["xinc"], gdes_tar_dict["xsize"]),
-                     *CDO.get_slice_coords(gdes_tar_dict["yfirst"], gdes_tar_dict["yinc"], gdes_tar_dict["ysize"]))
+        lonlatbox = (*gdes_tar.get_slice_coords(gdes_tar["xfirst"], gdes_tar["xinc"], gdes_tar["xsize"]),
+                     *gdes_tar.get_slice_coords(gdes_tar["yfirst"], gdes_tar["yinc"], gdes_tar["ysize"]))
 
         cdo.run([ifs_file, ftmp_hres],
                 OrderedDict([("-seltimestep", "7/12"), ("-selname", ",".join(ifsvars)),
@@ -684,4 +682,3 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                              .format(method, ", ".join(known_seasons)))
 
         return months
-
