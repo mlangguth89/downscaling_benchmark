@@ -119,7 +119,6 @@ virt_env*/
 **/results_test_samples
 **/logs
 **/vp
-**/models
 *.h5
 
 # ignore file for diagnosis

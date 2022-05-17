@@ -10,7 +10,7 @@ from tensorflow.keras.models import Model
 # building blocks for Unet
 
 
-def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), padding: str = "same",
+def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), stride= (1,1), padding: str = "same",
                activation: str = "relu", kernel_init: str = "he_normal", l_batch_normalization: bool = True):
     """
     A convolutional layer with optional batch normalization
