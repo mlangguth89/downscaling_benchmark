@@ -21,7 +21,7 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), stride= (1,1), p
     :param activation: activation fuction for neurons (e.g. "relu")
     :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
     """
-    x = Conv2D(num_filters, kernel, padding=padding, kernel_initializer=kernel_init)(inputs)
+    x = Conv2D(num_filters, kernel, stride, padding=padding, kernel_initializer=kernel_init)(inputs)
     if l_batch_normalization:
         x = BatchNormalization()(x)
     x = Activation(activation)(x)
