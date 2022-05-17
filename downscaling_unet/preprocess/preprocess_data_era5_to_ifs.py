@@ -170,10 +170,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 filelist = []
-                date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d- %H:00 UTC")
+                date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                 tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
-                logger.info("Start preprocessing data for {0}".format(date2op.strftime("%Y-%m-%d %H:00")))
+                logger.info("Start preprocessing data for {0}".format(date_pr))
                 # process surface variables of ERA5 (predictors)
                 if sfvars:
                     sf_file = os.path.join(dir_curr_era5, "{0}_sf.grb".format(date_str))
@@ -236,6 +236,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
             cdo.run(all_daily_files + [final_file], OrderedDict([("mergetime", "")]))
             remove_files(all_daily_files, lbreak=True)
+
+        return nwarn
 
     @staticmethod
     def organize_predictors(predictors: dict) -> (List, dict, List):
