@@ -146,7 +146,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
             dir_curr_ifs = os.path.join(dirin_ifs, year_str, subdir)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
-            final_file = os.path.join(dest_dir, "preproc_{0}".format(subdir))
+            final_file = os.path.join(dest_dir, "preproc_{0}.nc".format(subdir))
             os.makedirs(dest_dir, exist_ok=True)
 
             # further sanity checks
