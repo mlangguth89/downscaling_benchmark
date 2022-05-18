@@ -380,12 +380,15 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                      ("-remap", "{0},{1}".format(fgdes_coarse, weights_con)),
                                                      ("-selname", ",".join(sfvars_dyn))]))
         if sfvars_stat:
-            ftmp_coarse2 = ftmp_coarse.replace("sf", "sf_stat")
+            ftmp_coarse2, ftmp_aux = ftmp_coarse.replace("sf", "sf_stat"), ftmp_coarse.replace("sf", "sf_aux")
             if not os.path.isfile(ftmp_coarse2):   # has only to be done once
                 cdo.run([invar_file, ftmp_coarse2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                                  ("-remap", "{0},{1}".format(fgdes_coarse, weights_con)),
                                                                  ("-selname", ",".join(sfvars_stat))]))
-            cdo.run([ftmp_coarse2, ftmp_coarse, ftmp_coarse], OrderedDict([("-O", ""), ("merge", "")]))
+            cdo.run([ftmp_coarse2, ftmp_coarse, ftmp_aux], OrderedDict([("-O", ""), ("merge", "")]))
+            # overwrite unmerged outfile
+            shutil.move(ftmp_aux, ftmp_coarse)
+            os.remove(ftmp_coarse2)
 
         if not os.path.isfile(weights_bil):
             cdo.run([ftmp_coarse, weights_bil], OrderedDict([("-genbil", fgdes_tar)]))
@@ -549,10 +552,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # temporary files (since CDO does not support modifying the input-file in place)
         base_dir = os.path.join(*(os.path.split(os.path.dirname(outfile)))[:-1])
-        ftmp_invar = os.path.join(base_dir, os.path.basename(invar_file))
-        ftmp_in = outfile.replace(".nc", "in.nc")
+        ftmp_invar = os.path.join(base_dir, os.path.basename(invar_file).replace(".grb", ".nc"))
+        ftmp_in1, ftmp_in2 = outfile.replace(".nc", "in_aux.nc"), outfile.replace(".nc", "in.nc")
         ftmp_coarse = outfile.replace(".nc", "_s_coarse.nc")
         ftmp_hres = outfile.replace(".nc", "_2t_tmp.nc")
+        outfile_aux = outfile.replace(".nc", "_aux.nc")
         # auxiliary weight-files for remapping
         weights_con = os.path.join(base_dir, "weights_recon.nc")
         weights_bil = os.path.join(base_dir, "weights_bil.nc")
@@ -563,14 +567,14 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                            ("-selname", "z")]))
 
         # extract 2m temperature from datafile of interest, merge with invariant geopotential file and...
-        cdo.run([infile, ftmp_in], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "2t")]))
-        cdo.run([ftmp_invar, ftmp_in, ftmp_in], OrderedDict([("-O", ""), ("merge", "")]))
+        cdo.run([infile, ftmp_in1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "2t")]))
+        cdo.run([ftmp_invar, ftmp_in1, ftmp_in2], OrderedDict([("-O", ""), ("merge", "")]))
         # ... finally do the remapping (while calculating remapping weights only once)
         if not os.path.isfile(weights_con):
-            cdo.run([ftmp_in, weights_con], OrderedDict([("-gencon", grid_des_coarse)]))
+            cdo.run([ftmp_in2, weights_con], OrderedDict([("-gencon", grid_des_coarse)]))
 
-        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remap", "{0},{1}".format(grid_des_coarse, weights_con)),
-                                                     ("-selname", "s,z"), ("-aexpr", "'s={0}*2t+z+{1}*2'"
+        cdo.run([ftmp_in2, ftmp_coarse], OrderedDict([("-remap", "{0},{1}".format(grid_des_coarse, weights_con)),
+                                                      ("-selname", "s,z"), ("-aexpr", "'s={0}*2t+z+{1}*2'"
                                                                            .format(cpd, g))]))
         if not os.path.isfile(weights_bil):
             cdo.run([ftmp_coarse, weights_bil], OrderedDict([("-genbil", grid_des_tar)]))
@@ -578,10 +582,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remap", "{0},{1}".format(grid_des_tar, weights_bil)),
                                                        ("-selname", "2t"), ("-aexpr", "'2t=(s-z-{0}*2)/{1}'"
                                                                             .format(g, cpd))]))
-        cdo.run([ftmp_hres, outfile, outfile], OrderedDict([("-O", ""), ("merge", "")]))
+        cdo.run([ftmp_hres, outfile, outfile_aux], OrderedDict([("-O", ""), ("merge", "")]))
+        # overwrite unmerged outfile
+        shutil.move(outfile_aux, outfile)
 
         # clean-up temporary files
-        remove_files([ftmp_in, ftmp_coarse, ftmp_hres], lbreak=False)
+        remove_files([ftmp_in1, ftmp_in2, ftmp_coarse, ftmp_hres], lbreak=False)
 
     @staticmethod
     def split_dyn_static(sfvars: List):
