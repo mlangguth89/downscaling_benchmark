@@ -377,19 +377,19 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             cdo.run([sf_file, weights_con], OrderedDict([("-gencon", fgdes_coarse)]))
 
         cdo.run([sf_file, ftmp_coarse], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                     ("-remapcon", "{0},{1}".format(fgdes_coarse, weights_con)),
+                                                     ("-remap", "{0},{1}".format(fgdes_coarse, weights_con)),
                                                      ("-selname", ",".join(sfvars_dyn))]))
         if sfvars_stat:
             ftmp_coarse2 = ftmp_coarse.replace("sf", "sf_stat")
             if not os.path.isfile(ftmp_coarse2):   # has only to be done once
                 cdo.run([invar_file, ftmp_coarse2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                                 ("-remapcon", "{0},{1}".format(fgdes_coarse, weights_con)),
+                                                                 ("-remap", "{0},{1}".format(fgdes_coarse, weights_con)),
                                                                  ("-selname", ",".join(sfvars_stat))]))
             cdo.run([ftmp_coarse2, ftmp_coarse, ftmp_coarse], OrderedDict([("-O", ""), ("merge", "")]))
 
         if not os.path.isfile(weights_bil):
             cdo.run([ftmp_coarse, weights_bil], OrderedDict([("-genbil", fgdes_tar)]))
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", "{0},{1}".format(fgdes_tar, weights_bil))]))
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remap", "{0},{1}".format(fgdes_tar, weights_bil))]))
 
         # special handling of 2m temperature
         if l2t:
@@ -473,11 +473,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         if not os.path.isfile(weights_con):
             cdo.run([ftmp_plvl2, weights_con], OrderedDict([("-gencon", fgdes_coarse)]))
 
-        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remapcon", "{0},{1}".format(fgdes_coarse, weights_con)),
+        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remap", "{0},{1}".format(fgdes_coarse, weights_con)),
                                                         ("-selname", ",".join(var_new_req))]))
         if not os.path.isfile(weights_bil):
             cdo.run([ftmp_plvl2, weights_bil], OrderedDict([("-genbil", fgdes_tar)]))
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", "{0},{1}".format(fgdes_tar, weights_bil))]))
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remap", "{0},{1}".format(fgdes_tar, weights_bil))]))
 
         # clean-up temporary files and rename variables
         plvl_files = list(glob.glob(ftmp_plvl1.replace(".nc", "??????.nc")))
@@ -569,13 +569,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         if not os.path.isfile(weights_con):
             cdo.run([ftmp_in, weights_con], OrderedDict([("-gencon", grid_des_coarse)]))
 
-        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remapcon", "{0},{1}".format(grid_des_coarse, weights_con)),
+        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remap", "{0},{1}".format(grid_des_coarse, weights_con)),
                                                      ("-selname", "s,z"), ("-aexpr", "'s={0}*2t+z+{1}*2'"
                                                                            .format(cpd, g))]))
         if not os.path.isfile(weights_bil):
             cdo.run([ftmp_coarse, weights_bil], OrderedDict([("-genbil", grid_des_tar)]))
 
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", "{0},{1}".format(grid_des_tar, weights_bil)),
+        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remap", "{0},{1}".format(grid_des_tar, weights_bil)),
                                                        ("-selname", "2t"), ("-aexpr", "'2t=(s-z-{0}*2)/{1}'"
                                                                             .format(g, cpd))]))
         cdo.run([ftmp_hres, outfile, outfile], OrderedDict([("-O", ""), ("merge", "")]))
