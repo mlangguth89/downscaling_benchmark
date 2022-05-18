@@ -173,6 +173,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                 tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
+                # skip time step if data already exists
+                if os.path.isfile(daily_file):
+                    logger.info("Preprocessed data already exists for {0}. Proceed with next time step."
+                                .format(date_pr))
+                    continue
+    
                 logger.info("Start preprocessing data for {0}".format(date_pr))
                 # process surface variables of ERA5 (predictors)
                 if sfvars:
