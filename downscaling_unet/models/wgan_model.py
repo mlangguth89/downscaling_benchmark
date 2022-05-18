@@ -78,10 +78,16 @@ class WGAN(keras.Model):
         if self.hparams["l_embed"] and not embedding:
             raise ValueError("Embedding must be parsed if hyperparameter l_embed is set to True.")
         # set in compile-method
+        self.train_iter, self.val_iter = None
         self.d_optimizer = None
         self.g_optimizer = None
 
-    def compile(self):
+    def compile(self, ds_train, ds_val):
+
+        in_shape, tar_shape =
+        train_iter, val_iter = self.make_data_generator(ds_train, ds_val=ds_val)
+
+
         super(WGAN, self).compile()
 
         self.d_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
@@ -210,6 +216,7 @@ class WGAN(keras.Model):
             "batch_size": 4,
             "lr": 1.e-03,
             "train_epochs": 10,
+            "z_branch": False,
             "lr_decay": False,
             "decay_start": 5,
             "lr_end": 1.e-04,
@@ -217,7 +224,7 @@ class WGAN(keras.Model):
             "ngf": 56,
             "d_steps": 5,
             "recon_weight": 20.,
-            "gp_weight": 10.,
+            "gp_weight": 10.
         }
 
         return hparams_dict
