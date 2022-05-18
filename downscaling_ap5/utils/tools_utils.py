@@ -152,11 +152,13 @@ class CDO(RunTool):
         Retrieves all known CDO operators.
         """
         try:
-            output = sp.check_output("cdo --operators 2>&1", shell=True, stderr=sp.STDOUT)
+            # output = sp.check_output("cdo --operators 2>&1", shell=True, stderr=sp.STDOUT)
+            output = sp.check_output("cdo --operators 2>&1", shell=True)
+            output = str(output).split("\\n")
         except Exception as e:
             output = str(e.output).lstrip("b").strip("'").split("\\n")
 
-        known_operators = [oper.partition(" ")[0] for oper in output]
+        known_operators = [str(oper.partition(" ")[0]).lstrip("b'") for oper in output]
         known_operators.extend(["-f", "-L", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
