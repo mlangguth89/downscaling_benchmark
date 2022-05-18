@@ -10,13 +10,14 @@ from tensorflow.keras.models import Model
 # building blocks for Unet
 
 
-def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), stride= (1,1), padding: str = "same",
+def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), stride: tuple = (1, 1), padding: str = "same",
                activation: str = "relu", kernel_init: str = "he_normal", l_batch_normalization: bool = True):
     """
     A convolutional layer with optional batch normalization
     :param inputs: the input data with dimensions nx, ny and nc
     :param num_filters: number of filters (output channel dimension)
-    :param kernel: tuple indictating kernel size
+    :param kernel: tuple for convolution kernel size
+    :param stride: tuple for stride of convolution
     :param padding: technique for padding (e.g. "same" or "valid")
     :param activation: activation fuction for neurons (e.g. "relu")
     :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
