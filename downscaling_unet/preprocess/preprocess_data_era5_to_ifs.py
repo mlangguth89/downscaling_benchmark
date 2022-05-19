@@ -161,7 +161,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 raise NotADirectoryError(err_mess)
 
             dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
-                                     last_day, freq="H")
+                                     last_day.replace(hour=23), freq="H")
 
             # Perform logging, reset warning counter and loop over dates...
             logger.info("Start preprocessing data for month {0}...".format(subdir))
@@ -240,8 +240,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             # merge all time steps to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
-            cdo.run(all_daily_files + [final_file], OrderedDict([("mergetime", "")]))
-            remove_files(all_daily_files, lbreak=True)
+            if not os.path.isfile(final_file):
+                cdo.run([os.path.join(dest_dir, "*preproc.nc"), final_file], OrderedDict([("-b F64", ""), ("mergetime", "")]))
+                #remove_files(all_daily_files, lbreak=True)
 
         return nwarn
 
