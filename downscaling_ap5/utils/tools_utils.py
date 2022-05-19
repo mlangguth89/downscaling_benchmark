@@ -159,7 +159,7 @@ class CDO(RunTool):
             output = str(e.output).lstrip("b").strip("'").split("\\n")
 
         known_operators = [str(oper.partition(" ")[0]).lstrip("b'") for oper in output]
-        known_operators.extend(["-f", "-L", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
+        known_operators.extend(["-b", "-f", "-L", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
 

@@ -103,12 +103,12 @@ for yr in years:
         pl_file = sf_file.replace("sfc_", "pl_")
 
         if not os.path.isfile(sf_file):
-            cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
+            cdo.run(all_sf_files + [sf_file], OrderedDict([("-b", "F64"), ("mergetime", "")]))
             add_varname_suffix(sf_file, sf_vars, "_in")
             ncrename.run([sf_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
                                                  ("-v", ["latitude,lat", "longitude,lon"])]))
         if not os.path.isfile(pl_file):
-            cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
+            cdo.run(all_pl_files + [pl_file], OrderedDict([("-b", "F64"), ("mergetime", "")]))
             add_varname_suffix(pl_file, pl_vars, "_in")
             ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
             ncrename.run([pl_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
@@ -131,7 +131,8 @@ for yr in years:
             curr_file_hres = curr_file_lres.replace("radklim_reg_lres", "radklim_reg_hres")
             file_hres_out = file_lres_out.replace("_lres_", "_hres_")
             
-            rd_dict_cdo = OrderedDict([("-L", ""), ("-seldate", rd.strftime("%Y-%m-%dT%H:00:00")),
+            rd_dict_cdo = OrderedDict([("-L", ""), ("-f nc2", ""), ("copy", ""),
+                                       ("-seldate", rd.strftime("%Y-%m-%dT%H:00:00")),
                                        ("-selname", rd_var_lower), ("-sellonlatbox", ll_box_str)])
             if not os.path.isfile(file_lres_out):
                 cdo.run([curr_file_lres, file_lres_out], rd_dict_cdo)
