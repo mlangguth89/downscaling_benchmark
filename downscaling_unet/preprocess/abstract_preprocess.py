@@ -85,7 +85,7 @@ class AbstractPreprocessing(ABC):
         if not os.path.isdir(target_dir):
             try:
                 print("%{0}: Create target directory '{1}'.".format(method, target_dir))
-                os.makedirs(target_dir)
+                os.makedirs(target_dir, exist_ok=True)
             except Exception as err:
                 print("%{0}: Problem creating target directory '{1}'. Inspect raised error.".format(method, target_dir))
                 raise err
