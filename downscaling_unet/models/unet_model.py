@@ -10,19 +10,18 @@ from tensorflow.keras.models import Model
 # building blocks for Unet
 
 
-def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), stride: tuple = (1, 1), padding: str = "same",
+def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1,1), padding: str = "same",
                activation: str = "relu", kernel_init: str = "he_normal", l_batch_normalization: bool = True):
     """
     A convolutional layer with optional batch normalization
     :param inputs: the input data with dimensions nx, ny and nc
     :param num_filters: number of filters (output channel dimension)
-    :param kernel: tuple for convolution kernel size
-    :param stride: tuple for stride of convolution
+    :param kernel: tuple indictating kernel size
     :param padding: technique for padding (e.g. "same" or "valid")
     :param activation: activation fuction for neurons (e.g. "relu")
     :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
     """
-    x = Conv2D(num_filters, kernel, stride, padding=padding, kernel_initializer=kernel_init)(inputs)
+    x = Conv2D(num_filters, kernel, strides=strides, padding=padding, kernel_initializer=kernel_init)(inputs)
     if l_batch_normalization:
         x = BatchNormalization()(x)
     x = Activation(activation)(x)
@@ -30,16 +29,16 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), stride: tuple =
     return x
 
 
-def conv_block_n(inputs, num_filters, n=2, kernel=(3, 3), padding="same", activation="relu",
+def conv_block_n(inputs, num_filters, n=2, kernel=(3, 3), strides=(1, 1), padding="same", activation="relu",
                  kernel_init="he_normal", l_batch_normalization=True):
     """
     Sequential application of two convolutional layers (using conv_block).
     """
 
-    x = conv_block(inputs, num_filters, kernel, padding, activation,
+    x = conv_block(inputs, num_filters, kernel, strides, padding, activation,
                    kernel_init, l_batch_normalization)
     for i in np.arange(n - 1):
-        x = conv_block(x, num_filters, kernel, padding, activation,
+        x = conv_block(x, num_filters, kernel, strides, padding, activation,
                        kernel_init, l_batch_normalization)
 
     return x
@@ -58,14 +57,15 @@ def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: 
 
     return x, p
 
-def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strides_up: int=2, padding: str= "same",
+
+def decoder_block(inputs, skip_features, num_filters, kernel: tuple= (3,3), strides_up: int=2, padding: str= "same",
                   activation="relu", kernel_init="he_normal", l_batch_normalization: bool=True):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
     x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
     x = Concatenate()([x, skip_features])
-    x = conv_block_n(x, num_filters, 2, kernel, padding, activation, kernel_init, l_batch_normalization)
+    x = conv_block_n(x, num_filters, 2, kernel, (1,1), padding, activation, kernel_init, l_batch_normalization)
 
     return x
 
