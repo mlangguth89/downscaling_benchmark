@@ -241,7 +241,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
             if not os.path.isfile(final_file):
-                cdo.run([os.path.join(dest_dir, "*preproc.nc"), final_file], OrderedDict([("-b F64", ""), ("mergetime", "")]))
+                cdo.run([os.path.join(dest_dir, "*preproc.nc"), final_file],
+                        OrderedDict([("--reduce_dim", ""), ("-b F64", ""), ("mergetime", "") ]))
                 #remove_files(all_daily_files, lbreak=True)
 
         return nwarn
@@ -469,7 +470,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                         ("-sellevel", plvl_strs)]))
 
         # Split pressure-levels into seperate files and ...
-        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
+        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
         for plvl in mlvars["plvls"]:
             for var in mlvars_list:
