@@ -1,4 +1,4 @@
-import numpy as np
+from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 
@@ -14,8 +14,8 @@ from typing import List, Tuple, Union
 list_or_tuple = Union[List, Tuple]
 
 
-def critic(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3,3),
-           stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
+def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3,3),
+                 stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
     """
     Set-up convolutional discriminator model that is followed by two dense-layers
     :param shape: input shape of data (either real or generated data)
@@ -41,25 +41,26 @@ def critic(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (
 
     # finally flatten encoded data, add two fully-connected layers...
     x = Flatten()(x)
-    x = Dense(channels/2, activation=activation)(x)
-    x = Dense(channels/4, activation=activation)(x)
+    #x = Dense(channels/2, activation=activation)(x)
+    #x = Dense(channels/4, activation=activation)(x)
     # ... and end with linear output layer
     out = Dense(1, activation="linear")(x)
 
-    critic_model = Model(input=critic_in, outputs=out)
+    critic = Model(inputs=critic_in, outputs=out)
 
-    return critic_model, out
+    return critic#, out
 
 
-class WGAN(object):
+class WGAN(keras.Model):
     """
     Class for Wassterstein GAN models
     """
     known_modes = ["train", "predict"]
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, input_shape: list_or_tuple,
-                 target_shape: list_or_tuple, mode: str = "train", embedding: List = None):
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict,
+                 mode: str = "train"):
 
+        super(WGAN, self).__init__()
         # sanity checks on parsed models
         if not isinstance(generator, keras.Model):
             raise ValueError("Generator must be a Keras model instance, but is of type '{0}'".format(type(generator)))
@@ -75,24 +76,155 @@ class WGAN(object):
         self.mode = mode
         self.hparams = WGAN.get_hparams_dict(hparams)
 
+        # attributes will be set in compile-method
+        self.train_iter, self.val_iter = None, None
+        self.c_optimizer, self.g_optimizer = None, None
+
+    def compile(self, ds_train, ds_val):
+
+        invars = [var for var in ds_train["variables"].values if var.endswith("_in")]
+
+        # determine shape-dimensions from data
+        in_shape = ds_train.sel(variables=slice(*invars)).shape[1:]
+
+        n = 1
+        if self.hparams["z_branch"]:
+            n = 2
+        tar_shape = (*in_shape[:-1], n)
+
+        # instantiate models
+        self.generator = self.generator(in_shape, channels_start=self.hparams["ngf"], z_branch=self.hparams["z_branch"])
+        self.critic = self.critic(tar_shape)
+
+        train_iter, val_iter = self.make_data_generator(ds_train, ds_val=ds_val)
+
+        super(WGAN, self).compile()
+
+        self.c_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
+
+        return train_iter, val_iter
+
+    def gradient_penalty(self, real_data, gen_data):
+        """
+        Calculates gradient penalty based on 'mixture' of generated and ground truth data
+        :param real_data: the ground truth data
+        :param gen_data: the generated/predicted data
+        :return: gradient penalty
+        """
+        # get mixture of generated and ground truth data
+        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        mix_data = real_data + alpha*(gen_data - real_data)
+
+        with tf.GradientTape() as gp_tape:
+            gp_tape.watch(mix_data)
+            critic_mix = self.critic(mix_data, training=True)
+
+        # calculate the gradient on the mixture data...
+        grads_mix = gp_tape.gradient(critic_mix, [mix_data])[0]
+        # ... and norm it
+        norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
+        gp = tf.reduce_mean(tf.square(norm - 1.))
+
+        return gp
+
+    def make_data_generator(self, da, da_val=None, embed=None, embed_val=None, var2drop = "z_tar"):
+        """
+        Convert data-array with variables as dimension to TensorFlow Dataset (consumed during training)
+        :param da: the
+        :param da_val:
+        :param embed:
+        :param embed_val:
+        :param var2drop:
+        :return:
+        """
+        if not self.hparams["z_branch"]:
+            da = da.drop(var2drop, dim="variables")
+
+        da_in, da_tar = WGAN.split_in_tar(da)
+
+        if self.hparams["l_embed"]:
+            if not embed:
+                raise ValueError("Embedding is enabled, but no embedding data was parsed.")
+            data_iter = tf.data.Dataset.from_tensor_slices((da_in, da_tar, embed))
+        else:
+            data_iter = tf.data.Dataset.from_tensor_slices((da_in, da_tar))
+
+        data_iter = data_iter.shuffle(10000).repeat().batch(self.hparams["batch_size"])
+        data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
+
+        if da_val is not None:
+            da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
+
+            if self.hparams["l_embed"]:
+                if not embed_val:
+                    raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
+                val_iter = tf.data.Dataset.from_tensor_slices((da_val_in, da_val_tar, embed_val))
+            else:
+                val_iter = tf.data.Dataset.from_tensor_slices((da_val_in, da_val_tar))
+
+            val_iter.repeat().batch(self.hparams["batch_size"])
+
+            return data_iter, val_iter
+        else:
+            return data_iter
+
+    def train_step(self, data_iter: tf.data.Dataset, embed = None):
+
+        predictors, predictands = data_iter
+
+        # train the critic d_steps-times
+        for substep in range(self.hparams["d_steps"]):
+            with tf.GradientTape() as tape_critic:
+                # generate (downscaled) data
+                gen_data = self.generator(predictors, training=True)
+                # calculate critics for both, the real and the generated data
+                critic_gen = self.critic(gen_data, training=True)
+                critic_gt = self.critic(predictands, training=True)
+                # calculate the loss (incl. gradient penalty)
+                c_loss = WGAN.critic_loss(critic_gt, critic_gen)
+                gp = self.gradient_penalty(predictands, gen_data)
+                d_loss = c_loss + self.hparams["gp_weight"]*gp
+
+            # calculate gradients and update discrimintor
+            d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
+            self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
+
+        # train generator
+        with tf.GradientTape() as tape_generator:
+            # generate (downscaled) data
+            gen_data = self.generator(predictors, training=True)
+            # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
+            critic_gen = self.critic(gen_data, training=True)
+            cg_loss = WGAN.critic_gen_loss(critic_gen)
+            recon_loss = WGAN.recon_loss(predictands, gen_data)
+
+            g_loss = cg_loss + self.hparams["recon_weight"]*recon_loss
+
+        g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
+        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+
+        return OrderedDict([("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"]*gp), ("d_loss", d_loss),
+                            ("cg_loss", cg_loss), ("recon_loss", recon_loss*self.hparams["recon_weight"]),
+                            ("g_loss", g_loss)])
 
     @staticmethod
-    def get_hparams_default():
-        hparams_dict = {
-            "batch_size": 4,
-            "lr": 1.e-03,
-            "train_epochs": 10,
-            "lr_decay": False,
-            "decay_start": 5,
-            "lr_end": 1.e-04,
-            "ngf": 56,
-            "d_steps": 5,
-            "recon_weight": 20.,
-            "gp_weight": 10.,
-            "optimizer": keras.optimizers.Adam(learning_rate = 1.e-03, beta_1 = 0.5, beta_2 = 0.9)
-        }
+    def split_in_tar(da):
 
-        return hparams_dict
+        invars = [var for var in da["variables"].values if var.endswith("_in")]
+        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
+
+        # ensure that da_tar has a channel coordinate even in case of single target variable
+        if len(tarvars) == 1:
+            sl_tarvars = tarvars
+            roll = False
+        else:
+            sl_tarvars = slice(*tarvars)
+            roll = True
+
+        da_in, da_tar = da.sel(variables=slice(*invars)), da.sel(variables=sl_tarvars)
+        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
+
+        return da_in, da_tar
 
     @staticmethod
     def get_hparams_dict(hparams_user):
@@ -115,7 +247,49 @@ class WGAN(object):
                 raise TypeError("Parsed hyperparameter '{0}' must be of type '{1}', but is '{2}'"
                                 .format(key, type(hparams_default[key]), type(hparams_merged[key])))
 
+        adam = keras.optimizers.Adam
+        hparams_dict["d_optimizer"] = adam(learning_rate = hparams_dict["lr"], beta_1 = 0.5, beta_2 = 0.9)
+        hparams_dict["g_optimizer"] = adam(learning_rate = hparams_dict["lr"], beta_1 = 0.5, beta_2 = 0.9)
+
         return hparams_dict
+
+    @staticmethod
+    def get_hparams_default():
+        hparams_dict = {
+            "batch_size": 32,
+            "lr": 1.e-05,
+            "train_epochs": 50,
+            "z_branch": False,
+            "lr_decay": False,
+            "decay_start": 5,
+            "lr_end": 1.e-04,
+            "l_embed": False,
+            "ngf": 56,
+            "d_steps": 5,
+            "recon_weight": 1000.,
+            "gp_weight": 10.
+        }
+
+        return hparams_dict
+
+    @staticmethod
+    def critic_loss(critic_real, critic_gen):
+        c_loss = tf.reduce_mean(critic_gen - critic_real)
+
+        return c_loss
+
+    @staticmethod
+    def critic_gen_loss(critic_gen):
+        cg_loss = -tf.reduce_mean(critic_gen)
+
+        return cg_loss
+
+    @staticmethod
+    def recon_loss(real_data, gen_data):
+        recon_loss = tf.reduce_mean(tf.abs(gen_data - real_data))
+
+        return recon_loss
+
 
 
 
