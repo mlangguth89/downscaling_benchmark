@@ -412,7 +412,8 @@ class PyStager(Distributor):
         method = PyStager.set_and_check_logdir.__name__
 
         if logdir is None:
-            logdir = os.path.join(os.getcwd(), "pystager_log_{0}".format(distributor_name))
+            date_now = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+            logdir = os.path.join(os.getcwd(), "pystager_log_{0}_{1}".format(distributor_name, date_now))
             os.makedirs(logdir, exist_ok=True)
             print("%{0}: Default log directory '{1}' is used.".format(method, logdir))
         else:
