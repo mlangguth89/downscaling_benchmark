@@ -517,7 +517,7 @@ def main(parser_args):
                                 xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_val_aug.nc")), \
                                 xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_test_aug.nc"))
 
-    print("Datasets for trining, validation and testing loaded."
+    print("Datasets for trining, validation and testing loaded.")
 
     wgan_model = WGAN(build_unet, critic_model,
                       {"lr_decay": parser_args.lr_decay, "lr": parser_args.lr,
@@ -539,7 +539,7 @@ def main(parser_args):
     print("Start training of WGAN...")
     history = wgan_model.fit(train_iter, val_iter)
 
-    print("WGAN training finished. Save model to '{0}' and start creating example plot.".format(os.path.join(outdir, parser_args.model_name))
+    print("WGAN training finished. Save model to '{0}' and start creating example plot.".format(os.path.join(outdir, parser_args.model_name)))
     # save trained model
     wgan_model.save_weights(os.path.join(outdir, parser_args.model_name))
 
