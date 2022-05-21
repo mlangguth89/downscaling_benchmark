@@ -5,6 +5,8 @@ __update__ = "2022-02-01"
 
 import os, sys
 import argparse
+from datetime import datetime as dt
+print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 from timeit import default_timer as timer
 import json as js
 import numpy as np
@@ -37,6 +39,7 @@ def main(parser_args):
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
     # read and normalize data for training
+    print("Start reading data from disk...")
     data_obj = HandleUnetData(datadir, "training", purpose="train_aug")
     data_obj.append_data("validation", purpose="val_aug")
 
@@ -137,7 +140,13 @@ def main(parser_args):
             js.dump(stat_info, jsf)
 
 
+    print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
+
+
 if __name__ == "__main__":
+    # date format for logging
+    fmt_t = "%Y-%m-%d %H:%:%S"
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", "-in", dest="input_dir", type=str, required=True,
                         help="Directory where input netCDF-files are stored.")
@@ -155,6 +164,8 @@ if __name__ == "__main__":
                              "(see Sha et al., 2020)")
 
     args = parser.parse_args()
+    print("Start running main-task at {0}".format(dt.strftime(dt.now(), fmt_t)))
     main(args)
+    print("Ended running main-task at {0}".format(dt.strftime(dt.now(), fmt_t)))
 
 
