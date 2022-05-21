@@ -509,7 +509,7 @@ def create_plots(data1, data2, plt_name, opt_plot={}):
 def main(parser_args):
 
     outdir="../trained_models/"
-    z_branch = not parser_args["no_z_branch"]
+    z_branch = not parser_args.no_z_branch
 
     base_dir = "/p/project/deepacf/maelstrom/data/downscaling_unet/"
 
@@ -517,11 +517,13 @@ def main(parser_args):
                                 xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_val_aug.nc")), \
                                 xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_test_aug.nc"))
 
+    print("Datasets for trining, validation and testing loaded."
+
     wgan_model = WGAN(build_unet, critic_model,
-                      {"lr_decay": parser_args["lr_decay"], "lr": parser_args["lr"],
-                       "train_epochs": parser_args["nepochs"], "recon_weight": parser_args["recon_wgt"],
-                       "d_steps": parser_args["d_steps"],
-                       "optimizer": parser_args["optimizer"], "z_branch": z_branch})
+                      {"lr_decay": parser_args.lr_decay, "lr": parser_args.lr,
+                       "train_epochs": parser_args.nepochs, "recon_weight": parser_args.recon_wgt,
+                       "d_steps": parser_args.d_steps,
+                       "optimizer": parser_args.optimizer, "z_branch": z_branch})
 
     # prepare data
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
@@ -530,13 +532,16 @@ def main(parser_args):
     da_train, mu_train, std_train = z_norm_data(da_train, dims=norm_dims, return_stat=True)
     da_val = z_norm_data(da_val, mu=mu_train, std=std_train)
 
+    print("Start compiling WGAN-model.")
     train_iter, val_iter = wgan_model.compile(da_train.astype(np.float32), da_val.astype(np.float32))
 
     # train model
+    print("Start training of WGAN...")
     history = wgan_model.fit(train_iter, val_iter)
 
+    print("WGAN training finished. Save model to '{0}' and start creating example plot.".format(os.path.join(outdir, parser_args.model_name))
     # save trained model
-    wgan_model.save_weights(os.path.join(trained_models, parser_args["model_name"]))
+    wgan_model.save_weights(os.path.join(outdir, parser_args.model_name))
 
     # do predictions
     da_test = reshape_ds(ds_train)
