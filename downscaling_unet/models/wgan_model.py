@@ -329,7 +329,7 @@ class WGAN(keras.Model):
 
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr"], beta_1=0.0,
+            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr"]/10., beta_1=0.0,
                                                beta_2=0.9)  # increase beta-values ?
             hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr"], beta_1=0.0, beta_2=0.9)
         elif hparams_dict["optimizer"].lower() == "rmsprop":
@@ -541,7 +541,9 @@ def main(parser_args):
 
     print("WGAN training finished. Save model to '{0}' and start creating example plot.".format(os.path.join(outdir, parser_args.model_name)))
     # save trained model
-    wgan_model.save_weights(os.path.join(outdir, parser_args.model_name))
+    model_savedir = os.path.join(outdir, parser_args.model_name)
+    os.makedirs(model_savedir, exist_ok=True)
+    wgan_model.save_weights(os.path.join(model_savedir, parser_args.model_name))
 
     # do predictions
     da_test = reshape_ds(ds_train)
@@ -551,7 +553,7 @@ def main(parser_args):
     test_iter = tf.data.Dataset.from_tensor_slices((da_test_in, da_test_tar))
     test_iter = test_iter.batch(wgan_model.hparams["batch_size"])
 
-    y_pred = wgan_model.predict(test_iter, verbose=1)
+    y_pred = wgan_model.predict(test_iter, batch_size=wgan_model.hparams["batch_size"],verbose=1)
 
     # denorm data from predictions and convert to xarray
     coords = da_test_tar.isel(variables=0).squeeze().coords
@@ -565,8 +567,8 @@ def main(parser_args):
 
     # create plot
     tind = 0
-    create_plots(y_pred_trans.isel(time=tind), ds_train["t2m_tar"].isel(time=tind),
-                 "plot_tind_{0:d}_{1}.pdf".format(tind, os.path.join(outdir, parser_args["model_name"])))
+    plt_name = os.path.join(model_savedir, "plot_tind_{0:d}_{1}.pdf".format(tind, os.path.join(outdir, parser_args["model_name"])))
+    create_plots(y_pred_trans.isel(time=tind), ds_train["t2m_tar"].isel(time=tind), plt_fname)
 
 
 if __name__ == "__main__":
