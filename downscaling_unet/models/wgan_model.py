@@ -27,7 +27,7 @@ list_or_tuple = Union[List, Tuple]
 
 
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
-                 stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
+                 stride: tuple = (1, 1), activation: str = "relu", lbatch_norm: bool = True):
     """
     Set-up convolutional discriminator model that is followed by two dense-layers
     :param shape: input shape of data (either real or generated data)
@@ -138,7 +138,7 @@ class WGAN(keras.Model):
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3)
+                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3, verbose=2)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
@@ -502,12 +502,13 @@ def create_plots(data1, data2, plt_name, opt_plot={}):
     cbar = fig.colorbar(temp2, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=12)
 
-    fig.savefig(plt_name)
+    fig.savefig(plt_name+".png")
     plt.close(fig)
 
 
 def main(parser_args):
 
+    outdir="../trained_models/"
     z_branch = not parser_args["no_z_branch"]
 
     base_dir = "/p/project/deepacf/maelstrom/data/downscaling_unet/"
@@ -535,7 +536,7 @@ def main(parser_args):
     history = wgan_model.fit(train_iter, val_iter)
 
     # save trained model
-    wgan_model.save_weights(parser_args["model_name"])
+    wgan_model.save_weights(os.path.join(trained_models, parser_args["model_name"]))
 
     # do predictions
     da_test = reshape_ds(ds_train)
@@ -560,7 +561,7 @@ def main(parser_args):
     # create plot
     tind = 0
     create_plots(y_pred_trans.isel(time=tind), ds_train["t2m_tar"].isel(time=tind),
-                 "plot_tind_{0:d}_{1}.pdf".format(tind, parser_args["model_name"]))
+                 "plot_tind_{0:d}_{1}.pdf".format(tind, os.path.join(outdir, parser_args["model_name"])))
 
 
 if __name__ == "__main__":
