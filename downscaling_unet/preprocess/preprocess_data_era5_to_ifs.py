@@ -241,8 +241,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
             if not os.path.isfile(final_file):
-                cdo.run([os.path.join(dest_dir, "*preproc.nc"), final_file],
-                        OrderedDict([("--reduce_dim", ""), ("-b F64", ""), ("mergetime", "") ]))
+                cdo.run([os.path.join(dest_dir, "*preproc.nc"), final_file.replace(".nc", "_tmp.nc")],
+                        OrderedDict([("-b F64", ""), ("mergetime", "")]))
+                cdo.run([final_file.replace(".nc", "_tmp.nc"), final_file], OrderedDict([("--reduce_dim", ""), ("copy", "")]))
+                remove_files([final_file.replace(".nc", "_tmp.nc")], lbreak=False)
                 #remove_files(all_daily_files, lbreak=True)
 
         return nwarn

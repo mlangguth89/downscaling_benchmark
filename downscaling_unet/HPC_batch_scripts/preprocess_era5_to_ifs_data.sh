@@ -1,7 +1,7 @@
 #!/bin/bash -x
 #SBATCH --account=deepacf
 #SBATCH --nodes=1
-#SBATCH --ntasks=7
+#SBATCH --ntasks=61
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --output=preprocess_era5_to_ifs_data-out.%j
@@ -36,11 +36,11 @@ src_dir_ifs=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/orig/
 out_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/
 invar_file=/p/fastdata/slmet/slmet111/met_data/ecmwf/era5/grib/invariants/2020010100_invariants.grb
 # predictors, predictands and grid description file for target domain
-predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
+predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": "", "z": "", "sshf": "", "slhf": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
 predictands='{"sf": {"t2m": "", "z": ""}}'
 grid_des_tar=../grid_des/ifs_hres_grid_tar
 
-years=( 2017 )
+years=( 2016 2017 2018 2019 2020 )
 months=( 4 5 6 7 8 9 )
 method=ERA5_to_IFS
 
