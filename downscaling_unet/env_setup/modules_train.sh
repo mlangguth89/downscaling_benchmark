@@ -5,7 +5,7 @@ ML_SCR=modules_train.sh
 ML_COLL=downscaling_unet_v1_0
 
 # check if module collection has been set-up once
-RES=$( { ml restore ${ML_COLL}; } 2<&1 )
+#RES=$( { ml restore ${ML_COLL}; } 2<&1 )
 
 #if [[ "${RES}" == *"error"* ]]; then
 if [[ 0 == 0 ]]; then  # Restoring from model collection currently throws MPI-setting errors. Thus, this approach is disabled for now.
