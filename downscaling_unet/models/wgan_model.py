@@ -5,7 +5,7 @@ import tensorflow.keras as keras
 
 # all the layers used for U-net
 from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
-                                     Conv2DTranspose, Input, MaxPool2D, Dense, Flatten, AvgPool2D
+                                     Conv2DTranspose, Input, MaxPool2D, Dense, Flatten, GlobalAveragePooling2D
 )
 from tensorflow.keras.models import Model
 # other modules
@@ -27,7 +27,7 @@ list_or_tuple = Union[List, Tuple]
 
 
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
-                 stride: tuple = (1, 1), activation: str = "relu", lbatch_norm: bool = True):
+                 stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
     """
     Set-up convolutional discriminator model that is followed by two dense-layers
     :param shape: input shape of data (either real or generated data)
@@ -48,12 +48,12 @@ def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tup
         raise ValueError("Number of convolutional layers num_conv must be 2 at minimum.")
 
     for _ in range(num_conv):
-        x = conv_block(x, channels_start, kernel, stride, activation=activation, l_batch_normalization=lbatch_norm)
+        x = conv_block(x, channels, kernel, stride, activation=activation, l_batch_normalization=lbatch_norm)
         channels *= 2
-        x = AvgPool2D((2, 2))(x)
 
-    # finally flatten encoded data, add two fully-connected layers...
-    x = Flatten()(x)
+    # finally perform global average pooling and finalize by fully connected layers
+    x = GlobalAveragePooling2D()(x)
+    x = Dense(channels_start)(x)
     # x = Dense(channels/2, activation=activation)(x)
     # x = Dense(channels/4, activation=activation)(x)
     # ... and end with linear output layer
