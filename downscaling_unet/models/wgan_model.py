@@ -101,7 +101,7 @@ class WGAN(keras.Model):
         invars = [var for var in ds_train["variables"].values if var.endswith("_in")]
 
         # determine shape-dimensions from data
-        shape_all = ds_train.sel(variables=slice(*invars)).shape
+        shape_all = ds_train.sel({"variables": invars}).shape
         self.nsamples, in_shape = shape_all[0], shape_all[1:]
 
         n = 1
@@ -296,8 +296,8 @@ class WGAN(keras.Model):
             sl_tarvars = slice(*tarvars)
             roll = True
 
-        ds_in, ds_tar = ds.sel(variables=slice(*invars)), ds.sel(variables=sl_tarvars)
-        if roll: ds_tar = ds_tar.roll(variables=1, roll_coords=True)
+        ds_in, ds_tar = ds.sel({"variables": invars}), ds.sel(variables=sl_tarvars)
+        # if roll: ds_tar = ds_tar.roll(variables=1, roll_coords=True)
 
         return ds_in, ds_tar
 
