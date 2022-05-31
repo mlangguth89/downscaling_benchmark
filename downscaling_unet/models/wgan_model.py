@@ -307,11 +307,11 @@ class WGAN(keras.Model):
         return cls(**config)
 
     @staticmethod
-    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> xr.DataArray:
+    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
         """
         Split data array with variables-dimension into input and target data for downscaling.
         :param da: The unsplitted data array.
-
+        :param target_var: Name of target variable which should consttute the first channel
         :return: The splitted data array.
         """
         invars = [var for var in da["variables"].values if var.endswith("_in")]
