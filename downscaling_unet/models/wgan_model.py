@@ -354,13 +354,12 @@ class WGAN(keras.Model):
 
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr"]/10., beta_1=0.0,
-                                               beta_2=0.9)  # increase beta-values ?
-            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr_critic"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr_gen"], beta_1=0.0, beta_2=0.9)
         elif hparams_dict["optimizer"].lower() == "rmsprop":
             rmsprop = keras.optimizers.RMSprop
-            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["lr"])  # increase beta-values ?
-            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["lr"])
+            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["lr_critic"])  # increase beta-values ?
+            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["lr_gen"])
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
