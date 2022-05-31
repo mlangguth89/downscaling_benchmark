@@ -1,3 +1,8 @@
+__author__ = "Michael Langguth"
+__email__ = "m.langguth@fz-juelich.de"
+__date__ = "2022-05-19"
+__update__ = "2022-05-26"
+
 import os, sys
 from collections import OrderedDict
 import tensorflow as tf
@@ -10,7 +15,6 @@ from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate
 from tensorflow.keras.models import Model
 # other modules
 import argparse
-import datetime as dt
 import xarray as xr
 import pandas as pd
 import numpy as np
@@ -25,18 +29,6 @@ from typing import List, Tuple, Union
 
 list_or_tuple = Union[List, Tuple]
 
-
-#### To-DO list
-#
-# - integrate Leaky-Relu option for conv-blocks (see Jupyter-notebook)
-# - include embedding with keras.to_categorical (bear in mind to ensure correct categories)
-# - include dynamic learning rate decay
-# - check if customized training loop is better than using Kera's fit-method
-# - make reconstruction loss calculation generic (to check later: apply critic also on geopotential)
-# - Reconsider make_data_generator-concept (have a look at AMBS-code)
-# - Allow for saving the model incl. optimizer state to continue training from checkpoint
-# - make rolling flexible in split_in_tar-method
-# - seperate prediction from training!
 
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
                  stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
@@ -203,16 +195,16 @@ class WGAN(keras.Model):
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
             critic_gen = self.critic(gen_data[0], training=True)
             cg_loss = WGAN.critic_gen_loss(critic_gen)
-            recon_loss = WGAN.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
+            rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
 
-            g_loss = cg_loss + self.hparams["recon_weight"] * recon_loss
+            g_loss = cg_loss + self.hparams["recon_weight"] * rloss
 
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
 
         return OrderedDict(
             [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
-             ("recon_loss", recon_loss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
+             ("recon_loss", rloss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
 
     def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
         """
@@ -224,9 +216,9 @@ class WGAN(keras.Model):
 
         gen_data = self.generator(predictors, training=False)
 
-        recon_loss = WGAN.recon_loss(predictands, gen_data)
+        rloss = self.recon_loss(predictands, gen_data)
 
-        return OrderedDict([("recon_loss_val", recon_loss)])
+        return OrderedDict([("recon_loss_val", rloss)])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
 
@@ -293,6 +285,19 @@ class WGAN(keras.Model):
 
         return gp
 
+    def recon_loss(self, real_data, gen_data):
+        # initialize reconstruction loss
+        rloss = 0.
+        # get number of output heads (=2 if z_branch is activated)
+        n = 1
+        if self.hparams["z_branch"]:
+            n = 2
+        # get MAE for all output heads
+        for i in range(n):
+            rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[i]) - real_data[:, :, :, i]))
+
+        return rloss
+
     # required for customized models, see here: https://www.tensorflow.org/guide/keras/save_and_serialize
     def get_config(self):
         return self.hparams
@@ -302,27 +307,29 @@ class WGAN(keras.Model):
         return cls(**config)
 
     @staticmethod
-    def split_in_tar(ds: xr.DataArray) -> xr.DataArray:
+    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> xr.DataArray:
         """
         Split data array with variables-dimension into input and target data for downscaling.
-        :param ds: The unsplitted data array.
+        :param da: The unsplitted data array.
+
         :return: The splitted data array.
         """
-        invars = [var for var in ds["variables"].values if var.endswith("_in")]
-        tarvars = [var for var in ds["variables"].values if var.endswith("_tar")]
+        invars = [var for var in da["variables"].values if var.endswith("_in")]
+        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
 
         # ensure that ds_tar has a channel coordinate even in case of single target variable
+        roll = False
         if len(tarvars) == 1:
             sl_tarvars = tarvars
-            roll = False
         else:
             sl_tarvars = slice(*tarvars)
-            roll = True
+            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
+                roll = True
 
-        ds_in, ds_tar = ds.sel({"variables": invars}), ds.sel(variables=sl_tarvars)
-        # if roll: ds_tar = ds_tar.roll(variables=1, roll_coords=True)
+        da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
+        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
 
-        return ds_in, ds_tar
+        return da_in, da_tar
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
@@ -388,13 +395,6 @@ class WGAN(keras.Model):
 
         return cg_loss
 
-    @staticmethod
-    def recon_loss(real_data, gen_data):
-        recon_loss = 0.
-        for i in range(2):
-            recon_loss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[i]) - real_data[:, :, :, i]))
-
-        return recon_loss
 
 # auxiliary functions
 
