@@ -125,8 +125,10 @@ class WGAN(keras.Model):
                     return lr
                 elif epoch >= decay_start and epoch < decay_end:
                     return lr / 2.  # * tf.math.exp(-0.1)
-                elif epoch >= decay_end:
+                elif epoch >= decay_end and epoch < decay_end + 10:
                     return lr
+                elif epoch >= decay_end:
+                    return lr * tf.math.exp(-0.05)
 
             self.lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=1)
 
@@ -329,7 +331,7 @@ class WGAN(keras.Model):
 
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr"]/10., beta_1=0.0,
+            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr"]/15., beta_1=0.0,
                                                beta_2=0.9)  # increase beta-values ?
             hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr"], beta_1=0.0, beta_2=0.9)
         elif hparams_dict["optimizer"].lower() == "rmsprop":
@@ -525,6 +527,7 @@ def main(parser_args):
                        "d_steps": parser_args.d_steps,
                        "optimizer": parser_args.optimizer, "z_branch": z_branch})
 
+    print(wgan_model.hparams["lr"])
     # prepare data
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
@@ -546,18 +549,19 @@ def main(parser_args):
     wgan_model.save_weights(os.path.join(model_savedir, parser_args.model_name))
 
     # do predictions
-    da_test = reshape_ds(ds_train)
-    da_test = z_norm_data(da_test, dims=norm_dims)
+    #da_test = reshape_ds(ds_train)
+    #da_test = z_norm_data(da_test, dims=norm_dims)
 
-    da_test_in, da_test_tar = WGAN.split_in_tar(da_test)
-    test_iter = tf.data.Dataset.from_tensor_slices((da_test_in, da_test_tar))
-    test_iter = test_iter.batch(wgan_model.hparams["batch_size"])
+    #da_test_in, da_test_tar = WGAN.split_in_tar(da_test)
+    #test_iter = tf.data.Dataset.from_tensor_slices((da_test_in, da_test_tar))
+    #test_iter = test_iter.batch(wgan_model.hparams["batch_size"])
+    val_iter = vali_iter.repeat(1)
 
-    y_pred = wgan_model.predict(test_iter, batch_size=wgan_model.hparams["batch_size"],verbose=1)
+    y_pred = wgan_model.predict(val_iter, batch_size=wgan_model.hparams["batch_size"],verbose=1)
 
     # denorm data from predictions and convert to xarray
-    coords = da_test_tar.isel(variables=0).squeeze().coords
-    dims = da_test_tar.isel(variables=0).squeeze().dims
+    coords = da_val.isel(variables=0).squeeze().coords
+    dims = da_val.isel(variables=0).squeeze().dims
 
     y_pred_trans = xr.DataArray(y_pred[0].squeeze(), coords=coords, dims=dims)
 
