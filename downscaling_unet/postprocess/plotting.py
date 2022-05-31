@@ -16,11 +16,10 @@ import matplotlib.pyplot as plt
 import cartopy
 import cartopy.crs as ccrs
 # make class for handling data available
-sys.path.append("../")
-from input_data_class import InputDataClass
+sys.path.append("../utils")
+from other_utils import provide_default
+#from input_data_class import InputDataClass
 
-
-# further auxiliary functions
 
 # auxiliary function for colormap
 def get_colormap_temp(levels=None):
@@ -45,17 +44,17 @@ def get_colormap_temp(levels=None):
 # for making plot nice
 def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
     fs = 16
-    if "login" in host:
+    #if "login" in host:
         # add nice coast- and borderlines
-        ax_plot.coastlines(linewidth=0.75)
-        ax_plot.coastlines(linewidth=0.75)
-        ax_plot.add_feature(cartopy.feature.BORDERS)
+    ax_plot.coastlines(linewidth=0.75)
+    ax_plot.coastlines(linewidth=0.75)
+    ax_plot.add_feature(cartopy.feature.BORDERS)
 
     # adjust extent and ticks as well as axis-label
     ax_plot.set_xticks(np.arange(0., 360. + 0.1, 5.))  # ,crs=projection_crs)
     ax_plot.set_yticks(np.arange(-90., 90. + 0.1, 5.))  # ,crs=projection_crs)
 
-    ax_plot.set_extent([3.5, 17., 44.5, 55.])#, crs=prj_crs)
+    ax_plot.set_extent([3.5, 16.5, 44.5, 54.])#, crs=prj_crs)
     ax_plot.minorticks_on()
     ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=12)
 
@@ -69,7 +68,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
 
 
 # for creating plot
-def create_plots(data1, data2, opt_plot={}):
+def create_plots(data1, data2, plt_fname ,opt_plot={}):
     # get coordinate data
     try:
         time, lat, lon = data1["time"].values, data1["lat"].values, data1["lon"].values
@@ -104,3 +103,6 @@ def create_plots(data1, data2, opt_plot={}):
     cax = fig.add_axes([0.92, 0.3, 0.02, 0.4])
     cbar = fig.colorbar(temp2, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=12)
+    
+    fig.savefig(plt_fname+".png", bbox_inches="tight")
+    plt.close(fig)
