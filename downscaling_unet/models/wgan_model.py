@@ -14,14 +14,8 @@ from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate
 )
 from tensorflow.keras.models import Model
 # other modules
-import argparse
 import xarray as xr
-import pandas as pd
 import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import cartopy
-import cartopy.crs as ccrs
 
 from unet_model import build_unet, conv_block
 
