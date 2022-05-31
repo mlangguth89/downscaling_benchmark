@@ -26,6 +26,18 @@ from typing import List, Tuple, Union
 list_or_tuple = Union[List, Tuple]
 
 
+#### To-DO list
+#
+# - integrate Leaky-Relu option for conv-blocks (see Jupyter-notebook)
+# - include embedding with keras.to_categorical (bear in mind to ensure correct categories)
+# - include dynamic learning rate decay
+# - check if customized training loop is better than using Kera's fit-method
+# - make reconstruction loss calculation generic (to check later: apply critic also on geopotential)
+# - Reconsider make_data_generator-concept (have a look at AMBS-code)
+# - Allow for saving the model incl. optimizer state to continue training from checkpoint
+# - make rolling flexible in split_in_tar-method
+# - seperate prediction from training!
+
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
                  stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
     """
@@ -54,8 +66,6 @@ def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tup
     # finally perform global average pooling and finalize by fully connected layers
     x = GlobalAveragePooling2D()(x)
     x = Dense(channels_start)(x)
-    # x = Dense(channels/2, activation=activation)(x)
-    # x = Dense(channels/4, activation=activation)(x)
     # ... and end with linear output layer
     out = Dense(1, activation="linear")(x)
 
@@ -68,69 +78,84 @@ class WGAN(keras.Model):
     """
     Class for Wassterstein GAN models
     """
-    known_modes = ["train", "predict"]
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, mode: str = "train",
-                 embedding_shape: List = None):
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict):
+        """
+        Initiate Wasserstein GAN model.
+        :param generator: A generator model returning a data field
+        :param critic: A critic model which returns a critic scalar on the data field
+        :param hparams: dictionary of hyperparameters
+        :param l_embedding: Flag to enable time embeddings
+        """
 
         super(WGAN, self).__init__()
-        # sanity checks on parsed models
-        # if not isinstance(generator, keras.Model):
-        #    raise ValueError("Generator must be a Keras model instance, but is of type '{0}'".format(type(generator)))
-
-        # if not isinstance(critic, keras.Model):
-        #    raise ValueError("Critic must be a Keras model instance, but is of type '{0}'".format(type(critic)))
-
-        if mode not in WGAN.known_modes:
-            raise ValueError("Parsed mode '{0}' is unknown. Possible choices: {1}"
-                             .format(str(mode), ", ".format(WGAN.known_modes)))
 
         self.generator, self.critic = generator, critic
-        self.mode = mode
         self.hparams = WGAN.get_hparams_dict(hparams)
-        if self.hparams["l_embed"] and not embedding_shape:
-            raise ValueError("Embedding must be parsed if hyperparameter l_embed is set to True.")
+        if self.hparams["l_embed"]:
+            raise ValueError("Embedding is not implemented yet.")
         # set in compile-method
         self.train_iter, self.val_iter = None, None
         self.nsamples = None
         self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
 
-    def compile(self, ds_train, ds_val):
-
-        invars = [var for var in ds_train["variables"].values if var.endswith("_in")]
+    def compile(self, da_train, da_val):
+        """
+        Turn datasets into tf.Datasets, compile model and set learning rate schedule (optionally)
+        :param da_train: Data Array providing the training data (must have variables-dimension)
+        :param da_val: Data Array providing the validation data (must have variables-dimension)
+        :return: tf.Datasets for training and validation data
+        """
+        invars = [var for var in da_train["variables"].values if var.endswith("_in")]
 
         # determine shape-dimensions from data
-        shape_all = ds_train.sel({"variables": invars}).shape
+        shape_all = da_train.sel({"variables": invars}).shape
         self.nsamples, in_shape = shape_all[0], shape_all[1:]
 
-        n = 1
-        # if self.hparams["z_branch"]:
-        #  n = 2
-        tar_shape = (*in_shape[:-1], n)
+        tar_shape = (*in_shape[:-1], 1)    # critic only accounts for first channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(in_shape, channels_start=self.hparams["ngf"], z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_data_generator(ds_train, ds_val=ds_val)
-
+        train_iter, val_iter = self.make_data_generator(da_train, ds_val=da_val)
+        # call Keras compile method
         super(WGAN, self).compile()
-
+        # set optimizers
         self.c_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
 
-        decay_start, decay_end = self.hparams["decay_start"], self.hparams["decay_start"] + 5
+        # get learning rate schedule if desired
         if self.hparams["lr_decay"]:
-            def lr_scheduler(epoch, lr):
-                if epoch < decay_start:
-                    return lr
-                elif epoch >= decay_start and epoch < decay_end:
-                    return lr / 2.  # * tf.math.exp(-0.1)
-                elif epoch >= decay_end:
-                    return lr
-
-            self.lr_scheduler = tf.keras.callbacks.LearningRateScheduler(lr_scheduler, verbose=1)
+            self.lr_scheduler = tf.keras.callbacks.LearningRateScheduler(self.get_lr_decay(), verbose=1)
 
         return train_iter, val_iter
+
+    def get_lr_decay(self):
+        """
+        Get callable of learning rate scheduler which can be used as callabck in Keras models.
+        Exponential decay is applied to change the learning rate from the start to the end value.
+        :return: learning rate scheduler
+        """
+        decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
+        lr_start, lr_end = self.hparams["lr"], self.hparams["lr_end"]
+
+        if not decay_end > decay_st:
+            raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
+                             "Your values: {0:d}, {1:d})".format(decay_st, decay_end))
+
+        ne_decay = decay_end - decay_st
+        # calculate decay rate from start and end learning rate
+        decay_rate = 1./ne_decay*np.log(lr_end/lr_start)
+
+        def lr_scheduler(epoch, lr):
+            if epoch < decay_st:
+                return lr
+            elif decay_st <= epoch < decay_end:
+                return lr * tf.math.exp(decay_rate)
+            elif epoch >= decay_end:
+                return lr
+
+        return lr_scheduler
 
     def fit(self, train_iter, val_iter, callbacks: List = [None]):
 
@@ -164,7 +189,7 @@ class WGAN(keras.Model):
                 # calculate the loss (incl. gradient penalty)
                 c_loss = WGAN.critic_loss(critic_gt, critic_gen)
                 gp = self.gradient_penalty(predictands_critic, gen_data[0])
-                # TO-CHECK: minus-sign in front of c_loss (see https://medium.com/mlearning-ai/how-to-improve-image-generation-using-wasserstein-gan-1297f449ca75 vs. Keras implementation)?
+
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update discrimintor
@@ -189,14 +214,12 @@ class WGAN(keras.Model):
             [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
              ("recon_loss", recon_loss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
 
-    def test_step(self, val_iter: tf.data.Dataset, embed=None) -> OrderedDict:
+    def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
         """
         Implement step to test trained generator on validation data.
         :param val_iter: Tensorflow Dataset with validation data
-        :param embed: embedding
         :return: dictionary with reconstruction loss on validation data
         """
-
         predictors, predictands = val_iter
 
         gen_data = self.generator(predictors, training=False)
@@ -205,7 +228,7 @@ class WGAN(keras.Model):
 
         return OrderedDict([("recon_loss_val", recon_loss)])
 
-    def predict_step(self, test_iter: tf.data.Dataset, embed=None) -> OrderedDict:
+    def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
 
         predictors, _ = test_iter
 
@@ -346,9 +369,10 @@ class WGAN(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr": 1.e-05, "train_epochs": 50, "z_branch": False, "lr_decay": False,
-                        "decay_start": 5, "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "d_steps": 5,
-                        "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam"}
+        hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
+                        "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06,
+                        "lr_critc_end": 1.e-07, "l_embed": False, "ngf": 56, "d_steps": 5, "recon_weight": 1000.,
+                        "gp_weight": 10., "optimizer": "adam"}
 
         return hparams_dict
 
@@ -511,11 +535,11 @@ def main(parser_args):
     outdir="../trained_models/"
     z_branch = not parser_args.no_z_branch
 
-    base_dir = "/p/project/deepacf/maelstrom/data/downscaling_unet/"
+    datadir = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/"
 
-    ds_train, ds_val, ds_test = xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_train_aug.nc")), \
-                                xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_val_aug.nc")), \
-                                xr.open_dataset(os.path.join(base_dir, "maelstrom-downscaling_test_aug.nc"))
+    ds_train, ds_val, ds_test = xr.open_dataset(os.path.join(datadir, "era5_to_ifs_train_corrected.nc")), \
+                                xr.open_dataset(os.path.join(datadir, "era5_to_ifs_val_corrected.nc")), \
+                                xr.open_dataset(os.path.join(datadir, "era5_to_ifs_test_corrected.nc"))
 
     print("Datasets for trining, validation and testing loaded.")
 
