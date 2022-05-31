@@ -120,10 +120,11 @@ class WGAN(keras.Model):
         """
         Get callable of learning rate scheduler which can be used as callabck in Keras models.
         Exponential decay is applied to change the learning rate from the start to the end value.
+        Note that the exponential decay is calculated based on the learning rate of the generator, but applies to both.
         :return: learning rate scheduler
         """
         decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
-        lr_start, lr_end = self.hparams["lr"], self.hparams["lr_end"]
+        lr_start, lr_end = self.hparams["lr_gen"], self.hparams["lr_gen_end"]
 
         if not decay_end > decay_st:
             raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
@@ -371,9 +372,8 @@ class WGAN(keras.Model):
         Return default hyperparameter dictionary.
         """
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
-                        "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06,
-                        "lr_critc_end": 1.e-07, "l_embed": False, "ngf": 56, "d_steps": 5, "recon_weight": 1000.,
-                        "gp_weight": 10., "optimizer": "adam"}
+                        "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
+                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam"}
 
         return hparams_dict
 
