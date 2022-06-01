@@ -3,14 +3,16 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-31"
 __update__ = "2022-06-01"
 
-import os, sys
+import os
 import argparse
 from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
+import gc
 import json as js
 from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
+import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils.layer_utils import count_params
 from unet_model import build_unet
@@ -60,6 +62,10 @@ def main(parser_args):
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
     da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
+    del ds_train
+    del ds_val
+    gc.collect()
+    
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
@@ -81,9 +87,22 @@ def main(parser_args):
         def on_epoch_end(self, epoch, logs={}):
             self.epoch_times.append(timer() - self.epoch_time_start)
 
+    class LRLogger(keras.callbacks.Callback):
+        def __init__(self):
+            super().__init__()
+            self._supports_tf_logs=True
+
+        def on_train_begin(self, logs={}):
+            self.lr_gen_logs = []
+            self.lr_critic_logs=[]
+
+        def on_epoch_begin(self, epoch, logs={}):
+            self.lr_gen_logs.append(self.model.g_optimizer._decayed_lr(tf.float32))
+            self.lr_critic_logs.append(self.model.c_optimizer._decayed_lr(tf.float32))
+
     # create callbacks for scheduling learning rate and for timing training process
-    time_tracker = TimeHistory()
-    callback_list = [time_tracker]
+    time_tracker, lr_tracker = TimeHistory(), LRLogger()
+    callback_list = [time_tracker, lr_tracker]
 
     print("Start training of WGAN...")
     history = wgan_model.fit(train_iter, val_iter, callbacks=callback_list)
@@ -92,6 +111,9 @@ def main(parser_args):
     training_times = get_training_time_dict(time_tracker.epoch_times,
                                             wgan_model.nsamples*wgan_model.hparams["train_epochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
+
+    print(lr_tracker.lr_gen_logs)
+    print(lr_tracker.lr_critic_logs)
 
     print("WGAN training finished. Save model to '{0}' and start creating example plot."
           .format(os.path.join(outdir, parser_args.model_name)))
@@ -112,6 +134,8 @@ def main(parser_args):
     benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"] = None, None, None
     benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
     benchmark_dict["gpu energy consumption"] = None
+    benchmark_dict["final training loss"] = -999.
+    benchmark_dict["final validation loss"] = 999.
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
@@ -138,7 +162,7 @@ if __name__ == "__main__":
                         help="Directory where input netCDF-files are stored.")
     parser.add_argument("--output_dir", "-out", dest="output_dir", type=str, required=True,
                         help="Output directory where model is savded.")
-    parser.add_argument("--job_id", "-id", dest="job_id", type=int, help="Job-id from Slurm.")
+    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
     parser.add_argument("--number_epochs", "-nepochs", dest="train_epochs", type=int, required=True,
                         help="Numer of epochs to train WGAN.")
     parser.add_argument("--learning_rate_generator", "-lr_gen", dest="lr_gen", type=float, required=True,
