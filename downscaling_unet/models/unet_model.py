@@ -43,7 +43,8 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
     """
     x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
     x = Concatenate()([x, skip_features])
-    x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init, l_batch_normalization)
+    x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
+                     l_batch_normalization=l_batch_normalization)
 
     return x
 
