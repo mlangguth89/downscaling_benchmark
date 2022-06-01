@@ -103,7 +103,6 @@ virt_env*/
 # mypy
 .mypy_cache/
 
-
 .idea/*
 */.idea
 
@@ -127,7 +126,7 @@ virt_env*/
 *.png
 
 # Ignore (Batch) runscripts
-**/batch_scripts/*.sh
+**/HPC_batch_scripts/*.sh
 !*_template.sh
 
 !*wrapper_container.sh
