@@ -143,7 +143,7 @@ if __name__ == "__main__":
                         help="Numer of epochs to train WGAN.")
     parser.add_argument("--learning_rate_generator", "-lr_gen", dest="lr_gen", type=float, required=True,
                         help="Learning rate to train generator of WGAN.")
-    parser.add_argument("--learning_rate_critic", "-lr_critic", dest="lr_gen", type=float, default=None,
+    parser.add_argument("--learning_rate_critic", "-lr_critic", dest="lr_critic", type=float, default=None,
                         help="Learning rate to train critic of WGAN.")
     parser.add_argument("--learning_rate_decay", "-lr_decay", dest="lr_decay", default=False, action="store_true",
                         help="Flag to perform learning rate decay.")
