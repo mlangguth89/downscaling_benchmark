@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2022-05-26"
+__update__ = "2022-05-31"
 
 """
 Some auxiliary methods to create Keras models.
