@@ -82,7 +82,7 @@ class WGAN(keras.Model):
             raise ValueError("Embedding is not implemented yet.")
         # set in compile-method
         self.train_iter, self.val_iter = None, None
-        self.nsamples = None
+        self.shape_in, self.nsamples = None, None
         self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
 
@@ -97,11 +97,12 @@ class WGAN(keras.Model):
 
         # determine shape-dimensions from data
         shape_all = da_train.sel({"variables": invars}).shape
-        self.nsamples, in_shape = shape_all[0], shape_all[1:]
+        self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
 
-        tar_shape = (*in_shape[:-1], 1)    # critic only accounts for first channel (should be the downscaling target)
+        tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
-        self.generator = self.generator(in_shape, channels_start=self.hparams["ngf"], z_branch=self.hparams["z_branch"])
+        self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
+                                        z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
         train_iter, val_iter = self.make_data_generator(da_train, ds_val=da_val)
@@ -210,7 +211,6 @@ class WGAN(keras.Model):
         predictors, predictands = val_iter
 
         gen_data = self.generator(predictors, training=False)
-
         rloss = self.recon_loss(predictands, gen_data)
 
         return OrderedDict([("recon_loss_val", rloss)])
