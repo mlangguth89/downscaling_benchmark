@@ -26,7 +26,7 @@ def main(parser_args):
     t0 = timer()
 
     # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
+    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training_wgan.csv"))
 
     # Get some basic directories and flags
     datadir = parser_args.input_dir
@@ -135,7 +135,7 @@ def main(parser_args):
     benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
     benchmark_dict["gpu energy consumption"] = None
     benchmark_dict["final training loss"] = -999.
-    benchmark_dict["final validation loss"] = 999.
+    benchmark_dict["final validation loss"] = -999.
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
