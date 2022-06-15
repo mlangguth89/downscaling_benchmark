@@ -121,7 +121,6 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   #export PYTHONPATH=${VENV_DIR}/lib/python3.9/site-packages:$PYTHONPATH >> ${activate_virt_env}   # already done above
   export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> ${activate_virt_env} 
   export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${BASE_DIR}/../utils/:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> ${activate_virt_env}
@@ -134,7 +133,6 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages/:\$PYTHONPATH" >> ${activate_virt_env} 
   echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/../utils/:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> ${activate_virt_env}
