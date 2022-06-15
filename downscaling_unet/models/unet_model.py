@@ -1,52 +1,30 @@
-import numpy as np
+__author__ = "Michael Langguth"
+__email__ = "m.langguth@fz-juelich.de"
+__date__ = "2021-XX-XX"
+__update__ = "2022-05-26"
+
+"""
+Methods to set-up U-net models incl. its building blocks.
+"""
+
+# import modules
 import tensorflow as tf
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
-                                     Conv2DTranspose, Input, MaxPool2D
-)
+from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D)
 from tensorflow.keras.models import Model
+from model_utils import conv_block, conv_block_n
 
 # building blocks for Unet
 
 
-def conv_block(inputs, num_filters: int, kernel: tuple = (3,3), padding: str = "same",
-               activation: str = "relu", kernel_init: str = "he_normal", l_batch_normalization: bool = True):
-    """
-    A convolutional layer with optional batch normalization
-    :param inputs: the input data with dimensions nx, ny and nc
-    :param num_filters: number of filters (output channel dimension)
-    :param kernel: tuple indictating kernel size
-    :param padding: technique for padding (e.g. "same" or "valid")
-    :param activation: activation fuction for neurons (e.g. "relu")
-    :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
-    """
-    x = Conv2D(num_filters, kernel, padding=padding, kernel_initializer=kernel_init)(inputs)
-    if l_batch_normalization:
-        x = BatchNormalization()(x)
-    x = Activation(activation)(x)
-
-    return x
-
-
-def conv_block_n(inputs, num_filters, n=2, kernel=(3, 3), padding="same", activation="relu",
-                 kernel_init="he_normal", l_batch_normalization=True):
-    """
-    Sequential application of two convolutional layers (using conv_block).
-    """
-
-    x = conv_block(inputs, num_filters, kernel, padding, activation,
-                   kernel_init, l_batch_normalization)
-    for i in np.arange(n - 1):
-        x = conv_block(x, num_filters, kernel, padding, activation,
-                       kernel_init, l_batch_normalization)
-
-    return x
-
-
 def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: bool = True):
     """
-    One complete encoder-block used in U-net
+    One complete encoder-block used in U-net.
+    :param inputs: input to encoder block
+    :param num_filters: number of filters/channel to be used in convolutional blocks
+    :param kernel_maxpool: kernel used in max-pooling
+    :param l_large: flag for large encoder block (two consecutive convolutional blocks)
     """
     if l_large:
         x = conv_block_n(inputs, num_filters, n=2)
@@ -57,19 +35,29 @@ def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: 
 
     return x, p
 
-def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strides_up: int=2, padding: str= "same",
-                  activation="relu", kernel_init="he_normal", l_batch_normalization: bool=True):
+
+def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strides_up: int = 2, padding: str = "same",
+                  activation="relu", kernel_init="he_normal", l_batch_normalization: bool = True):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
     x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
     x = Concatenate()([x, skip_features])
-    x = conv_block_n(x, num_filters, 2, kernel, padding, activation, kernel_init, l_batch_normalization)
+    x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
+                     l_batch_normalization=l_batch_normalization)
 
     return x
 
+
 # The particular U-net
-def build_unet(input_shape, channels_start=56, z_branch=False):
+def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False) -> Model:
+    """
+    Builds up U-net model
+    :param input_shape: shape of input-data
+    :param channels_start: number of channels to use as start in encoder blocks
+    :param z_branch: flag if z-branch is used.
+    :return:
+    """
     inputs = Input(input_shape)
 
     """ encoder """

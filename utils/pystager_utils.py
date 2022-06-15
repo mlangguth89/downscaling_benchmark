@@ -199,6 +199,7 @@ class PyStager(Distributor):
         self.comm = MPI.COMM_WORLD
         self.my_rank = self.comm.Get_rank()
         self.num_processes = self.comm.Get_size()
+        self.is_setup = False
 
         if not callable(self.job):
             raise ValueError("%{0}: Passed function to be parallelized must be a callable function for {1}."
@@ -227,6 +228,8 @@ class PyStager(Distributor):
                 raise err
         else:
             pass
+
+        self.is_setup = True
 
     # def run(self, data_dir, *args, job_name="dummy"):
     def run(self, *args, job_name="dummy"):
@@ -409,7 +412,8 @@ class PyStager(Distributor):
         method = PyStager.set_and_check_logdir.__name__
 
         if logdir is None:
-            logdir = os.path.join(os.getcwd(), "pystager_log_{0}".format(distributor_name))
+            date_now = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
+            logdir = os.path.join(os.getcwd(), "pystager_log_{0}_{1}".format(distributor_name, date_now))
             os.makedirs(logdir, exist_ok=True)
             print("%{0}: Default log directory '{1}' is used.".format(method, logdir))
         else:

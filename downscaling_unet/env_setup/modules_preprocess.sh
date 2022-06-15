@@ -27,7 +27,7 @@ if [[ "${HOST_NAME}" == hdfml* ]]; then
   ml SciPy-Stack/2021-Python-3.8.5
   ml dask/2.22.0-Python-3.8.5
   ml TensorFlow/2.5.0-Python-3.8.5
-elif [[ "${HOST_NAME}" == jwlogin* ]]; then
+elif [[ "${HOST_NAME}" == jw[b-c]* ]]; then
   ml GCC/9.3.0
   ml GCCcore/.9.3.0
   ml ParaStationMPI/5.4.7-1

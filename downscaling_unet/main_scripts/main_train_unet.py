@@ -122,7 +122,7 @@ def main(parser_args):
     benchmark_dict["total runtime"] = timer() - t0
     benchmark_dict["job id"] = job_id
     # currently untracked variables
-    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"]= None, None, None
+    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"] = None, None, None
     benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
     benchmark_dict["gpu energy consumption"] = None
     # ... and save CSV-file with tracked data on disk

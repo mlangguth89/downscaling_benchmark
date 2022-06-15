@@ -5,7 +5,7 @@ ML_SCR=modules_train.sh
 ML_COLL=downscaling_unet_v1_0
 
 # check if module collection has been set-up once
-RES=$( { ml restore ${ML_COLL}; } 2<&1 )
+#RES=$( { ml restore ${ML_COLL}; } 2<&1 )
 
 #if [[ "${RES}" == *"error"* ]]; then
 if [[ 0 == 0 ]]; then  # Restoring from model collection currently throws MPI-setting errors. Thus, this approach is disabled for now.
@@ -19,7 +19,8 @@ if [[ 0 == 0 ]]; then  # Restoring from model collection currently throws MPI-se
   ml GCCcore/.11.2.0
   ml GCC/11.2.0
   ml ParaStationMPI/5.5.0-1
-  ml mpi-settings/UCX              # is otherwise somehow missing when loading saved collection
+  #ml mpi-settings/UCX              # is otherwise somehow missing when loading saved collection
+  ml netcdf4-python/1.5.7-serial
   ml SciPy-bundle/2021.10
   ml xarray/0.20.1
   ml TensorFlow/2.6.0-CUDA-11.5
