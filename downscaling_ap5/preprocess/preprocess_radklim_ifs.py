@@ -8,9 +8,10 @@ sys.path.append("../utils")
 import xarray as xr
 import pandas as pd
 import datetime as dt
+from tqdm import tqdm
 from collections import OrderedDict
 from typing import List
-from tools_utils import CDO, NCRENAME
+from tools_utils import CDO, NCRENAME, NCKS
 from other_utils import last_day_of_month
 
 
@@ -49,14 +50,14 @@ radklim_var = "YW_hourly"
 
 years = [2016]
 
-lonlat_box = [8.0, 9.501, 50.0, 51.101]
+lonlat_box = [8.0, 9.591, 50.0, 51.191]
 
 # some parameter processing
 ll_box_str = "{0:.3f},{1:.3f},{2:.3f},{3:.3f}".format(*lonlat_box)
 rd_var_lower = radklim_var.lower()
 
 # initialize tools
-cdo, ncrename = CDO(), NCRENAME()
+cdo, ncrename, ncks = CDO(), NCRENAME(), NCKS()
 
 for yr in years:
     for mm in range(1, 13):
@@ -66,6 +67,8 @@ for yr in years:
         outdir_tmp = os.path.join(outdir, "tmp")
         os.makedirs(outdir, exist_ok=True)
         os.makedirs(outdir_tmp, exist_ok=True)
+
+        final_file = os.path.join(outdir, "preproc_ifs_radklim_{0:d}-{1:02d}.nc".format(yr, mm))
         
         # get current IFS forecast directory
         dirr_curr_ifs = os.path.join(ifs_dir, "{0:d}/{0:d}-{1:02d}".format(yr, mm))
@@ -78,8 +81,7 @@ for yr in years:
                                       freq="1H")
         # loop over all IFS forecast-files
         print("Start processing IFS-data for {0:d}-{1:02d}...".format(yr, mm))
-        for ir in init_runs:
-            print(ir)
+        for ir in tqdm(init_runs):
             ifs_sf_file = os.path.join(dirr_curr_ifs, "sfc_{0}.nc".format(ir.strftime("%Y%m%d_%H")))
             sf_file_out = os.path.join(outdir_tmp, "sfc_{0}.nc".format(ir.strftime("%Y%m%d%H")))
             
@@ -102,21 +104,19 @@ for yr in years:
 
         if not os.path.isfile(sf_file):
             cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
-            cdo.run()
             add_varname_suffix(sf_file, sf_vars, "_in")
-            ncrename.run([sf_file], OrderedDict([("-d", "latitude,lat"), ("-d", "longitude,lon"),
-                                                 ("-v", "latitude,lat"), ("-v", "longitude,lon")]))
+            ncrename.run([sf_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
+                                                 ("-v", ["latitude,lat", "longitude,lon"])]))
         if not os.path.isfile(pl_file):
             cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(pl_file, pl_vars, "_in")
             ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
-            ncrename.run([sf_file], OrderedDict([("-d", "latitude,lat"), ("-d", "longitude,lon"),
-                                                 ("-v", "latitude,lat"), ("-v", "longitude,lon")]))
+            ncrename.run([pl_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
+                                                 ("-v", ["latitude,lat", "longitude,lon"])]))
 
         # loop over all corresponding RADKLIM timesteps
         print("Start processing RADKLIM-data for {0:d}-{1:02d}...".format(yr, mm))
-        for rd in radklim_dates:
-            print(rd)
+        for rd in tqdm(radklim_dates):
             yr_now, mm_now, dd_now, hh_now = rd.strftime("%Y"), rd.strftime("%m"), rd.strftime("%d"), rd.strftime("%H")
             if hh_now == "00":
                 rd_file = rd - dt.timedelta(days=1)
@@ -148,10 +148,16 @@ for yr in years:
         if not os.path.isfile(rd_lres_file):
             cdo.run(all_rd_lres_files + [rd_lres_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(rd_lres_file, [rd_var_lower], "_in")
+            # overwrite coordinates for later merging
+            ncks.run([sf_file, rd_lres_file], OrderedDict([("-A", ""), ("-v", "lat,lon")]))
         if not os.path.isfile(rd_hres_file):
             cdo.run(all_rd_hres_files + [rd_hres_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(rd_hres_file, [rd_var_lower], "_tar")
+            ncrename.run([rd_hres_file], OrderedDict([("-d", ["lat,lat_tar", "lon,lon_tar"]),
+                                                 ("-v", ["lat,lat_tar", "lon,lon_tar"])]))
 
-
-                                          
+        if not os.path.isfile(final_file):
+            print("Write processed data for {0:d}-{1:02d} to {2}".format(yr, mm, final_file))
+            cdo.run([sf_file, pl_file, rd_lres_file, rd_hres_file, final_file],
+                    OrderedDict([("merge", "")]))
         
