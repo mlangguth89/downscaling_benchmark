@@ -113,9 +113,9 @@ for yr in years:
             else:
                 rd_file = rd
 
-            curr_file_lres = os.path.join(radklim_dir, "radklim_reg_lres", rd_var_lower, yr_now,
-                                          "{0}-{1}".format(yr_now, mm_now),
-                                          "{0}_remapped_radklim_reg_lres_{1}.nc".format(radklim_var, rd_file.strftime("%Y-%m-%d")))
+            curr_file_lres = os.path.join(radklim_dir, "radklim_reg_lres", rd_var_lower, rd_file.strftime("%Y"),
+                                          rd_file.strftime("%Y-%m"), "{0}_remapped_radklim_reg_lres_{1}.nc"
+                                          .format(radklim_var, rd_file.strftime("%Y-%m-%d")))
             file_lres_out = os.path.join(outdir_tmp, "radklim_lres_{0}.nc".format(rd.strftime("%Y%m%d%H")))
             
             curr_file_hres = curr_file_lres.replace("radklim_reg_lres", "radklim_reg_hres")
