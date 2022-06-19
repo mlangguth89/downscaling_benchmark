@@ -44,12 +44,12 @@ radklim_dir = "/p/scratch/deepacf/deeprain/radklim_process/netcdf/remapped/"
 outdir_base = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_ifs_radklim"
 
 sf_vars = ["cp", "lsp", "cape", "tclw", "tcwv", "sp","tisr"]
-pl_vars = ["u", "v"]#{"u": {"pl": 70000.}, "v": {"pl": 70000.}}
+pl_vars = ["u", "v"]  # {"u": {"pl": 70000.}, "v": {"pl": 70000.}}
 radklim_var = "YW_hourly"
 
 years = [2016]
 
-lonlat_box = [8.0, 9.6, 50.001, 51.201]
+lonlat_box = [8.0, 9.501, 50.0, 51.101]
 
 # some parameter processing
 ll_box_str = "{0:.3f},{1:.3f},{2:.3f},{3:.3f}".format(*lonlat_box)
@@ -86,11 +86,12 @@ for yr in years:
             ifs_pl_file, pl_file_out = ifs_sf_file.replace("sfc", "pl"), sf_file_out.replace("sfc", "pl")
 
             if not os.path.isfile(sf_file_out):
-                cdo.run([ifs_sf_file, sf_file_out], OrderedDict([("-selname", ",".join(sf_vars)),
+                cdo.run([ifs_sf_file, sf_file_out], OrderedDict([("-invertlat", ""), ("-selname", ",".join(sf_vars)),
                                                                  ("-sellonlatbox", ll_box_str),
                                                                  ("-seltimestep", "6/17")]))
             if not os.path.isfile(pl_file_out):
-                cdo.run([ifs_pl_file, pl_file_out], OrderedDict([("--reduce_dim", ""), ("-selname", ",".join(pl_vars)),
+                cdo.run([ifs_pl_file, pl_file_out], OrderedDict([("--reduce_dim", ""), ("-invertlat", ""),
+                                                                 ("-selname", ",".join(pl_vars)),
                                                                  ("-sellonlatbox", ll_box_str),
                                                                  ("-seltimestep", "6/17"), ("-sellevel", "700")]))
         
@@ -101,11 +102,16 @@ for yr in years:
 
         if not os.path.isfile(sf_file):
             cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
+            cdo.run()
             add_varname_suffix(sf_file, sf_vars, "_in")
+            ncrename.run([sf_file], OrderedDict([("-d", "latitude,lat"), ("-d", "longitude,lon"),
+                                                 ("-v", "latitude,lat"), ("-v", "longitude,lon")]))
         if not os.path.isfile(pl_file):
             cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(pl_file, pl_vars, "_in")
             ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
+            ncrename.run([sf_file], OrderedDict([("-d", "latitude,lat"), ("-d", "longitude,lon"),
+                                                 ("-v", "latitude,lat"), ("-v", "longitude,lon")]))
 
         # loop over all corresponding RADKLIM timesteps
         print("Start processing RADKLIM-data for {0:d}-{1:02d}...".format(yr, mm))
