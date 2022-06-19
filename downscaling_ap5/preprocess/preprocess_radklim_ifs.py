@@ -85,24 +85,28 @@ for yr in years:
             
             ifs_pl_file, pl_file_out = ifs_sf_file.replace("sfc", "pl"), sf_file_out.replace("sfc", "pl")
 
-            cdo.run([ifs_sf_file, sf_file_out], OrderedDict([("-selname", ",".join(sf_vars)),
-                                                             ("-sellonlatbox", ll_box_str), ("-seltimestep", "6/17")]))
-            cdo.run([ifs_pl_file, pl_file_out], OrderedDict([("--reduce_dim", ""), ("-selname", ",".join(pl_vars)),
-                                                             ("-sellonlatbox", ll_box_str), ("-seltimestep", "6/17"),
-                                                             ("-sellevel", "700")]))
+            if not os.path.isfile(sf_file_out):
+                cdo.run([ifs_sf_file, sf_file_out], OrderedDict([("-selname", ",".join(sf_vars)),
+                                                                 ("-sellonlatbox", ll_box_str),
+                                                                 ("-seltimestep", "6/17")]))
+            if not os.path.isfile(pl_file_out):
+                cdo.run([ifs_pl_file, pl_file_out], OrderedDict([("--reduce_dim", ""), ("-selname", ",".join(pl_vars)),
+                                                                 ("-sellonlatbox", ll_box_str),
+                                                                 ("-seltimestep", "6/17"), ("-sellevel", "700")]))
         
         # merge IFS forecast-files 
         all_sf_files, all_pl_files = glob.glob(os.path.join(outdir_tmp, "sfc_*.nc")), glob.glob(os.path.join(outdir_tmp, "pl_*.nc"))
         sf_file = os.path.join(outdir, "sfc_{0}.nc".format(ir.strftime("%Y-%m")))
         pl_file = sf_file.replace("sfc_", "pl_")
 
-        cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
-        cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
+        if not os.path.isfile(sf_file):
+            cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
+            add_varname_suffix(sf_file, sf_vars, "_in")
+        if not os.path.isfile(pl_file)
+            cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
+            add_varname_suffix(pl_file, pl_vars, "_in")
+            ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
 
-        # rename variables
-        add_varname_suffix(sf_file, sf_vars, "_in")
-        add_varname_suffix(pl_file, pl_vars, "_in")
-        ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
         # loop over all corresponding RADKLIM timesteps
         print("Start processing RADKLIM-data for {0:d}-{1:02d}...".format(yr, mm))
         for rd in radklim_dates:
@@ -121,10 +125,12 @@ for yr in years:
             curr_file_hres = curr_file_lres.replace("radklim_reg_lres", "radklim_reg_hres")
             file_hres_out = file_lres_out.replace("_lres_", "_hres_")
             
-            rd_dict_cdo = OrderedDict([("-L", ""), ("-seldate", rd.strftime("%Y-%m-%dT%H:00:00")), ("-selname", rd_var_lower),
-                                       ("-sellonlatbox", ll_box_str)])
-            cdo.run([curr_file_lres, file_lres_out], rd_dict_cdo)
-            cdo.run([curr_file_hres, file_hres_out], rd_dict_cdo)
+            rd_dict_cdo = OrderedDict([("-L", ""), ("-seldate", rd.strftime("%Y-%m-%dT%H:00:00")),
+                                       ("-selname", rd_var_lower), ("-sellonlatbox", ll_box_str)])
+            if not os.path.isfile(file_lres_out):
+                cdo.run([curr_file_lres, file_lres_out], rd_dict_cdo)
+            if not os.path.isfile(file_hres_out):
+                cdo.run([curr_file_hres, file_hres_out], rd_dict_cdo)
             
         # merge all RADKLIM files  
         all_rd_lres_files = glob.glob(os.path.join(outdir_tmp, "radklim_lres_*.nc"))
@@ -132,12 +138,14 @@ for yr in years:
         
         rd_lres_file = os.path.join(outdir, "radklim_lres_{0}.nc".format(ir.strftime("%Y-%m")))
         rd_hres_file = rd_lres_file.replace("_lres_", "_hres_")
-        
-        cdo.run(all_rd_lres_files + [rd_lres_file], OrderedDict([("mergetime", "")]))
-        cdo.run(all_rd_hres_files + [rd_hres_file], OrderedDict([("mergetime", "")]))
 
-        # rename variables
-        add_varname_suffix(rd_lres_file, [radklim_var], "_in")
-        add_varname_suffix(rd_hres_file, [radklim_var], "_tar")
+        if not os.path.isfile(rd_lres_file):
+            cdo.run(all_rd_lres_files + [rd_lres_file], OrderedDict([("mergetime", "")]))
+            add_varname_suffix(rd_lres_file, [rd_var_lower], "_in")
+        if not os.path.isfile(rd_hres_file):
+            cdo.run(all_rd_hres_files + [rd_hres_file], OrderedDict([("mergetime", "")]))
+            add_varname_suffix(rd_hres_file, [radklim_var], "_tar")
+
+
                                           
         
