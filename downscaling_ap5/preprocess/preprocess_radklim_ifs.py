@@ -99,10 +99,10 @@ for yr in years:
         cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
         cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
 
-        ncrename.run([pl_file], OrderedDict([("-v", ["u,u700", "v,v700"])]))
         # rename variables
         add_varname_suffix(sf_file, sf_vars, "_in")
         add_varname_suffix(pl_file, pl_vars, "_in")
+        ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
         # loop over all corresponding RADKLIM timesteps
         print("Start processing RADKLIM-data for {0:d}-{1:02d}...".format(yr, mm))
         for rd in radklim_dates:
