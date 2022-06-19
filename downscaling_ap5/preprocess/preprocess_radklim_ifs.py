@@ -102,7 +102,7 @@ for yr in years:
         if not os.path.isfile(sf_file):
             cdo.run(all_sf_files + [sf_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(sf_file, sf_vars, "_in")
-        if not os.path.isfile(pl_file)
+        if not os.path.isfile(pl_file):
             cdo.run(all_pl_files + [pl_file], OrderedDict([("mergetime", "")]))
             add_varname_suffix(pl_file, pl_vars, "_in")
             ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
@@ -144,7 +144,7 @@ for yr in years:
             add_varname_suffix(rd_lres_file, [rd_var_lower], "_in")
         if not os.path.isfile(rd_hres_file):
             cdo.run(all_rd_hres_files + [rd_hres_file], OrderedDict([("mergetime", "")]))
-            add_varname_suffix(rd_hres_file, [radklim_var], "_tar")
+            add_varname_suffix(rd_hres_file, [rd_var_lower], "_tar")
 
 
                                           
