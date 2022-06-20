@@ -48,7 +48,7 @@ sf_vars = ["cp", "lsp", "cape", "tclw", "tcwv", "sp","tisr"]
 pl_vars = ["u", "v"]  # {"u": {"pl": 70000.}, "v": {"pl": 70000.}}
 radklim_var = "YW_hourly"
 
-years = [2016]
+years = [2020] #[2017, 2018, 2019, 2020]
 
 lonlat_box = [8.0, 9.591, 50.0, 51.191]
 
@@ -77,6 +77,7 @@ for yr in years:
         ld = last_day_of_month(dt.datetime.strptime("{0:d}{1:02d}01".format(yr, mm), "%Y%m%d"))
         init_runs = pd.date_range("{0:d}-{1:02d}-01 00:00".format(yr, mm),
                                   ld.replace(hour=12), freq="12H")
+
         radklim_dates = pd.date_range(init_runs[0] + dt.timedelta(hours=6), init_runs[-1] + dt.timedelta(hours=17),
                                       freq="1H")
         # loop over all IFS forecast-files
@@ -103,12 +104,12 @@ for yr in years:
         pl_file = sf_file.replace("sfc_", "pl_")
 
         if not os.path.isfile(sf_file):
-            cdo.run(all_sf_files + [sf_file], OrderedDict([("-b", "F64"), ("mergetime", "")]))
+            cdo.run(all_sf_files + [sf_file], OrderedDict([("-b F64", ""), ("mergetime", "")]))
             add_varname_suffix(sf_file, sf_vars, "_in")
             ncrename.run([sf_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
                                                  ("-v", ["latitude,lat", "longitude,lon"])]))
         if not os.path.isfile(pl_file):
-            cdo.run(all_pl_files + [pl_file], OrderedDict([("-b", "F64"), ("mergetime", "")]))
+            cdo.run(all_pl_files + [pl_file], OrderedDict([("-b F64", ""), ("mergetime", "")]))
             add_varname_suffix(pl_file, pl_vars, "_in")
             ncrename.run([pl_file], OrderedDict([("-v", ["u_in,u700_in", "v_in,v700_in"])]))
             ncrename.run([pl_file], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
