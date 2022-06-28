@@ -7,6 +7,9 @@ import os, sys
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
+from tensorflow.keras import backend as K
+from tensorflow.keras.utils import io_utils
+from tensorflow.keras.callbacks import LearningRateScheduler
 
 # all the layers used for U-net
 from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
@@ -387,3 +390,48 @@ class WGAN(keras.Model):
         cg_loss = -tf.reduce_mean(critic_gen)
 
         return cg_loss
+
+
+class LearningRateSchedulerWGAN(LearningRateScheduler):
+
+    def __init__(self, schedule, verbose=0):
+        super(LearningRateSchedulerWGAN, self).__init__(schedule, verbose)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        if not hasattr(self.model, "g_optimizer"):
+            raise AttributeError('Model must have a "g_optimizer" for optimizing the generator.')
+
+        if not hasattr(self.model, "c_optimizer"):
+            raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
+
+        if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
+          raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
+        try:  # new API
+          lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                       float(K.get_value(self.model.c_optimizer.lr))
+          lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+        except TypeError:  # Support for old API for backward compatibility
+          raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+
+        if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
+                isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
+            raise ValueError('The output of the "schedule" function '
+                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)' )
+        if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
+           and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
+            raise ValueError(
+                f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
+                f'and {lr_c.dtype} (critic)' )
+        # set updated learning rate
+        K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
+        K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
+        if self.verbose > 0:
+            io_utils.print_msg(
+                f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
+                f'rate for generator to {lr_g}, for critic to {lr_c}.')
+
+  def on_epoch_end(self, epoch, logs=None):
+    logs = logs or {}
+    logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
+    logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
+
