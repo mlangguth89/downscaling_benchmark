@@ -430,8 +430,8 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
                 f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
                 f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
-  def on_epoch_end(self, epoch, logs=None):
-    logs = logs or {}
-    logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
-    logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
+        logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
 
