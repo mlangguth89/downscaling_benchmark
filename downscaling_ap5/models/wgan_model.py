@@ -116,7 +116,7 @@ class WGAN(keras.Model):
 
         # get learning rate schedule if desired
         if self.hparams["lr_decay"]:
-            self.lr_scheduler = tf.keras.callbacks.LearningRateScheduler(self.get_lr_decay(), verbose=1)
+            self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
 
         return train_iter, val_iter
 
