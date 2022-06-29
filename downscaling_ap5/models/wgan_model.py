@@ -8,7 +8,7 @@ from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
-from tensorflow.keras.utils import io_utils
+import tensorflow.keras.utils as KerasUtils
 from tensorflow.keras.callbacks import LearningRateScheduler
 
 # all the layers used for U-net
@@ -426,7 +426,7 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
         K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
         K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
         if self.verbose > 0:
-            io_utils.print_msg(
+            KerasUtils.print_msg(
                 f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
                 f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
