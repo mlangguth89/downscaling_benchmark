@@ -1,14 +1,13 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-05-31"
+__update__ = "2022-06-28"
 
 import os, sys
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
-import tensorflow.keras.utils as KerasUtils
 from tensorflow.keras.callbacks import LearningRateScheduler
 
 # all the layers used for U-net
@@ -426,8 +425,7 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
         K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
         K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
         if self.verbose > 0:
-            KerasUtils.print_msg(
-                f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
+            print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
                 f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
     def on_epoch_end(self, epoch, logs=None):
