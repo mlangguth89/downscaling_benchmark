@@ -42,7 +42,7 @@ def main(parser_args):
     benchmark_dict = {"loading data time": timer() - t0_save}
 
     keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
-    args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (v not in keys_remove)}
+    args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
     # set critic learning rate equal to generator if not supplied
     if not "lr_critic": args_dict["lr_critic"] = args_dict["lr_gen"]
