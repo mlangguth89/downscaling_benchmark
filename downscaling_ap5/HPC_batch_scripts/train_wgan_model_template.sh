@@ -33,13 +33,17 @@ if [ -z ${VIRTUAL_ENV} ]; then
    fi
 fi
 
+# data-directories
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/
+outdir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_ap5/trained_models/
+
 # declare directory-variables which will be modified by config_runscript.py
 nepochs=30
 lr_gen=5.e-05
 lr_critic=1.e-06
 lr_end=5.e-06
 lr_decay=True
-model_name=my_trained_wgan_model
+model_name=my_wgan_model
 
 srun --overlap python3 ../main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -lr_gen ${lr_gen} -lr_critic ${lr_critic} -lr_gen_end ${lr_end} \
                                                           -nepochs ${nepochs} -lr_decay -model_name ${model_name} -id ${SLURM_JOBID}
