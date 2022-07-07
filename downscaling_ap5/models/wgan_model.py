@@ -154,6 +154,11 @@ class WGAN(keras.Model):
                                      steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3, verbose=2)
 
     def train(self, train_iter, val_iter, _callbacks: keras.callbacks, verbose: int):
+        """
+        Customized training loop from scratch incl. running callbacks.
+        The approach follows this post:
+        https://stackoverflow.com/questions/59438904/applying-callbacks-in-a-custom-training-loop-in-tensorflow-2-0
+        """
 
         # initialize callbacks
         callbacks = keras.callbacks.CallbackList(_callbacks, add_history=True, add_progbar=verbose != 0, model=self)
