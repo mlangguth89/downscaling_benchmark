@@ -145,7 +145,7 @@ class WGAN(keras.Model):
 
         return lr_scheduler
 
-    def fit(self, train_iter, val_iter, callbacks: List = [None]):
+    def fit(self, train_iter, val_iter, callbacks: List = [None], verbose: int = 0):
 
         callbacks = [e for e in [self.lr_scheduler] + callbacks if e is not None]
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
@@ -153,6 +153,52 @@ class WGAN(keras.Model):
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
                                      steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3, verbose=2)
 
+    def train(self, train_iter, val_iter, _callbacks: keras.callbacks, verbose: int):
+
+        # initialize callbacks
+        callbacks = keras.callbacks.CallbackList(_callbacks, add_history=True, add_progbar=verbose != 0, model=self)
+        # run callbacks at the beginning
+        logs = {}
+        callbacks.on_train_begin(logs=logs)
+
+        for epoch in range(self.hparams["nepochs"]):
+            # run callbacks at beginning of epoch
+            callbacks.on_epoch_begin(epoch, logs=logs)
+            for step in self.hparams["steps_per_epoch"]:
+                self.reset_states()
+                # do the training step incl. executing callbacks
+                callbacks.on_batch_begin(step, logs=logs)
+                callbacks.on_train_batch_begin(step, logs=logs)
+
+                logs = self.train_step(train_iter, return_dict=True)
+
+                callbacks.on_train_batch_end(step, logs=logs)
+                callbacks.on_batch_end(step, logs=logs)
+                # do the validation step incl. executing callbacks
+                callbacks.on_batch_begin(step, logs=logs)
+                callbacks.on_test_batch_begin(step, logs=logs)
+
+                logs = self.test_step(val_iter, return_dict=True)
+
+                callbacks.on_test_batch_end(step, logs=logs)
+                callbacks.on_batch_end(step, logs=logs)
+
+            callbacks.on_epoch_end(epoch, logs=logs)
+
+        callbacks.on_train_end(logs=logs)
+
+        # Fetch the history object we normally get from keras.fit
+        history_object = None
+        for cb in callbacks:
+            if isinstance(cb, tf.keras.callbacks.History):
+                history_object = cb
+        assert history_object is not None
+
+        return history_object
+
+
+
+    @tf.function
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
         Training step for Wasserstein GAN.
@@ -160,17 +206,14 @@ class WGAN(keras.Model):
         :param embed: embedding (not implemented yet)
         :return: Ordered dictionary with several losses of generator and critic
         """
-
-        predictors, predictands = data_iter
-
         # train the critic d_steps-times
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
-                ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
+                predictors, predictands = next(data_iter)
                 # critic only operates on first channel
-                predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
+                predictands_critic = tf.expand_dims(predictands[..., 0], axis=-1)
                 # generate (downscaled) data
-                gen_data = self.generator(predictors[ist:ie, :, :, :], training=True)
+                gen_data = self.generator(predictors, training=True)
                 # calculate critics for both, the real and the generated data
                 critic_gen = self.critic(gen_data[0], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
@@ -187,11 +230,12 @@ class WGAN(keras.Model):
         # train generator
         with tf.GradientTape() as tape_generator:
             # generate (downscaled) data
-            gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
+            predictors, predictands = next(data_iter)
+            gen_data = self.generator(predictors, training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
             critic_gen = self.critic(gen_data[0], training=True)
             cg_loss = WGAN.critic_gen_loss(critic_gen)
-            rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
+            rloss = self.recon_loss(predictands, gen_data)
 
             g_loss = cg_loss + self.hparams["recon_weight"] * rloss
 
@@ -202,13 +246,14 @@ class WGAN(keras.Model):
             [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
              ("recon_loss", rloss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
 
+    @tf.function
     def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
         """
         Implement step to test trained generator on validation data.
         :param val_iter: Tensorflow Dataset with validation data
         :return: dictionary with reconstruction loss on validation data
         """
-        predictors, predictands = val_iter
+        predictors, predictands = next(val_iter)
 
         gen_data = self.generator(predictors, training=False)
         rloss = self.recon_loss(predictands, gen_data)
@@ -237,8 +282,9 @@ class WGAN(keras.Model):
             data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
 
         # repeat must be before shuffle to get varying mini-batches per epoch
-        # increase batch-size to allow substepping
-        data_iter = data_iter.repeat().shuffle(10000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
+        epochs2repeat = self.hparams["nepochs"] * (self.hparams["d_steps"] + 1)
+        data_iter = data_iter.repeat(epochs2repeat).shuffle(10000).batch(self.hparams["batch_size"])
+        data_iter = data_iter.make_one_shot_iterator()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
         if ds_val is not None:
@@ -252,6 +298,7 @@ class WGAN(keras.Model):
                 val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
 
             val_iter = val_iter.repeat().batch(self.hparams["batch_size"])
+            val_iter = val_iter.make_one_shot_iterator()
 
             return data_iter, val_iter
         else:
