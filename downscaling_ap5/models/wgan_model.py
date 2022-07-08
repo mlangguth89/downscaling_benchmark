@@ -184,7 +184,8 @@ class WGAN(keras.Model):
         """
 
         # initialize callbacks
-        callbacks = keras.callbacks.CallbackList(_callbacks, add_history=True, add_progbar=verbose != 0, model=self)
+        callbacks = keras.callbacks.CallbackList(_callbacks, add_history=True, add_progbar=verbose != 0, model=self,
+                                                 verbose=verbose)
         # run callbacks at the beginning
         logs = {}
         callbacks.on_train_begin(logs=logs)
