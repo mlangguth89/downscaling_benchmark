@@ -100,7 +100,7 @@ class WGAN(keras.Model):
         self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
 
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
-        self["steps_per_epoch"] = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
+        self.steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
@@ -190,7 +190,7 @@ class WGAN(keras.Model):
         for epoch in range(self.hparams["train_epochs"]):
             # run callbacks at beginning of epoch
             callbacks.on_epoch_begin(epoch, logs=logs)
-            for step in self.hparams["steps_per_epoch"]:
+            for step in range(self.steps_per_epoch):
                 self.reset_states()
                 # do the training step incl. executing callbacks
                 callbacks.on_batch_begin(step, logs=logs)
@@ -308,7 +308,7 @@ class WGAN(keras.Model):
 
         # repeat must be before shuffle to get varying mini-batches per epoch
         # Note: incrementing epochs2repeat accounts for ceiling in steps_per_epoch-calculation (see compile-method)
-        epochs2repeat = self.hparams["nepochs"] * (self.hparams["d_steps"] + 1) + 1
+        epochs2repeat = self.hparams["train_epochs"] * (self.hparams["d_steps"] + 1) + 1
         data_iter = data_iter.repeat(epochs2repeat).shuffle(10000).batch(self.hparams["batch_size"])
         data_iter = iter(data_iter)
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
@@ -324,7 +324,7 @@ class WGAN(keras.Model):
                 val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
 
             val_iter = val_iter.repeat().batch(self.hparams["batch_size"])
-            val_iter = val_iter.make_one_shot_iterator()
+            val_iter = iter(val_iter)
 
             return data_iter, val_iter
         else:
