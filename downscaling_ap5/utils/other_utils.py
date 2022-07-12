@@ -78,6 +78,20 @@ def to_list(obj: Any) -> List:
     return obj
 
 
+def is_integer(n):
+    """
+    Checks if argument can be coerced to an integer.
+    :param n: argument of arbitrary type (e.g. 3, 3., "3." all give true)
+    :return True if coercision works
+    """
+    try:
+        float(n)
+    except ValueError:
+        return False
+    else:
+        return float(n).is_integer()
+
+
 def get_func_kwargs(func, kwargs):
     """
     Returns dictonary of keyword arguments that can be used for method
@@ -97,22 +111,24 @@ def subset_files_on_date(all_files_list: list, val: int, filter_basedir: bool = 
     :param all_files_list: list of all files
     :param val: time value (default meaning: hour of the day, see date_alias)
     :param filter_basedir: flag for removing base-directory when subsetting, e.g. when dates are present in basedir
-    :param date_alias: also known as offset alias in pandas
-    (see https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#timeseries-offset-aliases)
+    :param date_alias: valid datetime formats
+    (see https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior)
     """
     method = subset_files_on_date.__name__
 
     if filter_basedir:
         all_files_dates = [(extract_date(os.path.dirname(dfile))).strftime(date_alias) for dfile in all_files_list]
     else:
-        all_files_dates = [(extract_date(dfile)).strftime(date_alias) for dfile in all_files_list]
-    inds = [idx for idx, s in enumerate(all_files_dates) if "{0:02d}".format(int(val)) in s]
+        all_files_dates = [(extract_date(os.path.basename(dfile))).strftime(date_alias) for dfile in all_files_list]
+
+    val = "{0:02d}".format(int(val)) if is_integer(val) else val
+
+    inds = [idx for idx, s in enumerate(all_files_dates) if val in s]
 
     if not inds:
-        raise ValueError("%{0}: Could not find any file carrying the value of {1:02d} with date alias {2}"
-                         .format(method, val, date_alias))
-    else:
-        return list(np.asarray(all_files_list)[inds])
+        raise ValueError(f"Could not find any file carrying the value of {val} with date alias {date_alias}")
+
+    return list(np.asarray(all_files_list)[inds])
 
 
 def extract_date(date_str):
