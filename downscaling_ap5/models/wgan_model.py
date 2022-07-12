@@ -3,7 +3,7 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
 __update__ = "2022-06-28"
 
-import os, sys
+import os, glob
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -20,6 +20,7 @@ import xarray as xr
 import numpy as np
 
 from unet_model import build_unet, conv_block
+from other_utils import subset_files_on_date
 
 from typing import List, Tuple, Union
 
@@ -223,8 +224,28 @@ class WGAN(keras.Model):
 
         return self.generator(predictors, training=False)
 
-    def make_data_generator(self, ds: xr.DataArray, ds_val: xr.DataArray = None, embed=None, embed_val=None,
-                            var2drop: str = "z_tar") -> tf.data.Dataset:
+    def make_data_generator(self, data_dir: str, month_list: List, shuffle: bool = True, embed=None, embed_val=None,
+                            var2drop: str = "z_tar", seed: int = 42) -> tf.data.Dataset:
+
+        nc_files_dir = glob.glob(os.path.join(data_dir, "preproc*.nc"))
+
+        nc_files = []
+        for yr_mm in month_list:
+            nc_files = nc_files + subset_files_on_date(nc_files_dir, yr_mm, date_alias="%Y-%m")
+
+        def gen(nc_files_ds):
+
+            for file in nc_files_ds:
+                ds = xr.open_dataset(file, engine='netcdf4')
+                ntimes = len(ds["time"])
+                for t in range(ntimes):
+                    ds_t = ds.isel({"time": t})
+                    data_dict = {key: tf.convert_to_tensor(val) for key, val in ds_t.items()}
+                    yield data_dict
+
+        sample = next(iter(gen(nc_files, shuffle, seed=seed)))
+
+        gen_mod = gen(nc_files, shuffle, seed)
 
         if not self.hparams["z_branch"]:
             ds = ds.drop(var2drop, dim="variables")
