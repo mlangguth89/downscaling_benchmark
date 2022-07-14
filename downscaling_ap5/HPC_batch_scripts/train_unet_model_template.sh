@@ -21,7 +21,7 @@ exit 99
 VIRT_ENV_NAME="venv_juwels"
 
 # Loading mouldes
-source ../env_setup/modules_train.sh
+source ../env_setup/modules.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
    if [[ -f ../virtual_envs/${VIRT_ENV_NAME}/bin/activate ]]; then
