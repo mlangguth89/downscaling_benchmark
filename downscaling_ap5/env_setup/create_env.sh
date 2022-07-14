@@ -88,7 +88,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   # Install virtualenv-package and set-up virtual environment with required additional Python packages.
   echo "${SCR_SETUP}Configuring and activating virtual environment on ${HOST_NAME}"
 
-  source modules_train.sh
+  source modules.sh
 
   python3 -m venv ${VENV_DIR}
 
