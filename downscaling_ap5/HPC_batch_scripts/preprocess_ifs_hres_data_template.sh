@@ -32,7 +32,7 @@ if [ -z ${VIRTUAL_ENV} ]; then
    fi
 fi
 # Loading mouldes
-source ../env_setup/modules_preprocess.sh
+source ../env_setup/modules.sh
 
 # set variables to be parsed 
 src_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ifs_hres/orig/

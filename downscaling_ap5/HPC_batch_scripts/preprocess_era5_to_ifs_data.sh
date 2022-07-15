@@ -27,7 +27,7 @@ if [ -z ${VIRTUAL_ENV} ]; then
    fi
 fi
 # Loading mouldes
-source ../env_setup/modules_preprocess.sh
+source ../env_setup/modules.sh
 
 # set variables to be parsed 
 # input data directory and output directory for preprocessed data

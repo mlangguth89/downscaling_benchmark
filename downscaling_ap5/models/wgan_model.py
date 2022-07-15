@@ -20,7 +20,7 @@ import xarray as xr
 import numpy as np
 
 from unet_model import build_unet, conv_block
-from other_utils import subset_files_on_date
+from other_utils import subset_files_on_date, to_list
 
 from typing import List, Tuple, Union
 
@@ -224,10 +224,13 @@ class WGAN(keras.Model):
 
         return self.generator(predictors, training=False)
 
-    def make_data_generator(self, data_dir: str, month_list: List, shuffle: bool = True, embed=None, embed_val=None,
-                            var2drop: str = "z_tar", seed: int = 42) -> tf.data.Dataset:
+    def make_data_generator(self, data_dir: str, month_list: List, predictors: List, predictands: List, norm_data: dict,
+                            shuffle: bool = True, embed=None, embed_val=None, var2drop: str = "z_tar",
+                            seed: int = 42) -> tf.data.Dataset:
 
         nc_files_dir = glob.glob(os.path.join(data_dir, "preproc*.nc"))
+
+        all_vars = to_list(predictors) + to_list(predictands)
 
         nc_files = []
         for yr_mm in month_list:
@@ -237,15 +240,44 @@ class WGAN(keras.Model):
 
             for file in nc_files_ds:
                 ds = xr.open_dataset(file, engine='netcdf4')
+                ds = ds[all_vars]
                 ntimes = len(ds["time"])
                 for t in range(ntimes):
                     ds_t = ds.isel({"time": t})
-                    data_dict = {key: tf.convert_to_tensor(val) for key, val in ds_t.items()}
-                    yield data_dict
+                    in_data, tar_data = ds_t[predictors].to_array(dim="variables").transpose(..., "variables"), \
+                                        ds_t[predictands].to_array(dim="variables").transpose(..., "variables")
+                    yield tuple((in_data, tar_data))
 
-        sample = next(iter(gen(nc_files, shuffle, seed=seed)))
+        s0 = next(iter(gen(nc_files)))
+        gen_mod = gen(nc_files)
 
-        gen_mod = gen(nc_files, shuffle, seed)
+        tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
+                                                  output_signature=(tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype),
+                                                                    tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)))
+
+        def normalize_batch(batch: tuple, norm_dict):
+
+            mu_in, std_in = tf.constant(norm_dict["mu_in"], dtype=batch[0].dtype), \
+                            tf.constant(norm_dict["std_in"], dtype=batch[0].dtype)
+            mu_tar, std_tar = tf.constant(norm_dict["mu_tar"], dtype=batch[1].dtype), \
+                              tf.constant(norm_dict["std_tar"], dtype=batch[1].dtype)
+
+            in_normed, tar_normed = tf.divide(tf.subtract(batch[0], mu_in), std_in), \
+                                    tf.divide(tf.subtract(batch[1], mu_tar), std_tar)
+
+            return in_normed, tar_normed
+
+        def parse_example(in_data, tar_data):
+            return normalize_batch((in_data, tar_data), norm_data)
+
+        tfds_dat = tfds_dat.shuffle(buffer_size=20000).batch(self.hparams["batch_size"]).map(parse_example)
+        tfds_dat = tfds_dat.repeat(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1)).prefetch(1000)
+
+        return tfds_dat
+
+
+
+
 
         if not self.hparams["z_branch"]:
             ds = ds.drop(var2drop, dim="variables")
