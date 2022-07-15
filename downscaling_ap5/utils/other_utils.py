@@ -108,8 +108,8 @@ def get_func_kwargs(func, kwargs):
 def subset_files_on_date(all_files_list: list, val: int, filter_basedir: bool = False, date_alias: str = "H"):
     """
     Subsets a list of files based on a time-pattern that must be part of the filename.
-    :param all_files_list: list of all files
-    :param val: time value (default meaning: hour of the day, see date_alias)
+    :param all_files_list: list of all files from which dates should be extracted using date_alias and compared to val
+    :param val: time value which can be either an integer or a string; interpretation depends on date_alias
     :param filter_basedir: flag for removing base-directory when subsetting, e.g. when dates are present in basedir
     :param date_alias: valid datetime formats
     (see https://docs.python.org/3/library/datetime.html#strftime-strptime-behavior)
