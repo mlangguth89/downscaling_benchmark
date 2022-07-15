@@ -90,7 +90,7 @@ class WGAN(keras.Model):
         self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
 
-    def compile(self, da_train, da_val):
+    def compile(self, data_dir, months_train, months_val, predictors, predictands, norm_dict):
         """
         Turn datasets into tf.Datasets, compile model and set learning rate schedule (optionally)
         :param da_train: Data Array providing the training data (must have variables-dimension)
@@ -109,7 +109,8 @@ class WGAN(keras.Model):
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_data_generator(da_train, ds_val=da_val)
+        train_iter = self.make_data_generator(data_dir, months_train, predictors, predictands, norm_dict)
+        val_iter = self.make_data_generator(data_dir, months_val, predictors, predictands, norm_dict)
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
