@@ -5,6 +5,7 @@ __update__ = "2022-06-28"
 
 import os, glob
 from collections import OrderedDict
+import random
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
@@ -225,17 +226,34 @@ class WGAN(keras.Model):
         return self.generator(predictors, training=False)
 
     def make_data_generator(self, data_dir: str, month_list: List, predictors: List, predictands: List, norm_data: dict,
-                            shuffle: bool = True, embed=None, embed_val=None, var2drop: str = "z_tar",
-                            seed: int = 42) -> tf.data.Dataset:
+                            shuffle: bool = True, embed=None, seed: int = 42) -> tf.data.Dataset:
+        """
+        Creates TensorFlow dataset for input ipeline to neural networks.
+        :param data_dir: directory where monthly netCDF-files are saved (e.g. preproc_2016-01.nc)
+        :param month_list: list of monts saved as datetime-objects to be used for dataset
+        :param predictors: list of predictor variables
+        :param predictands: list of predictands
+        :param norm_data: parameters for normalization
+        :param shuffle: Flag to perform shuffling on the dataset
+        :param embed: embedding of daytime and month (not implemented yet)
+        :param seed: seed for random shuffling
+        """
 
         nc_files_dir = glob.glob(os.path.join(data_dir, "preproc*.nc"))
 
         all_vars = to_list(predictors) + to_list(predictands)
 
+        # filter files based on months of interest
         nc_files = []
         for yr_mm in month_list:
             nc_files = nc_files + subset_files_on_date(nc_files_dir, yr_mm, date_alias="%Y-%m")
 
+        # shuffle if desired
+        if shuffle:
+            random.seed(seed)
+            random.shuffle(nc_files)
+
+        # auxiliary function for generator
         def gen(nc_files_ds):
 
             for file in nc_files_ds:
@@ -251,10 +269,12 @@ class WGAN(keras.Model):
         s0 = next(iter(gen(nc_files)))
         gen_mod = gen(nc_files)
 
+        # create TF dataset from generator function
         tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
                                                   output_signature=(tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype),
                                                                     tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)))
 
+        # Define normalization function to be applied to mini-batches...
         def normalize_batch(batch: tuple, norm_dict):
 
             mu_in, std_in = tf.constant(norm_dict["mu_in"], dtype=batch[0].dtype), \
@@ -270,47 +290,11 @@ class WGAN(keras.Model):
         def parse_example(in_data, tar_data):
             return normalize_batch((in_data, tar_data), norm_data)
 
-        tfds_dat = tfds_dat.shuffle(buffer_size=20000).batch(self.hparams["batch_size"]).map(parse_example)
+        # ...and configure dataset
+        tfds_dat = tfds_dat.shuffle(buffer_size=20000, seed=seed).batch(self.hparams["batch_size"]).map(parse_example)
         tfds_dat = tfds_dat.repeat(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1)).prefetch(1000)
 
         return tfds_dat
-
-
-
-
-
-        if not self.hparams["z_branch"]:
-            ds = ds.drop(var2drop, dim="variables")
-
-        ds_in, ds_tar = WGAN.split_in_tar(ds)
-
-        if self.hparams["l_embed"]:
-            if not embed:
-                raise ValueError("Embedding is enabled, but no embedding data was parsed.")
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
-        else:
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
-
-        # repeat must be before shuffle to get varying mini-batches per epoch
-        # increase batch-size to allow substepping
-        data_iter = data_iter.repeat().shuffle(10000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
-        # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
-
-        if ds_val is not None:
-            ds_val_in, ds_val_tar = WGAN.split_in_tar(ds_val)
-
-            if self.hparams["l_embed"]:
-                if not embed_val:
-                    raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
-            else:
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
-
-            val_iter = val_iter.repeat().batch(self.hparams["batch_size"])
-
-            return data_iter, val_iter
-        else:
-            return data_iter
 
     def gradient_penalty(self, real_data, gen_data):
         """
