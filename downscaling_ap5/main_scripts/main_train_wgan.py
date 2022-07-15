@@ -11,7 +11,7 @@ import gc
 import json as js
 from timeit import default_timer as timer
 import numpy as np
-import xarray as xr
+import pandas as pd
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils.layer_utils import count_params
@@ -33,13 +33,9 @@ def main(parser_args):
     outdir = parser_args.output_dir
     job_id = parser_args.id
 
-    # Read training and validation data
-    print("Start reading data from disk...")
-    t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "era5_to_ifs_train_corrected.nc")), \
-                       xr.open_dataset(os.path.join(datadir, "era5_to_ifs_val_corrected.nc"))
-
-    benchmark_dict = {"loading data time": timer() - t0_save}
+    # (still) hard-coded list of months whose data serves for training and validation
+    train_months = [month.strftime("%Y-%m") for month in pd.date_range("2016-01", "2019-12", freq="MS")]
+    val_months = [month.strftime("%Y-%m") for month in pd.date_range("2020-01", "2020-06", freq="MS")]
 
     keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
