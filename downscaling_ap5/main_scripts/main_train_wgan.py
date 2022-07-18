@@ -33,43 +33,35 @@ def main(parser_args):
     outdir = parser_args.output_dir
     job_id = parser_args.id
 
+    predictors, predictands = parser_args.predictors, to_list(parser_args.predictands)
+
     # (still) hard-coded list of months whose data serves for training and validation
     train_months = [month.strftime("%Y-%m") for month in pd.date_range("2016-01", "2019-12", freq="MS")]
     val_months = [month.strftime("%Y-%m") for month in pd.date_range("2020-01", "2020-06", freq="MS")]
 
-    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "predictors", "predictands"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
+
+    if args_dict["z_branch"]:
+        if "z_tar" not in predictands:
+            predictands.append("z_tar")
+    else:
+        if "z_tar" in predictands:
+            predictands.pop("z_tar")
+
     # set critic learning rate equal to generator if not supplied
     if not "lr_critic": args_dict["lr_critic"] = args_dict["lr_gen"]
 
+    # instantiate WGAN model
     wgan_model = WGAN(build_unet, critic_model, args_dict)
 
-    # preprocess data (i.e. normalizing)
-    def reshape_ds(ds):
-        da = ds.to_array(dim="variables")
-        da = da.transpose(..., "variables")
-        return da
-
-    t0_preproc = timer()
-    da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
-
-    norm_dims = ["time", "lat", "lon"]
-    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
-    da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
-
-    del ds_train
-    del ds_val
-    gc.collect()
-    
-    t0_compile = timer()
-    benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
-
     # compile model and get dataset iterators
-    print("Start compiling WGAN-model.")
-    train_iter, val_iter = wgan_model.compile(da_train.astype(np.float32), da_val.astype(np.float32))
+    print("Start setting up training and vaildation datasets and compiling WGAN-model")
+    t0_compile = timer()
+    train_iter, val_iter = wgan_model.compile(datadir, train_months, val_months, predictors, predictands)
 
-    benchmark_dict["model compile time"] = timer() - t0_compile
+    benchmark_dict = {"model compile time": timer() - t0_compile}
 
     # train model
     # define class for creating timer callback
@@ -183,6 +175,10 @@ if __name__ == "__main__":
                         help="Substeps to train critic/discriminator of WGAN.")
     parser.add_argument("--reconstruction_weight", "-recon_wgt", dest="recon_weight", type=float, default=1000.,
                         help="Reconstruction weight used by generator.")
+    parser.add_argument("--predictor_variables", "-predictors", dest="predictors", type=str, required=True, nargs="+",
+                        help="List of predictor variables which must be included in netCDF-files (see --input_dir/-in)")
+    parser.add_argument("--predictand_variables", "-predictands", dest="predictands", type=str, nargs="+", required=True,
+                        help="List of predictor variables which must be included in netCDF-files (see --input_dir/-in)")
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
