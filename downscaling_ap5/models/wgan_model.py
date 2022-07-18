@@ -86,31 +86,36 @@ class WGAN(keras.Model):
             raise ValueError("Embedding is not implemented yet.")
         # set in compile-method
         self.train_iter, self.val_iter = None, None
-        self.shape_in, self.nsamples = None, None
+        self.shape_in, self.shape_tar, self.nsamples = None, None, None
         self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
 
-    def compile(self, data_dir, months_train, months_val, predictors, predictands, norm_dict):
+    def compile(self, data_dir, months_train, months_val, predictors, predictands):
         """
         Turn datasets into tf.Datasets, compile model and set learning rate schedule (optionally)
-        :param da_train: Data Array providing the training data (must have variables-dimension)
-        :param da_val: Data Array providing the validation data (must have variables-dimension)
+        :param data_dir: Data Array providing the training data (must have variables-dimension)
+        :param months_train: list of months used to build training dataset (strings with format <YYYY>-<MM>)
+        :param months_val: list of months used to build validation dataset (strings with format <YYYY>-<MM>)
+        :param predictors: list of predictor variables
+        :param predictands: list of predictand (target) variable(-s)
         :return: tf.Datasets for training and validation data
         """
-        invars = [var for var in da_train["variables"].values if var.endswith("_in")]
+        self.nsamples, mu_all, std_all = WGAN.get_data_statistics(data_dir, months_train, predictors + predictands)
 
-        # determine shape-dimensions from data
-        shape_all = da_train.sel({"variables": invars}).shape
-        self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
+        norm_dict = {"mu_in": mu_all[predictors].values, "std_in": std_all[predictors].values,
+                     "mu_tar": mu_all[predictands].values, "std_tar": std_all[predictands].values}
 
-        tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
+        # set-up dataset iterators for traing and validation dataset
+        train_iter, data_shp = self.make_data_generator(data_dir, months_train, predictors, predictands, norm_dict)
+        val_iter, _ = self.make_data_generator(data_dir, months_val, predictors, predictands, norm_dict)
+
+        self.shape_in, self.shape_tar = data_shp["shape_in"], data_shp["shape_tar"]
+
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
-        self.critic = self.critic(tar_shape)
+        self.critic = self.critic(self.tar_shape)
 
-        train_iter = self.make_data_generator(data_dir, months_train, predictors, predictands, norm_dict)
-        val_iter = self.make_data_generator(data_dir, months_val, predictors, predictands, norm_dict)
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
@@ -231,10 +236,10 @@ class WGAN(keras.Model):
         """
         Creates TensorFlow dataset for input ipeline to neural networks.
         :param data_dir: directory where monthly netCDF-files are saved (e.g. preproc_2016-01.nc)
-        :param month_list: list of monts saved as datetime-objects to be used for dataset
+        :param month_list: list of months (strings with format <YYYY>-<MM>)
         :param predictors: list of predictor variables
         :param predictands: list of predictands
-        :param norm_data: parameters for normalization
+        :param norm_data: dictionary containing data statistics for normalization (keys: mu_in, std_in, mu_tar, std_tar)
         :param shuffle: Flag to perform shuffling on the dataset
         :param embed: embedding of daytime and month (not implemented yet)
         :param seed: seed for random shuffling
@@ -248,6 +253,10 @@ class WGAN(keras.Model):
         nc_files = []
         for yr_mm in month_list:
             nc_files = nc_files + subset_files_on_date(nc_files_dir, yr_mm, date_alias="%Y-%m")
+
+        if not nc_files:
+            raise FileNotFoundError("Could not find any datafiles under '{0}' containing data for the months: {1}"
+                                    .format(data_dir, ", ".join(month_list)))
 
         # shuffle if desired
         if shuffle:
@@ -342,29 +351,27 @@ class WGAN(keras.Model):
         return cls(**config)
 
     @staticmethod
-    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
+    def get_data_statistics(data_dir: str, month_list: List, variables: List) -> (int, xr.Dataset, xr.Dataset):
         """
-        Split data array with variables-dimension into input and target data for downscaling.
-        :param da: The unsplitted data array.
-        :param target_var: Name of target variable which should consttute the first channel
-        :return: The splitted data array.
+        Get number of samples from several monthly netCDF-files using open_mfdataset.
+        :param data_dir: directory where monthly netCDF-files are saved (e.g. preproc_2016-01.nc)
+        :param month_list: list of months (strings with format <YYYY>-<MM>)
+        :param variables: List of variables for which mean and standard deviation should be computed
+        :return: number of samples from scanned files, mean and standard deviations of variables
         """
-        invars = [var for var in da["variables"].values if var.endswith("_in")]
-        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
+        nc_files_dir = glob.glob(os.path.join(data_dir, "preproc*.nc"))
+        # filter files based on months of interest
+        nc_files = []
+        for yr_mm in month_list:
+            nc_files = nc_files + subset_files_on_date(nc_files_dir, yr_mm, date_alias="%Y-%m")
 
-        # ensure that ds_tar has a channel coordinate even in case of single target variable
-        roll = False
-        if len(tarvars) == 1:
-            sl_tarvars = tarvars
-        else:
-            sl_tarvars = slice(*tarvars)
-            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
-                roll = True
+        data_all = xr.open_mfdataset(nc_files)
 
-        da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
-        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
+        nsamples = len(data_all["time"])
+        norm_dims = ["time", "lat", "lon"]
+        mu_data, std_data = data_all[variables].mean(dims=norm_dims), data_all[variables].std(dim=norm_dims)
 
-        return da_in, da_tar
+        return nsamples, mu_data, std_data
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
