@@ -34,7 +34,7 @@ if [ -z ${VIRTUAL_ENV} ]; then
 fi
 
 # data-directories
-indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/all_files/
 outdir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_ap5/trained_models/
 
 # declare directory-variables which will be modified by config_runscript.py
@@ -44,7 +44,10 @@ lr_critic=1.e-06
 lr_end=5.e-06
 lr_decay=True
 model_name=my_wgan_model
+predictors=("2t_in" "z_in" "sshf_in" "slhf_in" "blh_in" "10u_in" "10v_in" "t850_in" "t925_in")
+predictands=("t2m_tar" "z_tar")
 
-srun --overlap python3 ../main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -lr_gen ${lr_gen} -lr_critic ${lr_critic} -lr_gen_end ${lr_end} \
-                                                          -nepochs ${nepochs} -lr_decay -model_name ${model_name} -id ${SLURM_JOBID}
+srun --overlap python3 ../main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -predictors "${predictors[@]}" -predictands "${predictands[@]}" \
+                                                          -lr_gen ${lr_gen} -lr_critic ${lr_critic} -lr_gen_end ${lr_end} -nepochs ${nepochs} -lr_decay \
+                                                          -model_name ${model_name} -id ${SLURM_JOBID}
 
