@@ -102,19 +102,22 @@ class WGAN(keras.Model):
         """
         self.nsamples, mu_all, std_all = WGAN.get_data_statistics(data_dir, months_train, predictors + predictands)
 
-        norm_dict = {"mu_in": mu_all[predictors].values, "std_in": std_all[predictors].values,
-                     "mu_tar": mu_all[predictands].values, "std_tar": std_all[predictands].values}
+        norm_dict = {"mu_in": mu_all[predictors].to_array().as_numpy(), "std_in": std_all[predictors].to_array().as_numpy(),
+                     "mu_tar": mu_all[predictands].to_array().as_numpy(), "std_tar": std_all[predictands].to_array().as_numpy()}
 
         # set-up dataset iterators for traing and validation dataset
         train_iter, data_shp = self.make_data_generator(data_dir, months_train, predictors, predictands, norm_dict)
         val_iter, _ = self.make_data_generator(data_dir, months_val, predictors, predictands, norm_dict)
+
+        print(data_shp["shape_in"])
+        print(data_shp["shape_tar"])
 
         self.shape_in, self.shape_tar = data_shp["shape_in"], data_shp["shape_tar"]
 
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
-        self.critic = self.critic(self.tar_shape)
+        self.critic = self.critic(self.shape_tar)
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -249,6 +252,8 @@ class WGAN(keras.Model):
 
         all_vars = to_list(predictors) + to_list(predictands)
 
+        print(all_vars)
+
         # filter files based on months of interest
         nc_files = []
         for yr_mm in month_list:
@@ -274,15 +279,16 @@ class WGAN(keras.Model):
                     ds_t = ds.isel({"time": t})
                     in_data, tar_data = ds_t[predictors].to_array(dim="variables").transpose(..., "variables"), \
                                         ds_t[predictands].to_array(dim="variables").transpose(..., "variables")
-                    yield tuple((in_data, tar_data))
+                    yield tuple((in_data.values, tar_data.values))
 
         s0 = next(iter(gen(nc_files)))
         gen_mod = gen(nc_files)
+        sample_shp = {"shape_in": s0[0].shape, "shape_tar": s0[1].shape}
 
         # create TF dataset from generator function
         tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
-                                                  output_signature=(tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype),
-                                                                    tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)))
+                                                  output_signature=(tf.TensorSpec(sample_shp["shape_in"], dtype=s0[0].dtype),
+                                                                    tf.TensorSpec(sample_shp["shape_tar"], dtype=s0[1].dtype)))
 
         # Define normalization function to be applied to mini-batches...
         def normalize_batch(batch: tuple, norm_dict):
@@ -304,7 +310,7 @@ class WGAN(keras.Model):
         tfds_dat = tfds_dat.shuffle(buffer_size=20000, seed=seed).batch(self.hparams["batch_size"]).map(parse_example)
         tfds_dat = tfds_dat.repeat(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1)).prefetch(1000)
 
-        return tfds_dat
+        return tfds_dat, sample_shp
 
     def gradient_penalty(self, real_data, gen_data):
         """
@@ -369,9 +375,9 @@ class WGAN(keras.Model):
 
         nsamples = len(data_all["time"])
         norm_dims = ["time", "lat", "lon"]
-        mu_data, std_data = data_all[variables].mean(dims=norm_dims), data_all[variables].std(dim=norm_dims)
+        mu_data, std_data = data_all[variables].mean(dim=norm_dims), data_all[variables].std(dim=norm_dims)
 
-        return nsamples, mu_data, std_data
+        return nsamples, mu_data.compute(), std_data.compute()
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
