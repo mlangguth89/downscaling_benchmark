@@ -114,7 +114,8 @@ class WGAN(keras.Model):
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
-        self.critic = self.critic(self.shape_tar)
+        # NOTE: critic only accounts for 1st channel (= downscaling target) -> parse shape accordingly
+        self.critic = self.critic((*sample_shp["shape_tar"][:-1], 1))
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -279,7 +280,7 @@ class WGAN(keras.Model):
         s0 = next(iter(gen(nc_files)))
         gen_mod = gen(nc_files)
         # NOTE: critic only accounts for 1st channel (= downscaling target) -> shape_tar-value set accordingly
-        sample_shp = {"shape_in": s0[0].shape, "shape_tar": (*s0[1].shape[:-1], 1)}
+        sample_shp = {"shape_in": s0[0].shape, "shape_tar": s0[1].shape}
 
         # create TF dataset from generator function
         tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
