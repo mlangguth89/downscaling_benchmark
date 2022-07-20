@@ -268,7 +268,7 @@ class WGAN(keras.Model):
 
             for file in nc_files_ds:
                 ds = xr.open_dataset(file, engine='netcdf4')
-                ds = ds[all_vars]
+                ds = ds[all_vars].astype(np.float32)
                 ntimes = len(ds["time"])
                 for t in range(ntimes):
                     ds_t = ds.isel({"time": t})
@@ -373,7 +373,7 @@ class WGAN(keras.Model):
         norm_dims = ["time", "lat", "lon"]
         mu_data, std_data = data_all[variables].mean(dim=norm_dims), data_all[variables].std(dim=norm_dims)
 
-        return nsamples, mu_data.compute(), std_data.compute()
+        return nsamples, mu_data.astype(np.float32).compute(), std_data.astype(np.float32).compute()
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
