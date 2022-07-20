@@ -109,9 +109,6 @@ class WGAN(keras.Model):
         train_iter, data_shp = self.make_data_generator(data_dir, months_train, predictors, predictands, norm_dict)
         val_iter, _ = self.make_data_generator(data_dir, months_val, predictors, predictands, norm_dict)
 
-        print(data_shp["shape_in"])
-        print(data_shp["shape_tar"])
-
         self.shape_in, self.shape_tar = data_shp["shape_in"], data_shp["shape_tar"]
 
         # instantiate models
@@ -252,8 +249,6 @@ class WGAN(keras.Model):
 
         all_vars = to_list(predictors) + to_list(predictands)
 
-        print(all_vars)
-
         # filter files based on months of interest
         nc_files = []
         for yr_mm in month_list:
@@ -283,7 +278,8 @@ class WGAN(keras.Model):
 
         s0 = next(iter(gen(nc_files)))
         gen_mod = gen(nc_files)
-        sample_shp = {"shape_in": s0[0].shape, "shape_tar": s0[1].shape}
+        # NOTE: critic only accounts for 1st channel (= downscaling target) -> shape_tar-value set accordingly
+        sample_shp = {"shape_in": s0[0].shape, "shape_tar": (*s0[1].shape[:-1], 1)}
 
         # create TF dataset from generator function
         tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
