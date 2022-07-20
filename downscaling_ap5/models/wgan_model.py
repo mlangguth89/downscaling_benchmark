@@ -115,7 +115,7 @@ class WGAN(keras.Model):
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
         # NOTE: critic only accounts for 1st channel (= downscaling target) -> parse shape accordingly
-        self.critic = self.critic((*sample_shp["shape_tar"][:-1], 1))
+        self.critic = self.critic((*data_shp["shape_tar"][:-1], 1))
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -177,6 +177,7 @@ class WGAN(keras.Model):
         # train the critic d_steps-times
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
+                tf.print("substep: " ,i)
                 ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
                 # critic only operates on first channel
                 predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
@@ -187,6 +188,10 @@ class WGAN(keras.Model):
                 critic_gt = self.critic(predictands_critic, training=True)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = WGAN.critic_loss(critic_gt, critic_gen)
+                
+                tf.print(predictands_critic)
+                tf.print(gen_data[0])
+                tf.print("******************************")
                 gp = self.gradient_penalty(predictands_critic, gen_data[0])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
@@ -278,9 +283,8 @@ class WGAN(keras.Model):
                     yield tuple((in_data.values, tar_data.values))
 
         s0 = next(iter(gen(nc_files)))
-        gen_mod = gen(nc_files)
-        # NOTE: critic only accounts for 1st channel (= downscaling target) -> shape_tar-value set accordingly
         sample_shp = {"shape_in": s0[0].shape, "shape_tar": s0[1].shape}
+        gen_mod = gen(nc_files)
 
         # create TF dataset from generator function
         tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
@@ -304,8 +308,9 @@ class WGAN(keras.Model):
             return normalize_batch((in_data, tar_data), norm_data)
 
         # ...and configure dataset
-        tfds_dat = tfds_dat.shuffle(buffer_size=20000, seed=seed).batch(self.hparams["batch_size"]).map(parse_example)
-        tfds_dat = tfds_dat.repeat(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1)).prefetch(1000)
+        scal_eff = self.hparams["d_steps"] + 1
+        tfds_dat = tfds_dat.repeat().shuffle(buffer_size=20000, seed=seed)
+        tfds_dat = tfds_dat.batch(scal_eff*self.hparams["batch_size"]).map(parse_example).prefetch(1000)
 
         return tfds_dat, sample_shp
 
