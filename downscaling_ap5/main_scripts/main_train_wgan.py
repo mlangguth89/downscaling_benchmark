@@ -39,7 +39,7 @@ def main(parser_args):
     train_months = [month.strftime("%Y-%m") for month in pd.date_range("2016-01", "2019-12", freq="MS")]
     val_months = [month.strftime("%Y-%m") for month in pd.date_range("2020-01", "2020-06", freq="MS")]
 
-    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "predictors", "predictands"]
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "predictors", "predictands", "model_name"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
 
