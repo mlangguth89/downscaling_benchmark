@@ -7,10 +7,8 @@ import os
 import argparse
 from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
-import gc
 import json as js
 from timeit import default_timer as timer
-import numpy as np
 import pandas as pd
 import tensorflow as tf
 import tensorflow.keras as keras
