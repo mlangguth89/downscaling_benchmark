@@ -177,7 +177,6 @@ class WGAN(keras.Model):
         # train the critic d_steps-times
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
-                tf.print("substep: " ,i)
                 ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
                 # critic only operates on first channel
                 predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
@@ -189,9 +188,6 @@ class WGAN(keras.Model):
                 # calculate the loss (incl. gradient penalty)
                 c_loss = WGAN.critic_loss(critic_gt, critic_gen)
                 
-                tf.print(predictands_critic)
-                tf.print(gen_data[0])
-                tf.print("******************************")
                 gp = self.gradient_penalty(predictands_critic, gen_data[0])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
@@ -270,9 +266,9 @@ class WGAN(keras.Model):
             random.shuffle(nc_files)
 
         # auxiliary function for generator
-        def gen(nc_files_ds):
+        def gen():
 
-            for file in nc_files_ds:
+            for file in nc_files:
                 ds = xr.open_dataset(file, engine='netcdf4')
                 ds = ds[all_vars].astype(np.float32)
                 ntimes = len(ds["time"])
@@ -282,12 +278,12 @@ class WGAN(keras.Model):
                                         ds_t[predictands].to_array(dim="variables").transpose(..., "variables")
                     yield tuple((in_data.values, tar_data.values))
 
-        s0 = next(iter(gen(nc_files)))
+        s0 = next(iter(gen()))
         sample_shp = {"shape_in": s0[0].shape, "shape_tar": s0[1].shape}
-        gen_mod = gen(nc_files)
+        #gen_mod = gen(nc_files)
 
         # create TF dataset from generator function
-        tfds_dat = tf.data.Dataset.from_generator(lambda: gen_mod,
+        tfds_dat = tf.data.Dataset.from_generator(gen,
                                                   output_signature=(tf.TensorSpec(sample_shp["shape_in"], dtype=s0[0].dtype),
                                                                     tf.TensorSpec(sample_shp["shape_tar"], dtype=s0[1].dtype)))
 
