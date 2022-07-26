@@ -13,6 +13,7 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 import pathlib
+import math
 
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
@@ -23,7 +24,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
     def __init__(self, file_path: str = None, batch_size: int = 4, patch_size: int = 16,
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
-                 var_out: list = ["yw_hourly_tar"], sf: int = 10):
+                 var_out: list = ["yw_hourly_tar"], sf: int = 10,
+                 seed: int = 1234):
         """
         file_path : the path to the directory of .nc files
         vars_in   : the list contains the input variable names
@@ -32,6 +34,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         patch_size: the patch size for low-resolution image,
                     the corresponding high-resolution patch size should be muliply by scale factor (sf)
         sf        : the scaling factor from low-resolution to high-resolution
+        seed      : specify a seed so that we can generate the same random index for shuffle function
         """
 
         super(PrecipDatasetInter).__init__()
@@ -41,6 +44,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.vars_in = vars_in
         self.var_out = var_out
         self.batch_size = batch_size
+        self.seed = seed
 
 
         # Search for files
@@ -60,11 +64,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             vars_in_patches_list.append(vars_in_patches)
             vars_out_patches_list.append(vars_out_patches)
 
-        vars_in_patches_list = torch.utils.data.ConcatDataset(vars_in_patches_list)
-        vars_out_patches_list = torch.utils.data.ConcatDataset(vars_out_patches_list)
+        self.vars_in_patches_list = torch.utils.data.ConcatDataset(vars_in_patches_list)
+        self.vars_out_patches_list = torch.utils.data.ConcatDataset(vars_out_patches_list)
         print("Len of vars in", vars_in_patches_list.shape)
 
-        self.shuffle()
+
+        self.idx_perm = self.shuffle()
 
 
 
@@ -85,12 +90,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         assert inputs.dims["time"] == output.dims["time"]
         assert inputs.dims["lat"] * self.sf == output.dims["lat_tar"]
 
-        n_patches_x = int(np.floor(n_lon) / self.patch_size)
-        n_patches_y = int(np.floor(n_lat) / self.patch_size)
+        self.n_patches_x = int(np.floor(n_lon) / self.patch_size)
+        self.n_patches_y = int(np.floor(n_lat) / self.patch_size)
 
         # initialize the vars in after patch
         self.vars_in_per_t = torch.zeros((inputs.dims["time"], self.patch_size, self.patch_size,
-                                          n_patches_x, n_patches_y))
+                                          self.n_patches_x, self.n_patches_y))
 
         print("The input variables are initialized")
 
@@ -100,20 +105,21 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Original input shape:", da_in.shape)
         print("Original output shape:", da_out.shape)
 
-        # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size]
-        vars_in_patches = da_in.unfold(2, self.patch_size, n_patches_x).unfold(3, self.patch_size, n_patches_y)
+        # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size, patch_size]
+        vars_in_patches = da_in.unfold(2, self.patch_size, self.n_patches_x).unfold(3, self.patch_size, self.n_patches_y)
         vars_in_patches_shape = list(vars_in_patches.shape)
         vars_in_patches = torch.reshape(vars_in_patches, [vars_in_patches_shape[0],
                                                           vars_in_patches_shape[1] * vars_in_patches_shape[2] *
                                                           vars_in_patches_shape[3],
                                                           vars_in_patches_shape[4], vars_in_patches_shape[5]])
+
         vars_in_patches = torch.transpose(vars_in_patches, 0, 1)
         print("vars_in_patches after reshape:", vars_in_patches.shape)
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
-                                         n_patches_x * self.sf).unfold(2,
+                                         self.n_patches_x * self.sf).unfold(2,
                                                                        self.patch_size * self.sf,
-                                                                       n_patches_y * self.sf)
+                                                                       self.n_patches_y * self.sf)
         print("vars_output_patch", vars_out_patches.shape)
         vars_out_patches_shape = list(vars_out_patches.shape)
         vars_out_patches = torch.reshape(vars_out_patches,
@@ -138,6 +144,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         vars_in_patches_no_nan = torch.index_select(vars_in_patches, 0, no_nan_idx)
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
+        self.n_samples = len(vars_out_pathes_no_nan)
+
+
         print("len of vars output", len(vars_out_pathes_no_nan))
         print("len of vars input", len(vars_in_patches_no_nan))
         print("len of vars times", len(times))
@@ -147,22 +156,54 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
     def shuffle(self):
-        pass
+        """
+        shuffle the index
+        """
+        multiformer_np_rng = np.random.default_rng(self.seed)
+        idx_perm = multiformer_np_rng(self.n_samples)
+
+        # restrict to multiples of batch size
+        idx = int(math.floor(self.n_samples/self.batch_size)) * self.batch_size
+
+        idx_perm = idx_perm[idx]
+
+        return idx_perm
 
 
 
     def __iter__(self):
+
         iter_start, iter_end = 0, 771  # todo
 
         for bidx in range(iter_start, iter_end):
-            x = torch.zeros(self.batch_size, self.num_tokens, self.num_tokens_y,
-                            self.tok_size, self.tok_size, self.nvars)
+
+            self.idx = iter_start * self.batch_size
+
+            #initialise x, y for each batch
+            x = torch.zeros(self.batch_size, len(self.vars_in),self.n_patch_x,
+                            self.n_patch_y, self.patch_size, self.patch_size)
+            y = torch.zeros(self.batch_size,self.n_patch_x,
+                            self.n_patch_y, self.patch_size, self.patch_size)
+
+            cids = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
+
+            for jj in range(self.batch_size):
+
+                cid = self.idx_perm[jj]
+                x[jj] = self.vars_in_patches_list[cid]
+                y[jj] = self.vars_out_patches_list[cid]
+                cidx = torch.tensor(cid, dtype=torch.int)
+
+                self.idx += 1
+
+            yield (x, y, cidx)
 
 
 def run():
-    data_loader = PrecipDatasetInter(file_path = "preproc_ifs_radklim_2020-01.nc")
-    print()
+    data_loader = PrecipDatasetInter(file_path = "preproc_ifs_radklim_2020-01g.nc")
 
+    for batch_idx, (inputs, target, idx) in enumerate(data_loader):
+        print("inputs", inputs)
 
 if __name__ == "__main__":
     run()
