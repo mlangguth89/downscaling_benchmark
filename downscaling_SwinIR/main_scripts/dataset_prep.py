@@ -56,7 +56,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
         if len(self.files) < 1:
             raise RuntimeError('No files found.')
-        print("Total files", self.files)
+        print("Going to open the following files:", self.files)
 
         #is_first = True
         vars_in_patches_list = []
@@ -69,20 +69,20 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         self.vars_in_patches_list = torch.utils.data.ConcatDataset(vars_in_patches_list)
         self.vars_out_patches_list = torch.utils.data.ConcatDataset(vars_out_patches_list)
-        print("vars in size", len(self.vars_in_patches_list))
-        print("var_out size",self.vars_out_patches_list)
+        print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
+        
+        self.n_samples = len(self.vars_in_patches_list)
+        #print("var_out size",self.vars_out_patches_list)
 
         self.idx_perm = self.shuffle()
-        print("self.idx_perm",self.idx_perm)
 
 
     def process_netcdf(self, file: int = None):
         """
         process one netcdf file: filter the Nan Values, split to patches
         """
-        print("Loading file:", file)
+        print("Loading data from the file:", file)
         dt = xr.open_dataset(file)
-        print("dt",dt)
         # get input variables, and select the regions
         inputs = dt[self.vars_in].isel(lon = slice(2, 114)).sel(lat = slice(47.5, 60))
         output = dt[self.var_out].isel(lon_tar = slice(16, 113 * 10 + 6)).sel(lat_tar = slice(47.41, 60))
@@ -100,13 +100,11 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.vars_in_per_t = torch.zeros((inputs.dims["time"], self.patch_size, self.patch_size,
                                           self.n_patches_x, self.n_patches_y))
 
-        print("The input variables are initialized")
 
         da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
         da_out = torch.from_numpy(output.to_array(dim = "variables").squeeze().values)
         times = inputs["time"].values  # get the timestamps
         print("Original input shape:", da_in.shape)
-        print("Original output shape:", da_out.shape)
 
         # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size, patch_size]
         vars_in_patches = da_in.unfold(2, self.patch_size, self.n_patches_x).unfold(3, self.patch_size, self.n_patches_y)
@@ -117,20 +115,19 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                                                           vars_in_patches_shape[4], vars_in_patches_shape[5]])
 
         vars_in_patches = torch.transpose(vars_in_patches, 0, 1)
-        print("vars_in_patches after reshape:", vars_in_patches.shape)
+        print("Input shape:", vars_in_patches.shape)
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
                                          self.n_patches_x * self.sf).unfold(2,
                                                                        self.patch_size * self.sf,
                                                                        self.n_patches_y * self.sf)
-        print("vars_output_patch", vars_out_patches.shape)
         vars_out_patches_shape = list(vars_out_patches.shape)
         vars_out_patches = torch.reshape(vars_out_patches,
                                          [vars_out_patches_shape[0] * vars_out_patches_shape[1] *
                                           vars_out_patches_shape[2],
                                           vars_out_patches_shape[3], vars_out_patches_shape[4]])
 
-        print("vars_output_patch after reshape", vars_out_patches.shape)
+        print("Output reshape", vars_out_patches.shape)
 
         no_nan_idx = []
 
@@ -147,13 +144,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         vars_in_patches_no_nan = torch.index_select(vars_in_patches, 0, no_nan_idx)
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
-        self.n_samples = len(vars_out_pathes_no_nan)
-
-
-        print("len of vars output", len(vars_out_pathes_no_nan))
-        print("len of vars input", len(vars_in_patches_no_nan))
-        print("len of vars times", len(times))
-
         return vars_in_patches_no_nan, vars_out_pathes_no_nan
 
 
@@ -162,6 +152,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         """
         shuffle the index
         """
+        print("Shuffling the index ....")
         multiformer_np_rng = np.random.default_rng(self.seed)
         idx_perm = multiformer_np_rng.permutation(self.n_samples)
 
@@ -176,22 +167,19 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
     def __iter__(self):
 
-        iter_start, iter_end = 0, 771  # todo
-
+        iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)  # todo
+        self.idx = 0
         for bidx in range(iter_start, iter_end):
-
-            self.idx = iter_start * self.batch_size
 
             #initialise x, y for each batch
             x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
             y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
 
-            cids = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
+            cidx = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
 
             for jj in range(self.batch_size):
 
-                cid = self.idx_perm[jj]
-                print("var_in_patches_list size cid",self.vars_in_patches_list[cid].size())
+                cid = self.idx_perm[self.idx]
                 x[jj] = self.vars_in_patches_list[cid]
                 y[jj] = self.vars_out_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
@@ -208,6 +196,7 @@ def run():
         print("inputs", inputs.size())
         print("target",target.size())
         print("idx",idx)
+        print("batch_idx",batch_idx)
 if __name__ == "__main__":
     run()
 
