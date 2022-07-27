@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pathlib
 import math
-
+from pathlib import Path
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -48,9 +48,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
         # Search for files
-        p = pathlib.Path(file_path)
-        assert (p.is_dir())
-        self.files = sorted(p.glob('*.nc'))
+        p = pathlib.Path( file_path)
+        assert(p.is_dir())
+        #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
+        #for path in p.rglob('preproc_ifs_radklim*.nc'):
+        #    print("pathname",path.name)
+        self.files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
         if len(self.files) < 1:
             raise RuntimeError('No files found.')
         print("Total files", self.files)
@@ -66,11 +69,11 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         self.vars_in_patches_list = torch.utils.data.ConcatDataset(vars_in_patches_list)
         self.vars_out_patches_list = torch.utils.data.ConcatDataset(vars_out_patches_list)
-        print("Len of vars in", vars_in_patches_list.shape)
-
+        print("vars in size", len(self.vars_in_patches_list))
+        print("var_out size",self.vars_out_patches_list)
 
         self.idx_perm = self.shuffle()
-
+        print("self.idx_perm",self.idx_perm)
 
 
     def process_netcdf(self, file: int = None):
@@ -79,7 +82,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         """
         print("Loading file:", file)
         dt = xr.open_dataset(file)
-
+        print("dt",dt)
         # get input variables, and select the regions
         inputs = dt[self.vars_in].isel(lon = slice(2, 114)).sel(lat = slice(47.5, 60))
         output = dt[self.var_out].isel(lon_tar = slice(16, 113 * 10 + 6)).sel(lat_tar = slice(47.41, 60))
@@ -160,12 +163,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         shuffle the index
         """
         multiformer_np_rng = np.random.default_rng(self.seed)
-        idx_perm = multiformer_np_rng(self.n_samples)
+        idx_perm = multiformer_np_rng.permutation(self.n_samples)
 
         # restrict to multiples of batch size
         idx = int(math.floor(self.n_samples/self.batch_size)) * self.batch_size
 
-        idx_perm = idx_perm[idx]
+        idx_perm = idx_perm[:idx]
 
         return idx_perm
 
@@ -180,16 +183,15 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             self.idx = iter_start * self.batch_size
 
             #initialise x, y for each batch
-            x = torch.zeros(self.batch_size, len(self.vars_in),self.n_patch_x,
-                            self.n_patch_y, self.patch_size, self.patch_size)
-            y = torch.zeros(self.batch_size,self.n_patch_x,
-                            self.n_patch_y, self.patch_size, self.patch_size)
+            x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
+            y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
 
             cids = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
 
             for jj in range(self.batch_size):
 
                 cid = self.idx_perm[jj]
+                print("var_in_patches_list size cid",self.vars_in_patches_list[cid].size())
                 x[jj] = self.vars_in_patches_list[cid]
                 y[jj] = self.vars_out_patches_list[cid]
                 cidx = torch.tensor(cid, dtype=torch.int)
@@ -200,11 +202,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
 def run():
-    data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk")
-
+    data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/")
+    print("created data_loader")
     for batch_idx, (inputs, target, idx) in enumerate(data_loader):
-        print("inputs", inputs)
-
+        print("inputs", inputs.size())
+        print("target",target.size())
+        print("idx",idx)
 if __name__ == "__main__":
     run()
 
