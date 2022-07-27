@@ -194,7 +194,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 print("var_in_patches_list size cid",self.vars_in_patches_list[cid].size())
                 x[jj] = self.vars_in_patches_list[cid]
                 y[jj] = self.vars_out_patches_list[cid]
-                cidx = torch.tensor(cid, dtype=torch.int)
+                cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
                 self.idx += 1
 
