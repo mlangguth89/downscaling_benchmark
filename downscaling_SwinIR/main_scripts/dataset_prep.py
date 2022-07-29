@@ -174,13 +174,17 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
                 self.idx += 1
 
-            yield (x, y, cidx)
+            yield  {'L': x, 'H': y, "idx":cidx}
 
 
 def run():
     data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/")
     print("created data_loader")
-    for batch_idx, (inputs, target, idx) in enumerate(data_loader):
+    for batch_idx, train_data in enumerate(data_loader):
+
+        inputs = train_data["L"]
+        target = train_data["H"]
+        idx = train_data["idx"]
         print("inputs", inputs.size())
         print("target",target.size())
         print("idx",idx)

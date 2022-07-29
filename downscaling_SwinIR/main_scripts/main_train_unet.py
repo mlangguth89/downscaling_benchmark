@@ -123,10 +123,10 @@ class BuildModel:
     # ----------------------------------------
     # feed L/H data
     # ----------------------------------------
-    def feed_data(self, inputs, output: torch.Tensor = None):
-        self.L = inputs.double()
-        if output:
-            self.H = output.double()
+    def feed_data(self, data, need_H=True):
+        self.L = data['L'].double()
+        if need_H:
+            self.H = data['H'].double()
 
     # ----------------------------------------
     # feed L to netG
@@ -169,15 +169,13 @@ class BuildModel:
 
 
 
+
 train_file_path = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train"
 test_file_path = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test"
 
 train_loader = create_loader(train_file_path)
 test_loader = create_loader(test_file_path)
-
-
 epochs = 2
-
 netG = net(n_channels=9)
 
 model = BuildModel(netG)
@@ -191,9 +189,6 @@ for epoch in range(epochs):
 
         current_step += 1
 
-        (x, y, cidx) = train_data
-
-        print("train_data",x)
 
         # -------------------------------
         # 1) update learning rate
@@ -203,7 +198,7 @@ for epoch in range(epochs):
         # -------------------------------
         # 2) feed patch pairs
         # -------------------------------
-        model.feed_data(x,y)
+        model.feed_data(train_data)
 
         # -------------------------------
         # 3) optimize parameters
