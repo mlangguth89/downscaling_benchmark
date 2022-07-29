@@ -106,7 +106,7 @@ class Decode_Block(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, channels_start: int = 56, bilinear = False):
+    def __init__(self, n_channels, channels_start: int = 56):
 
         super(UNet, self).__init__()
 

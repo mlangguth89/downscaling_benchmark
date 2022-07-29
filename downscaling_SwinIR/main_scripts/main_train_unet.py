@@ -1,7 +1,6 @@
 
-
 # SPDX-FileCopyrightText: 2021 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
-#
+
 # SPDX-License-Identifier: MIT
 
 __email__ = "b.gong@fz-juelich.de"
@@ -19,7 +18,8 @@ import sys
 import os
 import torch.nn as nn
 sys.path.append('../')
-from models.network_swinir import UNet as net
+from models.network_unet import UNet as net
+import time
 
 
 
@@ -27,11 +27,11 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234, loader_params:dict = None):
+                 seed: int = 1234, loader_params: dict = None):
 
     """
     file_path : the path to the directory of .nc files
-    vars_in   : the list contains the input variable names
+    vars_in   : the list contains the input variable namsaes
     var_out   : the list contains the output variable name
     batch_size: the number of samples per iteration
     patch_size: the patch size for low-resolution image,
@@ -40,7 +40,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
     seed      : specify a seed so that we can generate the same random index for shuffle function
     """
 
-    dataset = PrecipDatasetInter(file_path,batch_size,patch_size,vars_in,var_out, sf, seed)
+    dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
 
     return torch.utils.data.DataLoader(dataset, **loader_params)
 
@@ -123,10 +123,10 @@ class BuildModel:
     # ----------------------------------------
     # feed L/H data
     # ----------------------------------------
-    def feed_data(self, data, need_H=True):
-        self.L = data['L'].double()
-        if need_H:
-            self.H = data['H'].double()
+    def feed_data(self, inputs, output: torch.Tensor = None):
+        self.L = inputs.double()
+        if output:
+            self.H = output.double()
 
     # ----------------------------------------
     # feed L to netG
@@ -178,11 +178,46 @@ test_loader = create_loader(test_file_path)
 
 epochs = 2
 
-for epoch in range(epochs):  # keep running
+netG = net(n_channels=9)
+
+model = BuildModel(netG)
+model.init_train()
+current_step = 0
+CHECKPOINT_SAVE = 200 #how many steps to save checkpoint
+
+for epoch in range(epochs):
     for i, train_data in enumerate(train_loader):
-        if i == 0:
-         print("train_data",train_data.shape)
-        print("i",i)
+        st = time.time()
+
+        current_step += 1
+
+        (x, y, cidx) = train_data
+
+        print("train_data",x)
+
+        # -------------------------------
+        # 1) update learning rate
+        # -------------------------------
+        model.update_learning_rate(current_step)
+
+        # -------------------------------
+        # 2) feed patch pairs
+        # -------------------------------
+        model.feed_data(x,y)
+
+        # -------------------------------
+        # 3) optimize parameters
+        # -------------------------------
+        model.optimize_parameters(current_step)
+
+        # -------------------------------
+        # 6) Save model
+        # -------------------------------
+        if current_step == 1 or current_step % CHECKPOINT_SAVE == 0:
+            model.save(current_step)
+            print("Model Loss {} after step {}".format(model.G_loss, current_step))
+            print("Model Saved")
+            print("Time per step:", time.time() - st)
 
 
 
