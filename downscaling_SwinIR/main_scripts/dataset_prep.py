@@ -10,11 +10,9 @@ __date__ = "2022-07-13"
 
 import xarray as xr
 import torch
-import matplotlib.pyplot as plt
 import numpy as np
 import pathlib
 import math
-from pathlib import Path
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -53,22 +51,16 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
         #    print("pathname",path.name)
-        self.files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
-        if len(self.files) < 1:
+        files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
+        if len(files) < 1:
             raise RuntimeError('No files found.')
-        print("Going to open the following files:", self.files)
+        print("Going to open the following files:", files)
 
-        #is_first = True
-        vars_in_patches_list = []
-        vars_out_patches_list = []
 
-        for file in self.files:
-            vars_in_patches, vars_out_patches = self.process_netcdf(file)
-            vars_in_patches_list.append(vars_in_patches)
-            vars_out_patches_list.append(vars_out_patches)
 
-        self.vars_in_patches_list = torch.utils.data.ConcatDataset(vars_in_patches_list)
-        self.vars_out_patches_list = torch.utils.data.ConcatDataset(vars_out_patches_list)
+        self.vars_in_patches_list, self.vars_out_patches_list  = self.process_netcdf(files)
+
+
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
         
         self.n_samples = len(self.vars_in_patches_list)
@@ -77,12 +69,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.idx_perm = self.shuffle()
 
 
-    def process_netcdf(self, file: int = None):
+    def process_netcdf(self, filenames: int = None):
         """
-        process one netcdf file: filter the Nan Values, split to patches
+        process netcdf files: filter the Nan Values, split to patches
         """
-        print("Loading data from the file:", file)
-        dt = xr.open_dataset(file)
+        print("Loading data from the file:", filenames)
+        dt = xr.mfopen_dataset(filenames)
         # get input variables, and select the regions
         inputs = dt[self.vars_in].isel(lon = slice(2, 114)).sel(lat = slice(47.5, 60))
         output = dt[self.var_out].isel(lon_tar = slice(16, 113 * 10 + 6)).sel(lat_tar = slice(47.41, 60))
