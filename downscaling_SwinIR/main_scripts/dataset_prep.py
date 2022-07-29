@@ -74,7 +74,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         process netcdf files: filter the Nan Values, split to patches
         """
         print("Loading data from the file:", filenames)
-        dt = xr.mfopen_dataset(filenames)
+        dt = xr.open_mfdataset(filenames)
         # get input variables, and select the regions
         inputs = dt[self.vars_in].isel(lon = slice(2, 114)).sel(lat = slice(47.5, 60))
         output = dt[self.var_out].isel(lon_tar = slice(16, 113 * 10 + 6)).sel(lat_tar = slice(47.41, 60))
