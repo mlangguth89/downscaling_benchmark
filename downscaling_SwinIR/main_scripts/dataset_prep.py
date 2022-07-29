@@ -96,10 +96,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.n_patches_x = int(np.floor(n_lon) / self.patch_size)
         self.n_patches_y = int(np.floor(n_lat) / self.patch_size)
 
-        # initialize the vars in after patch
-        self.vars_in_per_t = torch.zeros((inputs.dims["time"], self.patch_size, self.patch_size,
-                                          self.n_patches_x, self.n_patches_y))
-
 
         da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
         da_out = torch.from_numpy(output.to_array(dim = "variables").squeeze().values)
@@ -107,7 +103,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Original input shape:", da_in.shape)
 
         # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size, patch_size]
-        vars_in_patches = da_in.unfold(2, self.patch_size, self.n_patches_x).unfold(3, self.patch_size, self.n_patches_y)
+        vars_in_patches = da_in.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
         vars_in_patches_shape = list(vars_in_patches.shape)
         vars_in_patches = torch.reshape(vars_in_patches, [vars_in_patches_shape[0],
                                                           vars_in_patches_shape[1] * vars_in_patches_shape[2] *
@@ -118,9 +114,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Input shape:", vars_in_patches.shape)
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
-                                         self.n_patches_x * self.sf).unfold(2,
+                                         self.patch_size * self.sf).unfold(2,
                                                                        self.patch_size * self.sf,
-                                                                       self.n_patches_y * self.sf)
+                                                                       self.patch_size * self.sf)
         vars_out_patches_shape = list(vars_out_patches.shape)
         vars_out_patches = torch.reshape(vars_out_patches,
                                          [vars_out_patches_shape[0] * vars_out_patches_shape[1] *
