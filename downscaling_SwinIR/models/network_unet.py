@@ -56,6 +56,9 @@ class Conv_Block_N(nn.Module):
 
         self.conv_block_n = nn.Sequential(*n_layers)
 
+    def forward(self, x):
+        return self.conv_block_n(x)
+
 
 class Encoder_Block(nn.Module):
     """Downscaling with maxpool then convol block"""
@@ -90,13 +93,9 @@ class Decode_Block(nn.Module):
                  stride_up: int = 2, padding: str = "same"):
         super().__init__()
 
-        # if bilinear, use the normal convolutions to reduce the number of channels
-        if bilinear:
-            self.up = nn.Upsample(scale_factor = 2, mode = 'bilinear', align_corners = True)
-            self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
-        else:
-            self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=stride_up, padding = padding)
-            self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
+
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=stride_up, padding = padding)
+        self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
 
     def forward(self, x1, x2):
         x1 = self.up(x1)
