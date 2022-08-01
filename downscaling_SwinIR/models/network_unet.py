@@ -12,12 +12,12 @@ __date__ = "2022-07-13"
 import torch
 import torch.nn as nn
 import numpy as np
-
+from torch import Tensor
 
 class Conv_Block(nn.Module):
 
     def __init__(self, in_channels :int = None, out_channels: int = None,
-                 kernel_size: int = 3, padding: str = "same"):
+                 kernel_size: int = 3, padding: str = "same",bias=True):
         """
         The convolutional block consists of one convolutional layer, bach normalization and activation function
         :param in_channels : the number of input channels
@@ -27,12 +27,12 @@ class Conv_Block(nn.Module):
         """
         super().__init__()
         self.conv_block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=bias),
             nn.BatchNorm2d(out_channels),
-            nn.ReLU(inplace=True),
+            nn.ReLU(inplace=True)
         )
 
-    def forward(self, x):
+     def forward(self, x: Tensor)->Tensor: 
         return self.conv_block(x)
 
 
@@ -51,7 +51,8 @@ class Conv_Block_N(nn.Module):
         """
         super().__init__()
         n_layers = [Conv_Block(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True)]
-        for _ in np.range(n-1):
+        for i in np.arange(n-1):
+            print("i",i)
             n_layers.append(Conv_Block(out_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True))
 
         self.conv_block_n = nn.Sequential(*n_layers)
@@ -80,7 +81,7 @@ class Encoder_Block(nn.Module):
 
         self.maxpool_conv = nn.MaxPool2d(kernel_maxpool)
 
-    def forward(self, x):
+    def forward(self, x:Tensor)->Tensor:
         x = self.layer1(x)
         e = self.maxpool_conv(x)
         return x, e
@@ -94,10 +95,10 @@ class Decode_Block(nn.Module):
         super().__init__()
 
 
-        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=stride_up, padding = padding)
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 0)
         self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
 
-    def forward(self, x1, x2):
+    def forward(self, x1: Tensor, x2:Tensor)->Tensor:
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
@@ -126,7 +127,8 @@ class UNet(nn.Module):
         torch.nn.init.xavier_uniform(self.output .weight)
 
 
-    def forward(self, x):
+    def forward(self, x:Tensor)->Tensor:
+        print("input shape",x.shape)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
         s3, e3 = self.down3(e2)
