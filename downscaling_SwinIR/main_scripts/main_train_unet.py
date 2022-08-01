@@ -143,6 +143,7 @@ class BuildModel:
         self.netG_forward()
         self.G_loss = self.G_lossfn(self.E, self.H)
         self.G_loss.backward()
+        self.G_optimizer.step()
 
     def update_learning_rate(self, n):
         for scheduler in self.schedulers:
