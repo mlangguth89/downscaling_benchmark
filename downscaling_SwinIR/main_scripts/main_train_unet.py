@@ -42,7 +42,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
 
     dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
 
-    return torch.utils.data.DataLoader(dataset, **loader_params)
+    return torch.utils.data.DataLoader(dataset, batch_size=None)
 
 
 
@@ -124,9 +124,10 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
-        self.L = data['L'].double()
+        print("datat[L] shape",data["L"].shape)
+        self.L = data['L']
         if need_H:
-            self.H = data['H'].double()
+            self.H = data['H']
 
     # ----------------------------------------
     # feed L to netG
@@ -176,7 +177,7 @@ test_file_path = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test"
 train_loader = create_loader(train_file_path)
 test_loader = create_loader(test_file_path)
 epochs = 2
-netG = net(n_channels=9)
+netG = net(n_channels=8)
 
 model = BuildModel(netG)
 model.init_train()
