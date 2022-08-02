@@ -133,7 +133,7 @@ class BuildModel:
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)
+        self.E = self.netG(self.L)[:,0,:,:]
 
     # ----------------------------------------
     # update parameters and get loss
@@ -179,7 +179,8 @@ train_loader = create_loader(train_file_path)
 test_loader = create_loader(test_file_path)
 epochs = 2
 netG = net(n_channels=8)
-
+netG_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+print("Total trainalbe parameters:",netG_params)
 model = BuildModel(netG)
 model.init_train()
 current_step = 0
