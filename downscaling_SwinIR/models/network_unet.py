@@ -20,6 +20,7 @@ class Upsampling(nn.Module):
     def __init__(self, in_channels :int = None, out_channels: int = None,
                  kernel_size: int = 3, padding: int = 1, stride: int = 2,
                  upsampling:bool = True, sf: int = 10 , mode = "bilinear"):
+        super().__init__()
         """
         This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
         Note: The input data is assumed to be of the form minibatch x channels x [optional depth] x [optional height] x width.
@@ -67,7 +68,7 @@ class Conv_Block(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-     def forward(self, x: Tensor)->Tensor: 
+    def forward(self, x: Tensor)->Tensor: 
         return self.conv_block(x)
 
 
