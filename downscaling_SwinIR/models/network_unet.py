@@ -67,7 +67,7 @@ class Conv_Block(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-     def forward(self, x: Tensor)->Tensor: 
+    def forward(self, x: Tensor)->Tensor: 
         return self.conv_block(x)
 
 
