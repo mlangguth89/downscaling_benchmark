@@ -14,6 +14,41 @@ import torch.nn as nn
 import numpy as np
 from torch import Tensor
 
+
+class Upsampling(nn.Module):
+
+    def __init__(self, in_channels :int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: int = 1, stride: int = 2,
+                 upsampling:bool = True, sf: int = 10 , mode = "bilinear"):
+        """
+        This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
+        Note: The input data is assumed to be of the form minibatch x channels x [optional depth] x [optional height] x width.
+        :param in_channels : the number of input variables
+        :param out_channels: the output channels for each ConvTranspose2D layer
+        :param kernel_size : the kernel size
+        :param padding     : the padding size
+        :param stride      : the stride size
+        :param sf          : the scaling factor (low-resolution to high resolution)
+        :param upsampling  : use upsampling (True) to convert low to high resolution  or use transposed convolutional approach(False)
+        """
+
+        if upsampling:
+            self.deconv_block = nn.Upsample(scale_factor = sf, mode = mode, align_corners = True)
+        else:
+
+            layers = [nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = stride,
+                                         padding = padding) for i in range(3)]
+
+            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = 1,
+                                   padding = padding, output_padding = 31 ))
+
+            self.deconv_block = nn.Sequential(*layers)
+
+    def forward(self, x:Tensor)->Tensor:
+         return self.deconv_block(x)
+
+
+
 class Conv_Block(nn.Module):
 
     def __init__(self, in_channels :int = None, out_channels: int = None,
@@ -110,6 +145,8 @@ class UNet(nn.Module):
 
         super(UNet, self).__init__()
 
+        self.upsampling = Upsampling(n_channels,channels_start)
+
         """encoder """
         self.down1 = Encoder_Block(n_channels, channels_start)
         self.down2 = Encoder_Block(channels_start, channels_start*2)
@@ -129,6 +166,7 @@ class UNet(nn.Module):
 
     def forward(self, x:Tensor)->Tensor:
         print("input shape",x.shape)
+        x = self.upsampling(x)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
         s3, e3 = self.down3(e2)
