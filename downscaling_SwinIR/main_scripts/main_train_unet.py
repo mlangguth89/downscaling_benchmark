@@ -7,19 +7,20 @@ __email__ = "b.gong@fz-juelich.de"
 __author__ = "Bing Gong"
 __date__ = "2022-07-22"
 
-
+import time
+import argparse
+import sys
+import os
+import json
 import torch
-from dataset_prep import PrecipDatasetInter
 from torch.utils.data import DataLoader
 from collections import OrderedDict
 from torch.optim import lr_scheduler
 from torch.optim import Adam
-import sys
-import os
 import torch.nn as nn
+from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as net
-import time
 
 
 
@@ -27,7 +28,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234, loader_params: dict = None):
+                 seed: int = 1234):
 
     """
     file_path : the path to the directory of .nc files
@@ -171,53 +172,86 @@ class BuildModel:
 
 
 
+def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
+        test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
+        n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
+        epochs: int = 2):
 
-train_file_path = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train"
-test_file_path = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test"
+    """
+    :param train_dir       : the directory that contains the training dataset NetCDF files
+    :param test_dir        : the directory that contains the testing dataset NetCDF files
+    :param checkpoint_save : how many steps to save checkpoint
+    :param n_channels      : the number of input variables/channels
+    :param save_dir        : the directory where the checkpoint results are save
+    :param epochs          : the number of epochs
 
-train_loader = create_loader(train_file_path)
-test_loader = create_loader(test_file_path)
-epochs = 2
-netG = net(n_channels=8)
-netG_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-print("Total trainalbe parameters:",netG_params)
-model = BuildModel(netG)
-model.init_train()
-current_step = 0
-CHECKPOINT_SAVE = 200 #how many steps to save checkpoint
+    """
 
-for epoch in range(epochs):
-    for i, train_data in enumerate(train_loader):
-        st = time.time()
+    train_loader = create_loader(train_dir)
+    test_loader = create_loader(test_dir)
 
-        current_step += 1
+    netG = net(n_channels = n_channels)
+    netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
+    print("Total trainalbe parameters:", netG_params)
+    model = BuildModel(netG, save_dir = save_dir)
+    model.init_train()
+    current_step = 0
+
+    for epoch in range(epochs):
+        for i, train_data in enumerate(train_loader):
+            st = time.time()
+
+            current_step += 1
+
+            # -------------------------------
+            # 1) update learning rate
+            # -------------------------------
+            model.update_learning_rate(current_step)
+
+            # -------------------------------
+            # 2) feed patch pairs
+            # -------------------------------
+            model.feed_data(train_data)
+
+            # -------------------------------
+            # 3) optimize parameters
+            # -------------------------------
+            model.optimize_parameters(current_step)
+
+            # -------------------------------
+            # 6) Save model
+            # -------------------------------
+            if current_step == 1 or current_step % checkpoint_save == 0:
+                model.save(current_step)
+                print("Model Loss {} after step {}".format(model.G_loss, current_step))
+                print("Model Saved")
+                print("Time per step:", time.time() - st)
 
 
-        # -------------------------------
-        # 1) update learning rate
-        # -------------------------------
-        model.update_learning_rate(current_step)
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train_dir", type = str, required = True,
+                        help = "The directory where training data (.nc files) are stored")
+    parser.add_argument("test_dir", type = str, required = True,
+                        help = "The directory where testing data (.nc files) are stored")
+    parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
+    parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
 
-        # -------------------------------
-        # 2) feed patch pairs
-        # -------------------------------
-        model.feed_data(train_data)
+    args = parser.parse_args()
 
-        # -------------------------------
-        # 3) optimize parameters
-        # -------------------------------
-        model.optimize_parameters(current_step)
+    #save the args to the checkpoint directory
+    with open(os.path.join(args.save_dir, "options.json"), "w") as f:
+        f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
-        # -------------------------------
-        # 6) Save model
-        # -------------------------------
-        if current_step == 1 or current_step % CHECKPOINT_SAVE == 0:
-            model.save(current_step)
-            print("Model Loss {} after step {}".format(model.G_loss, current_step))
-            print("Model Saved")
-            print("Time per step:", time.time() - st)
+    run(train_dir = args.train_dir,
+        test_dir = args.test_dir,
+        n_channels = 8,
+        save_dir = args.save_dir,
+        checkpoint_save = 200,
+        epochs = args.epochs)
 
 
+l
 
 
 
