@@ -251,7 +251,6 @@ def main():
         epochs = args.epochs)
 
 
-l
 
 
 
