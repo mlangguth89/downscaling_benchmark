@@ -39,10 +39,9 @@ class PatchEmbedding(nn.Module):
             self.projection = nn.Sequential(
             # using a conv layer instead of a linear one -> performance gains
             nn.Conv2d(in_channels, emb_size, kernel_size=patch_size, stride=patch_size),
-
-            Rearrange('b e (h) (w) -> b (h w) e'),
-
+            Rearrange('b e (h) (w) -> b (h w) e')
             )
+
         else:
             self.projection = nn.Sequential(
             # break-down the image in s1 x s2 patches and flat them
@@ -54,7 +53,7 @@ class PatchEmbedding(nn.Module):
             # In the future, we can include the datetime and location as embedding, it should be implemented here
             self.positions = nn.Parameter(torch.randn((img_size // patch_size) ** 2 + 1, emb_size))
 
-    def forward(self,x: Tensor) ->Tensor:
+    def forward(self, x: Tensor) ->Tensor:
         x = self.projection(x)
         print("The shape after Patching Embedding",x.shape)
         # add position embedding
@@ -154,6 +153,29 @@ class TransformerEncoder(nn.Sequential):
     def __init__(self, depth: int = 12, **kwargs):
         super().__init__(*[TransformerEncoderBlock(**kwargs) for _ in range(depth)])
 
+
+
+
+class UpsampleOneStep(nn.Sequential):
+    """
+    UpsampleOneStep module (the difference with Upsample is that it always only has 1conv + 1pixelshuffle)
+    Used in lightweight SR to save parameters.
+    scale (int): Scale factor. Supported scales: 2^n and 3.
+    num_feat (int): Channel number of intermediate features.
+    """
+
+    def __init__(self, scale, num_feat, num_out_ch, input_resolution=None):
+        self.num_feat = num_feat
+        self.input_resolution = input_resolution
+        m = []
+        m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1))
+        m.append(nn.PixelShuffle(scale))
+        super(UpsampleOneStep, self).__init__(*m)
+
+    def flops(self):
+        H, W = self.input_resolution
+        flops = H * W * self.num_feat * 3 * 9
+        return flops
 
 
 
