@@ -153,7 +153,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
     def shuffle(self):
         """
-        shuffle the index
+        shuffle the index 
         """
         print("Shuffling the index ....")
         multiformer_np_rng = np.random.default_rng(self.seed)
@@ -163,7 +163,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         idx = int(math.floor(self.n_samples/self.batch_size)) * self.batch_size
 
         idx_perm = idx_perm[:idx]
-
+        print("idx_perm",idx_perm)
         return idx_perm
 
 
@@ -175,6 +175,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         for bidx in range(iter_start, iter_end):
 
             #initialise x, y for each batch
+            # x  stores the low resolution images, y for high resolution,
+            # t is the corresponding timestamps, cidx is the index
             x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
             y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
             t = torch.zeros(self.batch_size, 4, dtype = torch.int)
@@ -189,8 +191,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
                 self.idx += 1
-
-                yield  {'L': x, 'H': y, "idx": cidx, "T":t}
+            yield  {'L': x, 'H': y, "idx": cidx, "T":t}
 
 
 def run():
