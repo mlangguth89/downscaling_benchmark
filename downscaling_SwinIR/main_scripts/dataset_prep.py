@@ -58,7 +58,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
 
-        self.vars_in_patches_list, self.vars_out_patches_list  = self.process_netcdf(files)
+        self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
 
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
@@ -87,11 +87,16 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         n_patches_x = int(np.floor(n_lon) / self.patch_size)
         n_patches_y = int(np.floor(n_lat) / self.patch_size)
-
+        num_patches_img = n_patches_x * n_patches_y
 
         da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
         da_out = torch.from_numpy(output.to_array(dim = "variables").squeeze().values)
         times = inputs["time"].values  # get the timestamps
+        times = torch.from_numpy(np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour])))        
+        
+        
+        
+        
         print("Original input shape:", da_in.shape)
 
         # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size, patch_size]
@@ -99,9 +104,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         vars_in_patches_shape = list(vars_in_patches.shape)
 
         #sanity check to make sure the number of patches is as we expected
-        assert (n_patches_x * n_patches_x) == int(vars_in_patches_shape[2] * vars_in_patches_shape[3])
-
-
+        assert n_patches_x * n_patches_y == int(vars_in_patches_shape[2] * vars_in_patches_shape[3])
+        
         vars_in_patches = torch.reshape(vars_in_patches, [vars_in_patches_shape[0],
                                                           vars_in_patches_shape[1] * vars_in_patches_shape[2] *
                                                           vars_in_patches_shape[3],
@@ -110,8 +114,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         vars_in_patches = torch.transpose(vars_in_patches, 0, 1)
         print("Input shape:", vars_in_patches.shape)
 
-        ## Replicate times
-        #times_patches = torch
+        ## Replicate times for patches in the same image
+        times_patches = [ x for x in times for _ in range(num_patches_img)]
+        
+        ## sanity check 
+        assert len(times_patches) ==  vars_in_patches_shape[1] * vars_in_patches_shape[2] * vars_in_patches_shape[3]
+        assert times_patches[0] == times_patches[1] 
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
                                          self.patch_size * self.sf).unfold(2,
@@ -138,9 +146,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         # Only get the patch that without NaN values
         vars_out_pathes_no_nan = torch.index_select(vars_out_patches, 0, no_nan_idx)
         vars_in_patches_no_nan = torch.index_select(vars_in_patches, 0, no_nan_idx)
+        times_no_nan = torch.index_select(times_patches,0, no_nan_idx) 
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
-        return vars_in_patches_no_nan, vars_out_pathes_no_nan
+        return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 
 
 
@@ -178,11 +187,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 cid = self.idx_perm[self.idx]
                 x[jj] = self.vars_in_patches_list[cid]
                 y[jj] = self.vars_out_patches_list[cid]
+                t[jj] = self.times_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
                 self.idx += 1
 
-            yield  {'L': x, 'H': y, "idx": cidx}
+                yield  {'L': x, 'H': y, "idx": cidx, "T":t}
 
 
 def run():
