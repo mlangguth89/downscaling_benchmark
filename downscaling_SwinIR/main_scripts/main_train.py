@@ -232,13 +232,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type = str, required = True,
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("test_dir", type = str, required = True,
+    parser.add_argument("--test_dir", type = str, required = True,
                         help = "The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
 
     args = parser.parse_args()
 
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
     #save the args to the checkpoint directory
     with open(os.path.join(args.save_dir, "options.json"), "w") as f:
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
@@ -254,5 +256,7 @@ def main():
 
 
 
+if __name__ == '__main__':
+    main()
 
 
