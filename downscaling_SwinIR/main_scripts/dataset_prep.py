@@ -177,7 +177,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             #initialise x, y for each batch
             x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
             y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
-            t = torch.zeros(self.batch_size, 4)
+            t = torch.zeros(self.batch_size, 4, dtype = torch.int)
             cidx = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
 
             for jj in range(self.batch_size):
@@ -201,11 +201,12 @@ def run():
         inputs = train_data["L"]
         target = train_data["H"]
         idx = train_data["idx"]
+        times = train_data["T"]
         print("inputs", inputs.size())
         print("target", target.size())
         print("idx", idx)
         print("batch_idx", batch_idx)
-
+        print("timestamps,", times)
 
 
 if __name__ == "__main__":
