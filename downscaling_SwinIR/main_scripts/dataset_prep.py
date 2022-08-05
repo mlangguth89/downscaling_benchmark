@@ -43,7 +43,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.var_out = var_out
         self.batch_size = batch_size
         self.seed = seed
-
+        self.vars_in_patches_list = []
+        self.vars_out_patches_list = []
+        self.times_patches_list = []
 
         # Search for files
         p = pathlib.Path( file_path)
@@ -92,10 +94,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
         da_out = torch.from_numpy(output.to_array(dim = "variables").squeeze().values)
         times = inputs["time"].values  # get the timestamps
-        times = torch.from_numpy(np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour])))        
-        
-        
-        
+        times = np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour]))        
         
         print("Original input shape:", da_in.shape)
 
@@ -115,11 +114,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Input shape:", vars_in_patches.shape)
 
         ## Replicate times for patches in the same image
-        times_patches = [ x for x in times for _ in range(num_patches_img)]
+        times_patches = torch.from_numpy(np.array([ x for x in times for _ in range(num_patches_img)]))
         
         ## sanity check 
         assert len(times_patches) ==  vars_in_patches_shape[1] * vars_in_patches_shape[2] * vars_in_patches_shape[3]
-        assert times_patches[0] == times_patches[1] 
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
                                          self.patch_size * self.sf).unfold(2,
@@ -179,7 +177,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             #initialise x, y for each batch
             x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
             y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
-
+            t = torch.zeros(self.batch_size, 4)
             cidx = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
 
             for jj in range(self.batch_size):
