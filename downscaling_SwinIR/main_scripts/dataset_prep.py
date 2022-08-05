@@ -85,8 +85,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         assert inputs.dims["time"] == output.dims["time"]
         assert inputs.dims["lat"] * self.sf == output.dims["lat_tar"]
 
-        self.n_patches_x = int(np.floor(n_lon) / self.patch_size)
-        self.n_patches_y = int(np.floor(n_lat) / self.patch_size)
+        n_patches_x = int(np.floor(n_lon) / self.patch_size)
+        n_patches_y = int(np.floor(n_lat) / self.patch_size)
 
 
         da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
@@ -97,6 +97,11 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         # split into small patches, the return dim are [vars, samples,n_patch_x, n_patch_y, patch_size, patch_size]
         vars_in_patches = da_in.unfold(2, self.patch_size, self.patch_size).unfold(3, self.patch_size, self.patch_size)
         vars_in_patches_shape = list(vars_in_patches.shape)
+
+        #sanity check to make sure the number of patches is as we expected
+        assert (n_patches_x * n_patches_x) == int(vars_in_patches_shape[2] * vars_in_patches_shape[3])
+
+
         vars_in_patches = torch.reshape(vars_in_patches, [vars_in_patches_shape[0],
                                                           vars_in_patches_shape[1] * vars_in_patches_shape[2] *
                                                           vars_in_patches_shape[3],
@@ -104,6 +109,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         vars_in_patches = torch.transpose(vars_in_patches, 0, 1)
         print("Input shape:", vars_in_patches.shape)
+
+        ## Replicate times
+        #times_patches = torch
 
         vars_out_patches = da_out.unfold(1, self.patch_size * self.sf,
                                          self.patch_size * self.sf).unfold(2,
@@ -174,7 +182,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
                 self.idx += 1
 
-            yield  {'L': x, 'H': y, "idx":cidx}
+            yield  {'L': x, 'H': y, "idx": cidx}
 
 
 def run():
@@ -186,9 +194,12 @@ def run():
         target = train_data["H"]
         idx = train_data["idx"]
         print("inputs", inputs.size())
-        print("target",target.size())
-        print("idx",idx)
-        print("batch_idx",batch_idx)
+        print("target", target.size())
+        print("idx", idx)
+        print("batch_idx", batch_idx)
+
+
+
 if __name__ == "__main__":
     run()
 
