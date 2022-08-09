@@ -306,7 +306,7 @@ class WGAN(keras.Model):
         # ...and configure dataset
         scal_eff = self.hparams["d_steps"] + 1
         tfds_dat = tfds_dat.repeat().shuffle(buffer_size=20000, seed=seed)
-        tfds_dat = tfds_dat.batch(scal_eff*self.hparams["batch_size"]).map(parse_example).prefetch(1000)
+        tfds_dat = tfds_dat.batch(scal_eff*self.hparams["batch_size"]).map(parse_example).prefetch(tf.data.AUTOTUNE)
 
         return tfds_dat, sample_shp
 
