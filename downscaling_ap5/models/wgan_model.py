@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-06-28"
+__update__ = "2022-07-21"
 
 import os, glob
 from collections import OrderedDict
@@ -75,7 +75,6 @@ class WGAN(keras.Model):
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
         :param hparams: dictionary of hyperparameters
-        :param l_embedding: Flag to enable time embeddings
         """
 
         super(WGAN, self).__init__()
