@@ -113,7 +113,8 @@ class CDOGridDes(ABC):
     # valid CDO grd description keys, see section 1.5.2.4 on CDO grids in documentation
     # (https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-220001.5.2)
     valid_keys = ["gridtype", "gridsize", "xsize", "ysize", "xvals", "yvals", "nvertx", "xbounds", "ybounds", "xfirst",
-                  "xinc", "yfirst", "yinc", "xunits", "yunits"]
+                  "xinc", "yfirst", "yinc", "xunits", "yunits", "xname", "yname", "xlongname", "ylongname",
+                  "grid_mapping", "grid_mapping_name", "grid_north_pole_latitude", "grid_north_pole_longitude"]
 
     def __init__(self, gdes_file: str = None, gdes_dict: dict = None):
         """
@@ -206,6 +207,7 @@ class CDOGridDes(ABC):
         coarse_grid_des_dict = {"gridtype": gtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
                                 "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
                                 "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
+        coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict)
 
         # construct filename
         coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
@@ -222,6 +224,7 @@ class CDOGridDes(ABC):
             base_grid_des_dict = {"gridtype": gtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
                                   "xfirst": xyf_in[0] - dx_coarse[0], "xinc": dx_in[0],
                                   "yfirst": xyf_in[1] - dx_coarse[1], "yinc": dx_in[1]}
+            base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict)
             # construct filename and ...
             base_grid_des = os.path.join(target_dir, "{0}grid_base".format(name_base))
             if rank == 0 or rank is None:
@@ -284,6 +287,20 @@ class CDOGridDes(ABC):
             grid_des_dict["file"] = grid_des_file
 
         return grid_des_dict
+
+    @staticmethod
+    def merge_dicts(first_dict, other_dict):
+        """
+        Merges two dicts. Keys that reside in both dictionaries are taken from the first dictionary.
+        :param first_dict: first dictionary to be merged
+        :param other_dict: second dictionary to be merged
+        :return: merged dictionary
+        """
+        new_dict = other_dict.copy()
+        for key in first_dict.keys():
+            new_dict[key] = first_dict[key]
+
+        return new_dict
 
     @staticmethod
     def griddes_lines_to_dict(lines):
