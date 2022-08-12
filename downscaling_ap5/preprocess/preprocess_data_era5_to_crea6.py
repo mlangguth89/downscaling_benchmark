@@ -25,7 +25,7 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 #from tfrecords_utils import IFS2TFRecords
-from abstract_preprocess import AbstractPreprocessing
+from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
 from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
@@ -37,34 +37,29 @@ list_or_tuple = Union[List, tuple]
 list_or_dict = Union[List, dict]
 
 
-class PreprocessERA5toCREA6(AbstractPreprocessing):
+class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
-    # get required tool-instances (cdo with activated extrapolation)
-    cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE": "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
+    # re-instatiate CDO-object to disable extrapolation
+    cdo = CDO(tool_envs={"REMAP_EXTRAPOLATE": "on"})
     # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
     cpd, g = 1004.709, 9.80665
     # invariant variables expected in the invariant files
     const_vars = ["z", "lsm"]
 
-    def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, grid_des_tar: str,
-                 predictors: dict, predictands: dict, downscaling_fac: int = 8):
+    def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, constfile_in: str, constfile_tar: str,
+                 grid_des_tar: str, predictors: dict, predictands: dict, downscaling_fac: int = 5):
         """
-        Initialize class for ERA5-to-IFS downscaling class.
+        Initialize class for ERA5-to-COSMO REA6 downscaling class.
         """
-        super().__init__("preprocess_ERA5_to_IFS", in_datadir, tar_datadir, predictors, predictands, out_dir)
+        # initialize from ERA5-to-IFS class (parent class)
+        super().__init__(in_datadir, tar_datadir, out_dir, constfile_in, grid_des_tar, predictors, predictands,
+                         downscaling_fac)
 
-        # sanity checks
-        if not os.path.isfile(grid_des_tar):
-            raise FileNotFoundError("Preprocess_Unet_Tier1: Could not find target grid description file '{0}'"
-                                    .format(grid_des_tar))
-        if not os.path.isfile(in_constfile): 
-            raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(in_constfile))
+        self.name_preprocess = "preprocess_ERA5_to_CREA6"
 
-        self.grid_des_tar = grid_des_tar
-        self.invar_file = in_constfile
-        self.downscaling_fac = downscaling_fac
-
-        self.my_rank = None                     # to be set in __call__
+        # sanity check on constant/invariant file of COSMO REA6
+        if not os.path.isfile(constfile_tar):
+            raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(constfile_tar))
 
     def prepare_worker(self, years: List, season: str, **kwargs):
         """
