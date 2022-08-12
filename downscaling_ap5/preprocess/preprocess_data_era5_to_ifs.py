@@ -232,7 +232,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     def preprocess_era5_in(era5_dir: str, invar_file: str, dest_dir: str, date: dt.datetime, grid_des_coarse: str,
                            grid_des_tar: str, sfvars: List, mlvars: List, fc_sfvars: List, fc_mlvars: dict,
                            logger: logging.Logger, nwarn: int, max_warn:int):
-
+        """
+        Preprocess ERA5 data to serve as input for downscaling task.
+        """
         # construct date-strings, path to temp-directory and initialize filelist for later merging
         date_str, date_pr = date.strftime("%Y%m%d%H"), date.strftime("%Y-%m-%d %H:00 UTC")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
@@ -290,7 +292,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     @staticmethod
     def preprocess_ifs_tar(dirin_ifs: str, dest_dir: str, date: dt.datetime, grid_des_tar: str, predictands: dict,
                            filelist: List, logger, nwarn, max_warn):
-
+        """
+        Preprocess IFS-forecast data to serve as target for downscaling task.
+        """
         date_str, date_pr = date.strftime("%Y%m%d%H"), date.strftime("%Y-%m-%d %H:00 UTC")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
 
