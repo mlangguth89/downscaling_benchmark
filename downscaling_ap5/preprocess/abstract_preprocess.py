@@ -289,14 +289,19 @@ class CDOGridDes(ABC):
         return grid_des_dict
 
     @staticmethod
-    def merge_dicts(first_dict, other_dict):
+    def merge_dicts(first_dict, other_dict, create_copy: bool = False):
         """
         Merges two dicts. Keys that reside in both dictionaries are taken from the first dictionary.
         :param first_dict: first dictionary to be merged
         :param other_dict: second dictionary to be merged
+        :param create_copy: Creates a new copy if True. If False, changes other_dict in-place!
         :return: merged dictionary
         """
-        new_dict = other_dict.copy()
+        if create_copy:
+            new_dict = other_dict.copy()
+        else:
+            new_dict = other_dict
+
         for key in first_dict.keys():
             new_dict[key] = first_dict[key]
 
