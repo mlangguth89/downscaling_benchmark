@@ -86,7 +86,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         ifs_grid_des = CDOGridDes(self.grid_des_tar)
         coa_gdes_d = ifs_grid_des.create_coarsened_grid_des(self.target_dir, self.downscaling_fac, self.my_rank,
-                                                            name_base="era5_", lextrapolate=True)
+                                                            name_base=kwargs.get("coarse_grid_name", "era5_"),
+                                                            lextrapolate=True)
 
         gdes_dict = {"tar_grid_des": ifs_grid_des.grid_des_dict["file"], "coa_grid_des": coa_gdes_d}
         # define arguments and keyword arguments for running PyStager later
