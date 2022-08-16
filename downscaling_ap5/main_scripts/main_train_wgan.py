@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-31"
-__update__ = "2022-06-01"
+__update__ = "2022-07-21"
 
 import os
 import argparse
