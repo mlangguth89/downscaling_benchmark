@@ -114,6 +114,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
 
+        # initialize number of warnings
+        nwarn = 0
         for year_month in year_months:
             assert isinstance(year_month, dt.datetime),\
                 "All year_months-argument must be a datetime-object. Current one is of type '{0}'"\
@@ -127,26 +129,21 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
             _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, subdir, sfvars_era5, const_vars_crea6)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
-            final_file = os.path.join(dest_dir, "preproc_{0}.nc".format(subdir))
+            final_file_era5 = os.path.join(dest_dir, "preproc_era5_{0}.nc".format(subdir))
+            final_file = final_file_era5.replace("_era5_", "")
             os.makedirs(dest_dir, exist_ok=True)
 
-            # further sanity checks
+            # sanity check on ERA5-directory
             if not os.path.isdir(dir_curr_era5):
-                err_mess = "%{0}: Could not find directory for ERA5-data '{1}'".format(method, dir_curr_era5)
-                logger.fatal(err_mess)
-                raise NotADirectoryError(err_mess)
-
-            if not os.path.isdir(dir_curr_ifs):
-                err_mess = "%{0}: Could not find directory for IFS-data '{1}'".format(method, dir_curr_ifs)
+                err_mess = "Could not find directory for ERA5-data '{0}'".format(dir_curr_era5)
                 logger.fatal(err_mess)
                 raise NotADirectoryError(err_mess)
 
             dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
                                      last_day, freq="H")
-
             # Perform logging, reset warning counter and loop over dates...
             logger.info("Start preprocessing data for month {0}...".format(subdir))
-            nwarn = 0
+
             for date2op in dates2op:
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
@@ -168,19 +165,19 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # merge all time steps to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
-            cdo.run(all_daily_files + [final_file], OrderedDict([("mergetime", "")]))
+            cdo.run(all_daily_files + [final_file_era5], OrderedDict([("mergetime", "")]))
             remove_files(all_daily_files, lbreak=True)
 
             # process COSMO-REA6 doata which is already organized in monthly files
-            filelist, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, dest_dir,
-                                                                         subdir, sfvars_crea6, const_vars_crea6, logger,
-                                                                         nwarn, max_warn)
-            if filelist:
+            final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, dest_dir,
+                                                                                 subdir, sfvars_crea6, const_vars_crea6,
+                                                                                 logger, nwarn, max_warn)
 
-
+            # finally merge the ERA5- and the COSMO REA&-data into one monthly datafile
+            cdo.run([final_file_crea6, final_file_era5, final_file], OrderedDict([("mergetime", "")]))
+            remove_files([final_file_crea6, final_file_era5], lbreak=True)
 
         return nwarn
-
 
     @staticmethod
     def organize_predictands(predictands: dict) -> (List, List):
@@ -299,11 +296,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
                 ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
+            # rename variables
+            PreprocessERA5toIFS.add_varname_suffix(final_file, vars_2d + const_vars, "_tar")
 
-
-
-
-        return filelist, nwarn
+        return final_file, nwarn
 
     @staticmethod
     def process_2d_file(file_2d: str, target_dir: str, date_str: str, lonlatbox_str: str):
