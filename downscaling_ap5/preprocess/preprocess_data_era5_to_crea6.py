@@ -158,6 +158,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                                                                          mlvars_era5, fc_sfvars_era5, fc_mlvars_era5,
                                                                          logger, nwarn, max_warn)
 
+                if not filelist: continue  # skip day if preprocessing ERA5-data failed
+
                 # finally all temporary files for each time step and clean-up
                 logger.info("Merge temporary files to daily netCDF-file '{0}'".format(daily_file))
                 cdo.run(filelist + [daily_file], OrderedDict([("merge", "")]))
@@ -170,8 +172,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             remove_files(all_daily_files, lbreak=True)
 
             # process COSMO-REA6 doata which is already organized in monthly files
-            PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, dest_dir, subdir,
-                                                       sfvars_crea6, const_vars_crea6, logger, nwarn, max_warn)
+            filelist, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, dest_dir,
+                                                                         subdir, sfvars_crea6, const_vars_crea6, logger,
+                                                                         nwarn, max_warn)
+            if filelist:
+
 
 
         return nwarn
@@ -244,9 +249,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :return: path to processed netCDF-datafile
         """
         cdo, ncrename = PreprocessERA5toCREA6.cdo, PreprocessERA5toCREA6.ncrename
+        ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
 
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
+        final_file = os.path.join(dest_dir, f"preproc_ERA5_to_CREA6_{date_str}.nc")
 
         gdes_tar = CDOGridDes(fgdes_tar)
         gdes_dict = gdes_tar.grid_des_dict
@@ -255,29 +262,93 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                      *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
         lonlatbox_str = ",".join("{:.3f}".format(coord) for coord in lonlatbox)
 
+        filelist = []
+
+        lfail = False
+
         # process 2D-files
         if vars_2d:
             for var in vars_2d:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
                 dfile_in = os.path.join(dirin, "2D", var.capitilize(), f"{var.capitilize()}.2D.{date_str2}.grb")
-                dfile_out = os.path.join(tmp_dir, var.lowercase())
-                if not os.path.isfile(dfile_in):
-                    FileNotFoundError(f"Could not find required COSMO-REA6 file '{dfile_in}'.")
+                nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_2d_file,
+                                                                           [dfile_in, tmp_dir, date_str, lonlatbox_str],
+                                                                           {}, logger, nwarn, max_warn)
 
-                cdo.run([dfile_in, dfile_out], OrderedDict([("-f nc", ""), ("copy", ""),
-                                                            ("-sellonlatbox", lonlatbox_str)]))
+                if not file2merge:
+                    lfail = True
+                else:
+                    filelist = PreprocessERA5toCREA6.manage_filemerge(filelist, file2merge, tmp_dir)
 
-                # rename varibale in resulting file (must be done in hacky manner)
-                varname = sp.check_output(f"cdo showname {dfile_out}", shell=True)
-                varname = varname.lstrip("'b").split("\\n")[0].strip()
+        if const_vars and not lfail:
+            nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_const_file,
+                                                                       [invar_file, tmp_dir, const_vars, date_str,
+                                                                        lonlatbox_str], {}, logger, nwarn, max_warn)
+            if not file2merge:
+                lfail = True
+            else:
+                filelist = PreprocessERA5toCREA6.manage_filemerge(filelist, file2merge, tmp_dir)
 
-                ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
+        if lfail:
+            nwarn = max_warn + 1
+        else:
+            # merge the data
+            cdo.run([filelist, final_file], OrderedDict([("mergetime", "")]))
+            # replicate constant data over all timesteps
+            for const_var in const_vars:
+                ncap2.run([final_file, final_file], OrderedDict([("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
+                ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
+                ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
-        if const_vars:
-            pass    # TBD
 
+
+
+
+        return filelist, nwarn
 
     @staticmethod
-    def process_2d_file(file_2d: str, target_dir, date2op, fgdes_tar: str):
+    def process_2d_file(file_2d: str, target_dir: str, date_str: str, lonlatbox_str: str):
+
+        cdo, ncrename = PreprocessERA5toCREA6.cdo, PreprocessERA5toCREA6.ncrename
+
+        # sanity check
+        if not os.path.isfile(file_2d):
+            FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+        # retrieve variable name back from path to file
+        var = os.path.dirname(os.path.basename(file_2d)).lower()
+        dfile_out = os.path.join(target_dir, f"{var}_{date_str}.nc")
+
+        # slice data and convert to netCDF
+        cdo.run([file_2d, dfile_out], OrderedDict([("-f nc", ""), ("copy", ""),
+                                                   ("-sellonlatbox", lonlatbox_str)]))
+
+        # rename varibale in resulting file (must be done in hacky manner)
+        varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
+        varname = varname.lstrip("'b").split("\\n")[0].strip()
+
+        ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
+
+        return dfile_out
+
+    @staticmethod
+    def process_const_file(const_file: str, target_dir: str, const_vars: List, date_str: str, lonlatbox_str: str):
+
+        cdo = PreprocessERA5toCREA6.cdo
+
+        const_vars = to_list(const_vars)
+
+        # sanity check
+        if not os.path.isfile(const_file):
+            FileNotFoundError(f"Could not find required COSMO-REA6 file '{const_file}'.")
+        # retrieve variable name back from path to file
+        dfile_out = os.path.join(target_dir, f"const_{date_str}.nc")
+
+        cdo.run([const_file, dfile_out], OrderedDict([("selname", ",".join(const_vars)),
+                                                      ("-sellonlatbox", lonlatbox_str)]))
+
+        return dfile_out
+
+
+
 
 
 
