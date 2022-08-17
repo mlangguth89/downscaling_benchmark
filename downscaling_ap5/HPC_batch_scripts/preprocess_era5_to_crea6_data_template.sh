@@ -34,17 +34,19 @@ fi
 # Loading mouldes
 source ../env_setup/modules.sh
 
-# set variables to be parsed 
-src_dir_era5=/p/fastdata/slmet/slmet111/met_data/ecmwf/era5/grib/
-src_dir_crea6=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/cosmo-rea6/     #  must be copied from /p/largedata/slmet/slmet111/met_data/dwd/cosmo-rea6/hourly/
-const_file_crea6=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/cosmo-rea6/COSMO_REA6_CONST_withOUTsponge.nc
-out_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/
+# set variables to be parsed
+# data directories
+src_dir_era5=/path/to/era5/data
+src_dir_crea6=/path/to/cosmo/rea6/data
+const_file_crea6=/path/to/invariant/file/of/cosmo/rea6
+out_dir=/path/to/output/directory/
+# default predictors and predictands as well as path to grid description
 predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": "", "z": "", "sshf": "", "slhf": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
 predictands='{"sf": {"t_2m": ""}, "invar"}: {"hsurf": ""}}'
-grid_des_tar=../grid_des/ifs_hres_grid_tar
+grid_des_tar=/path/to/grid/description/
 
 years=( 2016 2017 2018 )
-months="all"
+# months="all"             # still hard-coded
 method=ERA5_to_CREA6
 
 srun --overlap python -m mpi4py ../main_scripts/main_preprocessing.py \
