@@ -21,7 +21,8 @@ import torch.nn as nn
 from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as net
-
+import wandb
+wandb.init(project="Precip_downscaling")
 
 
 def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
@@ -65,10 +66,11 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
+        wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
-
+        self.define_scheduler()
     # ----------------------------------------
     # define loss
     # ----------------------------------------
@@ -101,8 +103,8 @@ class BuildModel:
     # ----------------------------------------
     def define_scheduler(self):
         self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        [250000, 400000, 450000, 475000, 500000],
-                                                        0.5))
+                                                        milestones = [1, 2, 3],
+                                                        gamma = 0.1))
 
     # ----------------------------------------
     # save model / optimizer(optional)
@@ -226,7 +228,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-
+                wandb.log({"loss":loss, "lr":model.G_optimizer_lr}])
+                
 
 def main():
     parser = argparse.ArgumentParser()
