@@ -13,6 +13,7 @@ import torch
 import numpy as np
 import pathlib
 import math
+import torchvision
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -61,6 +62,11 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
         self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
+
+        self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
+        self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
+        self.vars_out_patches_mean = self.vars_out_patches_list.mean()
+        self.vars_out_patches_std = self.vars_out_patches_list.std()
 
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
@@ -166,12 +172,32 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("idx_perm",idx_perm)
         return idx_perm
 
+    # def save_stats(self):
+    #     output_file = os.path.join(self.output_dir, "statistics.json")
+    #     stats = {}
+    #     for i in range(len(self.vars_in)):
+    #         key = self.vars_in[i]+'_mean'
+    #         stats.update({key:self.vars_in_patches_mean[i]})
+
+    #     for i, var in enumerate(self.vars_in):
+    #         stats_var = {} #for each variable
+    #         for j, key in enumerate(self.vars_in):
+    #             stats_var.update({key: float(vars_in_patches_mean[j][i])})
+    #         stats.update({var:stats_var})
+
+    #     #save to output directory
+    #     with open(output_file,'w') as f:
+    #         json.dump(stats, f)
+    #     print("The statistic has been stored to the json file: ", output_file)
 
 
     def __iter__(self):
 
         iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)  # todo
         self.idx = 0
+
+        transform_x = torchvision.transforms.Normalize(self.vars_in_patches_mean,self.vars_in_patches_std)
+
         for bidx in range(iter_start, iter_end):
 
             #initialise x, y for each batch
@@ -185,8 +211,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             for jj in range(self.batch_size):
 
                 cid = self.idx_perm[self.idx]
-                x[jj] = self.vars_in_patches_list[cid]
-                y[jj] = self.vars_out_patches_list[cid]
+                
+                x[jj] = transform_x(self.vars_in_patches_list[cid])
+                y[jj] = (self.vars_out_patches_list[cid] - self.vars_out_patches_mean) / self.vars_out_patches_std
                 t[jj] = self.times_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
