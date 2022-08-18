@@ -18,13 +18,12 @@ import torch.nn as nn
 from torch import Tensor
 from einops.layers.torch import Rearrange, Reduce
 
-
 class PatchEmbedding(nn.Module):
 
     def __init__(self,
                  in_channels: int = 8,
                  patch_size: int = 4,
-                 emb_size :int = 768,
+                 emb_size: int = 768,
                  enable_cnn: bool = False,
                  img_size: int = 16):
         super.__init__()
@@ -48,7 +47,7 @@ class PatchEmbedding(nn.Module):
             Rearrange('b c (h s1) (w s2) -> b (h w) (s1 s2 c)', s1=patch_size, s2=patch_size),
             nn.Linear(patch_size * patch_size * in_channels, emb_size)
             )
-            # I remove the cls enbedding, since wwe do not have class labels in the data,
+            # I remove the cls embedding, since we do not have class labels in the data,
             # I used learnable position embedding in this case
             # In the future, we can include the datetime and location as embedding, it should be implemented here
             self.positions = nn.Parameter(torch.randn((img_size // patch_size) ** 2 + 1, emb_size))
@@ -68,10 +67,7 @@ class MultiHeadAttention(nn.Module):
                  num_heads: int = 8,
                  dropout: float = 0):
         super().__init__()
-        """
-        Note, the emb_size is different from the embed_size in PatchEmbedding, the size of  this embedding is the same 
-        for the query, values and keys
-        """
+
         self.emb_size = emb_size
         self.num_heads = num_heads
         # fuse the queries, keys and values in one matrix
@@ -80,14 +76,12 @@ class MultiHeadAttention(nn.Module):
         self.projection = nn.Linear(emb_size, emb_size)
 
 
-    def forward(self,
-                x:Tensor,
-                mask:Tensor)->Tensor:
+    def forward(self, x:Tensor, mask:Tensor=None)->Tensor:
 
-        qkv = rearrange(self.qkv(x), "b n (h d qkv) -> (qkv) b h n d", h = self.num_heads, qkv = 3)
+        qkv = rearrange(self.qkv(x), "b n (h d qkv) -> (qkv) b h n d", h=self.num_heads, qkv=3)
         queries, keys, values = qkv[0], qkv[1], qkv[2]
         # sum up over the last axis
-        energy = torch.einsum('bhqd, bhkd -> bhqk', queries, keys) # batch, num_heads, query_len, key_len
+        energy = torch.einsum('bhqd, bhkd -> bhqk', queries, keys)# batch, num_heads, query_len, key_len
         if mask is not None:
             fill_value = torch.finfo(torch.float32).min
             energy.mask_fill(~mask, fill_value)
@@ -154,31 +148,39 @@ class TransformerEncoder(nn.Sequential):
         super().__init__(*[TransformerEncoderBlock(**kwargs) for _ in range(depth)])
 
 
-
-
-class UpsampleOneStep(nn.Sequential):
-    """
-    UpsampleOneStep module (the difference with Upsample is that it always only has 1conv + 1pixelshuffle)
-    Used in lightweight SR to save parameters.
-    scale (int): Scale factor. Supported scales: 2^n and 3.
-    num_feat (int): Channel number of intermediate features.
+class Upsample(nn.Sequential):
+    """Upsample module.
+    Args:
+        scale (int): Scale factor. Supported scales: 2^n and 3.
+        num_feat (int): Channel number of intermediate features.
     """
 
-    def __init__(self, scale, num_feat, num_out_ch, input_resolution=None):
-        self.num_feat = num_feat
-        self.input_resolution = input_resolution
+    def __init__(self, num_feat, scale: int=10):
         m = []
-        m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1))
+        m.append(nn.Conv2d(in_channels=num_feat, out_channels=10*num_feat, kernel_size=3, stride=1, padding=1))
         m.append(nn.PixelShuffle(scale))
-        super(UpsampleOneStep, self).__init__(*m)
-
-    def flops(self):
-        H, W = self.input_resolution
-        flops = H * W * self.num_feat * 3 * 9
-        return flops
+        super(Upsample, self).__init__(*m)
 
 
+class TransformerSR(nn.Module):
+    def __int__(self, embed_dim: int=768, num_feat: int=10, upscale: int=10):
+        super(TransformerSR, self).__init__()
+
+        self.TransformerEncode = TransformerEncoder(depth=2)
+        # for classical SR
+        self.conv_before_upsample = nn.Sequential(nn.Conv2d(embed_dim, num_feat, 3, 1, 1),
+                                                      nn.LeakyReLU(inplace = True))
+        self.upsample = Upsample(num_feat, upscale=upscale)
+        self.conv_last = nn.Conv2d(num_feat, 1, 3, 1, 1)
+
+
+    def forward(self,x):
+        x = self.TransformerEncode(x)
+        x = self.conv_before_upsample(x)
+        x = self.upsample(x)
+        x= self.conv_last(x)
 
 
 
-        
+
+
