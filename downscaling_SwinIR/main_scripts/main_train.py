@@ -22,7 +22,11 @@ from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as net
 import wandb
-wandb.init(project="Precip_downscaling")
+os.environ["WANDB_MODE"]="offline"
+#os.environ["WANDB_API_KEY"] = key
+
+
+wandb.init(project="Precip_downscaling",reinit=True)
 
 
 def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
@@ -172,7 +176,10 @@ class BuildModel:
             out_dict['H'] = self.H.detach()[0].float()
         return out_dict
 
-
+    #get learning rate
+    def get_lr(self):
+        for param_group in self.G_optimizer.param_groups:
+            return param_group['lr']
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
@@ -209,6 +216,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # 1) update learning rate
             # -------------------------------
             model.update_learning_rate(current_step)
+            lr =  model.get_lr() #get learning rate
 
             # -------------------------------
             # 2) feed patch pairs
@@ -228,7 +236,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                wandb.log({"loss":loss, "lr":model.G_optimizer_lr}])
+                wandb.log({"loss":model.G_loss, "lr":lr})
                 
 
 def main():
