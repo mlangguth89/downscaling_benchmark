@@ -313,7 +313,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                                   grid_des_tar, predictands], {}, logger,
                                                                  nwarn, max_warn)
         filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
-        if not file2merge: continue  # skip day if some data is missing
 
         return filelist, nwarn
 
