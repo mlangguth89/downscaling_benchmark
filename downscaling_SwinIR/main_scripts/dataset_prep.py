@@ -38,6 +38,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         super(PrecipDatasetInter).__init__()
 
+        self.file_path = file_path
         self.patch_size = patch_size
         self.sf = sf  # scaling factor
         self.vars_in = vars_in
@@ -49,7 +50,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.times_patches_list = []
 
         # Search for files
-        p = pathlib.Path( file_path)
+        p = pathlib.Path(self.file_path)
         assert(p.is_dir())
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
@@ -58,8 +59,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         if len(files) < 1:
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
-
-
 
         self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
 
@@ -75,7 +74,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         #print("var_out size",self.vars_out_patches_list)
 
         self.idx_perm = self.shuffle()
-
+        self.save_stats()
 
     def process_netcdf(self, filenames: int = None):
         """
@@ -155,8 +154,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 
-
-
     def shuffle(self):
         """
         shuffle the index 
@@ -172,24 +169,24 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("idx_perm",idx_perm)
         return idx_perm
 
-    # def save_stats(self):
-    #     output_file = os.path.join(self.output_dir, "statistics.json")
-    #     stats = {}
-    #     for i in range(len(self.vars_in)):
-    #         key = self.vars_in[i]+'_mean'
-    #         stats.update({key:self.vars_in_patches_mean[i]})
+    def save_stats(self):
+        output_file = os.path.join(self.file_path, "statistics.json")
+        stats = {}
+        for i in range(len(self.vars_in)):
+            key = self.vars_in[i]+'_mean'
+            stats.update({key:float(self.vars_in_patches_mean[i])})
+            key = self.vars_in[i]+'_std'
+            stats.update({key:float(self.vars_in_patches_std[i])}) 
+            
+        key = self.var_out[0]+'_mean'
+        stats.update({key:float(self.vars_out_patches_mean)})
+        key = self.var_out[0]+'_std'
+        stats.update({key:float(self.vars_out_patches_std)})
 
-    #     for i, var in enumerate(self.vars_in):
-    #         stats_var = {} #for each variable
-    #         for j, key in enumerate(self.vars_in):
-    #             stats_var.update({key: float(vars_in_patches_mean[j][i])})
-    #         stats.update({var:stats_var})
-
-    #     #save to output directory
-    #     with open(output_file,'w') as f:
-    #         json.dump(stats, f)
-    #     print("The statistic has been stored to the json file: ", output_file)
-
+        #save to output directory
+        with open(output_file,'w') as f:
+            json.dump(stats, f)
+        print("The statistic has been stored to the json file: ", output_file)
 
     def __iter__(self):
 
@@ -220,12 +217,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 self.idx += 1
             yield  {'L': x, 'H': y, "idx": cidx, "T":t}
 
-
 def run():
     data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
-
         inputs = train_data["L"]
         target = train_data["H"]
         idx = train_data["idx"]
@@ -235,7 +230,6 @@ def run():
         print("idx", idx)
         print("batch_idx", batch_idx)
         print("timestamps,", times)
-
 
 if __name__ == "__main__":
     run()
