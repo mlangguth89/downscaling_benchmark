@@ -1,5 +1,8 @@
+scikit-build
 opencv-python
 requests
 timm
+xarray
 matplotlib
 numpy
+torchvision

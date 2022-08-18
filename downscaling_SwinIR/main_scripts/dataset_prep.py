@@ -14,6 +14,8 @@ import numpy as np
 import pathlib
 import math
 import torchvision
+import os
+import json
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -55,7 +57,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
         #    print("pathname",path.name)
-        files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
+        files = sorted(p.rglob('preproc_ifs_radklim_*.nc'))
         if len(files) < 1:
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
