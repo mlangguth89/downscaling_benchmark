@@ -151,17 +151,22 @@ class CDO(RunTool):
         """
         Retrieves all known CDO operators.
         """
+        output = sp.check_output("cdo --operators 2>&1", shell=True, stderr=sp.STDOUT)
         try:
-            output = sp.check_output("cdo --operators 2>&1", shell=True, stderr=sp.STDOUT)
+            known_operators = [oper.partition(" ")[0] for oper in output]
         except Exception as e:
-            output = str(e.output).lstrip("b").strip("'").split("\\n")
+            output = str(output).lstrip("b").strip("'").split("\\n")
+            known_operators = [oper.partition(" ")[0] for oper in output]
 
-        known_operators = [oper.partition(" ")[0] for oper in output]
+        # remove empty last list entry (may happen for successful exception)
+        if not known_operators[-1]:
+            known_operators = known_operators[:-1]
+
         known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
 
-
+c
 class NCRENAME(RunTool):
     """
     Child class for ncrename commands.
