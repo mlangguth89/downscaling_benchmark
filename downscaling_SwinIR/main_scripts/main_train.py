@@ -22,9 +22,9 @@ from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinir
-from models.netowkr_swinsr
+from models.network_vit import TransformerSR 
 import wandb
-os.environ["WANDB_MODE"]="offline"
+#os.environ["WANDB_MODE"]="offline"
 #os.environ["WANDB_API_KEY"] = key
 
 
@@ -195,16 +195,18 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param n_channels      : the number of input variables/channels
     :param save_dir        : the directory where the checkpoint results are save
     :param epochs          : the number of epochs
-
+    :param type_net        : the type of the models
     """
 
     train_loader = create_loader(train_dir)
     test_loader = create_loader(test_dir)
-
+    print("The model {} is selected for training", type_net)
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinir":
         netG = swinir()
+    elif type_net == "TransformerSR":
+        netG = TransformerSR()
     else:
         NotImplementedError
 
