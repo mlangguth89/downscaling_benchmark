@@ -20,7 +20,8 @@ from torch.optim import Adam
 import torch.nn as nn
 from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
-from models.network_unet import UNet as net
+from models.network_unet import UNet as unet
+from models.network_swinir import SwinIR as swinir
 import wandb
 os.environ["WANDB_MODE"]="offline"
 #os.environ["WANDB_API_KEY"] = key
@@ -184,7 +185,7 @@ class BuildModel:
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
-        epochs: int = 2):
+        epochs: int = 2,type_net: str = "unet"):
 
     """
     :param train_dir       : the directory that contains the training dataset NetCDF files
@@ -199,7 +200,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     train_loader = create_loader(train_dir)
     test_loader = create_loader(test_dir)
 
-    netG = net(n_channels = n_channels)
+    if type_net == "unet":
+        netG = unet(n_channels = n_channels)
+    elif type_net == "swinir":
+        netG = swinir()
+    else:
+        NotImplementedError
+
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainalbe parameters:", netG_params)
     model = BuildModel(netG, save_dir = save_dir)
@@ -262,9 +269,6 @@ def main():
         save_dir = args.save_dir,
         checkpoint_save = 200,
         epochs = args.epochs)
-
-
-
 
 
 if __name__ == '__main__':
