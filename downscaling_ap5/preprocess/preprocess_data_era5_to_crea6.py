@@ -47,20 +47,21 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
     # invariant variables expected in the invariant files
     const_vars = ["z", "lsm"]
 
-    def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, constfile_in: str, constfile_tar: str,
+    def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, tar_constfile: str,
                  grid_des_tar: str, predictors: dict, predictands: dict, downscaling_fac: int = 5):
         """
         Initialize class for ERA5-to-COSMO REA6 downscaling class.
         """
         # initialize from ERA5-to-IFS class (parent class)
-        super().__init__(in_datadir, tar_datadir, out_dir, constfile_in, grid_des_tar, predictors, predictands,
+        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands,
                          downscaling_fac)
 
         self.name_preprocess = "preprocess_ERA5_to_CREA6"
 
         # sanity check on constant/invariant file of COSMO REA6
-        if not os.path.isfile(constfile_tar):
-            raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(constfile_tar))
+        if not os.path.isfile(tar_constfile):
+            raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(tar_constfile))
+        self.constfile_tar = tar_constfile
 
     def prepare_worker(self, years: List, season: str, **kwargs):
         """
