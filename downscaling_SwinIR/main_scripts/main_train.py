@@ -22,6 +22,7 @@ from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinir
+from models.netowkr_swinsr
 import wandb
 os.environ["WANDB_MODE"]="offline"
 #os.environ["WANDB_API_KEY"] = key
@@ -254,7 +255,7 @@ def main():
                         help = "The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
-
+    parser.add_argument("--model_type",type = str, default = "unet", help = "The model type: unet, swinir")
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
@@ -268,7 +269,8 @@ def main():
         n_channels = 8,
         save_dir = args.save_dir,
         checkpoint_save = 200,
-        epochs = args.epochs)
+        epochs = args.epochs,
+        type_net = args.model_type)
 
 
 if __name__ == '__main__':

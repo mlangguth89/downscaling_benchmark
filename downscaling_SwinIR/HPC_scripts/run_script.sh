@@ -25,7 +25,7 @@ train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
 test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
 save_dir=../results/exp_test
 epochs=2
+model_type=swinir
 
-python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --save_dir ${save_dir} --epochs ${epochs} > output.test 
-#python ../main_scripts/dataset_prep.py
+python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type}> output.test #python ../main_scripts/dataset_prep.py
 #python ../main_scripts/main_train_precip.py  
