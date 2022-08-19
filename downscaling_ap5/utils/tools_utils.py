@@ -166,6 +166,25 @@ class CDO(RunTool):
 
         return known_operators
 
+    def run(self, args: List, operator_dict: dict = None):
+        """
+        Modify run-method to allow for merge-operations where outfile is in the list of infiles.
+        In this case, a temporary file is created which is then moved to the desired outfile after running CDO.
+        """
+        if "merge" in operator_dict.keys():
+            ltmp = False
+            if args[-1] in args[:-1]:
+                tarfile = args[-1]
+                args[-1] = f"{args[-1]}_tmp"
+                ltmp = True
+            try:
+                super().run(args, operator_dict)
+            except Exception as e:
+                if ltmp: shutil.move(args[-1], tarfile)
+                raise e
+        else:
+            super().run(args, operator_dict)
+
 
 class NCRENAME(RunTool):
     """
