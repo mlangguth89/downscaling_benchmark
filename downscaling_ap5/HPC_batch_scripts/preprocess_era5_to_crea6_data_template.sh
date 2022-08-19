@@ -34,24 +34,26 @@ fi
 # Loading mouldes
 source ../env_setup/modules.sh
 
-# set variables to be parsed
-# data directories
+# path to data directories and files
 src_dir_era5=/path/to/era5/data
 src_dir_crea6=/path/to/cosmo/rea6/data
+const_file_era5=/path/to/invariant/file/of/era5
 const_file_crea6=/path/to/invariant/file/of/cosmo/rea6
+grid_des_tar=/path/to/grid/description/
 out_dir=/path/to/output/directory/
-# default predictors and predictands as well as path to grid description
+# selection of predictors and predictands
 predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": "", "z": "", "sshf": "", "slhf": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
 predictands='{"sf": {"t_2m": ""}, "invar": {"hsurf": ""}}'
-grid_des_tar=/path/to/grid/description/
 
+# time request
 years=( 2016 2017 2018 )
 # months="all"             # still hard-coded
+# preprocessing method
 method=ERA5_to_CREA6
 
 srun --overlap python -m mpi4py ../main_scripts/main_preprocessing.py \
   -in_datadir ${src_dir_era5} -tar_datadir ${src_dir_crea6} -out_dir ${out_dir} -grid_des_tar ${grid_des_tar} \
-  -tar_constfile ${const_file_crea6} -predictors "${predictors}" -predictands "${predictands}" -y "${years[@]}"  \
-  -method ${method}
+  -in_constfile ${const_file_era5} -tar_constfile ${const_file_crea6} -predictors "${predictors}" -predictands "${predictands}" \
+  -y "${years[@]}" -method ${method}
 
 
