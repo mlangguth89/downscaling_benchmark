@@ -179,8 +179,9 @@ class CDO(RunTool):
                 ltmp = True
             try:
                 super().run(args, operator_dict)
+                if ltmp: os.replace(args[-1], tarfile)
             except Exception as e:
-                if ltmp: shutil.move(args[-1], tarfile)
+                if ltmp: os.replace(args[-1], tarfile)
                 raise e
         else:
             super().run(args, operator_dict)
