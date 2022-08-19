@@ -1,0 +1,6 @@
+scikit-build
+opencv-python
+requests
+timm
+matplotlib
+numpy

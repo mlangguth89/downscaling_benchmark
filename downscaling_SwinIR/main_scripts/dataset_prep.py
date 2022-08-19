@@ -13,6 +13,9 @@ import torch
 import numpy as np
 import pathlib
 import math
+import torchvision
+import os
+import json
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -37,6 +40,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         super(PrecipDatasetInter).__init__()
 
+        self.file_path = file_path
         self.patch_size = patch_size
         self.sf = sf  # scaling factor
         self.vars_in = vars_in
@@ -48,19 +52,22 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.times_patches_list = []
 
         # Search for files
-        p = pathlib.Path( file_path)
+        p = pathlib.Path(self.file_path)
         assert(p.is_dir())
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
         #    print("pathname",path.name)
-        files = sorted(p.rglob('preproc_ifs_radklim*.nc'))
+        files = sorted(p.rglob('preproc_ifs_radklim_*.nc'))
         if len(files) < 1:
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
 
-
-
         self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
+
+        self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
+        self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
+        self.vars_out_patches_mean = self.vars_out_patches_list.mean()
+        self.vars_out_patches_std = self.vars_out_patches_list.std()
 
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
@@ -69,7 +76,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         #print("var_out size",self.vars_out_patches_list)
 
         self.idx_perm = self.shuffle()
-
+        self.save_stats()
 
     def process_netcdf(self, filenames: int = None):
         """
@@ -149,8 +156,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 
-
-
     def shuffle(self):
         """
         shuffle the index 
@@ -166,12 +171,32 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("idx_perm",idx_perm)
         return idx_perm
 
+    def save_stats(self):
+        output_file = os.path.join(self.file_path, "statistics.json")
+        stats = {}
+        for i in range(len(self.vars_in)):
+            key = self.vars_in[i]+'_mean'
+            stats.update({key:float(self.vars_in_patches_mean[i])})
+            key = self.vars_in[i]+'_std'
+            stats.update({key:float(self.vars_in_patches_std[i])}) 
+            
+        key = self.var_out[0]+'_mean'
+        stats.update({key:float(self.vars_out_patches_mean)})
+        key = self.var_out[0]+'_std'
+        stats.update({key:float(self.vars_out_patches_std)})
 
+        #save to output directory
+        with open(output_file,'w') as f:
+            json.dump(stats, f)
+        print("The statistic has been stored to the json file: ", output_file)
 
     def __iter__(self):
 
         iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)  # todo
         self.idx = 0
+
+        transform_x = torchvision.transforms.Normalize(self.vars_in_patches_mean,self.vars_in_patches_std)
+
         for bidx in range(iter_start, iter_end):
 
             #initialise x, y for each batch
@@ -185,20 +210,19 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             for jj in range(self.batch_size):
 
                 cid = self.idx_perm[self.idx]
-                x[jj] = self.vars_in_patches_list[cid]
-                y[jj] = self.vars_out_patches_list[cid]
+                
+                x[jj] = transform_x(self.vars_in_patches_list[cid])
+                y[jj] = (self.vars_out_patches_list[cid] - self.vars_out_patches_mean) / self.vars_out_patches_std
                 t[jj] = self.times_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
                 self.idx += 1
             yield  {'L': x, 'H': y, "idx": cidx, "T":t}
 
-
 def run():
     data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
-
         inputs = train_data["L"]
         target = train_data["H"]
         idx = train_data["idx"]
@@ -208,7 +232,6 @@ def run():
         print("idx", idx)
         print("batch_idx", batch_idx)
         print("timestamps,", times)
-
 
 if __name__ == "__main__":
     run()
