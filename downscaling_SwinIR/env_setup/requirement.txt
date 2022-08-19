@@ -1,5 +1,6 @@
 opencv-python
 requests
 timm
+wanda
 matplotlib
 numpy
