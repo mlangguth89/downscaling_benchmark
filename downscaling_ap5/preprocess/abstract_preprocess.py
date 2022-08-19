@@ -208,6 +208,8 @@ class CDOGridDes(ABC):
                                 "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
                                 "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
         coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict)
+        if "gridsize" in coarse_grid_des_dict.keys():
+            coarse_grid_des_dict["gridsize"] = coarse_grid_des_dict["xsize"]*coarse_grid_des_dict["ysize"]
 
         # construct filename
         coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
@@ -225,6 +227,8 @@ class CDOGridDes(ABC):
                                   "xfirst": xyf_in[0] - dx_coarse[0], "xinc": dx_in[0],
                                   "yfirst": xyf_in[1] - dx_coarse[1], "yinc": dx_in[1]}
             base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict)
+            if "gridsize" in base_grid_des_dict.keys():
+                base_grid_des_dict["gridsize"] = base_grid_des_dict["xsize"] * base_grid_des_dict["ysize"]
             # construct filename and ...
             base_grid_des = os.path.join(target_dir, "{0}grid_base".format(name_base))
             if rank == 0 or rank is None:
