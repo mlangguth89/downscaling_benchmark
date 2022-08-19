@@ -166,7 +166,7 @@ class CDO(RunTool):
 
         return known_operators
 
-c
+
 class NCRENAME(RunTool):
     """
     Child class for ncrename commands.

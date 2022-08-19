@@ -4,8 +4,8 @@
 #SBATCH --ntasks=12
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --output=preprocess_ifs_hres_data-out.%j
-#SBATCH --error=preprocess_ifs_hres_data-err.%j
+#SBATCH --output=preprocess_era5_to_crea6_data-out.%j
+#SBATCH --error=preprocess_era5_to_crea6_data-err.%j
 #SBATCH --time=01:00:00
 #SBATCH --gres=gpu:0
 #SBATCH --partition=devel
@@ -19,7 +19,7 @@ exit 99
 ######### Template identifier (don't remove) #########
 
 # Name of virtual environment
-VIRT_ENV_NAME="venv_juwels"
+VIRT_ENV_NAME="my_venv"
 
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
@@ -42,7 +42,7 @@ const_file_crea6=/path/to/invariant/file/of/cosmo/rea6
 out_dir=/path/to/output/directory/
 # default predictors and predictands as well as path to grid description
 predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": "", "z": "", "sshf": "", "slhf": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
-predictands='{"sf": {"t_2m": ""}, "invar"}: {"hsurf": ""}}'
+predictands='{"sf": {"t_2m": ""}, "invar": {"hsurf": ""}}'
 grid_des_tar=/path/to/grid/description/
 
 years=( 2016 2017 2018 )
