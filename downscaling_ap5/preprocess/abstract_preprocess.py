@@ -193,7 +193,7 @@ class CDOGridDes(ABC):
         # sanity check
         if not all([n_c[1] == 0 for n_c in nxy_coarse]):
             raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
-                             .format(method, ", ".join(nxy_in), downscaling_fac))
+                             .format(method, ", ".join(map(str, nxy_in)), downscaling_fac))
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later

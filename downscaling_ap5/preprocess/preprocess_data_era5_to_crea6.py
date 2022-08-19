@@ -70,10 +70,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :param season: Season-string to be processed.
         :param kwargs: Arguments such as jobname for logger-filename
         """
-        preprocess_pystager, run_dict = super.prepare_worker(years, season, coarse_grid_name="crea6_", **kwargs)
+        preprocess_pystager, run_dict = super().prepare_worker(years, season, coarse_grid_name="crea6_", **kwargs)
 
-        # correct (default) job name
+        # correct (default) job name...
         run_dict["kwargs"] = {"job_name": kwargs.get("jobname", "Preproc_ERA5_to_CREA6")}
+        # ... and update args-list to fit to call of preprocess_worker
+        run_dict["args"].insert(3, self.constfile_tar)
 
         return preprocess_pystager, run_dict
 
@@ -128,7 +130,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             subdir = year_month.strftime("%Y-%m")
             dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
-            _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, subdir, sfvars_era5, const_vars_crea6)
+            _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, invar_file_crea6, subdir, sfvars_crea6, const_vars_crea6)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
             final_file_era5 = os.path.join(dest_dir, "preproc_era5_{0}.nc".format(subdir))
             final_file = final_file_era5.replace("_era5_", "")
@@ -151,7 +153,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 date_str = date2op.strftime("%Y%m%d%H")
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
 
-                filelist, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_curr_era5, invar_file_era5, dest_dir, date2op,
+                filelist, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, dest_dir, date2op,
                                                                          grid_des_coarse, grid_des_tar, sfvars_era5,
                                                                          mlvars_era5, fc_sfvars_era5, fc_mlvars_era5,
                                                                          logger, nwarn, max_warn)
@@ -170,8 +172,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             remove_files(all_daily_files, lbreak=True)
 
             # process COSMO-REA6 doata which is already organized in monthly files
-            final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, dest_dir,
-                                                                                 subdir, sfvars_crea6, const_vars_crea6,
+            final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar,
+                                                                                 dest_dir, subdir, sfvars_crea6, const_vars_crea6,
                                                                                  logger, nwarn, max_warn)
 
             # finally merge the ERA5- and the COSMO REA&-data into one monthly datafile
@@ -200,7 +202,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                              .format(", ".join(unknown_vartypes)))
 
         vars_2d, vars_const = predictands.get("2D", None), predictands.get("const", None)
-        vars_2d = [var_2d.capitalize() for var_2d in vars_2d]
+        vars_2d = [var_2d.upper() for var_2d in vars_2d]
+        vars_const = [var_const.upper() for var_const in vars_const]
 
         return vars_2d, vars_const
 
@@ -216,11 +219,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :param vars_2d: list of 2D-variables serving as predictands
         :param const_vars: list of invariant variables serving as predictands (must be part of const_file)
         """
-        for var_2d in vars_2d:
-            var_2d = var_2d.capitalize()
-            dfile_2d = os.path.join(indir, "2D", var_2d, f"{var_2d}.2D.{yr_month}")
-            if not os.path.isfile(dfile_2d):
-                FileNotFoundError(f"Could not find required file '{dfile_2d}' for predictand variable '{dfile_2d}'")
+        if vars_2d:
+            for var_2d in vars_2d:
+                var_2d = var_2d.capitalize()
+                dfile_2d = os.path.join(indir, "2D", var_2d, f"{var_2d}.2D.{yr_month}")
+                if not os.path.isfile(dfile_2d):
+                   FileNotFoundError(f"Could not find required file '{dfile_2d}' for predictand variable '{dfile_2d}'")
 
         if const_vars:
             fconsts = xr.open_dataset(const_file)
