@@ -195,7 +195,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
 
 def run():
-    data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/")
+    data_loader = PrecipDatasetInter(file_path="/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
 
