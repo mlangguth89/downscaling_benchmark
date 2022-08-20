@@ -26,7 +26,7 @@ class PatchEmbedding(nn.Module):
                  emb_size: int = 768,
                  enable_cnn: bool = False,
                  img_size: int = 16):
-        super.__init__()
+        super().__init__()
         """
         in_channels :  the number of variables/channles
         patch_size  :  the size of each patch
@@ -162,15 +162,19 @@ class Upsample(nn.Sequential):
         super(Upsample, self).__init__(*m)
 
 
-class TransformerSR(nn.Module):
-    def __int__(self, embed_dim: int=768, num_feat: int=10, upscale: int=10):
-        super(TransformerSR, self).__init__()
 
+class TransformerSR(nn.Module):
+
+    def __init__(self, embed_dim, num_feat: int=10, upscale: int=10):
+        print("Transformer Build")
+        super(TransformerSR, self).__init__()
+        print("Building TransformerSR")
         self.TransformerEncode = TransformerEncoder(depth=2)
         # for classical SR
         self.conv_before_upsample = nn.Sequential(nn.Conv2d(embed_dim, num_feat, 3, 1, 1),
                                                       nn.LeakyReLU(inplace = True))
-        self.upsample = Upsample(num_feat, upscale=upscale)
+
+        self.upsample = Upsample(num_feat, scale=upscale)
         self.conv_last = nn.Conv2d(num_feat, 1, 3, 1, 1)
 
 

@@ -165,17 +165,17 @@ class SwinTransformerBlock(nn.Module):
     r""" Swin Transformer Block.
 
     Args:
-        dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resulotion.
-        num_heads (int): Number of attention heads.
-        window_size (int): Window size.
-        shift_size (int): Shift size for SW-MSA.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
+        dim (int)                      : Number of input channels.
+        input_resolution (tuple[int])  : Input resolution.
+        num_heads (int)                : Number of attention heads.
+        window_size (int)              : Window size.
+        shift_size (int)               : Shift size for SW-MSA.
+        mlp_ratio (float)              : Ratio of mlp hidden dim to embedding dim.
+        qkv_bias (bool, optional)      : If True, add a learnable bias to query, key, value. Default: True
         qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
-        drop_path (float, optional): Stochastic depth rate. Default: 0.0
+        drop (float, optional)         : Dropout rate. Default: 0.0
+        attn_drop (float, optional)    : Attention dropout rate. Default: 0.0
+        drop_path (float, optional)    : Stochastic depth rate. Default: 0.0
         act_layer (nn.Module, optional): Activation layer. Default: nn.GELU
         norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
     """
@@ -348,7 +348,6 @@ class PatchMerging(nn.Module):
 
 class BasicLayer(nn.Module):
     """ A basic Swin Transformer layer for one stage.
-
     Args:
         dim (int): Number of input channels.
         input_resolution (tuple[int]): Input resolution.
@@ -597,9 +596,8 @@ class UpsampleOneStep(nn.Sequential):
        Used in lightweight SR to save parameters.
 
     Args:
-        scale (int): Scale factor. Supported scales: 2^n and 3.
+        scale (int)   : Scale factor. Supported scales: 2^n and 3.
         num_feat (int): Channel number of intermediate features.
-
     """
 
     def __init__(self, scale, num_feat, num_out_ch, input_resolution=None):
@@ -617,11 +615,11 @@ class UpsampleOneStep(nn.Sequential):
 
 
 class SwinIR(nn.Module):
-    r""" SwinIR
+    """ SwinIR
         A PyTorch impl of : `SwinIR: Image Restoration Using Swin Transformer`, based on Swin Transformer.
 
     Args:
-        img_size (int | tuple(int)): Input image size. Default 64
+        img_size (int | tuple(int))  : Input image size. Default 64
         patch_size (int | tuple(int)): Patch size. Default: 1
         in_chans (int): Number of input image channels. Default: 3
         embed_dim (int): Patch embedding dimension. Default: 96
@@ -807,7 +805,6 @@ class SwinIR(nn.Module):
     def forward(self, x):
         H, W = x.shape[2:]
         x = self.check_image_size(x)
-
         self.mean = self.mean.type_as(x)
         x = (x - self.mean) * self.img_range
 

@@ -24,12 +24,9 @@ from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinir
 from models.network_vit import TransformerSR 
 import wandb
-#os.environ["WANDB_MODE"]="offline"
+os.environ["WANDB_MODE"]="offline"
 #os.environ["WANDB_API_KEY"] = key
-
-
 wandb.init(project="Precip_downscaling",reinit=True)
-
 
 def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
@@ -200,7 +197,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     train_loader = create_loader(train_dir)
     test_loader = create_loader(test_dir)
-    print("The model {} is selected for training", type_net)
+    print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinir":
@@ -257,7 +254,7 @@ def main():
                         help = "The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
-    parser.add_argument("--model_type",type = str, default = "unet", help = "The model type: unet, swinir")
+    parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
