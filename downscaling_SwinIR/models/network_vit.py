@@ -16,14 +16,16 @@ https://towardsdatascience.com/implementing-visualttransformer-in-pytorch-184f9f
 import torch
 import torch.nn as nn
 from torch import Tensor
+import torch.nn.functional as F
 from einops.layers.torch import Rearrange, Reduce
+from einops import rearrange, reduce, repeat
 
 class PatchEmbedding(nn.Module):
 
     def __init__(self,
                  in_channels: int = 8,
                  patch_size: int = 4,
-                 emb_size: int = 768,
+                 emb_size: int = 64,
                  enable_cnn: bool = False,
                  img_size: int = 16):
         super().__init__()
@@ -50,8 +52,8 @@ class PatchEmbedding(nn.Module):
             # I remove the cls embedding, since we do not have class labels in the data,
             # I used learnable position embedding in this case
             # In the future, we can include the datetime and location as embedding, it should be implemented here
-            self.positions = nn.Parameter(torch.randn((img_size // patch_size) ** 2 + 1, emb_size))
-
+            self.position = nn.Parameter(torch.randn((img_size // patch_size) ** 2 , emb_size))
+            print("self.position", self.position.shape)
     def forward(self, x: Tensor) ->Tensor:
         x = self.projection(x)
         print("The shape after Patching Embedding",x.shape)
@@ -157,7 +159,7 @@ class Upsample(nn.Sequential):
 
     def __init__(self, num_feat, scale: int=10):
         m = []
-        m.append(nn.Conv2d(in_channels=num_feat, out_channels=10*num_feat, kernel_size=3, stride=1, padding=1))
+        m.append(nn.Conv2d(in_channels=num_feat, out_channels=scale*scale*num_feat, kernel_size=3, stride=1, padding=1))
         m.append(nn.PixelShuffle(scale))
         super(Upsample, self).__init__(*m)
 
@@ -165,25 +167,38 @@ class Upsample(nn.Sequential):
 
 class TransformerSR(nn.Module):
 
-    def __init__(self, embed_dim, num_feat: int=10, upscale: int=10):
+    def __init__(self, embed_dim: int = 64 , num_feat: int=10, upscale: int=10, patch_size:int=4, in_channels: int=8):
         print("Transformer Build")
         super(TransformerSR, self).__init__()
         print("Building TransformerSR")
+        self.patch_size = patch_size
+        self.embed = PatchEmbedding(in_channels, patch_size, embed_dim, img_size=16)
         self.TransformerEncode = TransformerEncoder(depth=2)
         # for classical SR
         self.conv_before_upsample = nn.Sequential(nn.Conv2d(embed_dim, num_feat, 3, 1, 1),
                                                       nn.LeakyReLU(inplace = True))
 
+        self.linear = nn.Linear(embed_dim,patch_size * patch_size)
         self.upsample = Upsample(num_feat, scale=upscale)
         self.conv_last = nn.Conv2d(num_feat, 1, 3, 1, 1)
 
 
     def forward(self,x):
+        x = self.embed(x)
         x = self.TransformerEncode(x)
+        print("x shape after TransformerEncode:",x.shape)
+        x_shape = x.size()
+        #x = x.view(x.size(dim=0), self.patch_size, self.patch_size, x.size(dim=2))
+        x = x.permute(0, 2, 1) #put channle to the second place
+        print("X shape before conv_before_upsample",x.shape)
+        x = self.linear(x)
+        x =  x.view(x.size(dim=0), x.size(dim=1), self.patch_size, self.patch_size)
         x = self.conv_before_upsample(x)
         x = self.upsample(x)
-        x= self.conv_last(x)
+        print("X shape after upsample",x.shape)
 
+        x= self.conv_last(x)
+        return x
 
 
 
