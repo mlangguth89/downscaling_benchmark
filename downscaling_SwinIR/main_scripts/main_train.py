@@ -13,42 +13,19 @@ import sys
 import os
 import json
 import torch
-from torch.utils.data import DataLoader
 from collections import OrderedDict
 from torch.optim import lr_scheduler
 from torch.optim import Adam
 import torch.nn as nn
-from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
 from models.network_vanilla_swin_transformerimport import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
+from utils.data_loader import create_loader
 import wandb
 os.environ["WANDB_MODE"]="offline"
 #os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-
-def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
-                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
-                                  "yw_hourly_in"],
-                 var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234):
-
-    """
-    file_path : the path to the directory of .nc files
-    vars_in   : the list contains the input variable namsaes
-    var_out   : the list contains the output variable name
-    batch_size: the number of samples per iteration
-    patch_size: the patch size for low-resolution image,
-                the corresponding high-resolution patch size should be muliply by scale factor (sf)
-    sf        : the scaling factor from low-resolution to high-resolution
-    seed      : specify a seed so that we can generate the same random index for shuffle function
-    """
-
-    dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
-
-    return torch.utils.data.DataLoader(dataset, batch_size=None)
-
 
 
 class BuildModel:
@@ -181,7 +158,6 @@ class BuildModel:
             return param_group['lr']
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
-        test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet"):
 
@@ -196,7 +172,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     """
 
     train_loader = create_loader(train_dir)
-    test_loader = create_loader(test_dir)
+    #test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
@@ -223,7 +199,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # 1) update learning rate
             # -------------------------------
             model.update_learning_rate(current_step)
-            lr =  model.get_lr() #get learning rate
+            lr = model.get_lr() #get learning rate
 
             # -------------------------------
             # 2) feed patch pairs
