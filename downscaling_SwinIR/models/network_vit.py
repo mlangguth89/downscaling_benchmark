@@ -170,13 +170,14 @@ class Upsample(nn.Sequential):
 class TransformerSR(nn.Module):
 
     def __init__(self, embed_dim: int = 64 , num_feat: int=1, 
-                       img_size = 16, upscale: int=10, patch_size:int=4, in_channels: int=8):
+            img_size = 16, upscale: int=10, patch_size:int=4, in_channels: int=8,out_channels:int=1):
         print("Transformer Build")
         super(TransformerSR, self).__init__()
         print("Building TransformerSR")
         self.patch_size = patch_size
         self.img_size = img_size
         self.upscale = upscale
+        self.out_channels = out_channels
         
         self.embed = PatchEmbedding(in_channels, patch_size, embed_dim, img_size=img_size)
         self.TransformerEncode = TransformerEncoder(depth=2)
@@ -184,7 +185,7 @@ class TransformerSR(nn.Module):
         #self.conv_before_upsample = nn.Sequential(nn.Conv2d(embed_dim, num_feat, 3, 1, 1),
         #                                             nn.LeakyReLU(inplace = True))
 
-        self.linear = nn.Linear(embed_dim, patch_size*patch_size*upscale*upscale) 
+        self.linear = nn.Linear(embed_dim, patch_size*patch_size*out_channels*upscale*upscale) 
         self.upsample = Upsample(scale=upscale)
         self.conv_last = nn.Conv2d(num_feat, 1, 3, 1, 1)
 
@@ -199,7 +200,7 @@ class TransformerSR(nn.Module):
         x = self.linear(x)
         x = x.permute(0, 2, 1) #put channle to the second place
         print("x shape after permute",x.shape)
-        x =  x.reshape(x.size(dim=0), self.upscale * self.upscale, self.patch_size, self.patch_size)
+        x =  x.reshape(x.size(dim=0), self.out_channels*self.upscale*self.upscale, self.img_size, self.img_size)
         x = self.upsample(x)
         print("X shape after upsample",x.shape)
 
