@@ -189,8 +189,23 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             # merge all time steps to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
             all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
-            cdo.run(all_daily_files + [final_file], OrderedDict([("mergetime", "")]))
-            remove_files(all_daily_files, lbreak=True)
+            cdo.run(all_daily_files + [final_file_in], OrderedDict([("mergetime", "")]))
+            # remap input data
+            if "2t" in all_predictors:
+                all_predictors.remove("2t")
+                l2t = True
+            else:
+                l2t = False
+
+            cdo.run([final_file_in, final_file_in_coa], OrderedDict([("-remapcon", grid_des_coarse),
+                                                                     ("-selname", ",".join(all_predictors))]))
+            cdo.run([final_file_in_coa, final_file], OrderedDict([("-remapbil", grid_des_tar)]))
+            if l2t:
+                PreprocessERA5toIFS.remap2t_and_cat(final_file_in, final_file, grid_des_coarse, grid_des_tar)
+
+            # merge input and target datafile
+            cdo.run([final_file, final_file_tar, final_file], OrderedDict([("merge", "")]))
+            remove_files(all_daily_files + [final_file_in, final_file_in_coa, final_file_tar], lbreak=True)
 
         return nwarn
 
@@ -220,11 +235,15 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             if any([i is not None for i in sfvars.values()]):
                 print("%{0}: Some values of sf-variables are not None, but do not have any effect.".format(method))
             sfvars = list(sfvars)
+            if "2t" in sfvars and "z" not in sfvars:
+                sfvars.append("z")
 
         if fc_sfvars:
             if any([i is not None for i in fc_sfvars.values()]):
                 print("%{0}: Some values of fc_sf-variables are not None, but do not have any effect.".format(method))
             fc_sfvars = list(fc_sfvars)
+            if "2t" in fc_sfvars and "z" not in fc_sfvars:
+                fc_sfvars.append("z")
 
         if mlvars:
             mlvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(mlvars)
