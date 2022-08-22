@@ -480,7 +480,6 @@ class SwinTransformerSR(nn.Module):
         img_size (int | tuple(int))    : Input image size. Default 224
         patch_size (int | tuple(int))  : Patch size. Default: 4
         in_chans (int)                 : Number of input image channels. Default: 3
-        num_classes (int)              : Number of classes for classification head. Default: 1000
         embed_dim (int)                : Patch embedding dimension. Default: 96
         depths (tuple(int))            : Depth of each Swin Transformer layer.
         num_heads (tuple(int))         : Number of attention heads in different layers.
@@ -498,16 +497,15 @@ class SwinTransformerSR(nn.Module):
         out_channels                   : the number of channles for output
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, num_classes=1000,
-                 embed_dim=96, depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24],
-                 window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+    def __init__(self, img_size=16, patch_size=4, in_chans=8,
+                 embed_dim=96, depths=[2, 2], num_heads=[3, 6],
+                 window_size=4, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=10, out_channels:int = 1,
                  **kwargs):
         super().__init__()
 
-        self.num_classes = num_classes
         self.num_layers = len(depths)
         self.embed_dim = embed_dim
         self.ape = ape
@@ -554,7 +552,7 @@ class SwinTransformerSR(nn.Module):
             self.layers.append(layer)
 
         self.norm = norm_layer(self.num_features)
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
+        #self.avgpool = nn.AdaptiveAvgPool1d(1)
 
         #Bing: This is the original code, I comment the following code,
         #since we are dealing with super-resolution task instead of classification
@@ -563,7 +561,7 @@ class SwinTransformerSR(nn.Module):
 
         self.linear = nn.Linear(self.num_features, patch_size*patch_size*out_channels*upscale*upscale)
         self.upsample = Upsample(scale=upscale)
-        self.conv_last = nn.Conv2d(self.num_feat, 1, 3, 1, 1)
+        self.conv_last = nn.Conv2d(out_channels, 1, 3, 1, 1)
 
 
         self.apply(self._init_weights)
@@ -601,6 +599,7 @@ class SwinTransformerSR(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
+        print("x shape after forward_features",x.shape)
         #Bing: uncomment
         #x = self.head(x)
         #Bing: replace the following code
