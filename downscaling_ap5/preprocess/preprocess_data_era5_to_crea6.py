@@ -152,14 +152,14 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str = date2op.strftime("%Y%m%d%H")
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
-
+            
                 filelist, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, dest_dir, date2op,
                                                                          grid_des_coarse, grid_des_tar, sfvars_era5,
                                                                          mlvars_era5, fc_sfvars_era5, fc_mlvars_era5,
                                                                          logger, nwarn, max_warn)
-
+            
                 if not filelist: continue  # skip day if preprocessing ERA5-data failed
-
+            
                 # finally all temporary files for each time step and clean-up
                 logger.info("Merge temporary files to daily netCDF-file '{0}'".format(daily_file))
                 cdo.run(filelist + [daily_file], OrderedDict([("merge", "")]))
@@ -173,7 +173,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar,
-                                                                                 dest_dir, subdir, sfvars_crea6, const_vars_crea6,
+                                                                                 dest_dir, year_month, sfvars_crea6, const_vars_crea6,
                                                                                  logger, nwarn, max_warn)
 
             # finally merge the ERA5- and the COSMO REA&-data into one monthly datafile
@@ -255,7 +255,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
-        final_file = os.path.join(dest_dir, f"preproc_ERA5_to_CREA6_{date_str}.nc")
+        final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
 
         gdes_tar = CDOGridDes(fgdes_tar)
         gdes_dict = gdes_tar.grid_des_dict
@@ -271,9 +271,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         # process 2D-files
         if vars_2d:
             for var in vars_2d:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
-                dfile_in = os.path.join(dirin, "2D", var.capitilize(), f"{var.capitilize()}.2D.{date_str2}.grb")
+                dfile_in = os.path.join(dirin, "2D", var.upper(), f"{var.upper()}.2D.{date_str2}.grb")
                 nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_2d_file,
-                                                                           [dfile_in, tmp_dir, date_str, lonlatbox_str],
+                                                                           [dfile_in, dest_dir, date_str, lonlatbox_str],
                                                                            {}, logger, nwarn, max_warn)
 
                 if not file2merge:
@@ -283,7 +283,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         if const_vars and not lfail:
             nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_const_file,
-                                                                       [invar_file, tmp_dir, const_vars, date_str,
+                                                                       [invar_file, dest_dir, const_vars, date_str,
                                                                         lonlatbox_str], {}, logger, nwarn, max_warn)
             if not file2merge:
                 lfail = True
@@ -294,10 +294,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             nwarn = max_warn + 1
         else:
             # merge the data
-            cdo.run([filelist, final_file], OrderedDict([("mergetime", "")]))
+            cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
             # replicate constant data over all timesteps
             for const_var in const_vars:
-                ncap2.run([final_file, final_file], OrderedDict([("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
+                ncap2.run([final_file, final_file], OrderedDict([("-A", ""), ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
                 ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
                 ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
@@ -315,11 +315,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not os.path.isfile(file_2d):
             FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
         # retrieve variable name back from path to file
-        var = os.path.dirname(os.path.basename(file_2d)).lower()
+        var = os.path.basename(os.path.dirname(file_2d))
         dfile_out = os.path.join(target_dir, f"{var}_{date_str}.nc")
 
         # slice data and convert to netCDF
-        cdo.run([file_2d, dfile_out], OrderedDict([("-f nc", ""), ("copy", ""),
+        cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""),
                                                    ("-sellonlatbox", lonlatbox_str)]))
 
         # rename varibale in resulting file (must be done in hacky manner)
@@ -348,41 +348,4 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return dfile_out
 
-
-
-
-
-
-
-        cdo = PreprocessERA5toIFS.cdo
-
-        # handle date and create tmp-directory and -files
-        date_str = date2op.strftime("%Y%m%d%H")
-        ifs_file,fh = PreprocessERA5toIFS.get_fc_file(dirin_ifs, date2op, model="ifs", suffix="sfc")
-        tmp_dir = os.path.join(target_dir, "tmp_{0}".format(date_str))
-        os.makedirs(tmp_dir, exist_ok=True)
-
-        ftmp_hres = os.path.join(tmp_dir, "{0}_tar.nc".format(date_str))
-
-        # get variables to retrieve from predictands-dictionary
-        # ! TO-DO: Allow for variables given on pressure levels (in pl-files!) !
-        if any(vartype != "sf" for vartype in predictands.keys()):
-            raise ValueError("Only surface variables (i.e. vartype 'sf') are currently supported for IFS data.")
-        ifsvars = list(predictands["sf"].keys())
-
-        # get slicing coordinates from target grid description file
-        gdes_tar = CDOGridDes(fgdes_tar)
-        gdes_dict = gdes_tar.grid_des_dict
-
-        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]),
-                     *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
-
-        cdo.run([ifs_file, ftmp_hres],
-                OrderedDict([("-seltimestep", "{0:d}".format(fh)), ("-selname", ",".join(ifsvars)),
-                             ("-sellonlatbox", "{0:.2f},{1:.2f},{2:.2f},{3:.2f}".format(*lonlatbox))]))
-
-        # rename variables
-        PreprocessERA5toIFS.add_varname_suffix(ftmp_hres, ifsvars, "_tar")
-
-        return ftmp_hres
 
