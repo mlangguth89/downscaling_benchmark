@@ -203,7 +203,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "swinir":
         netG = swinir()
     elif type_net == "TransformerSR":
-        netG = TransformerSR()
+        netG = TransformerSR(embed_dim =768)
     else:
         NotImplementedError
 
