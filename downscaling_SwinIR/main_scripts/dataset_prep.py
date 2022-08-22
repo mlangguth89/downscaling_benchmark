@@ -225,7 +225,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
                 cid = self.idx_perm[self.idx]
 
-                x[jj] = transform_x(self.vars_in_patches_list)
+                x[jj] = transform_x(self.vars_in_patches_list[cid])
                 y[jj] = (self.vars_out_patches_list[cid] - self.vars_out_patches_mean) / self.vars_out_patches_std
                 t[jj] = self.times_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
