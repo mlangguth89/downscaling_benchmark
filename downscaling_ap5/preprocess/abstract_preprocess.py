@@ -207,10 +207,10 @@ class CDOGridDes(ABC):
         coarse_grid_des_dict = {"gridtype": gtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
                                 "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
                                 "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
-        coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict)
+        coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict, create_copy=True)
         if "gridsize" in coarse_grid_des_dict.keys():
             coarse_grid_des_dict["gridsize"] = coarse_grid_des_dict["xsize"]*coarse_grid_des_dict["ysize"]
-
+        
         # construct filename
         coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
         # write data to CDO's grid description files
@@ -226,7 +226,7 @@ class CDOGridDes(ABC):
             base_grid_des_dict = {"gridtype": gtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
                                   "xfirst": xyf_in[0] - dx_coarse[0], "xinc": dx_in[0],
                                   "yfirst": xyf_in[1] - dx_coarse[1], "yinc": dx_in[1]}
-            base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict)
+            base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict, create_copy=True)
             if "gridsize" in base_grid_des_dict.keys():
                 base_grid_des_dict["gridsize"] = base_grid_des_dict["xsize"] * base_grid_des_dict["ysize"]
             # construct filename and ...
