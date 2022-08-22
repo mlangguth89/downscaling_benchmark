@@ -26,7 +26,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234):
+                 seed: int = 1234, k: float = 0.01):
         """
         file_path : the path to the directory of .nc files
         vars_in   : the list contains the input variable names
@@ -47,9 +47,20 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.var_out = var_out
         self.batch_size = batch_size
         self.seed = seed
+        self.k = k 
         self.vars_in_patches_list = []
         self.vars_out_patches_list = []
         self.times_patches_list = []
+        
+        prcpids = ['yw','cp','lsp']
+        self.prcp_indexes = []
+        i = 0
+
+        while i < len(vars_in):
+            for j in range(len(prcpids)):
+                if prcpids[j] in vars_in[i]:
+                    self.prcp_indexes.append(i)
+            i += 1
 
         # Search for files
         p = pathlib.Path(self.file_path)
@@ -68,7 +79,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
         self.vars_out_patches_mean = self.vars_out_patches_list.mean()
         self.vars_out_patches_std = self.vars_out_patches_list.std()
-
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
         
@@ -154,6 +164,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         times_no_nan = torch.index_select(times_patches,0, no_nan_idx) 
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
+        # log-transform -> log(x+k)-log(k)
+        vars_in_patches_no_nan[:,self.prcp_indexes,:,:] = torch.log(vars_in_patches_no_nan[:,self.prcp_indexes,:,:]+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
+        vars_out_pathes_no_nan = torch.log(vars_out_pathes_no_nan+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
+
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 
     def shuffle(self):
@@ -210,8 +224,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             for jj in range(self.batch_size):
 
                 cid = self.idx_perm[self.idx]
-                
-                x[jj] = transform_x(self.vars_in_patches_list[cid])
+
+                x[jj] = transform_x(self.vars_in_patches_list)
                 y[jj] = (self.vars_out_patches_list[cid] - self.vars_out_patches_mean) / self.vars_out_patches_std
                 t[jj] = self.times_patches_list[cid]
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
