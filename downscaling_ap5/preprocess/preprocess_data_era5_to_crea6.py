@@ -19,7 +19,6 @@ import os, glob
 from typing import Union, List
 import subprocess as sp
 import logging
-import numbers
 import datetime as dt
 import numpy as np
 import pandas as pd
@@ -190,7 +189,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         !!! To-Do !!
         :param predictands: dictionary for predictands with the form {"2D", {"t_2m"}}
         """
-
         known_vartypes = ["2D", "const"]
 
         pred_vartypes = list(predictands.keys())
@@ -238,11 +236,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
     @staticmethod
     def preprocess_crea6_tar(dirin: str, invar_file: str, fgdes_tar: str, dest_dir: str, date2op: dt.datetime,
-                             vars_2d: List, const_vars: List, logger:logging.Logger, nwarn: int, max_warn):
+                             vars_2d: List, const_vars: List, logger: logging.Logger, nwarn: int, max_warn):
         """
         Process COSMO REA6-files based on requested 2D- and invariant variables.
         :param dirin: top-level directory where COSMO REA6-data are placed (under <year>/<year>-<month>/-subdirectories)
-        :praam invar_file: datafile providing invariant COSMO REA6-data, e.g. HSURF
+        :param invar_file: datafile providing invariant COSMO REA6-data, e.g. HSURF
         :param fgdes_tar: file to CDO grid description file of target data
         :param dest_dir: Target directory to store the processed data in netCDF-files
         :param date2op: Date for which data should be processed
@@ -351,5 +349,3 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                                                       ("-sellonlatbox", lonlatbox_str)]))
 
         return dfile_out
-
-

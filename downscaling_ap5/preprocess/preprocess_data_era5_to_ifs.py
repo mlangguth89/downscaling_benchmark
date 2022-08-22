@@ -369,8 +369,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return filelist
 
     @staticmethod
-    def process_sf_file(sf_file: str, invar_file: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
-                        fgdes_tar: str, sfvars: List) -> str:
+    def process_sf_file(sf_file: str, invar_file: str, target_dir: str, date2op: dt.datetime, sfvars: List) -> str:
         """
         Process surface ERA5-file, i.e. remap conservatively on coarsened grid followed by bilinear remapping
         onto the target (high-resolved) grid.
@@ -378,8 +377,6 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         :param invar_file: ERA5-file with invariant variables
         :param target_dir: Target directory to store the processed data in netCDF-files
         :param date2op: Date for which data should be processed
-        :param fgdes_coarse: grid description file for coarse grid
-        :param fgdes_tar: grid description file for target (high-resolved) grid
         :param sfvars: list of surface predictor variables
         :return: path to processed netCDF-datafile
         """
@@ -401,29 +398,15 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         # handle dynamical and invariant variables
         sfvars_stat, sfvars_dyn = PreprocessERA5toIFS.split_dyn_static(sfvars)
 
-        l2t = False
-        if "2t" in sfvars_dyn:
-            # remove 2t from dynamical variables list
-            sfvars_dyn.remove("2t")
-            l2t = True
-
         # run remapping
-        cdo.run([sf_file, ftmp_coarse], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                     ("-remapcon", fgdes_coarse), ("-selname", ",".join(sfvars_dyn))]))
+        cdo.run([sf_file, ftmp_hres], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                   ("-selname", ",".join(sfvars_dyn))]))
         if sfvars_stat:
-            ftmp_coarse2 = ftmp_coarse.replace("sf", "sf_stat")
-            if not os.path.isfile(ftmp_coarse2):   # has only to be done once
-                cdo.run([invar_file, ftmp_coarse2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                                 ("-remapcon", fgdes_coarse),
-                                                                 ("-selname", ",".join(sfvars_stat))]))
-            cdo.run([ftmp_coarse2, ftmp_coarse, ftmp_coarse], OrderedDict([("-O", ""), ("merge", "")]))
-
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
-
-        # special handling of 2m temperature
-        if l2t:
-            PreprocessERA5toIFS.remap2t_and_cat(sf_file, invar_file, ftmp_hres, fgdes_coarse, fgdes_tar)
-            sfvars_dyn.append("2t")
+            ftmp_hres2 = ftmp_hres.replace("sf", "sf_stat")
+            if not os.path.isfile(ftmp_hres2):   # has only to be done once
+                cdo.run([invar_file, ftmp_hres2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                               ("-selname", ",".join(sfvars_stat))]))
+            cdo.run([ftmp_hres2, ftmp_hres, ftmp_hres], OrderedDict([("-O", ""), ("merge", "")]))
 
         # clean-up temporary files and rename variables
         remove_files([ftmp_coarse], lbreak=False)
@@ -432,16 +415,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return ftmp_hres
 
     @staticmethod
-    def process_ml_file(ml_file: str, target_dir: str, date2op: dt.datetime, fgdes_coarse: str,
-                        fgdes_tar: str, mlvars: dict, interp: bool = True) -> str:
+    def process_ml_file(ml_file: str, target_dir: str, date2op: dt.datetime, mlvars: dict, interp: bool = True) -> str:
         """
         Process multi-level ERA5-file, i.e. interpolate on desired pressure levels, remap conservatively on coarsened
         grid and finally perform a bilinear remapping onto the target (high-resolved) grid.
         :param ml_file: ERA5-file with variables on multi-levels or pressure-levels to process
         :param target_dir: Target directory to store the processed data in netCDF-files
         :param date2op: Date for which data should be processed
-        :param fgdes_coarse: grid description file for coarse grid
-        :param fgdes_tar: grid description file for target (high-resolved) grid
         :param mlvars: dictionary of predictor variables to be interpolated onto pressure levels,
                        e.g. {"t": {"p85000", "p70000"}}
         :param interp: True if pressure interpolation is required or False if data is available on pressure levels
@@ -496,9 +476,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
         cdo.run([ftmp_plvl1.replace(".nc", "??????.nc"), ftmp_plvl2], OrderedDict([("-O", ""), ("merge", "")]))
-        cdo.run([ftmp_plvl2, ftmp_coarse], OrderedDict([("-remapcon", fgdes_coarse),
-                                                        ("-selname", ",".join(var_new_req))]))
-        cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("remapbil", fgdes_tar)]))
+        cdo.run([ftmp_plvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
 
         # clean-up temporary files and rename variables
         plvl_files = list(glob.glob(ftmp_plvl1.replace(".nc", "??????.nc")))
