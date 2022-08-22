@@ -15,6 +15,7 @@ But include the last layer (pixel upsampling) for super-resolution. This is simi
 import torch
 import torch.nn as nn
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
+import torch.utils.checkpoint as checkpoint
 
 class Mlp(nn.Module):
     def __init__(self, in_features:int=None, hidden_features:int = None, out_features:int = None, act_layer=nn.GELU, drop:float=0.):
@@ -179,13 +180,11 @@ class SwinTransformerBlock(nn.Module):
         drop_path (float, optional)       : Stochastic depth rate. Default: 0.0
         act_layer (nn.Module, optional)   : Activation layer. Default: nn.GELU
         norm_layer (nn.Module, optional)  : Normalization layer.  Default: nn.LayerNorm
-        fused_window_process (bool, optional): If True, use one kernel to fused window shift & window partition for acceleration, similar for the reversed part. Default: False
     """
 
     def __init__(self, dim, input_resolution, num_heads, window_size=7, shift_size=0,
                  mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0., drop_path=0.,
-                 act_layer=nn.GELU, norm_layer=nn.LayerNorm,
-                 fused_window_process=False):
+                 act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
         self.input_resolution = input_resolution
@@ -232,7 +231,7 @@ class SwinTransformerBlock(nn.Module):
             attn_mask = None
 
         self.register_buffer("attn_mask", attn_mask)
-        self.fused_window_process = fused_window_process
+
 
     def forward(self, x):
         H, W = self.input_resolution
@@ -243,7 +242,8 @@ class SwinTransformerBlock(nn.Module):
         x = self.norm1(x)
         x = x.view(B, H, W, C)
 
-        # cyclic shift # Bing: I change the adjust the following code based on our needs, I also take reference from SwinIR code
+        # cyclic shift # Bing: I change the adjust the following code based on our needs,
+        # I also take reference from SwinIR code, this due to the function used in the orignal code is written in C
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
         else:
@@ -258,17 +258,15 @@ class SwinTransformerBlock(nn.Module):
 
         # merge windows
         attn_windows = attn_windows.view(-1, self.window_size, self.window_size, C)
+        shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
 
-        # reverse cyclic shift
+        # reverse cyclic shift:# Bing: I change the adjust the following code based on our needs,
+        # I also take reference from SwinIR code
         if self.shift_size > 0:
-            if not self.fused_window_process:
-                shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
-                x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
-            else:
-                x = WindowProcessReverse.apply(attn_windows, B, H, W, C, self.shift_size, self.window_size)
+            x = torch.roll(shifted_x, shifts=(self.shift_size, self.shift_size), dims=(1, 2))
         else:
-            shifted_x = window_reverse(attn_windows, self.window_size, H, W)  # B H' W' C
             x = shifted_x
+
         x = x.view(B, H * W, C)
         x = shortcut + self.drop_path(x)
 
@@ -299,12 +297,12 @@ class SwinTransformerBlock(nn.Module):
 class PatchMerging(nn.Module):
     r""" Patch Merging Layer.
     Args:
-        input_resolution (tuple[int]): Resolution of input feature.
-        dim (int): Number of input channels.
-        norm_layer (nn.Module, optional): Normalization layer.  Default: nn.LayerNorm
+        input_resolution (tuple[int])     : Resolution of input feature.
+        dim (int)                         : Number of input channels.
+        norm_layer (nn.Module, optional)  : Normalization layer.  Default: nn.LayerNorm
     """
 
-    def __init__(self, input_resolution, dim, norm_layer=nn.LayerNorm):
+    def __init__(self, input_resolution: tuple = None, dim: int = None, norm_layer: nn.Module = nn.LayerNorm):
         super().__init__()
         self.input_resolution = input_resolution
         self.dim = dim
@@ -347,27 +345,26 @@ class PatchMerging(nn.Module):
 class BasicLayer(nn.Module):
     """ A basic Swin Transformer layer for one stage.
     Args:
-        dim (int): Number of input channels.
-        input_resolution (tuple[int]): Input resolution.
-        depth (int): Number of blocks.
-        num_heads (int): Number of attention heads.
-        window_size (int): Local window size.
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim.
-        qkv_bias (bool, optional): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float | None, optional): Override default qk scale of head_dim ** -0.5 if set.
-        drop (float, optional): Dropout rate. Default: 0.0
-        attn_drop (float, optional): Attention dropout rate. Default: 0.0
+        dim (int)                               : Number of input channels.
+        input_resolution (tuple[int])           : Input resolution.
+        depth (int)                             : Number of blocks.
+        num_heads (int)                         : Number of attention heads.
+        window_size (int)                       : Local window size.
+        mlp_ratio (float)                       : Ratio of mlp hidden dim to embedding dim.
+        qkv_bias (bool, optional)               : If True, add a learnable bias to query, key, value. Default: True
+        qk_scale (float | None, optional)       : Override default qk scale of head_dim ** -0.5 if set.
+        drop (float, optional)                  : Dropout rate. Default: 0.0
+        attn_drop (float, optional)             : Attention dropout rate. Default: 0.0
         drop_path (float | tuple[float], optional): Stochastic depth rate. Default: 0.0
-        norm_layer (nn.Module, optional): Normalization layer. Default: nn.LayerNorm
-        downsample (nn.Module | None, optional): Downsample layer at the end of the layer. Default: None
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False.
-        fused_window_process (bool, optional): If True, use one kernel to fused window shift & window partition for acceleration, similar for the reversed part. Default: False
+        norm_layer (nn.Module, optional)        : Normalization layer. Default: nn.LayerNorm
+        downsample (nn.Module | None, optional) : Downsample layer at the end of the layer. Default: None
+        use_checkpoint (bool)                   : Whether to use checkpointing to save memory. Default: False.
     """
 
-    def __init__(self, dim, input_resolution, depth, num_heads, window_size,
-                 mlp_ratio=4., qkv_bias=True, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False,
-                 fused_window_process=False):
+    def __init__(self, dim: int = None, input_resolution: tuple = None, depth:int = None, num_heads:int = None,
+                 window_size :int = None, mlp_ratio : float = 4., qkv_bias:bool = True, qk_scale:float = None,
+                 drop:float = 0., attn_drop: float = 0.,
+                 drop_path=0., norm_layer=nn.LayerNorm, downsample=None, use_checkpoint=False):
 
         super().__init__()
         self.dim = dim
@@ -384,8 +381,7 @@ class BasicLayer(nn.Module):
                                  qkv_bias=qkv_bias, qk_scale=qk_scale,
                                  drop=drop, attn_drop=attn_drop,
                                  drop_path=drop_path[i] if isinstance(drop_path, list) else drop_path,
-                                 norm_layer=norm_layer,
-                                 fused_window_process=fused_window_process)
+                                 norm_layer=norm_layer)
             for i in range(depth)])
 
         # patch merging layer
@@ -462,31 +458,44 @@ class PatchEmbed(nn.Module):
             flops += Ho * Wo * self.embed_dim
         return flops
 
+class Upsample(nn.Sequential):
+    """Upsample module.
+    Args:
+        scale (int): Scale factor. Supported scales: 2^n and 3.
+        num_feat (int): Channel number of intermediate features.
+    """
 
-class SwinTransformer(nn.Module):
-    r""" Swin Transformer
+    def __init__(self, scale: int=10):
+        m = []
+        #m.append(nn.Conv2d(in_channels=num_feat, out_channels=scale*scale*num_feat, kernel_size=3, stride=1, padding=1))
+        m.append(nn.PixelShuffle(scale))
+        super(Upsample, self).__init__(*m)
+
+
+class SwinTransformerSR(nn.Module):
+    """ Swin Transformer
         A PyTorch impl of: `Swin Transformer: Hierarchical Vision Transformer using Shifted Windows`  -
           https://arxiv.org/pdf/2103.14030
     Args:
-        img_size (int | tuple(int)): Input image size. Default 224
-        patch_size (int | tuple(int)): Patch size. Default: 4
-        in_chans (int): Number of input image channels. Default: 3
-        num_classes (int): Number of classes for classification head. Default: 1000
-        embed_dim (int): Patch embedding dimension. Default: 96
-        depths (tuple(int)): Depth of each Swin Transformer layer.
-        num_heads (tuple(int)): Number of attention heads in different layers.
-        window_size (int): Window size. Default: 7
-        mlp_ratio (float): Ratio of mlp hidden dim to embedding dim. Default: 4
-        qkv_bias (bool): If True, add a learnable bias to query, key, value. Default: True
-        qk_scale (float): Override default qk scale of head_dim ** -0.5 if set. Default: None
-        drop_rate (float): Dropout rate. Default: 0
-        attn_drop_rate (float): Attention dropout rate. Default: 0
-        drop_path_rate (float): Stochastic depth rate. Default: 0.1
-        norm_layer (nn.Module): Normalization layer. Default: nn.LayerNorm.
-        ape (bool): If True, add absolute position embedding to the patch embedding. Default: False
-        patch_norm (bool): If True, add normalization after patch embedding. Default: True
-        use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
-        fused_window_process (bool, optional): If True, use one kernel to fused window shift & window partition for acceleration, similar for the reversed part. Default: False
+        img_size (int | tuple(int))    : Input image size. Default 224
+        patch_size (int | tuple(int))  : Patch size. Default: 4
+        in_chans (int)                 : Number of input image channels. Default: 3
+        num_classes (int)              : Number of classes for classification head. Default: 1000
+        embed_dim (int)                : Patch embedding dimension. Default: 96
+        depths (tuple(int))            : Depth of each Swin Transformer layer.
+        num_heads (tuple(int))         : Number of attention heads in different layers.
+        window_size (int)              : Window size. Default: 7
+        mlp_ratio (float)              : Ratio of mlp hidden dim to embedding dim. Default: 4
+        qkv_bias (bool)                : If True, add a learnable bias to query, key, value. Default: True
+        qk_scale (float)               : Override default qk scale of head_dim ** -0.5 if set. Default: None
+        drop_rate (float)              : Dropout rate. Default: 0
+        attn_drop_rate (float)         : Attention dropout rate. Default: 0
+        drop_path_rate (float)         : Stochastic depth rate. Default: 0.1
+        norm_layer (nn.Module)         : Normalization layer. Default: nn.LayerNorm.
+        ape (bool)                     : If True, add absolute position embedding to the patch embedding. Default: False
+        patch_norm (bool)              : If True, add normalization after patch embedding. Default: True
+        use_checkpoint (bool)          : Whether to use checkpointing to save memory. Default: False
+        out_channels                   : the number of channles for output
     """
 
     def __init__(self, img_size=224, patch_size=4, in_chans=3, num_classes=1000,
@@ -494,7 +503,8 @@ class SwinTransformer(nn.Module):
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, fused_window_process=False, **kwargs):
+                 use_checkpoint=False, upscale=10, out_channels:int = 1,
+                 **kwargs):
         super().__init__()
 
         self.num_classes = num_classes
@@ -533,18 +543,28 @@ class SwinTransformer(nn.Module):
                                num_heads=num_heads[i_layer],
                                window_size=window_size,
                                mlp_ratio=self.mlp_ratio,
-                               qkv_bias=qkv_bias, qk_scale=qk_scale,
-                               drop=drop_rate, attn_drop=attn_drop_rate,
+                               qkv_bias=qkv_bias,
+                               qk_scale=qk_scale,
+                               drop=drop_rate,
+                               attn_drop=attn_drop_rate,
                                drop_path=dpr[sum(depths[:i_layer]):sum(depths[:i_layer + 1])],
                                norm_layer=norm_layer,
                                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
-                               use_checkpoint=use_checkpoint,
-                               fused_window_process=fused_window_process)
+                               use_checkpoint=use_checkpoint)
             self.layers.append(layer)
 
         self.norm = norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
-        self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+
+        #Bing: This is the original code, I comment the following code,
+        #since we are dealing with super-resolution task instead of classification
+        #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        #Replace the following code for super-resolution
+
+        self.linear = nn.Linear(self.num_features, patch_size*patch_size*out_channels*upscale*upscale)
+        self.upsample = Upsample(scale=upscale)
+        self.conv_last = nn.Conv2d(self.num_feat, 1, 3, 1, 1)
+
 
         self.apply(self._init_weights)
 
@@ -581,7 +601,14 @@ class SwinTransformer(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        x = self.head(x)
+        #Bing: uncomment
+        #x = self.head(x)
+        #Bing: replace the following code
+        x = self.linear(x)
+        x = x.permute(0, 2, 1) #put channle to the second place
+        print("x shape after permute",x.shape)
+        x = x.reshape(x.size(dim=0), self.out_channels*self.upscale*self.upscale, self.img_size, self.img_size)
+        x = self.upsample(x)
         return x
 
     def flops(self):
@@ -595,35 +622,8 @@ class SwinTransformer(nn.Module):
 
 
 
-class Upsample(nn.Sequential):
-    """Upsample module.
-    Args:
-        scale (int): Scale factor. Supported scales: 2^n and 3.
-        num_feat (int): Channel number of intermediate features.
-    """
-
-    def __init__(self, num_feat, scale: int=10):
-        m = []
-        m.append(nn.Conv2d(in_channels=num_feat, out_channels=10*num_feat, kernel_size=3, stride=1, padding=1))
-        m.append(nn.PixelShuffle(scale))
-        super(Upsample, self).__init__(*m)
 
 
-class SwinSR(nn.Module):
-    def __init__(self,img_size=64, patch_size=1, in_chans=3,
-                 embed_dim=96, depths=[6, 6, 6, 6], num_heads=[6, 6, 6, 6],
-                 window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
-                 norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, upscale=2, img_range=1., upsampler='', resi_connection='1conv'):
-        super().__init__()
-        self.img_size = img_size
-        self.patch_size = patch_size
-        self.ST = SwinTransformer()
-
-
-    def forward(self):
-        pass
 
 
 
