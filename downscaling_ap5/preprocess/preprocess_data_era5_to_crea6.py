@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-08-11"
-__update__ = "2022-08-11"
+__update__ = "2022-08-22"
 
 # doc-string
 """
@@ -25,10 +25,9 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from collections import OrderedDict
-#from tfrecords_utils import IFS2TFRecords
+# from tfrecords_utils import IFS2TFRecords
 from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
-from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
 from other_utils import to_list, last_day_of_month, flatten, remove_files
 
@@ -152,7 +151,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str = date2op.strftime("%Y%m%d%H")
                 daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
-            
+
                 filelist, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, dest_dir, date2op,
                                                                          grid_des_coarse, grid_des_tar, sfvars_era5,
                                                                          mlvars_era5, fc_sfvars_era5, fc_mlvars_era5,
@@ -173,8 +172,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar,
-                                                                                 dest_dir, year_month, sfvars_crea6, const_vars_crea6,
-                                                                                 logger, nwarn, max_warn)
+                                                                                 dest_dir, year_month, sfvars_crea6,
+                                                                                 const_vars_crea6, logger, nwarn, max_warn)
 
             # finally merge the ERA5- and the COSMO REA&-data into one monthly datafile
             cdo.run([final_file_crea6, final_file_era5, final_file], OrderedDict([("mergetime", "")]))
@@ -224,7 +223,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 var_2d = var_2d.capitalize()
                 dfile_2d = os.path.join(indir, "2D", var_2d, f"{var_2d}.2D.{yr_month}")
                 if not os.path.isfile(dfile_2d):
-                   FileNotFoundError(f"Could not find required file '{dfile_2d}' for predictand variable '{dfile_2d}'")
+                    FileNotFoundError(f"Could not find required file '{dfile_2d}' for predictand variable '{dfile_2d}'")
 
         if const_vars:
             fconsts = xr.open_dataset(const_file)
@@ -237,18 +236,22 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return True
 
-
     @staticmethod
     def preprocess_crea6_tar(dirin: str, invar_file: str, fgdes_tar: str, dest_dir: str, date2op: dt.datetime,
                              vars_2d: List, const_vars: List, logger:logging.Logger, nwarn: int, max_warn):
         """
-        Process IFS-file by slicing data to region of interest.
-        :param dirin_ifs: top-level directory where IFS-data are placed (under <year>/<year>-<month>/-subdirectories)
-        :param target_dir: Target directory to store the processed data in netCDF-files
+        Process COSMO REA6-files based on requested 2D- and invariant variables.
+        :param dirin: top-level directory where COSMO REA6-data are placed (under <year>/<year>-<month>/-subdirectories)
+        :praam invar_file: datafile providing invariant COSMO REA6-data, e.g. HSURF
+        :param fgdes_tar: file to CDO grid description file of target data
+        :param dest_dir: Target directory to store the processed data in netCDF-files
         :param date2op: Date for which data should be processed
-        :param fgdes_tar: grid description file for target (high-resolved) grid
-        :param predictands: dictionary for predictand variables
-        :return: path to processed netCDF-datafile
+        :param vars_2d: List of requested 2D-variables
+        :param const_vars: List of requested invariant variables
+        :param logger: logging-instance
+        :param nwarn: number of faced warnings in processing chain (will be updated here)
+        :param max_warn: maximum number of allowd warnings
+        :return: path to processed netCDF-datafile and updated number of warnings
         """
         cdo, ncrename = PreprocessERA5toCREA6.cdo, PreprocessERA5toCREA6.ncrename
         ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
@@ -297,7 +300,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
             # replicate constant data over all timesteps
             for const_var in const_vars:
-                ncap2.run([final_file, final_file], OrderedDict([("-A", ""), ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
+                ncap2.run([final_file, final_file], OrderedDict([("-A", ""),
+                                                                 ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
                 ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
                 ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 

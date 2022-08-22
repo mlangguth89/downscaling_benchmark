@@ -1,6 +1,6 @@
 # ********** Info **********
 # @Creation: 2021-08-01
-# @Update: 2021-08-17
+# @Update: 2021-08-22
 # @Author: Michael Langguth
 # @Site: Juelich supercomputing Centre (JSC) @ FZJ
 # @File: preprocess_downscaling_data.py
@@ -12,8 +12,6 @@ Main script to preprocess IFS HRES data for downscaling with UNet-architecture.
 """
 # doc-string
 
-import os, glob
-import shutil
 import argparse
 import json as js
 import datetime as dt

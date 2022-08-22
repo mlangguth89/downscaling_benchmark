@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-04-22"
-__update__ = "2022-08-12"
+__update__ = "2022-08-22"
 
 # doc-string
 """
@@ -237,7 +237,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     @staticmethod
     def preprocess_era5_in(era5_dir: str, invar_file: str, dest_dir: str, date: dt.datetime, grid_des_coarse: str,
                            grid_des_tar: str, sfvars: List, mlvars: List, fc_sfvars: List, fc_mlvars: dict,
-                           logger: logging.Logger, nwarn: int, max_warn:int):
+                           logger: logging.Logger, nwarn: int, max_warn: int):
         """
         Preprocess ERA5 data to serve as input for downscaling task.
         """
