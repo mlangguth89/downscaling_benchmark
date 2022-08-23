@@ -110,8 +110,19 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             raise FileNotFoundError("File providing invariant data of COSMO REA6-dataset'{0}' cannot be found."
                                     .format(invar_file_crea6))
 
+        # get lists of predictor and predictand variables
         sfvars_era5, mlvars_era5, fc_sfvars_era5, fc_mlvars_era5 = PreprocessERA5toIFS.organize_predictors(predictors)
+        all_predictors = sfvars_era5 + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
+                         fc_sfvars_era5 + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
+
         sfvars_crea6, const_vars_crea6 = PreprocessERA5toCREA6.organize_predictands(predictands)
+        all_predictands = sfvars_crea6 + const_vars_crea6
+
+        # append list of surface variables in case that 2m temperature (2t) is involved for special remapping approach
+        if "2t" in sfvars_era5:
+            sfvars_era5.append("z")
+        if "2t" in fc_sfvars_era5:
+            fc_sfvars_era5.append("2t")
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
 
@@ -148,35 +159,35 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             for date2op in dates2op:
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
-                date_str = date2op.strftime("%Y%m%d%H")
-                daily_file = os.path.join(dest_dir, "{}_preproc.nc".format(date_str))
+                date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
+                daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
+                daily_file_ifs = daily_file_era5.replace("era5", "ifs")
 
-                filelist, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, dest_dir, date2op,
-                                                                         grid_des_coarse, grid_des_tar, sfvars_era5,
-                                                                         mlvars_era5, fc_sfvars_era5, fc_mlvars_era5,
-                                                                         logger, nwarn, max_warn)
-            
-                if not filelist: continue  # skip day if preprocessing ERA5-data failed
-            
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_curr_era5, invar_file_era5, daily_file_era5,
+                                                                      date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
+                                                                      fc_mlvars_era5, logger, nwarn, max_warn)
+
+                if not lfail: continue       # skip day if preprocessing ERA5-data failed
+
                 # finally all temporary files for each time step and clean-up
-                logger.info("Merge temporary files to daily netCDF-file '{0}'".format(daily_file))
-                cdo.run(filelist + [daily_file], OrderedDict([("merge", "")]))
-                remove_files(filelist, lbreak=False)
+                logger.info(f"Data for day {date_pr} successfully preprocessed.")
 
-            # merge all time steps to monthly file and clean-up daily files
+            # merge all time steps of the ERA5-data to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
-            all_daily_files = glob.glob(os.path.join(dest_dir, "*_preproc.nc"))
-            cdo.run(all_daily_files + [final_file_era5], OrderedDict([("mergetime", "")]))
-            remove_files(all_daily_files, lbreak=True)
+            all_daily_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+
+            cdo.run(all_daily_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
+            remove_files(all_daily_files_era5, lbreak=True)
 
             # process COSMO-REA6 doata which is already organized in monthly files
-            final_file_crea6, nwarn = PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar,
-                                                                                 dest_dir, year_month, sfvars_crea6,
-                                                                                 const_vars_crea6, logger, nwarn, max_warn)
+            final_file_crea6, nwarn = \
+                PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar, dest_dir,
+                                                           year_month, sfvars_crea6, const_vars_crea6, logger, nwarn,
+                                                           max_warn)
 
-            # finally merge the ERA5- and the COSMO REA&-data into one monthly datafile
-            cdo.run([final_file_crea6, final_file_era5, final_file], OrderedDict([("mergetime", "")]))
-            remove_files([final_file_crea6, final_file_era5], lbreak=True)
+            # finally merge the ERA5- and the COSMO REA6-data
+            PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_crea6, final_file, grid_des_coarse,
+                                                     grid_des_tar, all_predictors, all_predictands, nwarn, max_warn)
 
         return nwarn
 
