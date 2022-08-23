@@ -216,6 +216,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             cdo.run(all_daily_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
             cdo.run(all_daily_files_ifs + [final_file_ifs], OrderedDict([("mergetime", "")]))
 
+            remove_files(all_daily_files_era5 + all_daily_files_ifs, lbreak=True)
+
             # remap input data
             PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_ifs, final_file, grid_des_coarse,
                                                      grid_des_tar, all_predictors, all_predictands, nwarn, max_warn)
