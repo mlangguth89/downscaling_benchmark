@@ -734,9 +734,16 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         :param mlvars: dictionary of variables to be interpolated onto pressure levels, e.g. {"t": {"p85000", "p70000"}}
         :return : list of variable names
         """
-        mlvars_list = list(mlvars.keys())
-        mlvarnames = ["{0}{1}".format(var, int(int(plvl.lstrip("p")) / 100))
-                      for var in mlvars_list for plvl in mlvars[var]]
+        try:
+            mlvars_list = list(mlvars.keys())
+            mlvarnames = ["{0}{1}".format(var, int(int(plvl.lstrip("p")) / 100))
+                          for var in mlvars_list for plvl in mlvars[var]]
+        except AttributeError as err:
+            if mlvars:
+                raise err
+            else:       # return empty list
+                mlvarnames = []
+
 
         return mlvarnames
 
