@@ -332,6 +332,6 @@ class CDOGridDes(ABC):
         Small helper to get coords for slicing
         """
         coord0 = np.float(coord0)
-        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
+        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - .5) * np.float(dx), decimals=d))
         return np.amin(coords), np.amax(coords)
 
