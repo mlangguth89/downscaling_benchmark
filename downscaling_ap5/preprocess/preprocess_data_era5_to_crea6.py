@@ -112,11 +112,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # get lists of predictor and predictand variables
         sfvars_era5, mlvars_era5, fc_sfvars_era5, fc_mlvars_era5 = PreprocessERA5toIFS.organize_predictors(predictors)
-        all_predictors = sfvars_era5 + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
-                         fc_sfvars_era5 + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
+        all_predictors = to_list(sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
+                         to_list(fc_sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
+        all_predictors = [e for e in all_predictors if e]
 
         sfvars_crea6, const_vars_crea6 = PreprocessERA5toCREA6.organize_predictands(predictands)
-        all_predictands = sfvars_crea6 + const_vars_crea6
+        all_predictands = [e for e in sfvars_crea6 + const_vars_crea6 if e]
 
         # append list of surface variables in case that 2m temperature (2t) is involved for special remapping approach
         if "2t" in sfvars_era5:

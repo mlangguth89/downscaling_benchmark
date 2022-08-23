@@ -134,8 +134,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # get lists of predictor and predictand variables
         sfvars, mlvars, fc_sfvars, fc_mlvars = PreprocessERA5toIFS.organize_predictors(predictors)
-        all_predictors = sfvars + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars) + \
-                         fc_sfvars + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars)
+        all_predictors = to_list(sfvars) + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars) + \
+                         to_list(fc_sfvars) + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars)
+        all_predictors = [e for e in all_predictors if e]
 
         if any(vartype != "sf" for vartype in predictands.keys()):
             raise ValueError("Only surface variables (i.e. vartype 'sf') are currently supported for IFS data.")
@@ -225,7 +226,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return nwarn
 
     @staticmethod
-    def organize_predictors(predictors: dict) -> (List, dict, List):
+    def organize_predictors(predictors: dict) -> (List, dict, List, dict):
         """
         Checks predictors for variables to process and returns condensed information for further processing
         :param predictors: dictionary for predictors
