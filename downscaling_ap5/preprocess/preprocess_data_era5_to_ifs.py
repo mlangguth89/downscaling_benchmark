@@ -182,7 +182,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 raise NotADirectoryError(err_mess)
 
             dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
-                                     last_day, freq="H")
+                                     last_day.replace(hour=23), freq="H")
 
             # Perform logging, reset warning counter and loop over dates...
             logger.info("Start preprocessing data for month {0}...".format(subdir_name))
