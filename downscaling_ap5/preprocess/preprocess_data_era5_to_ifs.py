@@ -195,7 +195,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
                 daily_file_ifs = daily_file_era5.replace("era5", "ifs")
 
-                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_curr_era5, invar_file, daily_file_era5,
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_in_era5, invar_file, daily_file_era5,
                                                                       date2op, sfvars, mlvars, fc_sfvars, fc_mlvars,
                                                                       logger, nwarn, max_warn)
 
@@ -737,6 +737,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         """
         try:
             mlvars_list = list(mlvars.keys())
+            if "plvls" in mlvars_list: mlvars_list.remove("plvls")
             mlvarnames = ["{0}{1}".format(var, int(int(plvl.lstrip("p")) / 100))
                           for var in mlvars_list for plvl in mlvars[var]]
         except AttributeError as err:

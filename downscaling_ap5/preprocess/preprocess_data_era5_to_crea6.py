@@ -112,6 +112,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # get lists of predictor and predictand variables
         sfvars_era5, mlvars_era5, fc_sfvars_era5, fc_mlvars_era5 = PreprocessERA5toIFS.organize_predictors(predictors)
+        
         all_predictors = to_list(sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
                          to_list(fc_sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
         all_predictors = [e for e in all_predictors if e]
@@ -120,9 +121,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         all_predictands = [e for e in sfvars_crea6 + const_vars_crea6 if e]
 
         # append list of surface variables in case that 2m temperature (2t) is involved for special remapping approach
-        if "2t" in sfvars_era5:
+        if "2t" in to_list(sfvars_era5):
             sfvars_era5.append("z")
-        if "2t" in fc_sfvars_era5:
+        if "2t" in to_list(fc_sfvars_era5):
             fc_sfvars_era5.append("2t")
 
         grid_des_tar, grid_des_coarse = gdes_dict["tar_grid_des"], gdes_dict["coa_grid_des"]
@@ -164,7 +165,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
                 daily_file_ifs = daily_file_era5.replace("era5", "ifs")
 
-                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_curr_era5, invar_file_era5, daily_file_era5,
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, daily_file_era5,
                                                                       date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
                                                                       fc_mlvars_era5, logger, nwarn, max_warn)
 
