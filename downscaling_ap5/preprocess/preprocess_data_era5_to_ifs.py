@@ -423,6 +423,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         if l2t:
             PreprocessERA5toIFS.remap2t_and_cat(file_in, file_in_hres, gdes_coarse, gdes_tar)
+            predictors.append("2t")                 # to ensure subsequent renaming
 
         # merge input and target data
         cdo.run([file_in_hres, file_tar, final_file], OrderedDict([("-merge", "")]))
@@ -607,7 +608,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return ftmp_hres
 
     @staticmethod
-    def remap2t_and_cat(infile: str, outfile: str, grid_des_coarse: str, grid_des_tar: str) -> None:
+    def remap2t_and_cat(infile: str, invar_file: str, outfile: str, grid_des_coarse: str, grid_des_tar: str) -> None:
         """
         Remap 2m temperature by transforming to dry static energy and concatenate outfile with the result.
         First, data is conservative remapping onto the coarse grid is performed, followed by bilinear remapping onto the
@@ -624,17 +625,18 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cpd, g = PreprocessERA5toIFS.cpd, PreprocessERA5toIFS.g
 
         # temporary files (since CDO does not support modifying the input-file in place)
+        ftmp_in = outfile.replace(".nc", "_tmp_in.nc")
         ftmp_coarse = outfile.replace(".nc", "_s_coarse.nc")
         ftmp_hres = outfile.replace(".nc", "_2t_tmp.nc")
 
-        cdo.run([infile, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
+        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
                                                      ("-aexpr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", grid_des_tar), ("-selname", "2t"),
                                                        ("-aexpr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
         cdo.run([ftmp_hres, outfile, outfile], OrderedDict([("-O", ""), ("merge", "")]))
 
         # clean-up temporary files
-        remove_files([ftmp_coarse, ftmp_hres], lbreak=False)
+        remove_files([ftmp_in, ftmp_coarse, ftmp_hres], lbreak=False)
 
     @staticmethod
     def split_dyn_static(sfvars: List):
