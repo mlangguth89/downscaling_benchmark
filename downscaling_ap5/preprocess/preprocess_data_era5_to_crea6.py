@@ -144,7 +144,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, invar_file_crea6, subdir, sfvars_crea6, const_vars_crea6)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
             final_file_era5 = os.path.join(dest_dir, "preproc_era5_{0}.nc".format(subdir))
-            final_file = final_file_era5.replace("_era5_", "")
+            final_file = final_file_era5.replace("preproc_era5_", "preproc_")           # note that 'preproc_' must be incldued to distortion of directory-path
             os.makedirs(dest_dir, exist_ok=True)
 
             # sanity check on ERA5-directory
@@ -154,7 +154,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 raise NotADirectoryError(err_mess)
 
             dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
-                                     last_day, freq="H")
+                                     last_day.replace(hour=23), freq="H")
             # Perform logging, reset warning counter and loop over dates...
             logger.info("Start preprocessing data for month {0}...".format(subdir))
 
@@ -163,7 +163,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                 daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
-                daily_file_ifs = daily_file_era5.replace("era5", "ifs")
+                # Skip time step if file already exists
+                if os.path.isfile(daily_file_era5): continue
 
                 lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, daily_file_era5,
                                                                       date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
@@ -176,7 +177,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             # merge all time steps of the ERA5-data to monthly file and clean-up daily files
             logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
-            all_daily_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+            all_daily_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_era5.nc"))
 
             cdo.run(all_daily_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
             remove_files(all_daily_files_era5, lbreak=True)
@@ -315,9 +316,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                                                                  ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
                 ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
                 ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
-
-            # rename variables
-            PreprocessERA5toIFS.add_varname_suffix(final_file, vars_2d + const_vars, "_tar")
 
         return final_file, nwarn
 
