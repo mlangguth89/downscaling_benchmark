@@ -335,8 +335,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                                      {"interp": False}, logger, nwarn, max_warn)
             filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
 
-        logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(hourly_file))
-        cdo.run(filelist + [hourly_file], OrderedDict([("merge", "")]))
+        if filelist:
+            logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(hourly_file))
+            cdo.run(filelist + [hourly_file], OrderedDict([("merge", "")]))
+        
         if os.path.isfile(hourly_file):
             lfail = False
             remove_files(filelist, lbreak=True)
@@ -558,7 +560,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                         ("-sellevel", plvl_strs)]))
 
         # Split pressure-levels into seperate files and ...
-        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
+        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
         for plvl in mlvars["plvls"]:
             curr_file = ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))
