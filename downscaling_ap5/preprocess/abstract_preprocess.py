@@ -130,6 +130,7 @@ class CDOGridDes(ABC):
                   "The file from the data is ignored.")
         elif gdes_file:
             self.grid_des_dict = CDOGridDes.read_grid_des(gdes_file)
+            self.file = gdes_file
         elif gdes_dict:
             self.grid_des_dict = gdes_dict
         else:
