@@ -25,7 +25,7 @@ from collections import OrderedDict
 from abstract_preprocess import AbstractPreprocessing
 from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
 from pystager_utils import PyStager
-from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
+from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA, NCWA
 from other_utils import to_list, last_day_of_month, flatten, remove_files
 
 number = Union[float, int]
@@ -38,6 +38,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
     # get required tool-instances (cdo with activated extrapolation)
     cdo, ncrename, ncap2, ncks, ncea = CDO(tool_envs={"REMAP_EXTRAPOLATE": "on"}), NCRENAME(), NCAP2(), NCKS(), NCEA()
+    ncwa = NCWA()
     # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
     cpd, g = 1004.709, 9.80665
     # invariant variables expected in the invarinat files
@@ -519,8 +520,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         """
         method = PreprocessERA5toIFS.process_ml_file.__name__
 
-        cdo = PreprocessERA5toIFS.cdo
-        ncrename = PreprocessERA5toIFS.ncrename
+        cdo, ncks = PreprocessERA5toIFS.cdo, PreprocessERA5toIFS.ncks
+        ncwa, ncrename = PreprocessERA5toIFS.ncwa, PreprocessERA5toIFS.ncrename
 
         # handle date and create tmp-directory and -files
         date_str = date2op.strftime("%Y%m%d%H")
@@ -557,6 +558,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("--reduce_dim", ""), ("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
         for plvl in mlvars["plvls"]:
+            curr_file = ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))
+            # trick to remove singleton plev- while keeping time-dimension
+            ncwa.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-a", "plev")]))
+            ncks.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", "plev")]))
+
             for var in mlvars_list:
                 var_new = "{0}{1:d}".format(var, int(plvl/100.))
                 ncrename.run([ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))],
