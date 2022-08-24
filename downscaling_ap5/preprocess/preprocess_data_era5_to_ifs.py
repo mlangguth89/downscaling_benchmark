@@ -334,6 +334,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run(filelist + [hourly_file], OrderedDict([("merge", "")]))
         if os.path.isfile(hourly_file):
             lfail = False
+            remove_files(filelist, lbreak=True)
 
         return lfail, nwarn
 
