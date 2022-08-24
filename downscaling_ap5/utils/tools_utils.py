@@ -247,7 +247,7 @@ class NCKS(RunTool):
 
 class NCEA(RunTool):
     """
-    Child class for NCKS commands.
+    Child class for NCEA commands.
     """
 
     def __init__(self):
@@ -262,5 +262,25 @@ class NCEA(RunTool):
         """
         known_operators = ["-A", "-C", "-c", "-D", "-d", "-F", "-h", "-L", "-I", "-n", "-O", "-p", "-R", "-r", "-t",
                            "-v", "-X", "-x", "-y"]
+
+        return known_operators
+
+
+class NCWA(RunTool):
+    """
+    Child class for NCWA commands.
+    """
+    def __init__(self):
+        super().__init__("ncwa", op_sep=" ")
+
+        self.known_operators = self.set_known_operators()
+        self.doc_url = "https://linux.die.net/man/1/ncwa"
+
+    def set_known_operators(self):
+        """
+        Set a list of known NCKS-operators.
+        """
+        known_operators = ["-A", "-a", "-B", "-b", "-C", "-c", "-D", "-d", "-F", "-h", "-I", "-L", "-l", "-M", "-m",
+                           "-N", "-O", "-o" "-p", "-R", "-r", "-T", "-t", "-v", "-w", "-x", "-y"]
 
         return known_operators
