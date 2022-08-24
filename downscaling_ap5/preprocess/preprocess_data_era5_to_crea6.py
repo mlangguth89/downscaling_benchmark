@@ -155,7 +155,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             if not os.path.isfile(final_file_era5):
                 dates2op = pd.date_range(dt.datetime.strptime("{0}{1}0100".format(year_str, month_str), "%Y%m%d%H"),
-                                         last_day, freq="H")
+                                         last_day.replace(hour=23), freq="H")
 
                 # Perform logging, reset warning counter and loop over dates...
                 logger.info("Start preprocessing data for month {0}...".format(subdir))
@@ -165,6 +165,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                     if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                     date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                     hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
+                    # Skip time step if file already exists
+                    if os.path.isfile(hourly_file_era5): continue
 
                     lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, hourly_file_era5,
                                                                           date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
@@ -177,7 +179,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
                 # merge all time steps of the ERA5-data to monthly file and clean-up hourly files
                 logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file))
-                all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+                all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_era5.nc"))
                 cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_era5, lbreak=True)
             else:

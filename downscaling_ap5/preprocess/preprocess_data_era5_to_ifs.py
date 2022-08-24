@@ -195,12 +195,16 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                 hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
                 hourly_file_ifs = hourly_file_era5.replace("era5", "ifs")
+                # Skip time step if file already exists
+                if os.path.isfile(hourly_file_era5): continue
 
                 lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file, hourly_file_era5,
                                                                       date2op, sfvars, mlvars, fc_sfvars, fc_mlvars,
                                                                       logger, nwarn, max_warn)
 
                 if not lfail: continue       # skip hour if preprocessing ERA5-data failed
+                # Skip time step if file already exists
+                if os.path.isfile(hourly_file_ifs): continue
 
                 lfail, nwarn = PreprocessERA5toIFS.preprocess_ifs_tar(dirin_ifs, hourly_file_ifs, date2op, grid_des_tar,
                                                                       predictands, logger, nwarn, max_warn)
