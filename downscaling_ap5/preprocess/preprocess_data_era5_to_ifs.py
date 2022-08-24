@@ -499,7 +499,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             if not os.path.isfile(ftmp_hres2):   # has only to be done once
                 cdo.run([invar_file, ftmp_hres2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                                ("-selname", ",".join(sfvars_stat))]))
-            cdo.run([ftmp_hres2, ftmp_hres, ftmp_hres], OrderedDict([("-O", ""), ("merge", "")]))
+            # NOTE: ftmp_hres must be at first position to overwrite time-dimension of ftmp_hres2
+            #       which would not fit since it is retrieved from an invariant datafile with arbitrary timestamp
+            #       This works at least for CDO 2.0.2!!!
+            cdo.run([ftmp_hres, ftmp_hres2, ftmp_hres], OrderedDict([("-O", ""), ("merge", "")]))
             # clean-up temporary files
             remove_files([ftmp_hres2], lbreak=False)
 
