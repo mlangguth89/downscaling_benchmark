@@ -144,7 +144,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, invar_file_crea6, subdir, sfvars_crea6, const_vars_crea6)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
             final_file_era5 = os.path.join(dest_dir, "preproc_era5_{0}.nc".format(subdir))
-            final_file = final_file_era5.replace("_era5_", "")
+            final_file = final_file_era5.replace("preproc_era5_", "preproc_")
             os.makedirs(dest_dir, exist_ok=True)
 
             # sanity check on ERA5-directory
@@ -180,6 +180,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
                 cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_era5, lbreak=True)
+            else:
+                logger.info("Monthly ERA5-file '{0}' already exists. Ensure that data is as expected.".format(final_file_era5))
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = \
@@ -270,6 +272,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
         final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
+        if os.path.isfile(final_file):
+            logger.info("Monthly COSMO REA6-file '{0}' already exists. Ensure that data is as expected.".format(final_file))
+            return final_file, nwarn
 
         gdes_tar = CDOGridDes(fgdes_tar)
 
@@ -349,7 +354,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         # remapped ERA5-data due to precision issues. Clearly, the user has to ensure that the grid description file
         # actually fits to the data at hand to avoid undesired remapping effects.
         cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""),
-                                                   ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar)]))
+                                                   ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
 
         # rename varibale in resulting file (must be done in hacky manner)
         varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
@@ -389,6 +394,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         dfile_out = os.path.join(target_dir, f"const_{date_str}.nc")
 
         cdo.run([const_file, dfile_out], OrderedDict([("selname", ",".join(const_vars)),
-                                                      ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar)]))
+                                                      ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
 
         return dfile_out

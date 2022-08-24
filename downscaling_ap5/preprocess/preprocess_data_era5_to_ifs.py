@@ -222,9 +222,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 cdo.run(all_hourly_files_ifs + [final_file_ifs], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_ifs, lbreak=True)
 
-            # remap input data
+            # remap input data and merge
             PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_ifs, final_file, grid_des_coarse,
                                                      grid_des_tar, all_predictors, all_predictands, nwarn, max_warn)
+
+            # rename data variables
+            _ = PreprocessERA5toIFS.add_varname_suffix(final_file, all_predictors, "_in")
+            _ = PreprocessERA5toIFS.add_varname_suffix(final_file, all_predictands, "_tar")
 
         return nwarn
 
@@ -431,10 +435,8 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # merge input and target data
         cdo.run([file_in_hres, file_tar, final_file], OrderedDict([("-merge", "")]))
-        stat1 = PreprocessERA5toIFS.add_varname_suffix(final_file, predictors, "_in")
-        stat2 = PreprocessERA5toIFS.add_varname_suffix(final_file, predictands, "_tar")
 
-        if all([stat1, stat2]) and not os.path.isfile(final_file):
+        if not os.path.isfile(final_file):
             nwarn = max_warn + 1
         else:
             remove_files([file_in_coa, file_in_hres, file_tar], lbreak=True)
@@ -612,13 +614,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return ftmp_hres
 
     @staticmethod
-    def remap2t_and_cat(infile: str, invar_file: str, outfile: str, grid_des_coarse: str, grid_des_tar: str) -> None:
+    def remap2t_and_cat(infile: str, outfile: str, grid_des_coarse: str, grid_des_tar: str) -> None:
         """
         Remap 2m temperature by transforming to dry static energy and concatenate outfile with the result.
         First, data is conservative remapping onto the coarse grid is performed, followed by bilinear remapping onto the
         target grid.
         :param infile: input data file with 2m temperature (2t)
-        :param invar_file: invariant data file providing geopotential z
         :param outfile: output-file which will be concatenated
         :param grid_des_coarse: grid description file for coarse grid
         :param grid_des_tar: grid description file for target (high-resolved) grid.
@@ -629,18 +630,17 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cpd, g = PreprocessERA5toIFS.cpd, PreprocessERA5toIFS.g
 
         # temporary files (since CDO does not support modifying the input-file in place)
-        ftmp_in = outfile.replace(".nc", "_tmp_in.nc")
         ftmp_coarse = outfile.replace(".nc", "_s_coarse.nc")
         ftmp_hres = outfile.replace(".nc", "_2t_tmp.nc")
 
-        cdo.run([ftmp_in, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
+        cdo.run([infile, ftmp_coarse], OrderedDict([("-remapcon", grid_des_coarse), ("-selname", "s,z"),
                                                      ("-aexpr", "'s={0}*2t+z+{1}*2'".format(cpd, g))]))
         cdo.run([ftmp_coarse, ftmp_hres], OrderedDict([("-remapbil", grid_des_tar), ("-selname", "2t"),
                                                        ("-aexpr", "'2t=(s-z-{0}*2)/{1}'".format(g, cpd))]))
         cdo.run([ftmp_hres, outfile, outfile], OrderedDict([("-O", ""), ("merge", "")]))
 
         # clean-up temporary files
-        remove_files([ftmp_in, ftmp_coarse, ftmp_hres], lbreak=False)
+        remove_files([ftmp_coarse, ftmp_hres], lbreak=False)
 
     @staticmethod
     def split_dyn_static(sfvars: List):
