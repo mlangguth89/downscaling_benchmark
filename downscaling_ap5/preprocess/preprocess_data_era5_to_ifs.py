@@ -192,32 +192,35 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
-                daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
-                daily_file_ifs = daily_file_era5.replace("era5", "ifs")
+                hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
+                hourly_file_ifs = hourly_file_era5.replace("era5", "ifs")
 
-                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dir_in_era5, invar_file, daily_file_era5,
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file, hourly_file_era5,
                                                                       date2op, sfvars, mlvars, fc_sfvars, fc_mlvars,
                                                                       logger, nwarn, max_warn)
 
-                if not lfail: continue       # skip day if preprocessing ERA5-data failed
+                if not lfail: continue       # skip hour if preprocessing ERA5-data failed
 
-                lfail, nwarn = PreprocessERA5toIFS.preprocess_ifs_tar(dirin_ifs, daily_file_ifs, date2op, grid_des_tar,
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_ifs_tar(dirin_ifs, hourly_file_ifs, date2op, grid_des_tar,
                                                                       predictands, logger, nwarn, max_warn)
 
-                if not lfail: continue  # skip day if preprocessing IFS-data failed
+                if not lfail: continue  # skip hour if preprocessing IFS-data failed
 
                 # finally all temporary files for each time step and clean-up
-                logger.info(f"Data for day {date_pr} successfully preprocessed.")
+                logger.info(f"Data for date {date_pr} successfully preprocessed.")
 
-            # merge all time steps to monthly file and clean-up daily files
-            logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
-            all_daily_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
-            all_daily_files_ifs = glob.glob(os.path.join(dest_dir, "*_preproc_ifs.nc"))
+            # merge all time steps to monthly file and clean-up hourly files
+            logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file))
 
-            cdo.run(all_daily_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
-            cdo.run(all_daily_files_ifs + [final_file_ifs], OrderedDict([("mergetime", "")]))
+            if not os.path.isfile(final_file_era5):
+                all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+                cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
+                remove_files(all_hourly_files_era5, lbreak=True)
 
-            remove_files(all_daily_files_era5 + all_daily_files_ifs, lbreak=True)
+            if not os.path.isfile(final_file_ifs):
+                all_hourly_files_ifs = glob.glob(os.path.join(dest_dir, "*_preproc_ifs.nc"))
+                cdo.run(all_hourly_files_ifs + [final_file_ifs], OrderedDict([("mergetime", "")]))
+                remove_files(all_hourly_files_ifs, lbreak=True)
 
             # remap input data
             PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_ifs, final_file, grid_des_coarse,
@@ -266,7 +269,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return sfvars, mlvars, fc_sfvars, fc_plvars
 
     @staticmethod
-    def preprocess_era5_in(era5_dir: str, invar_file: str, daily_file: str, date: dt.datetime, sfvars: List,
+    def preprocess_era5_in(era5_dir: str, invar_file: str, hourly_file: str, date: dt.datetime, sfvars: List,
                            mlvars: dict, fc_sfvars: List, fc_mlvars: dict, logger: logging.Logger, nwarn: int,
                            max_warn: int):
         """
@@ -276,7 +279,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # construct date-strings, path to temp-directory and initialize filelist for later merging
         date_str, date_pr = date.strftime("%Y%m%d%H"), date.strftime("%Y-%m-%d %H:00 UTC")
-        dest_dir = os.path.dirname(daily_file)
+        dest_dir = os.path.dirname(hourly_file)
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
         filelist = []
         lfail = False
@@ -327,20 +330,20 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
                                                                      {"interp": False}, logger, nwarn, max_warn)
             filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
 
-        logger.info("Merge temporary ERA5-files to daily netCDF-file '{0}'".format(daily_file))
-        cdo.run(filelist + [daily_file], OrderedDict([("merge", "")]))
-        if os.path.isfile(daily_file):
+        logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(hourly_file))
+        cdo.run(filelist + [hourly_file], OrderedDict([("merge", "")]))
+        if os.path.isfile(hourly_file):
             lfail = False
 
         return lfail, nwarn
 
     @staticmethod
-    def preprocess_ifs_tar(dirin_ifs: str, daily_file: str, date: dt.datetime, grid_des_tar: str, predictands: dict,
+    def preprocess_ifs_tar(dirin_ifs: str, hourly_file: str, date: dt.datetime, grid_des_tar: str, predictands: dict,
                            logger, nwarn, max_warn):
         """
         Retrieve the predictand data from the hourly IFS-dataset.
         """
-        dest_dir = os.path.dirname(daily_file)
+        dest_dir = os.path.dirname(hourly_file)
         date_pr = date.strftime("%Y-%m-%d %H:00 UTC")
         lfail = True
 

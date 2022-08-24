@@ -162,10 +162,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
                 if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
-                daily_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
-                daily_file_ifs = daily_file_era5.replace("era5", "ifs")
+                hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
 
-                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, daily_file_era5,
+                lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, hourly_file_era5,
                                                                       date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
                                                                       fc_mlvars_era5, logger, nwarn, max_warn)
 
@@ -174,12 +173,13 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 # finally all temporary files for each time step and clean-up
                 logger.info(f"Data for day {date_pr} successfully preprocessed.")
 
-            # merge all time steps of the ERA5-data to monthly file and clean-up daily files
-            logger.info("Merge all daily files to monthly datafile '{0}'".format(final_file))
-            all_daily_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+            # merge all time steps of the ERA5-data to monthly file and clean-up hourly files
+            logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file))
+            all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
 
-            cdo.run(all_daily_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
-            remove_files(all_daily_files_era5, lbreak=True)
+            if not os.path.isfile(final_file_era5):
+                cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
+                remove_files(all_hourly_files_era5, lbreak=True)
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = \
