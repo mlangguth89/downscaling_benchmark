@@ -728,7 +728,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     @staticmethod
     def add_varname_suffix(nc_file: str, varnames: List, suffix: str):
         """
-        Rename variables in netCDF-file by adding a suffix
+        Rename variables in netCDF-file by adding a suffix. Also adheres to the convention to use lower-case names!
         :param nc_file: netCDF-file to process
         :param varnames: (old) variable names to modify
         :param suffix: suffix to add to variable names
@@ -737,7 +737,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         ncrename = PreprocessERA5toIFS.ncrename
 
         varnames_new = [varname + suffix for varname in varnames]
-        varnames_pair = ["{0},{1}".format(varnames[i], varnames_new[i]) for i in range(len(varnames))]
+        varnames_pair = ["{0},{1}".format(varnames[i], varnames_new[i].lower()) for i in range(len(varnames))]
 
         try:
             ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))

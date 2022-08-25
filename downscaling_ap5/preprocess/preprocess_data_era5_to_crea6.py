@@ -183,7 +183,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_era5, lbreak=True)
             else:
-                logger.info("Monthly ERA5-file '{0}' already exists. Ensure that data is as expected.".format(final_file_era5))
+                logger.info("Monthly ERA5-file '{0}' already exists. Ensure that data is as expected."
+                            .format(final_file_era5))
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = \
@@ -194,6 +195,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # finally merge the ERA5- and the COSMO REA6-data
             PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_crea6, final_file, grid_des_coarse,
                                                      grid_des_tar, all_predictors, all_predictands, nwarn, max_warn)
+
+            # rename input-variables
+            PreprocessERA5toIFS.add_varname_suffix(final_file, all_predictors, "_in")
 
         return nwarn
 
