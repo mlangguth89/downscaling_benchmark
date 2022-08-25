@@ -21,7 +21,7 @@ import torch.nn as nn
 from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_vanilla_swin_transformerimport import SwinTransformerSR as swinSR
+from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 import wandb
 os.environ["WANDB_MODE"]="offline"
