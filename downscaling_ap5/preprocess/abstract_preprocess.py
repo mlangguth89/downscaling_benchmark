@@ -6,6 +6,7 @@ __update__ = "2022-04-29"
 import os
 from abc import ABC
 import numpy as np
+import xarray as xr
 from other_utils import get_func_kwargs, remove_key_from_dict
 
 
@@ -93,6 +94,36 @@ class AbstractPreprocessing(ABC):
             pass
 
         return target_dir
+
+    @staticmethod
+    def merge_two_netcdf(nc1: str, nc2: str, nc_tar: str, merge_dim: str ="time"):
+        """
+        Merge datasets from two netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in both
+        datasets must not coincide, but can overlap. The data will then be merged for the intersection of both datums.
+        :param nc1: path to first netCDF-file to merge; dataset must include dimension merge_dim
+        :param nc2: path to second netCDF-file to merge; dataset must include dimension merge_dim
+        :param merge_dim: name of dimension along which datsets will be merged
+        :param nc_tar: path to netCDf-file of merged dataset
+        :return stat: status if merging was successful
+        """
+        ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
+
+        times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
+        joint_times = list(set(times1) & set(times2))
+
+        stat = True
+        try:
+            if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
+            ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
+            ds_merged.to_netcdf(nc_tar)
+        except:
+            stat = False
+
+        return stat
+
+
+
+
 
     @classmethod
     def print_implement_err(cls, method):
