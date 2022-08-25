@@ -18,6 +18,12 @@ from models.network_unet import UNet as unet
 from models.network_vanilla_swin_transformerimport import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from utils.data_loader import create_loader
+from main_scripts.main_train import BuildModel
+import wandb
+
+
+
+
 
 
 def main():
@@ -31,14 +37,9 @@ def main():
 
     args = parser.parse_args()
 
-
-    test_loader = create_loader(args.test_dor)
-    type_net = args.model_type
-    n_channels = 8
-
     print("The model {} is selected for training".format(type_net))
     if args.model_type == "unet":
-        netG = unet(n_channels = n_channels)
+        netG = unet(n_channels = 8)
     elif args.model_type == "swinSR":
         netG = swinSR()
     elif args.model_type == "vitSR":
@@ -46,17 +47,22 @@ def main():
     else:
         NotImplementedError()
 
-    netG.load_state_dict(torch.load(args.test_dir))
-    netG.eval()
-    idx = 0
-    for i, test_data in enumerate(test_loader):
-        idx += 1
-        netG.feed_data(test_data)
-        netG.test()
-        print("forecast loss ", np.float(netG.G_loss))
-        outputs = netG.current_visuals()
-        print("maxium value of L image ", np.max(outputs["L"].numpy()))
-        print("maxium value of E image ", np.max(outputs["E"].numpy()))
+    model = BuildModel(netG)
+    model.test()
+    total_loss = 0.
+    test_len = []
+    test_loader = create_loader(args.test_dor)
+
+    with torch.no_grad():
+        model.netG.load_state_dict(torch.load(args.test_dir))
+        idx = 0
+        for i, test_data in enumerate(test_loader):
+            idx += 1
+            model.feed_data(test_data)
+            model.netG_forward()
+            G_loss = model.G_lossfn(model.E, model.H)
+            print("forecast loss ", np.float(G_loss))
+
 
 
 if __name__ == '__main__':
