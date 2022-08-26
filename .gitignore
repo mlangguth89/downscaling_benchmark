@@ -113,14 +113,17 @@ virt_env*/
 *-out*.[0-9]*
 
 
-#Ignore the results files
+# Ignore results files
 **/trained_models
 **/results_test_samples
 **/logs
 **/vp
 *.h5
 
-# ignore file for diagnosis
+# Ignore Jupyter Notebooks for testing
+**/jupyter_notebooks_test
+
+# Ignore file for diagnosis
 *.json
 *.csv
 *.png
@@ -133,3 +136,7 @@ virt_env*/
 
 # Ignore singularity containers (typically existing as symbolic link)
 *.sif
+
+# Ignore netCDF-files
+*.nc
+
