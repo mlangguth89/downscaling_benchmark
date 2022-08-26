@@ -4,11 +4,11 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=00:20:00
+#SBATCH --time=12:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develgpus
+#SBATCH --partition=gpus
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=b.gong@fz-juelich.de
+#SBATCH --mail-user=y.ji@fz-juelich.de
 
 #source ../venv_booster/bin/activate
 
@@ -21,10 +21,10 @@ source ../venv_booster/bin/activate
 
 
 
-train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
-test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
-save_dir=../results/exp_test
-epochs=2
+train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
+test_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
+save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/Unet_on_the_fly
+epochs=60
 model_type=swinir
 
 python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type}> output.test #python ../main_scripts/dataset_prep.py

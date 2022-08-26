@@ -1,9 +1,9 @@
-scikit-build
 opencv-python
 requests
 timm
-wanda
+wandb
 xarray
 matplotlib
 numpy
 torchvision
+einops
