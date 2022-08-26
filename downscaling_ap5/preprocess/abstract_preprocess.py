@@ -109,7 +109,7 @@ class AbstractPreprocessing(ABC):
         ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
 
         times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
-        joint_times = list(set(times1) & set(times2))
+        joint_times = sorted(list(set(times1) & set(times2)))
 
         stat = True
         try:
