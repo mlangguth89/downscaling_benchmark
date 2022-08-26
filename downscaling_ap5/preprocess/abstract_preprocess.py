@@ -6,6 +6,7 @@ __update__ = "2022-04-29"
 import os
 from abc import ABC
 import numpy as np
+import xarray as xr
 from other_utils import get_func_kwargs, remove_key_from_dict
 
 
@@ -94,6 +95,36 @@ class AbstractPreprocessing(ABC):
 
         return target_dir
 
+    @staticmethod
+    def merge_two_netcdf(nc1: str, nc2: str, nc_tar: str, merge_dim: str ="time"):
+        """
+        Merge datasets from two netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in both
+        datasets must not coincide, but can overlap. The data will then be merged for the intersection of both datums.
+        :param nc1: path to first netCDF-file to merge; dataset must include dimension merge_dim
+        :param nc2: path to second netCDF-file to merge; dataset must include dimension merge_dim
+        :param merge_dim: name of dimension along which datsets will be merged
+        :param nc_tar: path to netCDf-file of merged dataset
+        :return stat: status if merging was successful
+        """
+        ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
+
+        times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
+        joint_times = sorted(list(set(times1) & set(times2)))
+
+        stat = True
+        try:
+            if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
+            ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
+            ds_merged.to_netcdf(nc_tar)
+        except:
+            stat = False
+
+        return stat
+
+
+
+
+
     @classmethod
     def print_implement_err(cls, method):
         """
@@ -113,7 +144,8 @@ class CDOGridDes(ABC):
     # valid CDO grd description keys, see section 1.5.2.4 on CDO grids in documentation
     # (https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-220001.5.2)
     valid_keys = ["gridtype", "gridsize", "xsize", "ysize", "xvals", "yvals", "nvertx", "xbounds", "ybounds", "xfirst",
-                  "xinc", "yfirst", "yinc", "xunits", "yunits"]
+                  "xinc", "yfirst", "yinc", "xunits", "yunits", "xname", "yname", "xlongname", "ylongname",
+                  "grid_mapping", "grid_mapping_name", "grid_north_pole_latitude", "grid_north_pole_longitude"]
 
     def __init__(self, gdes_file: str = None, gdes_dict: dict = None):
         """
@@ -129,6 +161,7 @@ class CDOGridDes(ABC):
                   "The file from the data is ignored.")
         elif gdes_file:
             self.grid_des_dict = CDOGridDes.read_grid_des(gdes_file)
+            self.file = gdes_file
         elif gdes_dict:
             self.grid_des_dict = gdes_dict
         else:
@@ -192,7 +225,7 @@ class CDOGridDes(ABC):
         # sanity check
         if not all([n_c[1] == 0 for n_c in nxy_coarse]):
             raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
-                             .format(method, ", ".join(nxy_in), downscaling_fac))
+                             .format(method, ", ".join(map(str, nxy_in)), downscaling_fac))
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
@@ -206,7 +239,10 @@ class CDOGridDes(ABC):
         coarse_grid_des_dict = {"gridtype": gtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
                                 "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
                                 "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
-
+        coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict, create_copy=True)
+        if "gridsize" in coarse_grid_des_dict.keys():
+            coarse_grid_des_dict["gridsize"] = coarse_grid_des_dict["xsize"]*coarse_grid_des_dict["ysize"]
+        
         # construct filename
         coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
         # write data to CDO's grid description files
@@ -222,6 +258,9 @@ class CDOGridDes(ABC):
             base_grid_des_dict = {"gridtype": gtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
                                   "xfirst": xyf_in[0] - dx_coarse[0], "xinc": dx_in[0],
                                   "yfirst": xyf_in[1] - dx_coarse[1], "yinc": dx_in[1]}
+            base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict, create_copy=True)
+            if "gridsize" in base_grid_des_dict.keys():
+                base_grid_des_dict["gridsize"] = base_grid_des_dict["xsize"] * base_grid_des_dict["ysize"]
             # construct filename and ...
             base_grid_des = os.path.join(target_dir, "{0}grid_base".format(name_base))
             if rank == 0 or rank is None:
@@ -286,6 +325,25 @@ class CDOGridDes(ABC):
         return grid_des_dict
 
     @staticmethod
+    def merge_dicts(first_dict, other_dict, create_copy: bool = False):
+        """
+        Merges two dicts. Keys that reside in both dictionaries are taken from the first dictionary.
+        :param first_dict: first dictionary to be merged
+        :param other_dict: second dictionary to be merged
+        :param create_copy: Creates a new copy if True. If False, changes other_dict in-place!
+        :return: merged dictionary
+        """
+        if create_copy:
+            new_dict = other_dict.copy()
+        else:
+            new_dict = other_dict
+
+        for key in first_dict.keys():
+            new_dict[key] = first_dict[key]
+
+        return new_dict
+
+    @staticmethod
     def griddes_lines_to_dict(lines):
         """
         Converts lines read from CDO grid description files into dictionary.
@@ -306,6 +364,6 @@ class CDOGridDes(ABC):
         Small helper to get coords for slicing
         """
         coord0 = np.float(coord0)
-        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - 1) * np.float(dx), decimals=d))
+        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - .5) * np.float(dx), decimals=d))
         return np.amin(coords), np.amax(coords)
 

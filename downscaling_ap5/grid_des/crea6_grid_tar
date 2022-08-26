@@ -1,0 +1,21 @@
+#
+# COSMO-REA6 grid for downscaling task
+#
+gridtype  = projection
+gridsize  = 10800
+xsize     = 120
+ysize     = 90
+xname     = rlon
+xlongname = "longitude in rotated grid" 
+xunits    = "degrees" 
+yname     = rlat
+ylongname = "latitude in rotated grid" 
+yunits    = "degrees" 
+xfirst    = -8.273
+xinc      = 0.055
+yfirst    = -3.933
+yinc      = 0.055
+grid_mapping = rotated_pole
+grid_mapping_name = rotated_latitude_longitude
+grid_north_pole_latitude = 39.25
+grid_north_pole_longitude = -162.
