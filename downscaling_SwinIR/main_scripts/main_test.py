@@ -15,7 +15,7 @@ import numpy as np
 from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_vanilla_swin_transformerimport import SwinTransformerSR as swinSR
+from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
@@ -37,7 +37,7 @@ def main():
 
     args = parser.parse_args()
 
-    print("The model {} is selected for training".format(type_net))
+    print("The model {} is selected for training".format(args.model_type))
     if args.model_type == "unet":
         netG = unet(n_channels = 8)
     elif args.model_type == "swinSR":

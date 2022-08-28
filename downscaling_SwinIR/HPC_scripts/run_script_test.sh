@@ -26,7 +26,6 @@ save_dir=../results/exp_vis
 #model_type=vitSR
 #model_type=swinSR
 model_type=unet
-python ../main_scripts/main_test.py --test_dir ${test_dir} --checkpoint_dir ${checkpoint_dir}  --save_dir ${save_dir} / 
-       --model_type ${model_type} > vis.output
+python ../main_scripts/main_test.py --test_dir ${test_dir} --checkpoint_dir ${checkpoint_dir}  --save_dir ${save_dir} --model_type ${model_type} > vis.output
        #python ../main_scripts/dataset_prep.py
 #python ../main_scripts/main_train_precip.py  
