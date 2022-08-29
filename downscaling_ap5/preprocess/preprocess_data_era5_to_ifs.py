@@ -218,7 +218,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file))
 
             if not os.path.isfile(final_file_era5):
-                all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_eara5.nc"))
+                all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_era5.nc"))
                 cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_era5, lbreak=True)
 
@@ -499,12 +499,14 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # run remapping
         cdo.run([sf_file, ftmp_hres], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                   ("-selname", ",".join(sfvars_dyn))]))
+                                                   ("-selname", ",".join(sfvars_dyn)), 
+                                                   ("-sellonlatbox", "0.,30.,30.,60.")]))
         if sfvars_stat:
             ftmp_hres2 = ftmp_hres.replace("sf", "sf_stat")
             if not os.path.isfile(ftmp_hres2):   # has only to be done once
                 cdo.run([invar_file, ftmp_hres2], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                               ("-selname", ",".join(sfvars_stat))]))
+                                                               ("-selname", ",".join(sfvars_stat)),
+                                                               ("-sellonlatbox", "0.,30.,30.,60.")]))
             # NOTE: ftmp_hres must be at first position to overwrite time-dimension of ftmp_hres2
             #       which would not fit since it is retrieved from an invariant datafile with arbitrary timestamp
             #       This works at least for CDO 2.0.2!!!
@@ -557,11 +559,13 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
                                                         ("-ml2plx,{0}".format(plvl_strs)),
-                                                        ("-selname", ",".join(mlvars_list_interp))]))
+                                                        ("-selname", ",".join(mlvars_list_interp)),
+                                                        ("-sellonlatbox", "0.,30.,30.,60.")]))
         else:
             cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
-                                                        ("-sellevel", plvl_strs)]))
+                                                        ("-sellevel", plvl_strs),
+                                                        ("-sellonlatbox", "0.,30.,30.,60.")]))
 
         # Split pressure-levels into seperate files and ...
         cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
