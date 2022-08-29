@@ -22,10 +22,6 @@ from main_scripts.main_train import BuildModel
 import wandb
 
 
-
-
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--test_dir", type = str, required = True,
@@ -48,13 +44,13 @@ def main():
         NotImplementedError()
 
     model = BuildModel(netG)
-    model.test()
+    model.define_loss()
     total_loss = 0.
     test_len = []
-    test_loader = create_loader(args.test_dor)
+    test_loader = create_loader(args.test_dir)
 
     with torch.no_grad():
-        model.netG.load_state_dict(torch.load(args.test_dir))
+        model.netG.load_state_dict(torch.load(args.checkpoint_dir))
         idx = 0
         for i, test_data in enumerate(test_loader):
             idx += 1
