@@ -36,8 +36,8 @@ def main(parser_args):
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "era5_to_crea6_train.nc")), \
-                       xr.open_dataset(os.path.join(datadir, "era5_to_crea6_val.nc"))
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
