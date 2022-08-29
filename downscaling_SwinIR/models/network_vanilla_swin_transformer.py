@@ -17,6 +17,41 @@ import torch.nn as nn
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import torch.utils.checkpoint as checkpoint
 
+
+class Upsampling(nn.Module):
+
+    def __init__(self, in_channels:int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: int = 1, stride: int = 2,
+                 upsampling:bool = True, sf: int = 10, mode = "bilinear"):
+        super().__init__()
+        """
+        This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
+        Note: The input data is assumed to be of the form minibatch x channels x [optional depth] x [optional height] x width.
+        :param in_channels : the number of input variables
+        :param out_channels: the output channels for each ConvTranspose2D layer
+        :param kernel_size : the kernel size
+        :param padding     : the padding size
+        :param stride      : the stride size
+        :param sf          : the scaling factor (low-resolution to high resolution)
+        :param upsampling  : use upsampling (True) to convert low to high resolution  or use transposed convolutional approach(False)
+        """
+
+        if upsampling:
+            self.deconv_block = nn.Upsample(scale_factor = sf, mode = mode, align_corners = True)
+        else:
+
+            layers = [nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = stride,
+                                         padding = padding) for i in range(3)]
+
+            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = 1,
+                                   padding = padding, output_padding = 31 ))
+
+            self.deconv_block = nn.Sequential(*layers)
+
+    def forward(self, x:Tensor)->Tensor:
+         return self.deconv_block(x)
+
+
 class Mlp(nn.Module):
     def __init__(self, in_features:int=None, hidden_features:int = None, out_features:int = None, act_layer=nn.GELU, drop:float=0.):
         super().__init__()
@@ -242,7 +277,7 @@ class SwinTransformerBlock(nn.Module):
         x = self.norm1(x)
         x = x.view(B, H, W, C)
 
-        # cyclic shift # Bing: I change the adjust the following code based on our needs,
+        # cyclic shift # Bing: I change the code and adjust the following code based on our needs,
         # I also take reference from SwinIR code, this due to the function used in the orignal code is written in C
         if self.shift_size > 0:
             shifted_x = torch.roll(x, shifts=(-self.shift_size, -self.shift_size), dims=(1, 2))
@@ -498,7 +533,7 @@ class SwinTransformerSR(nn.Module):
     """
 
     def __init__(self, img_size=16, patch_size=4, in_chans=8,
-                 embed_dim=96, depths=[2, 2], num_heads=[3, 6],
+                 embed_dim=96, depths=[2, 2, 6 ,2], num_heads=[3, 6, 12, 24],
                  window_size=4, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
@@ -513,6 +548,8 @@ class SwinTransformerSR(nn.Module):
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.mlp_ratio = mlp_ratio
 
+        self.upsampling = Upsampling(in_channels=in_chans, sf=upscale)
+
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
@@ -520,6 +557,7 @@ class SwinTransformerSR(nn.Module):
         num_patches = self.patch_embed.num_patches
         patches_resolution = self.patch_embed.patches_resolution
         self.patches_resolution = patches_resolution
+
 
         # absolute position embedding
         if self.ape:
@@ -584,6 +622,7 @@ class SwinTransformerSR(nn.Module):
         return {'relative_position_bias_table'}
 
     def forward_features(self, x):
+
         x = self.patch_embed(x)
         if self.ape:
             x = x + self.absolute_pos_embed
@@ -598,6 +637,7 @@ class SwinTransformerSR(nn.Module):
         return x
 
     def forward(self, x):
+        x = self.upsampling(x)
         x = self.forward_features(x)
         print("x shape after forward_features",x.shape)
         #Bing: uncomment
