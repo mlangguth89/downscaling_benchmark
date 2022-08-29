@@ -229,31 +229,51 @@ class WGAN(keras.Model):
         if not self.hparams["z_branch"]:
             ds = ds.drop(var2drop, dim="variables")
 
+        ds = ds.load()
         ds_in, ds_tar = WGAN.split_in_tar(ds)
+
+        def gen(darr_in, darr_tar):
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+
+        s0 = next(iter(gen(ds_in, ds_tar)))
+        sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype , 
+                       "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
+
+        gen_train = gen(ds_in, ds_tar)
 
         if self.hparams["l_embed"]:
             if not embed:
                 raise ValueError("Embedding is enabled, but no embedding data was parsed.")
             data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
         else:
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
+            #data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
+            data_iter = tf.data.Dataset.from_generator(lambda: gen_train, 
+                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"], dtype=sample_spec["type_in"]), 
+                                                                         tf.TensorSpec(sample_spec["shape_tar"], dtype=sample_spec["type_tar"])))
 
         # repeat must be before shuffle to get varying mini-batches per epoch
         # increase batch-size to allow substepping
-        data_iter = data_iter.repeat().shuffle(10000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
+        data_iter = data_iter.cache().repeat().shuffle(20000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
         if ds_val is not None:
+            ds_val =ds_val.load()
             ds_val_in, ds_val_tar = WGAN.split_in_tar(ds_val)
-
+            gen_val = gen(ds_val_in, ds_val_tar) 
+            
             if self.hparams["l_embed"]:
                 if not embed_val:
                     raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
                 val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
             else:
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
+                # val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
+                val_iter = tf.data.Dataset.from_generator(lambda: gen_val, 
+                                                          output_signature=(tf.TensorSpec(sample_spec["shape_in"], dtype=sample_spec["type_in"]), 
+                                                                            tf.TensorSpec(sample_spec["shape_tar"], dtype=sample_spec["type_tar"])))
 
-            val_iter = val_iter.repeat().batch(self.hparams["batch_size"])
+            val_iter = val_iter.cache().repeat().batch(self.hparams["batch_size"])
 
             return data_iter, val_iter
         else:
@@ -268,6 +288,9 @@ class WGAN(keras.Model):
         """
         # get mixture of generated and ground truth data
         alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        #tf.print(tf.shape(alpha))
+        #tf.print(tf.shape(real_data))
+        #tf.print(tf.shape(gen_data))
         mix_data = real_data + alpha * (gen_data - real_data)
 
         with tf.GradientTape() as gp_tape:
