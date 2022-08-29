@@ -107,7 +107,7 @@ class WGAN(keras.Model):
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_data_generator(da_train, ds_val=da_val)
+        train_iter, val_iter = self.make_tf_dataset(da_train, da_val=da_val)
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
@@ -223,55 +223,69 @@ class WGAN(keras.Model):
 
         return self.generator(predictors, training=False)
 
-    def make_data_generator(self, ds: xr.DataArray, ds_val: xr.DataArray = None, embed=None, embed_val=None,
-                            var2drop: str = "z_tar") -> tf.data.Dataset:
+    def make_tf_dataset(self, da: xr.DataArray, da_val: xr.DataArray = None, embed=None, embed_val=None,
+                        var2drop: str = "z_tar") -> tf.data.Dataset:
+        """
+        Build-up TensorFlow dataset from a generator based on the xarray-data array.
+        Note that all data is loaded into memory.
+        :param da: the data-array from which the dataset should be cretaed
+        :param da_val: optional data-array for a validation dataset
+        :param embed: Some embedding array (not implemented yet)
+        :param embed_val: Same as embed, but for the (optional) validation dataset
+        :param var2drop: name of variable that will be dropped if no z-branch is active for U-Net (= generator)
+        """
 
         if not self.hparams["z_branch"]:
-            ds = ds.drop(var2drop, dim="variables")
+            da = da.drop(var2drop, dim="variables")
 
-        ds = ds.load()
-        ds_in, ds_tar = WGAN.split_in_tar(ds)
+        da = da.load()
+        da_in, da_tar = WGAN.split_in_tar(da)
 
         def gen(darr_in, darr_tar):
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
 
-        s0 = next(iter(gen(ds_in, ds_tar)))
+        s0 = next(iter(gen(da_in, da_tar)))
         sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype , 
                        "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
 
-        gen_train = gen(ds_in, ds_tar)
+        gen_train = gen(da_in, da_tar)
 
         if self.hparams["l_embed"]:
             if not embed:
                 raise ValueError("Embedding is enabled, but no embedding data was parsed.")
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
+            # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
         else:
-            #data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
             data_iter = tf.data.Dataset.from_generator(lambda: gen_train, 
-                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"], dtype=sample_spec["type_in"]), 
-                                                                         tf.TensorSpec(sample_spec["shape_tar"], dtype=sample_spec["type_tar"])))
-
-        # repeat must be before shuffle to get varying mini-batches per epoch
-        # increase batch-size to allow substepping
-        data_iter = data_iter.cache().repeat().shuffle(20000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
+                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"],
+                                                                                       dtype=sample_spec["type_in"]),
+                                                                         tf.TensorSpec(sample_spec["shape_tar"],
+                                                                                       dtype=sample_spec["type_tar"])))
+        # Notes:
+        # * cache is reuqired to make repeat work properly on datasets based on generators
+        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
+        # * repeat must be applied before shuffle to get varying mini-batches per epoch
+        # * batch-size is increaded to allow substepping in train_step
+        data_iter = data_iter.cache().repeat().shuffle(20000).batch(self.hparams["batch_size"]
+                                                                    * (self.hparams["d_steps"] + 1))
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
-        if ds_val is not None:
-            ds_val =ds_val.load()
-            ds_val_in, ds_val_tar = WGAN.split_in_tar(ds_val)
-            gen_val = gen(ds_val_in, ds_val_tar) 
+        if da_val is not None:
+            da_val = da_val.load()
+            da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
+            gen_val = gen(da_val_in, da_val_tar)
             
             if self.hparams["l_embed"]:
                 if not embed_val:
                     raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
+                # val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
             else:
-                # val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
                 val_iter = tf.data.Dataset.from_generator(lambda: gen_val, 
-                                                          output_signature=(tf.TensorSpec(sample_spec["shape_in"], dtype=sample_spec["type_in"]), 
-                                                                            tf.TensorSpec(sample_spec["shape_tar"], dtype=sample_spec["type_tar"])))
+                                                          output_signature=(tf.TensorSpec(sample_spec["shape_in"],
+                                                                                          dtype=sample_spec["type_in"]),
+                                                                            tf.TensorSpec(sample_spec["shape_tar"],
+                                                                                          dtype=sample_spec["type_tar"])))
 
             val_iter = val_iter.cache().repeat().batch(self.hparams["batch_size"])
 
@@ -403,6 +417,13 @@ class WGAN(keras.Model):
 
     @staticmethod
     def critic_loss(critic_real, critic_gen):
+        """
+        The critic is optimized to maximize the difference between the generated and the real data max(real - gen).
+        This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
+        :param critic_real: critic on the real data
+        :param critic_gen: critic on the generated data
+        :param c_loss: loss to optize the critic
+        """
         c_loss = tf.reduce_mean(critic_gen - critic_real)
 
         return c_loss
