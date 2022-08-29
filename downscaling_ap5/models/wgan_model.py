@@ -267,8 +267,8 @@ class WGAN(keras.Model):
         #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
         # * repeat must be applied before shuffle to get varying mini-batches per epoch
         # * batch-size is increaded to allow substepping in train_step
-        data_iter = data_iter.cache().repeat().shuffle(20000).batch(self.hparams["batch_size"]
-                                                                    * (self.hparams["d_steps"] + 1))
+        data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
+                                                           * (self.hparams["d_steps"] + 1)).repeat()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
         if da_val is not None:
