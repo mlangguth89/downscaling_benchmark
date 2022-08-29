@@ -112,12 +112,12 @@ class AbstractPreprocessing(ABC):
         joint_times = sorted(list(set(times1) & set(times2)))
 
         stat = True
-        try:
-            if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
-            ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
-            ds_merged.to_netcdf(nc_tar)
-        except:
-            stat = False
+        #try:
+        if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
+        ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
+        ds_merged.to_netcdf(nc_tar)
+        #except:
+        #    stat = False
 
         return stat
 

@@ -2,9 +2,9 @@
 # COSMO-REA6 grid for downscaling task
 #
 gridtype  = projection
-gridsize  = 10800
+gridsize  = 14400
 xsize     = 120
-ysize     = 90
+ysize     = 120
 xname     = rlon
 xlongname = "longitude in rotated grid" 
 xunits    = "degrees" 

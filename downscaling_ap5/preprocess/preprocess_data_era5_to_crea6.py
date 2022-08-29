@@ -162,7 +162,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
                 for date2op in dates2op:
                     # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
-                    if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
+                    # if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                     date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                     hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
                     # Skip time step if file already exists
@@ -178,7 +178,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                     logger.info(f"Data for day {date_pr} successfully preprocessed.")
 
                 # merge all time steps of the ERA5-data to monthly file and clean-up hourly files
-                logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file))
+                logger.info("Merge all hourly files to monthly datafile '{0}'".format(final_file_era5))
                 all_hourly_files_era5 = glob.glob(os.path.join(dest_dir, "*_preproc_era5.nc"))
                 cdo.run(all_hourly_files_era5 + [final_file_era5], OrderedDict([("mergetime", "")]))
                 remove_files(all_hourly_files_era5, lbreak=True)
