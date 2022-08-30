@@ -191,7 +191,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
             for date2op in dates2op:
                 # !!!!!! ML: Preliminary fix to avoid processing data from 2015 !!!!!!
-                if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
+                #if date2op <= dt.datetime.strptime("20160101 12", "%Y%m%d %H"): continue
                 date_str, date_pr = date2op.strftime("%Y%m%d%H"), date2op.strftime("%Y-%m-%d %H:00 UTC")
                 hourly_file_era5 = os.path.join(dest_dir, "{}_preproc_era5.nc".format(date_str))
                 hourly_file_ifs = hourly_file_era5.replace("era5", "ifs")
