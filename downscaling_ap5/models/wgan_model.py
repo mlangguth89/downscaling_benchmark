@@ -4,6 +4,7 @@ __date__ = "2022-05-19"
 __update__ = "2022-06-28"
 
 import os, sys
+import gc
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -242,6 +243,7 @@ class WGAN(keras.Model):
         da_in, da_tar = WGAN.split_in_tar(da)
 
         def gen(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
@@ -265,10 +267,12 @@ class WGAN(keras.Model):
         # Notes:
         # * cache is reuqired to make repeat work properly on datasets based on generators
         #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
-        # * repeat must be applied before shuffle to get varying mini-batches per epoch
+        # * repeat must be applied after shuffle to get varying mini-batches per epoch
         # * batch-size is increaded to allow substepping in train_step
         data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
                                                            * (self.hparams["d_steps"] + 1)).repeat()
+        del da
+        gc.collect()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
         if da_val is not None:
