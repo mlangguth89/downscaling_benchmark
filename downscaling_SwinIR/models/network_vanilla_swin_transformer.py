@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 import torch.utils.checkpoint as checkpoint
+from torch import Tensor
 
 
 class Upsampling(nn.Module):
@@ -79,6 +80,7 @@ def window_partition(x, window_size:int=None):
         windows          : (num_windows*B, window_size, window_size, C)
     """
     B, H, W, C = x.shape
+    print("x.shaape in window partition",x.shape)
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
     return windows
@@ -450,14 +452,14 @@ class BasicLayer(nn.Module):
 class PatchEmbed(nn.Module):
     """ Image to Patch Embedding
     Args:
-        img_size               : Image size.  Default: 224.
+        img_size               : Image size.  Default: 160.
         patch_size             : Patch token size. Default: 4.
         in_chans               : Number of input image channels. Default: 3.
         embed_dim              : Number of linear projection output channels. Default: 96.
         norm_layer (nn.Module, optional): Normalization layer. Default: None
     """
 
-    def __init__(self, img_size:int = 224, patch_size:int = 4, in_chans:int = 3, embed_dim:int = 96, norm_layer=None):
+    def __init__(self, img_size:int = 160, patch_size:int = 4, in_chans:int = 3, embed_dim:int = 96, norm_layer=None):
         super().__init__()
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
@@ -469,8 +471,11 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-
+        # Bing: This is a bug from SwinTransfomrer, which is not consistent with the description in the pape
+        # The paper use linear embedding, however, the source code here use convolutional layers
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        
+        # self.proj = nn.Linear(in_chans,embed_dim)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -481,6 +486,7 @@ class PatchEmbed(nn.Module):
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+        
         x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
@@ -533,7 +539,7 @@ class SwinTransformerSR(nn.Module):
     """
 
     def __init__(self, img_size=16, patch_size=4, in_chans=8,
-                 embed_dim=96, depths=[2, 2, 6 ,2], num_heads=[3, 6, 12, 24],
+                 embed_dim=96, depths=[2, 2 ], num_heads=[3, 6],
                  window_size=4, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
@@ -547,17 +553,19 @@ class SwinTransformerSR(nn.Module):
         self.patch_norm = patch_norm
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.mlp_ratio = mlp_ratio
-
+        self.out_channels = out_channels
+        self.img_size = img_size
         self.upsampling = Upsampling(in_channels=in_chans, sf=upscale)
-
+        self.upscale = upscale
+        self.de_linear_channels = int(self.out_channels * patch_size*self.num_layers)**2
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
-            img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
+            img_size=img_size*upscale, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
             norm_layer=norm_layer if self.patch_norm else None)
         num_patches = self.patch_embed.num_patches
         patches_resolution = self.patch_embed.patches_resolution
         self.patches_resolution = patches_resolution
-
+        print("self.patches_resolution",self.patches_resolution)
 
         # absolute position embedding
         if self.ape:
@@ -572,6 +580,7 @@ class SwinTransformerSR(nn.Module):
         # build layers
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
+            print("i_layer",i_layer)
             layer = BasicLayer(dim=int(embed_dim * 2 ** i_layer),
                                input_resolution=(patches_resolution[0] // (2 ** i_layer),
                                                  patches_resolution[1] // (2 ** i_layer)),
@@ -588,7 +597,7 @@ class SwinTransformerSR(nn.Module):
                                downsample=PatchMerging if (i_layer < self.num_layers - 1) else None,
                                use_checkpoint=use_checkpoint)
             self.layers.append(layer)
-
+        
         self.norm = norm_layer(self.num_features)
         #self.avgpool = nn.AdaptiveAvgPool1d(1)
 
@@ -597,11 +606,7 @@ class SwinTransformerSR(nn.Module):
         #self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
         #Replace the following code for super-resolution
 
-        self.linear = nn.Linear(self.num_features, patch_size*patch_size*out_channels*upscale*upscale)
-        self.upsample = Upsample(scale=upscale)
-        self.conv_last = nn.Conv2d(out_channels, 1, 3, 1, 1)
-
-
+        self.linear = nn.Linear(self.num_features, self.de_linear_channels)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -624,30 +629,33 @@ class SwinTransformerSR(nn.Module):
     def forward_features(self, x):
 
         x = self.patch_embed(x)
+        print("x after patch_embed",x.shape)
         if self.ape:
             x = x + self.absolute_pos_embed
+            print("x. after position embedding",x.shape)
         x = self.pos_drop(x)
 
         for layer in self.layers:
             x = layer(x)
+            print("x.after layer",x.shape)
 
         x = self.norm(x)  # B L C
-        x = self.avgpool(x.transpose(1, 2))  # B C 1
-        x = torch.flatten(x, 1)
+        print("X afrer self.norm",x.shape)
+        #x = self.avgpool(x.transpose(1, 2))  # B C 1
+        #x = torch.flatten(x, 1)
         return x
 
     def forward(self, x):
         x = self.upsampling(x)
+        print("x after unsampling",x.shape)
         x = self.forward_features(x)
         print("x shape after forward_features",x.shape)
         #Bing: uncomment
         #x = self.head(x)
         #Bing: replace the following code
         x = self.linear(x)
-        x = x.permute(0, 2, 1) #put channle to the second place
         print("x shape after permute",x.shape)
-        x = x.reshape(x.size(dim=0), self.out_channels*self.upscale*self.upscale, self.img_size, self.img_size)
-        x = self.upsample(x)
+        x = x.reshape(x.size(dim=0), self.out_channels, self.img_size*self.upscale, self.img_size*self.upscale)
         return x
 
     def flops(self):
