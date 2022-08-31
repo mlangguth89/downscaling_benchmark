@@ -240,7 +240,6 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
-        test_dir = args.test_dir,
         n_channels = 8,
         save_dir = args.save_dir,
         checkpoint_save = 200,
