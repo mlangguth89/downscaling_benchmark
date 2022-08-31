@@ -158,6 +158,7 @@ class BuildModel:
             return param_group['lr']
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
+        test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet"):
 

@@ -72,8 +72,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         if len(files) < 1:
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
-
+       
+        print('files: {}'.format(files))
         self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
+        print('self.times_patches_list: {}'.format(self.times_patches_list))
 
         self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
         self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
@@ -165,8 +167,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
         # log-transform -> log(x+k)-log(k)
-        vars_in_patches_no_nan[:,self.prcp_indexes,:,:] = torch.log(vars_in_patches_no_nan[:,self.prcp_indexes,:,:]+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
-        vars_out_pathes_no_nan = torch.log(vars_out_pathes_no_nan+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
+        #vars_in_patches_no_nan[:,self.prcp_indexes,:,:] = torch.log(vars_in_patches_no_nan[:,self.prcp_indexes,:,:]+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
+        #vars_out_pathes_no_nan = torch.log(vars_out_pathes_no_nan+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
 
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 

@@ -54,8 +54,16 @@ def main():
         idx = 0
         for i, test_data in enumerate(test_loader):
             idx += 1
+            print('test_data: {}'.format(test_data))
+            cidx = test_data["idx"]
+            times = test_data["T"]
+            print('cidx: {}'.format(cidx))
+            print('times: {}'.format(times))
+
             model.feed_data(test_data)
             model.netG_forward()
+            print('model.E: {}'.format(model.E))
+            print('model.E shape: {}'.format(model.E.shape))
             G_loss = model.G_lossfn(model.E, model.H)
             print("forecast loss ", np.float(G_loss))
 
