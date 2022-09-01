@@ -73,7 +73,7 @@ def main(parser_args):
     da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
 
     nsamples = da_train.shape[0]
-    shape_in = da_train.shape[1:-1]
+    shape_in = da_train_in.shape[1:]
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -94,20 +94,20 @@ def main(parser_args):
     unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"])
 
     if args_dict["z_branch"]:
-        print("%{0}: Start training with optimization on surface topography (with z_branch).")
+        print("Start training with optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(args_dict["lr"]),
                            loss={"output_temp": "mae", "output_z": "mae"},
                            loss_weights={"output_temp": 1.0, "output_z": 1.0})
 
-        history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.isel(variable=0).values,
-                                                          "output_z": da_train_tar.isel(variable=1).values},
+        history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
+                                                          "output_z": da_train_tar.sel(variables="hsurf_tar").values},
                                  batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
                                  callbacks=callback_list,
-                                 validation_data=(da_val_in.values, {"output_temp": da_val_tar.isel(variable=0).values,
-                                                                     "output_z": da_val_tar.isel(variable=1).values}),
+                                 validation_data=(da_val_in.values, {"output_temp": da_val_tar.sel(variables="t_2m_tar").values,
+                                                                     "output_z": da_val_tar.sel(variables="hsurf_tar").values}),
                                  verbose=2)
     else:
-        print("%{0}: Start training without optimization on surface topography (with z_branch).")
+        print("Start training without optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
         history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
@@ -162,14 +162,16 @@ if __name__ == "__main__":
                         help="Output directory where model is savded.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
     parser.add_argument("--number_epochs", "-nepochs", dest="train_epochs", type=int, required=True,
-                        help="Numer of epochs to train WGAN.")
+                        help="Numer of epochs to train U-Net.")
+    parser.add_argument("--batch_size", "-bs", dest="batch_size", type=int, default=32, 
+                        help="Number of samples per mini-batch.")
     parser.add_argument("--learning_rate", "-lr", dest="lr", type=float, required=True,
                         help="Learning rate to train U-Net.")
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
-                        help="Name for the trained WGAN.")
+                        help="Name for the trained U-Net.")
 
     args = parser.parse_args()
     main(args)
