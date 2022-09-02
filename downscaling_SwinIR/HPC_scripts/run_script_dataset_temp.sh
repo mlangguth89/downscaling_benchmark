@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=00:20:00
+#SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=develgpus
 #SBATCH --mail-type=ALL
