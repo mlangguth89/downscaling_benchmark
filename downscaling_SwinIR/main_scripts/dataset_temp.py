@@ -68,7 +68,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da = da.transpose(..., "variables")
             return da
 
-        da_train = reshape_ds(self.ds)
+        ds_train = self.ds.sel(time=slice("2011-01-01", "2016-12-30"))
+        da_train = reshape_ds(ds_train)
         norm_dims = ["time", "rlat", "rlon"]
 
         if self.verbose == 0:
