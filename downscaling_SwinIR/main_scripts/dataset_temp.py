@@ -157,7 +157,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
 def run():
     data_loader = TempDatasetInter(
-        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc")
+        file_path="\\p\\scratch\\deepacf\\maelstrom\\maelstrom_data\\ap5_michael\\preprocessed_era5_crea6\\netcdf_data\\all_files\\preproc_era5_crea6_train.nc")
+        # file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_train.nc")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
         inputs = train_data["L"]
