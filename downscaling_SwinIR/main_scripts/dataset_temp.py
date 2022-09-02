@@ -7,7 +7,9 @@ __email__ = "b.gong@fz-juelich.de"
 __author__ = "Maxim Bragilovski"
 __date__ = "2022-09-02"
 
-from downscaling_maelstrom.downscaling_SwinIR.handle_data.handle_data_unet import HandleUnetData
+import sys
+
+sys.path.append('../')
 import xarray as xr
 import torch
 import numpy as np
@@ -16,7 +18,7 @@ import math
 import torchvision
 import os
 import json
-# from downscaling_SwinIR.handle_data.handle_data_unet import HandleUnetData
+from handle_data.handle_data_unet import HandleUnetData
 
 
 class TempDatasetInter(torch.utils.data.IterableDataset):
