@@ -7,3 +7,5 @@ xarray
 matplotlib
 numpy
 torchvision
+netcdf4
+climetlab
