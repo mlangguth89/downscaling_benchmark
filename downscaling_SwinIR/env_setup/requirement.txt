@@ -4,7 +4,7 @@ requests
 timm
 wanda
 xarray
-matplotlibe
+matplotlib
 numpy
 torchvision
 netcdf4
