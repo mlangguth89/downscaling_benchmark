@@ -8,4 +8,4 @@ matplotlibe
 numpy
 torchvision
 netcdf4
-climetlabl
+climetlab
