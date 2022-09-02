@@ -1,14 +1,16 @@
 __author__ =  "Michael Langguth"
 __date__ = "2022-01-20"
 __update__ = "2022-02-01"
+import sys
 
+sys.path.append('../')
 from typing import Union, List
 from timeit import default_timer as timer
 import datetime as dt
 import numpy as np
 import xarray as xr
 # import climetlab as cml
-from handle_data_class import HandleDataClass
+from handle_data.handle_data_class import HandleDataClass
 
 # basic data types
 arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]
