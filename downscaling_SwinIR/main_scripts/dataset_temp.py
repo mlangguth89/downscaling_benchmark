@@ -42,7 +42,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.batch_size = batch_size
         self.verbose = verbose
         self.seed = seed
-        self.ds = xr.open_dataset(file_path)
+        self.ds = xr.open_dataset(file_path, chunks="auto")
 
         self.ds.load()
         self.times = np.transpose(np.stack(
