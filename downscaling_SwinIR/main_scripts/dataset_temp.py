@@ -40,7 +40,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.ds_in = None
         self.file_path = file_path
         self.batch_size = batch_size
-        self.verbose = vcderbose
+        self.verbose = verbose
         self.seed = seed
         self.ds = xr.open_dataset(file_path)
 
