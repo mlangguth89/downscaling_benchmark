@@ -11,6 +11,7 @@ import sys
 
 sys.path.append('../')
 import xarray as xr
+import time
 import torch
 import numpy as np
 import pathlib
@@ -42,7 +43,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.batch_size = batch_size
         self.verbose = verbose
         self.seed = seed
-        self.ds = xr.open_dataset(file_path, chunks="auto")
+        self.ds = xr.open_dataset(file_path)
 
         self.ds.load()
         self.times = np.transpose(np.stack(
@@ -69,11 +70,17 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             return da
 
         ds_train = self.ds.sel(time=slice("2011-01-01", "2016-12-30")) #
+        start = time.time()
         da_train = reshape_ds(ds_train)
+        end = time.time()
+        print(f'reshaping took {(end-start)/60} minutes')
         norm_dims = ["time", "rlat", "rlon"]
 
         if self.verbose == 0:
+            start = time.time()
             da_norm, mu, std = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
+            end = time.time()
+            print(f'normalization took {(end - start) / 60} minutes')
             for save in [(mu, 'mu'), (std, 'std')]:
                 self.save_stats(save[0], save[1])
         if self.verbose == 1:
@@ -92,9 +99,14 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
                 ds_train_tar.append(darr_tar.isel({"time": t}).values)
             return ds_train_in, ds_train_tar
 
+        start = time.time()
         da_in, da_tar = split_in_tar(da_norm)
+        end = time.time()
+        print(f'splitting took {(end - start) / 60} minutes')
+        start = time.time()
         self.ds_in, self.ds_tar = gen(da_in, da_tar)
-
+        end = time.time()
+        print(f'generation took {(end - start) / 60} minutes')
     def shuffle(self):
         """
         shuffle the index
@@ -161,10 +173,13 @@ def run():
         file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc") # file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_train.nc")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
+        start = time.time()
         inputs = train_data["L"]
         target = train_data["H"]
         idx = train_data["idx"]
         times = train_data["T"]
+        end = time.time()
+        print(f'getting 1 batch took {(end - start) / 60} minutes')
         print("inputs", inputs.size())
         print("target", target.size())
         print("idx", idx)
