@@ -7,7 +7,7 @@ __email__ = "b.gong@fz-juelich.de"
 __author__ = "Maxim Bragilovski"
 __date__ = "2022-09-02"
 
-from handle_data_unet import HandleUnetData
+from downscaling_maelstrom.downscaling_SwinIR.handle_data.handle_data_unet import HandleUnetData
 import xarray as xr
 import torch
 import numpy as np
