@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 import datetime as dt
 import numpy as np
 import xarray as xr
-import climetlab as cml
+# import climetlab as cml
 from downscaling_SwinIR.handle_data.handle_data_class import HandleDataClass
 
 # basic data types
