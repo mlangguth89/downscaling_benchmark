@@ -44,8 +44,10 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.verbose = verbose
         self.seed = seed
         self.ds = xr.open_dataset(file_path)
-
+        start = time.time()
         self.ds.load()
+        end = time.time()
+        print(f'loading took {(end - start) / 60} minutes')
         self.times = np.transpose(np.stack(
             [self.ds["time"].dt.year, self.ds["time"].dt.month, self.ds["time"].dt.day, self.ds["time"].dt.hour]))
         self.process_era5_netcdf()
@@ -187,7 +189,6 @@ def run():
         print("timestamps,", times)
 
 
-@staticmethod
 def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
     """
     Split data array with variables-dimension into input and target data for downscaling.
