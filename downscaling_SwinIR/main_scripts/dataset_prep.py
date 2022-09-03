@@ -26,7 +26,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234, k: float = 0.01):
+                 seed: int = 1234, k: float = 0.01, mode: str = "train", stat_path: str = None):
         """
         file_path : the path to the directory of .nc files
         vars_in   : the list contains the input variable names
@@ -36,6 +36,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                     the corresponding high-resolution patch size should be muliply by scale factor (sf)
         sf        : the scaling factor from low-resolution to high-resolution
         seed      : specify a seed so that we can generate the same random index for shuffle function
+        stat_dir  : the path to the directory of training .nc files
         """
 
         super(PrecipDatasetInter).__init__()
@@ -48,6 +49,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.batch_size = batch_size
         self.seed = seed
         self.k = k 
+        self.mode = mode
+        self.stat_path = stat_path
         self.vars_in_patches_list = []
         self.vars_out_patches_list = []
         self.times_patches_list = []
@@ -61,6 +64,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 if prcpids[j] in vars_in[i]:
                     self.prcp_indexes.append(i)
             i += 1
+        print('self.prcp_indexes: {}'.format(self.prcp_indexes))
 
         # Search for files
         p = pathlib.Path(self.file_path)
@@ -73,14 +77,25 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
        
-        print('files: {}'.format(files))
         self.vars_in_patches_list, self.vars_out_patches_list, self.times_patches_list  = self.process_netcdf(files)
         print('self.times_patches_list: {}'.format(self.times_patches_list))
 
-        self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
-        self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
-        self.vars_out_patches_mean = self.vars_out_patches_list.mean()
-        self.vars_out_patches_std = self.vars_out_patches_list.std()
+        if self.mode == "train":
+            self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
+            self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
+            self.vars_out_patches_mean = self.vars_out_patches_list.mean()
+            self.vars_out_patches_std = self.vars_out_patches_list.std()
+        else:
+            stat_file = os.path.join(stat_path, "statistics.json")
+            with open(stat_file,'r') as f:
+                stat_data = json.load(f)
+            self.vars_in_patches_mean = []
+            self.vars_in_patches_std = []
+            for i in range(len(self.vars_in)):
+                self.vars_in_patches_mean.append(stat_data[self.vars_in[i]+'_mean'])
+                self.vars_in_patches_std.append(stat_data[self.vars_in[i]+'_std'])
+            self.vars_out_patches_mean = stat_data[self.var_out[0]+'_mean']
+            self.vars_out_patches_std = stat_data[self.var_out[0]+'_std']
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
         
@@ -110,8 +125,15 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         n_patches_y = int(np.floor(n_lat) / self.patch_size)
         num_patches_img = n_patches_x * n_patches_y
 
-        da_in = torch.from_numpy(inputs.to_array(dim = "variables").squeeze().values)
-        da_out = torch.from_numpy(output.to_array(dim = "variables").squeeze().values)
+        inputs_nparray = inputs.to_array(dim = "variables").squeeze().values
+        outputs_nparray = output.to_array(dim = "variables").squeeze().values
+
+        # log-transform -> log(x+k)-log(k)
+        inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
+        outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
+
+        da_in = torch.from_numpy(inputs_nparray)
+        da_out = torch.from_numpy(outputs_nparray)
         times = inputs["time"].values  # get the timestamps
         times = np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour]))        
         
@@ -165,10 +187,6 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         vars_in_patches_no_nan = torch.index_select(vars_in_patches, 0, no_nan_idx)
         times_no_nan = torch.index_select(times_patches,0, no_nan_idx) 
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
-
-        # log-transform -> log(x+k)-log(k)
-        #vars_in_patches_no_nan[:,self.prcp_indexes,:,:] = torch.log(vars_in_patches_no_nan[:,self.prcp_indexes,:,:]+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
-        #vars_out_pathes_no_nan = torch.log(vars_out_pathes_no_nan+torch.tensor(self.k))-torch.log(torch.tensor(self.k))
 
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
 
