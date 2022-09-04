@@ -11,7 +11,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234):
+                 seed: int = 1234, k: float = 0.01, mode: str = "train", stat_path: str = None):
 
     """
     file_path : the path to the directory of .nc files
@@ -24,7 +24,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
     seed      : specify a seed so that we can generate the same random index for shuffle function
     """
 
-    dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
+    dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed, k, mode, stat_path)
 
     return DataLoader(dataset, batch_size=None)
 
