@@ -71,7 +71,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da = da.transpose(..., "variables")
             return da
 
-        ds_train = self.ds.sel(time=slice("2011-01-01", "2016-12-30")) #
+        ds_train = self.ds.sel(time=slice("2006-01-01", "2011-12-30")) #
+        print(ds_train.sizes)
         start = time.time()
         da_train = reshape_ds(ds_train)
         end = time.time()
@@ -109,6 +110,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.ds_in, self.ds_tar = gen(da_in, da_tar)
         end = time.time()
         print(f'generation took {(end - start) / 60} minutes')
+
     def shuffle(self):
         """
         shuffle the index
@@ -172,7 +174,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
 def run():
     data_loader = TempDatasetInter(
-        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc") # file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_train.nc")
+        file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
+    # /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/preproc_era5_crea6_trainall_files/preproc_era5_crea6_train.nc # file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_train.nc")
     print("created data_loader")
     for batch_idx, train_data in enumerate(data_loader):
         start = time.time()
