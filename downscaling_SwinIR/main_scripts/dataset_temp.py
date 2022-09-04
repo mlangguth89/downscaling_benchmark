@@ -37,6 +37,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
         super(TempDatasetInter).__init__()
 
+        self.n_samples = None
         self.ds_tar = None
         self.ds_in = None
         self.file_path = file_path
@@ -54,7 +55,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
         print("The total number of samples are:", self.ds.sizes['time'])
 
-        self.n_samples = self.ds.sizes['time']
+        
         self.idx_perm = self.shuffle()
 
         self.log = self.ds.sizes['rlon']
@@ -72,6 +73,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             return da
 
         ds_train = self.ds.sel(time=slice("2006-01-01", "2010-12-30")) #
+        self.n_samples = ds_train.sizes['time']
         print(ds_train.sizes)
         start = time.time()
         da_train = reshape_ds(ds_train)
