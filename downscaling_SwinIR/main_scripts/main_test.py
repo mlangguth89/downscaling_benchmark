@@ -93,6 +93,7 @@ def main():
             input_list.append(input_temp)     
             output_temp = np.exp((test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean+np.log(args.k)))-args.k
             output_list.append(output_temp)
+            print('input_vars shape: {}'.format(input_vars.shape))
 
             pred_temp = np.exp((model.E.numpy()*vars_out_patches_std+vars_out_patches_mean+np.log(args.k)))-args.k
             pred_list.append(pred_temp)
