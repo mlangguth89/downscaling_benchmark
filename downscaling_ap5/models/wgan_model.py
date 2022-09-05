@@ -270,7 +270,7 @@ class WGAN(keras.Model):
         # * repeat must be applied after shuffle to get varying mini-batches per epoch
         # * batch-size is increaded to allow substepping in train_step
         data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
-                                                           * (self.hparams["d_steps"] + 1)).repeat()
+                                                           * (self.hparams["d_steps"] + 1), drop_remainder=True).repeat()
         del da
         gc.collect()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
@@ -291,7 +291,7 @@ class WGAN(keras.Model):
                                                                             tf.TensorSpec(sample_spec["shape_tar"],
                                                                                           dtype=sample_spec["type_tar"])))
 
-            val_iter = val_iter.cache().repeat().batch(self.hparams["batch_size"])
+            val_iter = val_iter.cache().batch(self.hparams["batch_size"], drop_remainder=True).repeat()
 
             return data_iter, val_iter
         else:
