@@ -72,10 +72,10 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da = da.transpose(..., "variables")
             return da
 
-        ds_train = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
+        # ds_train = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
 
         start = time.time()
-        da_train = reshape_ds(ds_train)
+        da_train = reshape_ds(self.ds)
         end = time.time()
         print(f'reshaping took {(end-start)/60} minutes')
 
