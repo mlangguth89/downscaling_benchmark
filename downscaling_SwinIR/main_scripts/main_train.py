@@ -30,7 +30,7 @@ wandb.init(project="Precip_downscaling",reinit=True)
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 0.0002, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_lr: float = 0.02, G_optimizer_betas: list = [0.9, 0.999],
                  G_optimizer_wd: int= 0, save_dir: str = "../results"):
 
         # ------------------------------------
@@ -83,7 +83,7 @@ class BuildModel:
     # ----------------------------------------
     def define_scheduler(self):
         self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        milestones = [1, 2, 3],
+                                                        milestones = [4000, 8000, 12000],
                                                         gamma = 0.1))
 
     # ----------------------------------------
