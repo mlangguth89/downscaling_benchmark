@@ -21,7 +21,7 @@ def main(parser_args):
     job_id = parser_args.id
 
     ds_train = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_small.nc"))
-
+    start = time.time()
     keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
@@ -43,11 +43,11 @@ def main(parser_args):
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
     train_iter, val_iter = wgan_model.compile(da_train.astype(np.float32), da_train.astype(np.float32))
     it = iter(train_iter)
+    start_2 = time.time()
     batch = next(it)
-    start = time.time()
-    print(batch)
     end = time.time()
-    print(end - start)
+    print(f'tot time {end - start} seconds')
+    print('time for 1 batch',end - start_2)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
