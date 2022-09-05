@@ -72,44 +72,30 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da = da.transpose(..., "variables")
             return da
 
-        ds_train_1 = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
-        ds_train_2 = self.ds.sel(time=slice("2009-01-02", "2013-01-01"))#
-        start = time.time()
-        da_train_1 = reshape_ds(ds_train_1)
-        end = time.time()
-        print(f'reshaping took {(end-start)/60} minutes')
-        start = time.time()
-        da_train_2 = reshape_ds(ds_train_2)
-        end = time.time()
-        print(f'reshaping took {(end-start)/60} minutes')
-        del self.ds
-        # da_train = xr.concat([da_train_1, da_train_2], 'time')
+        ds_train = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
 
-        # del da_train_1
-        # del da_train_2
-        # self.n_samples = da_train.sizes['time']
-        # print(da_train.sizes)
         start = time.time()
-        # da_train = reshape_ds(ds_train)
+        da_train = reshape_ds(ds_train)
         end = time.time()
         print(f'reshaping took {(end-start)/60} minutes')
+
+        self.n_samples = da_train.sizes['time']
+        print(da_train.sizes)
+
         norm_dims = ["time", "rlat", "rlon"]
-
-        if self.verbose == 3:
+        if self.verbose == 0:
             start = time.time()
             da_norm, mu, std = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
             end = time.time()
             print(f'normalization took {(end - start) / 60} minutes')
             for save in [(mu, 'mu'), (std, 'std')]:
                 self.save_stats(save[0], save[1])
-        if self.verbose == 0:
+        if self.verbose == 1:
             mu_train = self.load_stats('mu')
             std_train = self.load_stats('std')
-            da_norm_1 = HandleUnetData.z_norm_data(da_train_1, mu=mu_train, std=std_train)
-            da_norm_2 = HandleUnetData.z_norm_data(da_train_2, mu=mu_train, std=std_train)
+            da_norm = HandleUnetData.z_norm_data(da_train, mu=mu_train, std=std_train)
 
-        da_norm_1 = da_norm_1.astype(np.float32)
-        da_norm_2 = da_norm_2.astype(np.float32)
+        da_norm = da_norm.astype(np.float32)
 
         def gen(darr_in, darr_tar):
             ds_train_in = []
@@ -121,15 +107,12 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             return ds_train_in, ds_train_tar
 
         start = time.time()
-        da_in_1, da_tar_1 = split_in_tar(da_norm_1)
-        da_in_2, da_tar_2 = split_in_tar(da_norm_2)
+        da_in, da_tar = split_in_tar(da_norm)
         end = time.time()
         print(f'splitting took {(end - start) / 60} minutes')
         start = time.time()
-        self.ds_in_1, self.ds_tar_1 = gen(da_in_1, da_tar_1)
-        self.ds_in_2, self.ds_tar_2 = gen(da_in_2, da_tar_2)
-        self.ds_in = self.ds_in_1 + self.ds_in_2
-        self.ds_tar = self.ds_tar_1 + self.ds_tar_2
+        self.ds_in, self.ds_tar = gen(da_in, da_tar)
+
         end = time.time()
         print(f'generation took {(end - start) / 60} minutes')
 
@@ -207,7 +190,7 @@ def run():
         idx = train_data["idx"]
         times = train_data["T"]
         end = time.time()
-        print(f'getting 1 batch took {(end - start) / 60} minutes')
+        print(f'getting 1 batch took {(end - start)} seconds')
         print("inputs", inputs.size())
         print("target", target.size())
         print("idx", idx)
