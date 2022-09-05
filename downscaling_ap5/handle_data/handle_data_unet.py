@@ -8,7 +8,7 @@ import datetime as dt
 import numpy as np
 import xarray as xr
 import climetlab as cml
-from handle_data_class import HandleDataClass
+from handle_data.handle_data_class import HandleDataClass
 
 # basic data types
 arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]

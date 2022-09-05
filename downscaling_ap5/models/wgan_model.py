@@ -4,6 +4,7 @@ __date__ = "2022-05-19"
 __update__ = "2022-06-28"
 
 import os, sys
+import gc
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -13,13 +14,13 @@ from tensorflow.keras.callbacks import LearningRateScheduler
 # all the layers used for U-net
 from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
                                      Conv2DTranspose, Input, MaxPool2D, Dense, Flatten, GlobalAveragePooling2D
-)
+                                     )
 from tensorflow.keras.models import Model
 # other modules
 import xarray as xr
 import numpy as np
 
-from unet_model import build_unet, conv_block
+from models.unet_model import build_unet, conv_block
 
 from typing import List, Tuple, Union
 
@@ -88,6 +89,7 @@ class WGAN(keras.Model):
         self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
 
+
     def compile(self, da_train, da_val):
         """
         Turn datasets into tf.Datasets, compile model and set learning rate schedule (optionally)
@@ -101,13 +103,13 @@ class WGAN(keras.Model):
         shape_all = da_train.sel({"variables": invars}).shape
         self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
 
-        tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
+        tar_shape = (*self.shape_in[:-1], 1)  # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_data_generator(da_train, ds_val=da_val)
+        train_iter, val_iter = self.make_tf_dataset(da_train, da_val=da_val)
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
@@ -135,7 +137,7 @@ class WGAN(keras.Model):
 
         ne_decay = decay_end - decay_st
         # calculate decay rate from start and end learning rate
-        decay_rate = 1./ne_decay*np.log(lr_end/lr_start)
+        decay_rate = 1. / ne_decay * np.log(lr_end / lr_start)
 
         def lr_scheduler(epoch, lr):
             if epoch < decay_st:
@@ -153,7 +155,8 @@ class WGAN(keras.Model):
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3, verbose=2)
+                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3,
+                                     verbose=2)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
@@ -223,37 +226,75 @@ class WGAN(keras.Model):
 
         return self.generator(predictors, training=False)
 
-    def make_data_generator(self, ds: xr.DataArray, ds_val: xr.DataArray = None, embed=None, embed_val=None,
-                            var2drop: str = "z_tar") -> tf.data.Dataset:
+    def make_tf_dataset(self, da: xr.DataArray, da_val: xr.DataArray = None, embed=None, embed_val=None,
+                        var2drop: str = "z_tar") -> tf.data.Dataset:
+        """
+        Build-up TensorFlow dataset from a generator based on the xarray-data array.
+        Note that all data is loaded into memory.
+        :param da: the data-array from which the dataset should be cretaed
+        :param da_val: optional data-array for a validation dataset
+        :param embed: Some embedding array (not implemented yet)
+        :param embed_val: Same as embed, but for the (optional) validation dataset
+        :param var2drop: name of variable that will be dropped if no z-branch is active for U-Net (= generator)
+        """
 
         if not self.hparams["z_branch"]:
-            ds = ds.drop(var2drop, dim="variables")
+            da = da.drop(var2drop, dim="variables")
 
-        ds_in, ds_tar = WGAN.split_in_tar(ds)
+        da = da.load()
+        da_in, da_tar = WGAN.split_in_tar(da)
+
+        def gen(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+
+        s0 = next(iter(gen(da_in, da_tar)))
+        sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype,
+                       "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
+
+        gen_train = gen(da_in, da_tar)
 
         if self.hparams["l_embed"]:
             if not embed:
                 raise ValueError("Embedding is enabled, but no embedding data was parsed.")
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
+            # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
         else:
-            data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar))
-
-        # repeat must be before shuffle to get varying mini-batches per epoch
-        # increase batch-size to allow substepping
-        data_iter = data_iter.repeat().shuffle(10000).batch(self.hparams["batch_size"] * (self.hparams["d_steps"] + 1))
+            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
+                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"],
+                                                                                       dtype=sample_spec["type_in"]),
+                                                                         tf.TensorSpec(sample_spec["shape_tar"],
+                                                                                       dtype=sample_spec["type_tar"])))
+        # Notes:
+        # * cache is reuqired to make repeat work properly on datasets based on generators
+        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
+        # * repeat must be applied after shuffle to get varying mini-batches per epoch
+        # * batch-size is increaded to allow substepping in train_step
+        data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
+                                                           * (self.hparams["d_steps"] + 1)).repeat()
+        del da
+        gc.collect()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
 
-        if ds_val is not None:
-            ds_val_in, ds_val_tar = WGAN.split_in_tar(ds_val)
+        if da_val is not None:
+            da_val = da_val.load()
+            da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
+            gen_val = gen(da_val_in, da_val_tar)
 
             if self.hparams["l_embed"]:
                 if not embed_val:
                     raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
+                # val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
             else:
-                val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar))
+                val_iter = tf.data.Dataset.from_generator(lambda: gen_val,
+                                                          output_signature=(tf.TensorSpec(sample_spec["shape_in"],
+                                                                                          dtype=sample_spec["type_in"]),
+                                                                            tf.TensorSpec(sample_spec["shape_tar"],
+                                                                                          dtype=sample_spec[
+                                                                                              "type_tar"])))
 
-            val_iter = val_iter.repeat().batch(self.hparams["batch_size"])
+            val_iter = val_iter.cache().repeat().batch(self.hparams["batch_size"])
 
             return data_iter, val_iter
         else:
@@ -268,6 +309,9 @@ class WGAN(keras.Model):
         """
         # get mixture of generated and ground truth data
         alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        # tf.print(tf.shape(alpha))
+        # tf.print(tf.shape(real_data))
+        # tf.print(tf.shape(gen_data))
         mix_data = real_data + alpha * (gen_data - real_data)
 
         with tf.GradientTape() as gp_tape:
@@ -320,7 +364,7 @@ class WGAN(keras.Model):
             sl_tarvars = tarvars
         else:
             sl_tarvars = slice(*tarvars)
-            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
+            if tarvars[0] != target_var:  # ensure that target variable appears as first channel
                 roll = True
 
         da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
@@ -380,6 +424,13 @@ class WGAN(keras.Model):
 
     @staticmethod
     def critic_loss(critic_real, critic_gen):
+        """
+        The critic is optimized to maximize the difference between the generated and the real data max(real - gen).
+        This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
+        :param critic_real: critic on the real data
+        :param critic_gen: critic on the generated data
+        :param c_loss: loss to optize the critic
+        """
         c_loss = tf.reduce_mean(critic_gen - critic_real)
 
         return c_loss
@@ -404,32 +455,31 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
             raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
 
         if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
-          raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
+            raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
         try:  # new API
-          lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
-                       float(K.get_value(self.model.c_optimizer.lr))
-          lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                         float(K.get_value(self.model.c_optimizer.lr))
+            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
         except TypeError:  # Support for old API for backward compatibility
-          raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
 
         if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
                 isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
             raise ValueError('The output of the "schedule" function '
-                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)' )
+                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)')
         if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
-           and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
+                and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
             raise ValueError(
                 f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
-                f'and {lr_c.dtype} (critic)' )
+                f'and {lr_c.dtype} (critic)')
         # set updated learning rate
         K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
         K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
         if self.verbose > 0:
             print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
-                f'rate for generator to {lr_g}, for critic to {lr_c}.')
+                  f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
         logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
         logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
-

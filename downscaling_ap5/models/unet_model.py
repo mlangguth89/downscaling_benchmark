@@ -13,7 +13,7 @@ import tensorflow as tf
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D)
 from tensorflow.keras.models import Model
-from model_utils import conv_block, conv_block_n
+from models.model_utils import conv_block, conv_block_n
 
 # building blocks for Unet
 
