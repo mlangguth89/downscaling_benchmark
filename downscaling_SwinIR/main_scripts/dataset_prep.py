@@ -16,6 +16,7 @@ import math
 import torchvision
 import os
 import json
+import gc
 
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
@@ -129,13 +130,15 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         outputs_nparray = output.to_array(dim = "variables").squeeze().values
 
         # log-transform -> log(x+k)-log(k)
-        inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
-        outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
+        #inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
+        #outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
         print('inputs_nparray shape: {}'.format(inputs_nparray.shape))
         print('inputs_nparray[self.prcp_indexes] shape: {}'.format(inputs_nparray[self.prcp_indexes].shape))
 
         da_in = torch.from_numpy(inputs_nparray)
         da_out = torch.from_numpy(outputs_nparray)
+        del inputs_nparray,outputs_nparray
+        gc.collect()
         times = inputs["time"].values  # get the timestamps
         times = np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour]))        
         

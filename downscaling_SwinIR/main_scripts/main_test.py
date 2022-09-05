@@ -89,15 +89,19 @@ def main():
 
             # log-transform -> log(x+k)-log(k)
             input_vars = test_data["L"].numpy()
-            input_temp = np.exp((np.squeeze(input_vars[...,-1])*vars_in_patches_std+vars_in_patches_mean+np.log(args.k)))-args.k
-            input_list.append(input_temp)     
-            output_temp = np.exp((test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean+np.log(args.k)))-args.k
-            output_list.append(output_temp)
             print('input_vars shape: {}'.format(input_vars.shape))
+            input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
+            #input_temp = np.exp(input_temp+np.log(args.k))-args.k
+            input_list.append(input_temp)     
+            output_temp = test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean
+            #output_temp = np.exp(output_temp+np.log(args.k))-args.k
+            output_list.append(output_temp)
 
-            pred_temp = np.exp((model.E.numpy()*vars_out_patches_std+vars_out_patches_mean+np.log(args.k)))-args.k
+            pred_temp = model.E.numpy()*vars_out_patches_std+vars_out_patches_mean
+            #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
             pred_list.append(pred_temp)
-            ref_temp = np.exp((model.H.numpy()*vars_out_patches_std+vars_out_patches_mean+np.log(args.k)))-args.k
+            ref_temp = model.H.numpy()*vars_out_patches_std+vars_out_patches_mean
+            #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
             ref_list.append(ref_temp)            
             print('model.E shape: {}'.format(model.E.shape))
             #G_loss = model.G_lossfn(model.E, model.H)
