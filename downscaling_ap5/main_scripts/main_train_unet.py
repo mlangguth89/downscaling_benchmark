@@ -19,6 +19,7 @@ from tensorflow.python.keras.utils.layer_utils import count_params
 from unet_model import build_unet, get_lr_scheduler
 from wgan_model import WGAN                  # to get helper for splitting input and target variables
 from handle_data_unet import HandleUnetData
+from handle_data_class import HandleDataClass
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
@@ -69,8 +70,12 @@ def main(parser_args):
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
-    da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
-    da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
+    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"]) # lshuffle=False
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"])
+
+
+    # da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
+    # da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
 
     nsamples = da_train.shape[0]
     shape_in = da_train_in.shape[1:]
@@ -99,22 +104,34 @@ def main(parser_args):
                            loss={"output_temp": "mae", "output_z": "mae"},
                            loss_weights={"output_temp": 1.0, "output_z": 1.0})
 
-        history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
-                                                          "output_z": da_train_tar.sel(variables="hsurf_tar").values},
+        history = unet_model.fit(train_iter,
                                  batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
                                  callbacks=callback_list,
-                                 validation_data=(da_val_in.values, {"output_temp": da_val_tar.sel(variables="t_2m_tar").values,
-                                                                     "output_z": da_val_tar.sel(variables="hsurf_tar").values}),
+                                 validation_data=val_iter,
                                  verbose=2)
+
+        # history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
+        #                                                   "output_z": da_train_tar.sel(variables="hsurf_tar").values},
+        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+        #                          callbacks=callback_list,
+        #                          validation_data=(da_val_in.values, {"output_temp": da_val_tar.sel(variables="t_2m_tar").values,
+        #                                                              "output_z": da_val_tar.sel(variables="hsurf_tar").values}),
+        #                          verbose=2)
     else:
         print("Start training without optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
-        history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
+        history = unet_model.fit(train_iter,
                                  batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
                                  callbacks=callback_list,
-                                 validation_data=(da_val_in.values, da_val_tar.isel(variable=0).values),
+                                 validation_data=val_iter,  # to-do: how to select target variables
                                  verbose=2)
+
+        # history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
+        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+        #                          callbacks=callback_list,
+        #                          validation_data=(da_val_in.values, da_val_tar.isel(variable=0).values),
+        #                          verbose=2)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*args_dict["batch_size"])
