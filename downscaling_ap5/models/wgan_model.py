@@ -21,6 +21,7 @@ import xarray as xr
 import numpy as np
 
 from unet_model import build_unet, conv_block
+from handle_data_class import HandleDataClass
 
 from typing import List, Tuple, Union
 
@@ -108,7 +109,13 @@ class WGAN(keras.Model):
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_tf_dataset(da_train, da_val=da_val)
+        # Note: The batch-size is increased for the training datset to allow substepping in WGAN
+        # (n+1 optimization steps to train generator and critic). The validation dataset however does not perform
+        # substeeping and thus does not be instantiated with an increased mini-batch size.
+        train_iter = HandleDataClass.make_tf_dataset(da_train, self.hparams["batch_size"]
+                                                     * (self.hparams["d_steps"] + 1))
+        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False)
+
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
@@ -154,7 +161,8 @@ class WGAN(keras.Model):
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3, verbose=2)
+                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3,
+                                     verbose=2)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
@@ -224,79 +232,6 @@ class WGAN(keras.Model):
 
         return self.generator(predictors, training=False)
 
-    def make_tf_dataset(self, da: xr.DataArray, da_val: xr.DataArray = None, embed=None, embed_val=None,
-                        var2drop: str = "z_tar") -> tf.data.Dataset:
-        """
-        Build-up TensorFlow dataset from a generator based on the xarray-data array.
-        Note that all data is loaded into memory.
-        :param da: the data-array from which the dataset should be cretaed
-        :param da_val: optional data-array for a validation dataset
-        :param embed: Some embedding array (not implemented yet)
-        :param embed_val: Same as embed, but for the (optional) validation dataset
-        :param var2drop: name of variable that will be dropped if no z-branch is active for U-Net (= generator)
-        """
-
-        if not self.hparams["z_branch"]:
-            da = da.drop(var2drop, dim="variables")
-
-        da = da.load()
-        da_in, da_tar = WGAN.split_in_tar(da)
-
-        def gen(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
-            ntimes = len(darr_in["time"])
-            for t in range(ntimes):
-                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
-
-        s0 = next(iter(gen(da_in, da_tar)))
-        sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype , 
-                       "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
-
-        gen_train = gen(da_in, da_tar)
-
-        if self.hparams["l_embed"]:
-            if not embed:
-                raise ValueError("Embedding is enabled, but no embedding data was parsed.")
-            # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
-        else:
-            data_iter = tf.data.Dataset.from_generator(lambda: gen_train, 
-                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"],
-                                                                                       dtype=sample_spec["type_in"]),
-                                                                         tf.TensorSpec(sample_spec["shape_tar"],
-                                                                                       dtype=sample_spec["type_tar"])))
-        # Notes:
-        # * cache is reuqired to make repeat work properly on datasets based on generators
-        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
-        # * repeat must be applied after shuffle to get varying mini-batches per epoch
-        # * batch-size is increaded to allow substepping in train_step
-        data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
-                                                           * (self.hparams["d_steps"] + 1), drop_remainder=True).repeat()
-        del da
-        gc.collect()
-        # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
-
-        if da_val is not None:
-            da_val = da_val.load()
-            da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
-            gen_val = gen(da_val_in, da_val_tar)
-            
-            if self.hparams["l_embed"]:
-                if not embed_val:
-                    raise ValueError("Embedding is enabled, but no embedding data for validation dataset is parsed.")
-                # val_iter = tf.data.Dataset.from_tensor_slices((ds_val_in, ds_val_tar, embed_val))
-            else:
-                val_iter = tf.data.Dataset.from_generator(lambda: gen_val, 
-                                                          output_signature=(tf.TensorSpec(sample_spec["shape_in"],
-                                                                                          dtype=sample_spec["type_in"]),
-                                                                            tf.TensorSpec(sample_spec["shape_tar"],
-                                                                                          dtype=sample_spec["type_tar"])))
-
-            val_iter = val_iter.cache().batch(self.hparams["batch_size"], drop_remainder=True).repeat()
-
-            return data_iter, val_iter
-        else:
-            return data_iter
-
     def gradient_penalty(self, real_data, gen_data):
         """
         Calculates gradient penalty based on 'mixture' of generated and ground truth data
@@ -343,31 +278,6 @@ class WGAN(keras.Model):
     @classmethod
     def from_config(cls, config):
         return cls(**config)
-
-    @staticmethod
-    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
-        """
-        Split data array with variables-dimension into input and target data for downscaling.
-        :param da: The unsplitted data array.
-        :param target_var: Name of target variable which should consttute the first channel
-        :return: The splitted data array.
-        """
-        invars = [var for var in da["variables"].values if var.endswith("_in")]
-        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
-
-        # ensure that ds_tar has a channel coordinate even in case of single target variable
-        roll = False
-        if len(tarvars) == 1:
-            sl_tarvars = tarvars
-        else:
-            sl_tarvars = slice(*tarvars)
-            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
-                roll = True
-
-        da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
-        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
-
-        return da_in, da_tar
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
