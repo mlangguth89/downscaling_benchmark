@@ -83,13 +83,12 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         end = time.time()
         print(f'reshaping took {(end-start)/60} minutes')
         del self.ds
-        da_train = xr.concat([da_train_1, da_train_2], 'time')
-        del ds_train_1
-        del ds_train_2
-        del da_train_1
-        del da_train_2
-        self.n_samples = da_train.sizes['time']
-        print(da_train.sizes)
+        # da_train = xr.concat([da_train_1, da_train_2], 'time')
+
+        # del da_train_1
+        # del da_train_2
+        # self.n_samples = da_train.sizes['time']
+        # print(da_train.sizes)
         start = time.time()
         # da_train = reshape_ds(ds_train)
         end = time.time()
@@ -106,9 +105,11 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         if self.verbose == 0:
             mu_train = self.load_stats('mu')
             std_train = self.load_stats('std')
-            da_norm = HandleUnetData.z_norm_data(da_train, mu=mu_train, std=std_train)
+            da_norm_1 = HandleUnetData.z_norm_data(da_train_1, mu=mu_train, std=std_train)
+            da_norm_2 = HandleUnetData.z_norm_data(da_train_2, mu=mu_train, std=std_train)
 
-        da_norm = da_norm.astype(np.float32)
+        da_norm_1 = da_norm_1.astype(np.float32)
+        da_norm_2 = da_norm_2.astype(np.float32)
 
         def gen(darr_in, darr_tar):
             ds_train_in = []
@@ -120,11 +121,15 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             return ds_train_in, ds_train_tar
 
         start = time.time()
-        da_in, da_tar = split_in_tar(da_norm)
+        da_in_1, da_tar_1 = split_in_tar(da_norm_1)
+        da_in_2, da_tar_2 = split_in_tar(da_norm_2)
         end = time.time()
         print(f'splitting took {(end - start) / 60} minutes')
         start = time.time()
-        self.ds_in, self.ds_tar = gen(da_in, da_tar)
+        self.ds_in_1, self.ds_tar_1 = gen(da_in_1, da_tar_1)
+        self.ds_in_2, self.ds_tar_2 = gen(da_in_2, da_tar_2)
+        self.ds_in = self.ds_in_1 + self.ds_in_2
+        self.ds_tar = self.ds_tar_1 + self.ds_tar_2
         end = time.time()
         print(f'generation took {(end - start) / 60} minutes')
 
