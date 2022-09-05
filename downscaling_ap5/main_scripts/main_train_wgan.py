@@ -59,13 +59,13 @@ def main(parser_args):
 
     t0_preproc = timer()
     #ds_train = ds_train.isel(time=slice(0,2000))
-    ds_train  = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
+    ds_train  = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
     
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
-    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
-    da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
+    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, save_path = os.path.join(outdir,parser_args.model_name), return_stat=True)
+    da_val = HandleUnetData.z_norm_data(da_val,save_path =  os.path.join(outdir,parser_args.model_name))
 
     del ds_train
     del ds_val
