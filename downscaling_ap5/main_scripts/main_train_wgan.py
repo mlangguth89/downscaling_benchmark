@@ -56,8 +56,8 @@ def main(parser_args):
         return da
 
     t0_preproc = timer()
-    #ds_train = ds_train.isel(time=slice(0,2000))
-    ds_train  = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
+    # slice data temporaly
+    # ds_train = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
     
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
