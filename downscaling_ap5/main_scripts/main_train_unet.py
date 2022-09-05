@@ -72,13 +72,14 @@ def main(parser_args):
 
     train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"]) # lshuffle=False
     val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"])
-
+    print('train_iter: {}'.format(train_iter))
 
     # da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
     # da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
 
+    print("da_train shape: {}".format(da_train.shape))
     nsamples = da_train.shape[0]
-    shape_in = da_train_in.shape[1:]
+    shape_in = da_train.shape[1:]
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
