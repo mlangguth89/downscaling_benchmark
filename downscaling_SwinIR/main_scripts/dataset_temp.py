@@ -72,8 +72,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da = da.transpose(..., "variables")
             return da
 
-        ds_train_1 = self.ds.sel(time=slice("2006-01-01", "2010-01-01"))
-        ds_train_2 = self.ds.sel(time=slice("2010-01-02", "2014-01-01"))#
+        ds_train_1 = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
+        ds_train_2 = self.ds.sel(time=slice("2009-01-02", "2013-01-01"))#
         da_train_1 = reshape_ds(ds_train_1)
         da_train_2 = reshape_ds(ds_train_2)
         da_train = xr.concat([da_train_1, da_train_2], 'time')
@@ -184,7 +184,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
 def run():
     data_loader = TempDatasetInter(
-        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc")
+        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc:")
     #   /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
     print("created data_loader")
