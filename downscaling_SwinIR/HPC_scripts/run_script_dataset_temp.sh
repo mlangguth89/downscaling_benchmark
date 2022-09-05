@@ -6,7 +6,7 @@
 #SBATCH --error=train-err.%j
 #SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develgpus
+#SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
