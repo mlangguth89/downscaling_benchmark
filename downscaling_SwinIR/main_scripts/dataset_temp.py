@@ -73,9 +73,15 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             return da
 
         ds_train_1 = self.ds.sel(time=slice("2006-01-01", "2009-01-01"))
-        ds_train_2 = self.ds.sel(time=slice("2009-01-02", "2013-01-01"))#
+        ds_train_2 = self.ds.sel(time=slice("2009-01-02", "2014-01-01"))#
+        start = time.time()
         da_train_1 = reshape_ds(ds_train_1)
+        end = time.time()
+        print(f'reshaping took {(end-start)/60} minutes')
+        start = time.time()
         da_train_2 = reshape_ds(ds_train_2)
+        end = time.time()
+        print(f'reshaping took {(end-start)/60} minutes')
         da_train = xr.concat([da_train_1, da_train_2], 'time')
         del ds_train_1
         del ds_train_2
@@ -89,14 +95,14 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         print(f'reshaping took {(end-start)/60} minutes')
         norm_dims = ["time", "rlat", "rlon"]
 
-        if self.verbose == 0:
+        if self.verbose == 3:
             start = time.time()
             da_norm, mu, std = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
             end = time.time()
             print(f'normalization took {(end - start) / 60} minutes')
             for save in [(mu, 'mu'), (std, 'std')]:
                 self.save_stats(save[0], save[1])
-        if self.verbose == 1:
+        if self.verbose == 0:
             mu_train = self.load_stats('mu')
             std_train = self.load_stats('std')
             da_norm = HandleUnetData.z_norm_data(da_train, mu=mu_train, std=std_train)
