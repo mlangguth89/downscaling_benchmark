@@ -151,36 +151,36 @@ class HandleUnetData(HandleDataClass):
         if not dims:
             dims = list(data.dims)
         
-        if norm_method == "norm":
-            if os.path.exists(js_file):
-                print("Loading file:",js_file)
-                with open(js_file, "r") as f:
-                    norm_dict = json.load(f)
-                    print("norm_dict mu", norm_dict["mu"] )
-                    keys = list(norm_dict["mu"].keys())
-                    mu = np.asarray(list(norm_dict["mu"].values()))
-                    std = np.asarray(list(norm_dict["std"].values()))
-                    print("Mu here after loading file:",mu)
-                    mu = xr.DataArray(mu, coords={"variables": keys}, dims=["variables"])
-                    std = xr.DataArray(std, coords={"variables": keys}, dims=["variables"])
-            else:
-               mu = data.mean(dim=dims)
-               std = data.std(dim=dims)
-               mu_dict, std_dict = mu.to_dict(), std.to_dict()
-               print("dict_test", mu_dict)
-               dict_mu, dict_std = {}, {}
-               dt_mu, dt_std = mu_dict["data"], std_dict["data"]
-               keys =  mu_dict['coords']['variables']['data']
-               
-               for i, var in enumerate(keys):
-                   dict_mu[var] = dt_mu[i]
-                   dict_std[var] = dt_std[i]
-               
-               norm_dict["mu"] = dict_mu
-               norm_dict["std"] = dict_std
-               with open(js_file,"w") as f:
-                   json.dump(norm_dict,f)
-                   print("The training stats mu and std are saved to ", js_file)
+
+        if os.path.exists(js_file):
+            print("Loading file:",js_file)
+            with open(js_file, "r") as f:
+                norm_dict = json.load(f)
+                print("norm_dict mu", norm_dict["mu"] )
+                keys = list(norm_dict["mu"].keys())
+                mu = np.asarray(list(norm_dict["mu"].values()))
+                std = np.asarray(list(norm_dict["std"].values()))
+                print("Mu here after loading file:",mu)
+                mu = xr.DataArray(mu, coords={"variables": keys}, dims=["variables"])
+                std = xr.DataArray(std, coords={"variables": keys}, dims=["variables"])
+        else:
+           mu = data.mean(dim=dims)
+           std = data.std(dim=dims)
+           mu_dict, std_dict = mu.to_dict(), std.to_dict()
+           print("dict_test", mu_dict)
+           dict_mu, dict_std = {}, {}
+           dt_mu, dt_std = mu_dict["data"], std_dict["data"]
+           keys =  mu_dict['coords']['variables']['data']
+
+           for i, var in enumerate(keys):
+               dict_mu[var] = dt_mu[i]
+               dict_std[var] = dt_std[i]
+
+           norm_dict["mu"] = dict_mu
+           norm_dict["std"] = dict_std
+           with open(js_file,"w") as f:
+               json.dump(norm_dict,f)
+               print("The training stats mu and std are saved to ", js_file)
                    
 
         if norm_method == "norm":
