@@ -56,16 +56,13 @@ def main(parser_args):
     wgan_model = WGAN(build_unet, critic_model, args_dict)
 
     # preprocess data (i.e. normalizing)
-    def reshape_ds(ds):
-        da = ds.to_array(dim="variables")
-        da = da.transpose(..., "variables")
-        return da
+
 
     t0_preproc = timer()
     # slice data temporaly
     #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
     
-    da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
+    da_train, da_val = HandleUnetData.reshape_ds(ds_train), HandleUnetData.reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, save_path = os.path.join(outdir,parser_args.model_name), return_stat=True)

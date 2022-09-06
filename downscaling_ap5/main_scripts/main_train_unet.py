@@ -38,7 +38,7 @@ def main(parser_args):
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto").sel(time=slice("2006-01-01","2016-12-31")), \
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
                        xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
 
     benchmark_dict = {"loading data time": timer() - t0_save}
@@ -47,17 +47,11 @@ def main(parser_args):
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
 
-    # preprocess data (i.e. normalizing)
-    def reshape_ds(ds):
-        da = ds.to_array(dim="variables")
-        da = da.transpose(..., "variables")
-        return da
-
     t0_preproc = timer()
     # slice data temporally to save memory
     # ds_train  = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
     
-    da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
