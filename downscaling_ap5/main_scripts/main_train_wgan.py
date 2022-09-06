@@ -56,8 +56,6 @@ def main(parser_args):
     wgan_model = WGAN(build_unet, critic_model, args_dict)
 
     # preprocess data (i.e. normalizing)
-
-
     t0_preproc = timer()
     # slice data temporaly
     #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))

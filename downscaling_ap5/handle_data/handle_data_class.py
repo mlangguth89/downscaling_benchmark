@@ -138,47 +138,65 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-                        lembed: bool = None) -> tf.data.Dataset:
+                        named_targets: bool = False, lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         Note that all data is loaded into memory.
-        :param da: the data-array from which the dataset should be cretaed
+        :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
+                   Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables.
         :param batch_size: number of samples per mini-batch
         :param lshuffle: flag if shuffling should be applied to dataset
         :param shuffle_samples: number of samples to load before applying shuffling
+        :param named_targets: flag if target of TF dataset should be dictionary with named target variables
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
 
-        def gen(darr_in, darr_tar):
+        varnames_tar = da_tar["variables"].values
+
+        def gen_named(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                tar_now = darr_tar.isel({"time": t})
+                yield tuple((darr_in.isel({"time": t}).values,
+                             {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
+
+        def gen_unnamed(darr_in, darr_tar):
             # darr_in, darr_tar = darr_in.load(), darr_tar.load()
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
 
-        s0 = next(iter(gen(da_in, da_tar)))
-        sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype,
-                       "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
+        if named_targets is True:
+            gen_now = gen_named
+        else:
+            gen_now = gen_unnamed
 
-        gen_train = gen(da_in, da_tar)
+        # create output signatures from first sample
+        s0 = next(iter(gen_now(da_in, da_tar)))
+        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
+        if named_targets is True:
+            sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
+        else:
+            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
 
-        if lembed:
-            if not lembed:
-                raise ValueError("Time embedding is not supported yet.")
-            # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
+        # re-instantiate the generator and build TF dataset
+        gen_train = gen_named(da_in, da_tar)
+
+        if lembed is True:
+            raise ValueError("Time embedding is not supported yet.")
         else:
             data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
-                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"],
-                                                                                       dtype=sample_spec["type_in"]),
-                                                                         tf.TensorSpec(sample_spec["shape_tar"],
-                                                                                       dtype=sample_spec["type_tar"])))
+                                                       output_signature=(sample_spec_in, sample_spec_tar))
+
         # Notes:
         # * cache is reuqired to make repeat work properly on datasets based on generators
         #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
         # * repeat must be applied after shuffle to get varying mini-batches per epoch
         # * batch-size is increaded to allow substepping in train_step
-        if lshuffle:
+        if lshuffle is True:
             data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=True).repeat()
         else:
             data_iter = data_iter.cache().batch(batch_size, drop_remainder=True).repeat()
