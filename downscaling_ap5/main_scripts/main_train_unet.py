@@ -22,6 +22,10 @@ from handle_data_unet import HandleUnetData
 from handle_data_class import HandleDataClass
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
+# To-Dos:
+#   * drop hsurf_tar from dataset if not z_branch
+#   * generic loss-naming using train_iter.element_spec[1].keys()
+
 
 def main(parser_args):
     # start timing
@@ -64,16 +68,12 @@ def main(parser_args):
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
-    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"]) # lshuffle=False
-    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False)
-    print('train_iter: {}'.format(train_iter))
+    # get targets as dictionary for usage in fit-function
+    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"], named_targets=True)
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True)
 
-    # da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
-    # da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
-
-    print("da_train shape: {}".format(da_train.shape))
     nsamples = da_train.shape[0]
-    shape_in = (96, 120, 9) # da_train.shape[1:] to-do: hard code
+    shape_in = train_iter.element_spec[0].shape
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -95,7 +95,7 @@ def main(parser_args):
     print(unet_model.summary())
     steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
     print('steps_per_epoch: {}'.format(steps_per_epoch))
- 
+
     if args_dict["z_branch"]:
         print("Start training with optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(args_dict["lr"]),
@@ -104,38 +104,22 @@ def main(parser_args):
 
         history = unet_model.fit(train_iter,
                                  epochs=args_dict["train_epochs"],
-                                 # batch_size=args_dict["batch_size"],
                                  steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,
                                  validation_steps=3,
                                  verbose=2)
-
-        # history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
-        #                                                   "output_z": da_train_tar.sel(variables="hsurf_tar").values},
-        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
-        #                          callbacks=callback_list,
-        #                          validation_data=(da_val_in.values, {"output_temp": da_val_tar.sel(variables="t_2m_tar").values,
-        #                                                              "output_z": da_val_tar.sel(variables="hsurf_tar").values}),
-        #                          verbose=2)
     else:
         print("Start training without optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
         history = unet_model.fit(train_iter,
                                  epochs=args_dict["train_epochs"],
-                                 batch_size=args_dict["batch_size"],
                                  steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,  # to-do: how to select target variables
                                  validation_steps=3,
                                  verbose=2)
-
-        # history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
-        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
-        #                          callbacks=callback_list,
-        #                          validation_data=(da_val_in.values, da_val_tar.isel(variable=0).values),
-        #                          verbose=2)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*args_dict["batch_size"])
