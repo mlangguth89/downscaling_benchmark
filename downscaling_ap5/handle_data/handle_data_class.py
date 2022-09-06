@@ -101,6 +101,17 @@ class HandleDataClass(object):
         raise NotImplementedError("Please set-up a customized get_data-function.")
 
     @staticmethod
+    def reshape_ds(ds):
+        """
+        Convert a xarray dataset to a data-array where the variables will constitute the last dimension (channel last)
+        :param ds: the xarray dataset with dimensions (dims)
+        :return da: the data-array with dimensions (dims, variables)
+        """
+        da = ds.to_array(dim="variables")
+        da = da.transpose(..., "variables")
+        return da
+
+    @staticmethod
     def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
         """
         Split data array with variables-dimension into input and target data for downscaling.
