@@ -5,9 +5,11 @@ __update__ = "2022-02-01"
 
 import os, sys
 import socket
+import gc
 from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
+import tensorflow as tf
 
 
 class HandleDataClass(object):
@@ -97,6 +99,84 @@ class HandleDataClass(object):
         Function to either downlaod data from the s3-bucket or to read from file.
         """
         raise NotImplementedError("Please set-up a customized get_data-function.")
+
+    @staticmethod
+    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
+        """
+        Split data array with variables-dimension into input and target data for downscaling.
+        :param da: The unsplitted data array.
+        :param target_var: Name of target variable which should consttute the first channel
+        :return: The splitted data array.
+        """
+        invars = [var for var in da["variables"].values if var.endswith("_in")]
+        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
+
+        # ensure that ds_tar has a channel coordinate even in case of single target variable
+        roll = False
+        if len(tarvars) == 1:
+            sl_tarvars = tarvars
+        else:
+            sl_tarvars = slice(*tarvars)
+            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
+                roll = True
+
+        da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
+        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
+
+        return da_in, da_tar
+
+    @staticmethod
+    def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
+                        lembed: bool = None) -> tf.data.Dataset:
+        """
+        Build-up TensorFlow dataset from a generator based on the xarray-data array.
+        Note that all data is loaded into memory.
+        :param da: the data-array from which the dataset should be cretaed
+        :param batch_size: number of samples per mini-batch
+        :param lshuffle: flag if shuffling should be applied to dataset
+        :param shuffle_samples: number of samples to load before applying shuffling
+        :param lembed: flag to trigger temporal embedding (not implemented yet!)
+        """
+        da = da.load()
+        da_in, da_tar = HandleDataClass.split_in_tar(da)
+
+        def gen(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+
+        s0 = next(iter(gen(da_in, da_tar)))
+        sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype,
+                       "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
+
+        gen_train = gen(da_in, da_tar)
+
+        if lembed:
+            if not lembed:
+                raise ValueError("Time embedding is not supported yet.")
+            # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
+        else:
+            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
+                                                       output_signature=(tf.TensorSpec(sample_spec["shape_in"],
+                                                                                       dtype=sample_spec["type_in"]),
+                                                                         tf.TensorSpec(sample_spec["shape_tar"],
+                                                                                       dtype=sample_spec["type_tar"])))
+        # Notes:
+        # * cache is reuqired to make repeat work properly on datasets based on generators
+        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
+        # * repeat must be applied after shuffle to get varying mini-batches per epoch
+        # * batch-size is increaded to allow substepping in train_step
+        if lshuffle:
+            data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=True).repeat()
+        else:
+            data_iter = data_iter.cache().batch(batch_size, drop_remainder=True).repeat()
+
+        # clean-up to free some memory
+        del da
+        gc.collect()
+
+        return data_iter
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):

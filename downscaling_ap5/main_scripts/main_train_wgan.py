@@ -36,11 +36,13 @@ def main(parser_args):
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+    #ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
+    #                   xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
 
-    print("ds_train_time",ds_train["time"])
-    print("ds_val",ds_val)
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
+
+
     benchmark_dict = {"loading data time": timer() - t0_save}
 
     keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
@@ -58,8 +60,8 @@ def main(parser_args):
         return da
 
     t0_preproc = timer()
-    #ds_train = ds_train.isel(time=slice(0,2000))
-    ds_train  = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
+    # slice data temporaly
+    ds_train = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
     
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
