@@ -33,6 +33,8 @@ def main(parser_args):
     outdir = parser_args.output_dir
     job_id = parser_args.id
 
+    model_savedir = os.path.join(outdir, parser_args.model_name)
+    os.makedirs(model_savedir, exist_ok=True)
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
@@ -61,7 +63,7 @@ def main(parser_args):
 
     t0_preproc = timer()
     # slice data temporaly
-    ds_train = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
+    #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
     
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
@@ -126,8 +128,7 @@ def main(parser_args):
           .format(os.path.join(outdir, parser_args.model_name)))
     # save trained model (generator and critic are saved seperately)
     t0_save = timer()
-    model_savedir = os.path.join(outdir, parser_args.model_name)
-    os.makedirs(model_savedir, exist_ok=True)
+   
 
     wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator".format(parser_args.model_name)))
     wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic".format(parser_args.model_name)))
