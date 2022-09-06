@@ -4,6 +4,7 @@ __date__ = "2022-05-19"
 __update__ = "2022-06-28"
 
 import os, sys
+import time
 import gc
 from collections import OrderedDict
 import tensorflow as tf
@@ -109,7 +110,7 @@ class WGAN(keras.Model):
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
-        train_iter, val_iter = self.make_tf_dataset(da_train, da_val=da_val)
+        train_iter = self.make_tf_dataset(da_train, da_val=None)
         # call Keras compile method
         super(WGAN, self).compile()
         # set optimizers
@@ -119,7 +120,7 @@ class WGAN(keras.Model):
         if self.hparams["lr_decay"]:
             self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
 
-        return train_iter, val_iter
+        return train_iter
 
     def get_lr_decay(self):
         """
@@ -241,8 +242,14 @@ class WGAN(keras.Model):
         if not self.hparams["z_branch"]:
             da = da.drop(var2drop, dim="variables")
 
+        start = time.time()
         da = da.load()
+        end = time.time()
+        print(f'Loading took {(end - start) / 60} minutes seconds')
+        start = time.time()
         da_in, da_tar = WGAN.split_in_tar(da)
+        end = time.time()
+        print(f'Splitting took {(end - start) / 60} minutes seconds')
 
         def gen(darr_in, darr_tar):
             # darr_in, darr_tar = darr_in.load(), darr_tar.load()
@@ -253,26 +260,33 @@ class WGAN(keras.Model):
         s0 = next(iter(gen(da_in, da_tar)))
         sample_spec = {"shape_in": s0[0].shape, "type_in": s0[0].dtype,
                        "shape_tar": s0[1].shape, "type_tar": s0[0].dtype}
-
+        start = time.time()
         gen_train = gen(da_in, da_tar)
-
+        end = time.time()
+        print(f'Shuffling took {(end - start) / 60} minutes seconds')
         if self.hparams["l_embed"]:
             if not embed:
                 raise ValueError("Embedding is enabled, but no embedding data was parsed.")
             # data_iter = tf.data.Dataset.from_tensor_slices((ds_in, ds_tar, embed))
         else:
+            start = time.time()
             data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
                                                        output_signature=(tf.TensorSpec(sample_spec["shape_in"],
                                                                                        dtype=sample_spec["type_in"]),
                                                                          tf.TensorSpec(sample_spec["shape_tar"],
                                                                                        dtype=sample_spec["type_tar"])))
+            end = time.time()
+            print(f'Creating tf data {(end - start) / 60} minutes')
         # Notes:
         # * cache is reuqired to make repeat work properly on datasets based on generators
         #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
         # * repeat must be applied after shuffle to get varying mini-batches per epoch
         # * batch-size is increaded to allow substepping in train_step
+        start = time.time()
         data_iter = data_iter.cache().shuffle(20000).batch(self.hparams["batch_size"]
                                                            * (self.hparams["d_steps"] + 1)).repeat()
+        end = time.time()
+        print(f'Shuffling took {(end - start) / 60} minutes seconds')
         del da
         gc.collect()
         # data_iter = data_iter.prefetch(tf.data.AUTOTUNE)
