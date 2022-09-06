@@ -110,7 +110,7 @@ def main(parser_args):
 
         history = unet_model.fit(train_iter,
                                  epochs=args_dict["train_epochs"],
-                                 batch_size=args_dict["batch_size"],
+                                 # batch_size=args_dict["batch_size"],
                                  steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,
