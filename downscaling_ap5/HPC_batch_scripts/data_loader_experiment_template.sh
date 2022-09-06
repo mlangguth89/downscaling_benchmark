@@ -4,8 +4,8 @@
 #SBATCH --ntasks=12
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --output=preprocess_era5_to_crea6_data-out.%j
-#SBATCH --error=preprocess_era5_to_crea6_data-err.%j
+#SBATCH --output=train-out.%j
+#SBATCH --error=train-err.%j
 #SBATCH --time=01:00:00
 #SBATCH --gres=gpu:0
 #SBATCH --partition=develbooster
