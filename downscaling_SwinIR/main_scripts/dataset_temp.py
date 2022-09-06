@@ -45,19 +45,21 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.verbose = verbose
         self.seed = seed
         self.ds = xr.open_dataset(file_path)
+        # self.ds = xr.open_dataset("/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc")
         start = time.time()
         self.ds.load()
         end = time.time()
-        print(f'loading took {(end - start) / 60} minutes')
+        print(f'Loading took {(end - start) / 60} minutes')
         self.times = np.transpose(np.stack(
             [self.ds["time"].dt.year, self.ds["time"].dt.month, self.ds["time"].dt.day, self.ds["time"].dt.hour]))
         self.process_era5_netcdf()
 
         print("The total number of samples are:", self.ds.sizes['time'])
 
-        
+        start = time.time()
         self.idx_perm = self.shuffle()
-
+        end = time.time()
+        print(f'Shuffling took {(end-start)/60} minutes')
         self.log = self.ds.sizes['rlon']
         self.lat = self.ds.sizes['rlat']
         # self.save_stats()
@@ -77,7 +79,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         start = time.time()
         da_train = reshape_ds(self.ds)
         end = time.time()
-        print(f'reshaping took {(end-start)/60} minutes')
+        print(f'Reshaping took {(end-start)/60} minutes')
 
         self.n_samples = da_train.sizes['time']
         print(da_train.sizes)
@@ -87,7 +89,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             start = time.time()
             da_norm, mu, std = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
             end = time.time()
-            print(f'normalization took {(end - start) / 60} minutes')
+            print(f'Normalization took {(end - start) / 60} minutes')
             for save in [(mu, 'mu'), (std, 'std')]:
                 self.save_stats(save[0], save[1])
         if self.verbose == 1:
@@ -120,7 +122,6 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         """
         shuffle the index
         """
-        print("Shuffling the index ....")
         multiformer_np_rng = np.random.default_rng(self.seed)
         idx_perm = multiformer_np_rng.permutation(self.n_samples)
 
