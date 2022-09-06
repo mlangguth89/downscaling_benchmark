@@ -71,7 +71,7 @@ def main(parser_args):
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
     train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"]) # lshuffle=False
-    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"])
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False)
     print('train_iter: {}'.format(train_iter))
 
     # da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
@@ -79,7 +79,7 @@ def main(parser_args):
 
     print("da_train shape: {}".format(da_train.shape))
     nsamples = da_train.shape[0]
-    shape_in = da_train.shape[1:]
+    shape_in = (96, 120, 9) # da_train.shape[1:] to-do: hard code
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -98,7 +98,10 @@ def main(parser_args):
 
     # build, compile and train the model
     unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"])
-
+    print(unet_model.summary())
+    steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
+    print('steps_per_epoch: {}'.format(steps_per_epoch))
+ 
     if args_dict["z_branch"]:
         print("Start training with optimization on surface topography (with z_branch).")
         unet_model.compile(optimizer=Adam(args_dict["lr"]),
@@ -106,9 +109,12 @@ def main(parser_args):
                            loss_weights={"output_temp": 1.0, "output_z": 1.0})
 
         history = unet_model.fit(train_iter,
-                                 batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+                                 epochs=args_dict["train_epochs"],
+                                 batch_size=args_dict["batch_size"],
+                                 steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,
+                                 validation_steps=3,
                                  verbose=2)
 
         # history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
@@ -123,9 +129,12 @@ def main(parser_args):
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
         history = unet_model.fit(train_iter,
-                                 batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+                                 epochs=args_dict["train_epochs"],
+                                 batch_size=args_dict["batch_size"],
+                                 steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,  # to-do: how to select target variables
+                                 validation_steps=3,
                                  verbose=2)
 
         # history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
