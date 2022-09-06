@@ -33,11 +33,17 @@ def main(parser_args):
     outdir = parser_args.output_dir
     job_id = parser_args.id
 
+    model_savedir = os.path.join(outdir, parser_args.model_name)
+    os.makedirs(model_savedir, exist_ok=True)
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+    #ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
+    #                   xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
+
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
@@ -57,13 +63,13 @@ def main(parser_args):
 
     t0_preproc = timer()
     # slice data temporaly
-    # ds_train = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
+    #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
     
     da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
-    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
-    da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
+    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, save_path = os.path.join(outdir,parser_args.model_name), return_stat=True)
+    da_val = HandleUnetData.z_norm_data(da_val,save_path =  os.path.join(outdir,parser_args.model_name))
 
     del ds_train
     del ds_val
@@ -122,8 +128,7 @@ def main(parser_args):
           .format(os.path.join(outdir, parser_args.model_name)))
     # save trained model (generator and critic are saved seperately)
     t0_save = timer()
-    model_savedir = os.path.join(outdir, parser_args.model_name)
-    os.makedirs(model_savedir, exist_ok=True)
+   
 
     wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator".format(parser_args.model_name)))
     wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic".format(parser_args.model_name)))
