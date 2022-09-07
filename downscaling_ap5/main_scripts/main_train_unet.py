@@ -17,11 +17,15 @@ import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
 from tensorflow.python.keras.utils.layer_utils import count_params
 from unet_model import build_unet, get_lr_scheduler
-from wgan_model import WGAN                  # to get helper for splitting input and target variables
 from handle_data_unet import HandleUnetData
 from handle_data_class import HandleDataClass
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
+from other_utils import to_list
 
+# Open issues:
+# * customized input file (= data engine)
+# * customized choice on predictors and predictands
+# * harmonize and merge with main_train_unet.py
 
 def main(parser_args):
     # start timing
@@ -47,20 +51,21 @@ def main(parser_args):
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
 
-    # preprocess data (i.e. normalizing)
-    def reshape_ds(ds):
-        da = ds.to_array(dim="variables")
-        da = da.transpose(..., "variables")
-        return da
-
+    # Start data preprocessing (reshaping, normalization and conversion to TF dataset)
     t0_preproc = timer()
     # slice data temporally to save memory
     # ds_train  = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
-    
-    da_train, da_val = reshape_ds(ds_train), reshape_ds(ds_val)
+    if not args_dict["z_branch"]:
+        # drop topography on target grid in case that z_branch is set to False
+        ds_train, ds_val = ds_train.drop("hsurf_tar"), ds_val.drop("hsurf_var")
+
+    # turn dataset into data-array and normalize
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
-    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
+    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
+                                                               save_path=os.path.join(outdir, parser_args.model_name),
+                                                               return_stat=True)
     da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
     del ds_train
@@ -70,15 +75,12 @@ def main(parser_args):
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
-    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"]) # lshuffle=False
-    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"])
-
-
-    # da_train_in, da_train_tar = WGAN.split_in_tar(da_train)
-    # da_val_in, da_val_tar = WGAN.split_in_tar(da_val)
+    # get targets as dictionary for usage in fit-function
+    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"], named_targets=True)
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True)
 
     nsamples = da_train.shape[0]
-    shape_in = da_train_in.shape[1:]
+    shape_in = train_iter.element_spec[0].shape
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -97,41 +99,36 @@ def main(parser_args):
 
     # build, compile and train the model
     unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"])
+    steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
+
+    varnames_tar = to_list(train_iter.element_spec[1].keys())
 
     if args_dict["z_branch"]:
         print("Start training with optimization on surface topography (with z_branch).")
+        assert len(varnames_tar) == 2, "U-Net is trained with z_branch, but does not comprise two target variables."
         unet_model.compile(optimizer=Adam(args_dict["lr"]),
-                           loss={"output_temp": "mae", "output_z": "mae"},
-                           loss_weights={"output_temp": 1.0, "output_z": 1.0})
+                           loss={varnames_tar[0]: "mae", varnames_tar[1]: "mae"},
+                           loss_weights={varnames_tar[0]: 1.0, varnames_tar[1]: 1.0})
 
         history = unet_model.fit(train_iter,
-                                 batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+                                 epochs=args_dict["train_epochs"],
+                                 steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
                                  validation_data=val_iter,
+                                 validation_steps=3,
                                  verbose=2)
-
-        # history = unet_model.fit(x=da_train_in.values, y={"output_temp": da_train_tar.sel(variables="t_2m_tar").values,
-        #                                                   "output_z": da_train_tar.sel(variables="hsurf_tar").values},
-        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
-        #                          callbacks=callback_list,
-        #                          validation_data=(da_val_in.values, {"output_temp": da_val_tar.sel(variables="t_2m_tar").values,
-        #                                                              "output_z": da_val_tar.sel(variables="hsurf_tar").values}),
-        #                          verbose=2)
     else:
-        print("Start training without optimization on surface topography (with z_branch).")
+        print("Start training without optimization on surface topography (without z_branch).")
+        assert len(varnames_tar) == 1, "U-Net is trained without z_branch, but still comprises more than one target."
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
         history = unet_model.fit(train_iter,
-                                 batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
+                                 epochs=args_dict["train_epochs"],
+                                 steps_per_epoch=steps_per_epoch,
                                  callbacks=callback_list,
-                                 validation_data=val_iter,  # to-do: how to select target variables
+                                 validation_data=val_iter,
+                                 validation_steps=3,
                                  verbose=2)
-
-        # history = unet_model.fit(x=da_train_in.values, y=da_train_tar.isel(variable=0).values,
-        #                          batch_size=args_dict["batch_size"], epochs=args_dict["train_epochs"],
-        #                          callbacks=callback_list,
-        #                          validation_data=(da_val_in.values, da_val_tar.isel(variable=0).values),
-        #                          verbose=2)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*args_dict["batch_size"])
@@ -141,7 +138,7 @@ def main(parser_args):
     benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
 
     # save trained model
-    model_name = "trained_downscaling_unet_t2m_hour_exp{0:d}".format(bm_obj.exp_number)
+    model_name = parser_args.model_name
     print("Save trained model '{0}' to '{1}'".format(model_name, outdir))
     t0_save = timer()
     unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")
