@@ -168,7 +168,7 @@ class HandleUnetData(HandleDataClass):
                 std = np.asarray(list(norm_dict["std"].values()))
                 mu = xr.DataArray(mu, coords={"variables": keys}, dims=["variables"])
                 std = xr.DataArray(std, coords={"variables": keys}, dims=["variables"])
-        elif mu and std:
+        elif mu is not None and std is not None:
             print(f"Parameters for normalization are parsed directly to the method.")
         else:
             print(f"Parameters for normalization are obtained from the data.")
