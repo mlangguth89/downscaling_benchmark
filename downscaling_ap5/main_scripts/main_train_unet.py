@@ -135,8 +135,8 @@ def main(parser_args):
     training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*args_dict["batch_size"])
     benchmark_dict = {**benchmark_dict, **training_times}
     # also track losses
-    benchmark_dict["final training loss"] = history.history["output_temp_loss"][-1]
-    benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
+    benchmark_dict["final training loss"] = history.history[f"{varnames_tar[0]}_loss"][-1]
+    benchmark_dict["final validation loss"] = history.history[f"val_varnames_tar[0]_loss"][-1]
 
     # save trained model
     model_name = parser_args.model_name
