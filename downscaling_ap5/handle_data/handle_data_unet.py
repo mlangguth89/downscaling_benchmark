@@ -132,13 +132,13 @@ class HandleUnetData(HandleDataClass):
         return data_denorm
 
     @staticmethod
-    def z_norm_data(data: ds_or_da, norm_method="norm", mu: ds_or_da = None, std: ds_or_da = None, save_path: str = None,
+    def z_norm_data(data: ds_or_da, norm_method="norm", mu: ds_or_da = None, std: ds_or_da = None, save_path: str = "",
                     dims=None, return_stat: bool = False):
         """
         Perform z-score normalization on the data. Three opitions for parsing/retrieving the normalization parameters
         mu and std.
         a) The file z_norm_dict.json already exists under save_path from which the parameters can be read.
-        b) mu and std are provided as arguments to this method (save_path must be None then!)
+        b) mu and std are provided as arguments to this method (save_path must be empty then!)
         c) The normalization parameters are obtained from the data (i.e. neither the json-file exists nor mu and std
            have been parsed).
         :param data: the data as xarray-Dataset or xarray-DataArray
@@ -185,7 +185,8 @@ class HandleUnetData(HandleDataClass):
 
             norm_dict["mu"] = dict_mu
             norm_dict["std"] = dict_std
-            with open(js_file,"w") as f:
+            os.makedirs(save_path, exist_ok=True)
+            with open(js_file, "w") as f:
                 json.dump(norm_dict,f)
                 print(f"Statistical parameters for z-normalization (mu and std) saved to {js_file}")
 
