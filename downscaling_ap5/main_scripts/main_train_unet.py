@@ -54,7 +54,7 @@ def main(parser_args):
     # Start data preprocessing (reshaping, normalization and conversion to TF dataset)
     t0_preproc = timer()
     # slice data temporally to save memory
-    # ds_train  = ds_train.sel(time=slice("2011-01-01", "2016-12-30"))
+    #ds_train  = ds_train.sel(time=slice("2011-01-01", "2013-12-31"))
     if not args_dict["z_branch"]:
         # drop topography on target grid in case that z_branch is set to False
         ds_train, ds_val = ds_train.drop("hsurf_tar"), ds_val.drop("hsurf_var")
@@ -80,7 +80,7 @@ def main(parser_args):
     val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True)
 
     nsamples = da_train.shape[0]
-    shape_in = train_iter.element_spec[0].shape
+    shape_in = train_iter.element_spec[0].shape[1:]
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -98,14 +98,15 @@ def main(parser_args):
     callback_list = [lr_scheduler, time_tracker]
 
     # build, compile and train the model
-    unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"])
+    varnames_tar = list(train_iter.element_spec[1].keys())
+    unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"], tar_channels=varnames_tar)
     steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
 
-    varnames_tar = to_list(train_iter.element_spec[1].keys())
+    nvars_tar = len(varnames_tar)
 
     if args_dict["z_branch"]:
         print("Start training with optimization on surface topography (with z_branch).")
-        assert len(varnames_tar) == 2, "U-Net is trained with z_branch, but does not comprise two target variables."
+        assert nvars_tar == 2, f"U-Net shall be trained with z_branch, but does not comprise two target variables (got {nvars_tar:d})."
         unet_model.compile(optimizer=Adam(args_dict["lr"]),
                            loss={varnames_tar[0]: "mae", varnames_tar[1]: "mae"},
                            loss_weights={varnames_tar[0]: 1.0, varnames_tar[1]: 1.0})
@@ -119,7 +120,7 @@ def main(parser_args):
                                  verbose=2)
     else:
         print("Start training without optimization on surface topography (without z_branch).")
-        assert len(varnames_tar) == 1, "U-Net is trained without z_branch, but still comprises more than one target."
+        assert nvars_tar == 1, f"U-Net shall be trained without z_branch, but still comprises more than one target (got {nvars_tar:d})."
         unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
         history = unet_model.fit(train_iter,
