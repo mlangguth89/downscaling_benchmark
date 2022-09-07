@@ -63,7 +63,9 @@ def main(parser_args):
     da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
-    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims, return_stat=True)
+    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
+                                                               save_path=os.path.join(outdir, parser_args.model_name),
+                                                               return_stat=True)
     da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
     del ds_train
@@ -136,7 +138,7 @@ def main(parser_args):
     benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
 
     # save trained model
-    model_name = "trained_downscaling_unet_t2m_hour_exp{0:d}".format(bm_obj.exp_number)
+    model_name = parser_args.model_name
     print("Save trained model '{0}' to '{1}'".format(model_name, outdir))
     t0_save = timer()
     unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")

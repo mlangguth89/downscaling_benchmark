@@ -65,7 +65,7 @@ def main(parser_args):
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
                                                                save_path=os.path.join(outdir, parser_args.model_name),
                                                                return_stat=True)
-    da_val = HandleUnetData.z_norm_data(da_val, save_path=os.path.join(outdir,parser_args.model_name))
+    da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
     del ds_train
     del ds_val
