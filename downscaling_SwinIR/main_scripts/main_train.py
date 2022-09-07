@@ -107,10 +107,11 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
-        print("datat[L] shape",data["L"].shape)
+        # print("datat[L] shape",data["L"].shape)
         self.L = data['L']
         if need_H:
-            self.H = data['H']
+            self.H = data['H'][:,1,:]
+
 
     # ----------------------------------------
     # feed L to netG
@@ -171,7 +172,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    train_loader = create_loader(train_dir)
+    train_loader = create_loader(train_dir, dataset_type="temperature")
     #test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
@@ -224,15 +225,26 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train_dir", type = str, required = True,
+    # parser.add_argument("--train_dir", type = str, required = True,
+    #                     help = "The directory where training data (.nc files) are stored")
+    # parser.add_argument("--test_dir", type = str, required = True,
+    #                     help = "The directory where testing data (.nc files) are stored")
+    # parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
+    # parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
+    # parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
+    # args = parser.parse_args()
+    parser.add_argument("--train_dir", type = str, required = False,
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("--test_dir", type = str, required = True,
-                        help = "The directory where testing data (.nc files) are stored")
-    parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
-    parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
+    parser.add_argument("--test_dir", type = str, required = False,
+                        default = "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        help = "The directory where test data (.nc files) are stored")
+    parser.add_argument("--save_dir", type = str, default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom", help = "The output directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
-    args = parser.parse_args()
+    parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
+    parser.add_argument("--checkpoint_dir", type = str, required = False, default = "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom", help = "Please provide the checkpoint directory")
 
+    args = parser.parse_args()
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
     #save the args to the checkpoint directory
@@ -240,7 +252,7 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
-        n_channels = 8,
+        n_channels = 9,
         save_dir = args.save_dir,
         checkpoint_save = 200,
         epochs = args.epochs,

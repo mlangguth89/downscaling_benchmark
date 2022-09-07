@@ -24,12 +24,19 @@ import wandb
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test_dir", type = str, required = True,
-                        default = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
+    # parser.add_argument("--test_dir", type = str, required = True,
+    #                     default = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
+    #                     help = "The directory where test data (.nc files) are stored")
+    # parser.add_argument("--save_dir", type = str, help = "The output directory")
+    # parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
+    # parser.add_argument("--checkpoint_dir", type = str, required = True, help = "Please provide the checkpoint directory")
+
+    parser.add_argument("--test_dir", type = str, required = False,
+                        default = "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help = "The directory where test data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The output directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
-    parser.add_argument("--checkpoint_dir", type = str, required = True, help = "Please provide the checkpoint directory")
+    parser.add_argument("--checkpoint_dir", type = str, required = False, default = "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom", help = "Please provide the checkpoint directory")
 
     args = parser.parse_args()
 
@@ -47,7 +54,7 @@ def main():
     model.define_loss()
     total_loss = 0.
     test_len = []
-    test_loader = create_loader(args.test_dir)
+    test_loader = create_loader(args.test_dir, dataset_type='temprature')
 
     with torch.no_grad():
         model.netG.load_state_dict(torch.load(args.checkpoint_dir))

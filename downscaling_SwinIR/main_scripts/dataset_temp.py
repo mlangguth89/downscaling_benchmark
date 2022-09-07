@@ -13,6 +13,7 @@ sys.path.append('../')
 import xarray as xr
 import time
 import torch
+print(torch.__version__)
 import numpy as np
 import pathlib
 import math
@@ -168,7 +169,6 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
             for jj in range(self.batch_size):
                 cid = self.idx_perm[self.idx]
-
                 x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1)
                 y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1)
                 t[jj] = torch.from_numpy(self.times[cid])

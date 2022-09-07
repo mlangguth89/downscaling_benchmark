@@ -19,7 +19,7 @@ class Upsampling(nn.Module):
 
     def __init__(self, in_channels :int = None, out_channels: int = None,
                  kernel_size: int = 3, padding: int = 1, stride: int = 2,
-                 upsampling:bool = True, sf: int = 10 , mode = "bilinear"):
+                 upsampling:bool = True, sf: int = 1 , mode = "bilinear"):
         super().__init__()
         """
         This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
@@ -166,7 +166,7 @@ class UNet(nn.Module):
 
 
     def forward(self, x:Tensor)->Tensor:
-        print("input shape",x.shape)
+        # print("input shape",x.shape)
         x = self.upsampling(x)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
