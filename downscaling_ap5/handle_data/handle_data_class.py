@@ -183,7 +183,7 @@ class HandleDataClass(object):
             sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
 
         # re-instantiate the generator and build TF dataset
-        gen_train = gen_named(da_in, da_tar)
+        gen_train = gen_now(da_in, da_tar)
 
         if lembed is True:
             raise ValueError("Time embedding is not supported yet.")
