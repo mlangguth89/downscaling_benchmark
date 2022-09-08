@@ -1,23 +1,22 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-06-28"
+__update__ = "2022-09-08"
 
 import os, sys
-import gc
+import six
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
-from tensorflow.keras.callbacks import LearningRateScheduler
+from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint
+from tensorflow.python.keras.utils import tf_utils
+from tensorflow.python.platform import tf_logging as logging
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
-                                     Conv2DTranspose, Input, MaxPool2D, Dense, Flatten, GlobalAveragePooling2D
-)
+from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
-import xarray as xr
 import numpy as np
 
 from unet_model import build_unet, conv_block
@@ -69,7 +68,7 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict):
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model"):
         """
         Initiate Wasserstein GAN model.
         :param generator: A generator model returning a data field
@@ -84,6 +83,7 @@ class WGAN(keras.Model):
         self.hparams = WGAN.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
+        self.modelname = model_name
         # set in compile-method
         self.train_iter, self.val_iter = None, None
         self.shape_in, self.nsamples = None, None
@@ -391,3 +391,77 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
         logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
         logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
 
+class ModelCheckpointWGAN(ModelCheckpoint):
+
+    def __init__(self, filepath,  monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
+                 mode='auto', save_freq='epoch', options=None, **kwargs):
+        super(ModelCheckpointWGAN, self).__init__(self, filepath,  monitor, verbose, save_best_only,
+                                                  save_weights_only, mode, save_freq, options=options, **kwargs)
+
+    def _save_model(self, epoch, logs):
+        """
+        Saves the model.
+        ML: The source-code is largely identical to Keras' implementation except that two models,
+            the critic and the generator, are saved separately in filepath_gen and filepath_critic (see below).
+
+        Arguments:
+            epoch: the epoch this iteration is in.
+            logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
+        """
+        logs = logs or {}
+
+        if isinstance(self.save_freq,
+                      int) or self.epochs_since_last_save >= self.period:
+            # Block only when saving interval is reached.
+            logs = tf_utils.to_numpy_or_python_type(logs)
+            self.epochs_since_last_save = 0
+            filepath = self._get_file_path(epoch, logs)
+            filepath_gen = os.path.join(filepath, f"{self.model.modelname}_generator")
+            filepath_critic = os.path.join(filepath, f"{self.model.modelname}_critic")
+
+            try:
+                if self.save_best_only:
+                    current = logs.get(self.monitor)
+                    if current is None:
+                        logging.warning('Can save best model only with %s available, '
+                                        'skipping.', self.monitor)
+                    else:
+                        if self.monitor_op(current, self.best):
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                      ' saving model to %s' % (epoch + 1, self.monitor,
+                                                               self.best, current, filepath))
+                            self.best = current
+                            if self.save_weights_only:
+                                self.model.generator.save_weights(
+                                    filepath_gen, overwrite=True, options=self._options)
+                                self.model.critic.save_weights(
+                                    filepath_critic, overwrite=True, options=self._options)
+                            else:
+                                self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                                self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                        else:
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s did not improve from %0.5f' %
+                                      (epoch + 1, self.monitor, self.best))
+                else:
+                    if self.verbose > 0:
+                        print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    if self.save_weights_only:
+                        self.model.generator.save_weights(
+                            filepath_gen, overwrite=True, options=self._options)
+                        self.model.critic.save_weights(
+                            filepath_critic, overwrite=True, options=self._options)
+                    else:
+                        self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                        self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+
+                self._maybe_remove_file()
+            except IOError as e:
+                # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
+                if 'is a directory' in six.ensure_str(e.args[0]).lower():
+                    raise IOError('Please specify a non-directory filepath for '
+                                  'ModelCheckpoint. Filepath used is an existing '
+                                  'directory: {}'.format(filepath))
+                # Re-throw the error for any other causes.
+                raise e
