@@ -43,8 +43,8 @@ def main(parser_args):
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
@@ -57,7 +57,7 @@ def main(parser_args):
     if not "lr_critic": args_dict["lr_critic"] = args_dict["lr_gen"]
 
     # instantiate model
-    wgan_model = WGAN(build_unet, critic_model, args_dict, model_name, supervise)
+    wgan_model = WGAN(build_unet, critic_model, args_dict, model_name, supervise, model_savedir)
 
     # prepare training and validation data
     t0_preproc = timer()
@@ -128,8 +128,8 @@ def main(parser_args):
     # save trained model (generator and critic are saved seperately)
     t0_save = timer()
 
-    wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator".format(parser_args.model_name)))
-    wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic".format(parser_args.model_name)))
+    wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator_last".format(parser_args.model_name)))
+    wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic_last".format(parser_args.model_name)))
 
     tend = timer()
     benchmark_dict["saving model time"] = tend - t0_save
