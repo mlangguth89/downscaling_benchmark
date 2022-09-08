@@ -9,7 +9,7 @@ from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
-from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint
+from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.platform import tf_logging as logging
 
@@ -68,12 +68,17 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model"):
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model",
+                 lsupervise: bool = True, savedir: str = None):
         """
         Initiate Wasserstein GAN model.
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
         :param hparams: dictionary of hyperparameters
+        :param model_name: name of the WGAN-model
+        :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
+                           patience of five epochs); if True, savedir must be provided
+        :param savedir: directory where checkpointed model will be saved
         :param l_embedding: Flag to enable time embeddings
         """
 
@@ -84,11 +89,19 @@ class WGAN(keras.Model):
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.modelname = model_name
+        self.lsupervise = lsupervise
+        if lsupervise and savedir is None:
+            raise ValueError("Add savedir to enable model saving when using checkpointing" +
+                             "and early stopping (lsupervise=True)")
+        elif lsupervise:
+            os.makedirs(savedir, exist_ok=True)
+        self.savedir = savedir
         # set in compile-method
         self.train_iter, self.val_iter = None, None
         self.shape_in, self.nsamples = None, None
-        self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
+        self.lr_scheduler = None
+        self.checkpoint, self.earlystopping = None, None
 
     def compile(self, da_train, da_val):
         """
@@ -125,6 +138,11 @@ class WGAN(keras.Model):
         if self.hparams["lr_decay"]:
             self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
 
+        if self.lsupervise:
+            self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
+                                                  save_best_only=True, mode="min")
+            self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=5)
+
         return train_iter, val_iter
 
     def get_lr_decay(self):
@@ -157,7 +175,9 @@ class WGAN(keras.Model):
 
     def fit(self, train_iter, val_iter, callbacks: List = [None]):
 
-        callbacks = [e for e in [self.lr_scheduler] + callbacks if e is not None]
+        wgan_callbacks = [self.lr_scheduler, self.checkpoint, self.earlystopping]
+
+        callbacks = [e for e in [self.lr_scheduler,] + callbacks if e is not None]
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
@@ -224,7 +244,7 @@ class WGAN(keras.Model):
         gen_data = self.generator(predictors, training=False)
         rloss = self.recon_loss(predictands, gen_data)
 
-        return OrderedDict([("recon_loss_val", rloss)])
+        return OrderedDict([("recon_loss", rloss)])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
 
