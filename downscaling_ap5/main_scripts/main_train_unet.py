@@ -142,7 +142,7 @@ def main(parser_args):
     model_name = parser_args.model_name
     print("Save trained model '{0}' to '{1}'".format(model_name, outdir))
     t0_save = timer()
-    unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")
+    unet_model.save(os.path.join(outdir, f"{model_name}"))
     benchmark_dict = {**benchmark_dict, "saving model time": timer() - t0_save}
 
     # finally, track total runtime...
