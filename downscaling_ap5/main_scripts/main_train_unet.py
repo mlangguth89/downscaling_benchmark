@@ -138,7 +138,7 @@ def main(parser_args):
     benchmark_dict = {**benchmark_dict, **training_times}
     # also track losses
     benchmark_dict["final training loss"] = history.history[f"{varnames_tar[0]}_loss"][-1]
-    benchmark_dict["final validation loss"] = history.history[f"val_varnames_tar[0]_loss"][-1]
+    benchmark_dict["final validation loss"] = history.history[f"varnames_tar[0]_loss"][-1]
 
     # save trained model
     model_name = parser_args.model_name
