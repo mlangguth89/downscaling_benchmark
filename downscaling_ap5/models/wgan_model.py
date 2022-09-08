@@ -415,7 +415,7 @@ class ModelCheckpointWGAN(ModelCheckpoint):
 
     def __init__(self, filepath,  monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
                  mode='auto', save_freq='epoch', options=None, **kwargs):
-        super(ModelCheckpointWGAN, self).__init__(self, filepath,  monitor, verbose, save_best_only,
+        super(ModelCheckpointWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
 
     def _save_model(self, epoch, logs):
