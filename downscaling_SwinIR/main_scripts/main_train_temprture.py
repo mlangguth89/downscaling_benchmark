@@ -31,7 +31,7 @@ fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_
 # fl_test = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc"
 # test_dt = xr.open_dataset(fl_test)
 
-train_loader = create_loader(fl, batch_size=32, dataset_type="temperature")
+train_loader = create_loader(fl, batch_size=512, dataset_type="temperature")
 # train_set = DatasetSR(train_dt)
 # test_set =  DatasetSR(test_dt)
 
@@ -176,7 +176,7 @@ model.init_train()
 current_step = 0
 
 
-for epoch in range(30):  # keep running
+for epoch in range(1):  # keep running
     for i, train_data in enumerate(train_loader):
         st = time.time()
 
@@ -202,6 +202,9 @@ for epoch in range(30):  # keep running
         print("Model Loss {} after step {}".format(model.G_loss, current_step))
         print("Model Saved")
         print("Time per step:", time.time() - st)
+
+        if i == 2:
+            break
 
 
 print("training is done")
