@@ -176,17 +176,18 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     #test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels = n_channels)
+        netG = unet(n_channels=n_channels)
     elif type_net == "swinSR":
         netG = swinSR()
     elif type_net == "vitSR":
-        netG = vitSR(embed_dim =768)
+        netG = vitSR(embed_dim=768)
     else:
         NotImplementedError
 
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainalbe parameters:", netG_params)
     model = BuildModel(netG, save_dir = save_dir)
+    # print(model.summary())
     model.init_train()
     current_step = 0
 
@@ -234,10 +235,12 @@ def main():
     # parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
     # args = parser.parse_args()
     parser.add_argument("--train_dir", type = str, required = False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc",
+                        # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
                         help = "The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type = str, required = False,
-                        default = "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_test.nc",
+                        # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
                         help = "The directory where test data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom", help = "The output directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
