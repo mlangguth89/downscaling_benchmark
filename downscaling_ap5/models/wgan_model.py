@@ -4,7 +4,6 @@ __date__ = "2022-05-19"
 __update__ = "2022-09-08"
 
 import os, sys
-import six
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -418,33 +417,35 @@ class ModelCheckpointWGAN(ModelCheckpoint):
         super(ModelCheckpointWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
 
-    def _save_model(self, epoch, logs):
-        """
-        Saves the model.
-        ML: The source-code is largely identical to Keras' implementation except that two models,
+    def _save_model(self, epoch, batch, logs):
+        """Saves the model.
+        ML: The source-code is largely identical to Keras v2.6.0 implementation except that two models,
             the critic and the generator, are saved separately in filepath_gen and filepath_critic (see below).
+            Modified source-code is envelopped between 'ML S' and 'ML E'-comment strings.
 
-        Arguments:
+        Args:
             epoch: the epoch this iteration is in.
+            batch: the batch this iteration is in. `None` if the `save_freq`
+              is set to `epoch`.
             logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
         """
         logs = logs or {}
 
-        if isinstance(self.save_freq,
-                      int) or self.epochs_since_last_save >= self.period:
+        if isinstance(self.save_freq, int) or self.epochs_since_last_save >= self.period:
             # Block only when saving interval is reached.
-            logs = tf_utils.to_numpy_or_python_type(logs)
+            logs = tf_utils.sync_to_numpy_or_python_type(logs)
             self.epochs_since_last_save = 0
-            filepath = self._get_file_path(epoch, logs)
+            filepath = self._get_file_path(epoch, batch, logs)
+            # ML S
             filepath_gen = os.path.join(filepath, f"{self.model.modelname}_generator")
             filepath_critic = os.path.join(filepath, f"{self.model.modelname}_critic")
+            # ML E
 
             try:
                 if self.save_best_only:
                     current = logs.get(self.monitor)
                     if current is None:
-                        logging.warning('Can save best model only with %s available, '
-                                        'skipping.', self.monitor)
+                        logging.warning('Can save best model only with %s available, skipping.', self.monitor)
                     else:
                         if self.monitor_op(current, self.best):
                             if self.verbose > 0:
@@ -452,6 +453,7 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                                       ' saving model to %s' % (epoch + 1, self.monitor,
                                                                self.best, current, filepath))
                             self.best = current
+                            # ML S
                             if self.save_weights_only:
                                 self.model.generator.save_weights(
                                     filepath_gen, overwrite=True, options=self._options)
@@ -460,6 +462,7 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                             else:
                                 self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
                                 self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                            # ML E
                         else:
                             if self.verbose > 0:
                                 print('\nEpoch %05d: %s did not improve from %0.5f' %
@@ -467,6 +470,7 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                 else:
                     if self.verbose > 0:
                         print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    # ML S
                     if self.save_weights_only:
                         self.model.generator.save_weights(
                             filepath_gen, overwrite=True, options=self._options)
@@ -475,13 +479,15 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                     else:
                         self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
                         self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
-
+                    # ML E
                 self._maybe_remove_file()
-            except IOError as e:
+            except IsADirectoryError as e:  # h5py 3.x
+                raise IOError('Please specify a non-directory filepath for'  
+                              'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+            except IOError as e:  # h5py 2.x
                 # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
-                if 'is a directory' in six.ensure_str(e.args[0]).lower():
+                if 'is a directory' in str(e.args[0]).lower():
                     raise IOError('Please specify a non-directory filepath for '
-                                  'ModelCheckpoint. Filepath used is an existing '
-                                  'directory: {}'.format(filepath))
+                                  'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
                 # Re-throw the error for any other causes.
                 raise e
