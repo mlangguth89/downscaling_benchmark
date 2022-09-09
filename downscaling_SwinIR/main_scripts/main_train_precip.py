@@ -225,6 +225,7 @@ current_step = 0
 
 
 for epoch in range(10):  # keep running
+    st_e = time.time()
     for i, train_data in enumerate(train_loader):
         st = time.time()
 
@@ -248,11 +249,13 @@ for epoch in range(10):  # keep running
         # -------------------------------
         # 6) Save model
         # -------------------------------
-        if current_step == 1 or current_step % CHECKPOINT_SAVE == 0:
-            model.save(current_step)
+        if current_step == 1 or current_step % 100 == 0:
+
             print("Model Loss {} after step {}".format(model.G_loss, current_step))
             print("Model Saved")
             print("Time per step:", time.time() - st)
-
+    print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
+    print("Model Saved")
+    print("Time per step:", time.time() - st_e)
 
 print("training is done")
