@@ -176,7 +176,7 @@ class WGAN(keras.Model):
 
         wgan_callbacks = [self.lr_scheduler, self.checkpoint, self.earlystopping]
 
-        callbacks = [e for e in [self.lr_scheduler,] + callbacks if e is not None]
+        callbacks = [e for e in wgan_callbacks + callbacks if e is not None]
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
