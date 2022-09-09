@@ -170,8 +170,9 @@ class BuildModel:
             out_dict['H'] = self.H.detach()[0].float()
         return out_dict
 
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = BuildModel(netG)
+model.to(device)
 model.init_train()
 current_step = 0
 
