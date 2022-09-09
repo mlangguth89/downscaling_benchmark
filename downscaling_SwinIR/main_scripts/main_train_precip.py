@@ -224,7 +224,7 @@ model.init_train()
 current_step = 0
 
 
-for epoch in range(10):  # keep running
+for epoch in range(2):  # keep running
     st_e = time.time()
     for i, train_data in enumerate(train_loader):
         st = time.time()
