@@ -23,4 +23,4 @@ module load xarray/0.20.1
 
 source ../venv_booster/bin/activate
 
-python ../main_scripts/main_train_temprature.py
+python ../main_scripts/main_train_temprture.py
