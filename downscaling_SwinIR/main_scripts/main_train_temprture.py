@@ -176,7 +176,7 @@ model.init_train()
 current_step = 0
 
 
-for epoch in range(30):  # keep running
+for epoch in range(1):  # keep running
     for i, train_data in enumerate(train_loader):
         st = time.time()
 
