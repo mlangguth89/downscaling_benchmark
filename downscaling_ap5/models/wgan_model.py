@@ -76,7 +76,7 @@ class WGAN(keras.Model):
         :param hparams: dictionary of hyperparameters
         :param model_name: name of the WGAN-model
         :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
-                           patience of five epochs); if True, savedir must be provided
+                           patience of eight epochs); if True, savedir must be provided
         :param savedir: directory where checkpointed model will be saved
         :param l_embedding: Flag to enable time embeddings
         """
@@ -110,6 +110,7 @@ class WGAN(keras.Model):
         :return: tf.Datasets for training and validation data
         """
         invars = [var for var in da_train["variables"].values if var.endswith("_in")]
+        invars = invars + ["hsurf_tar"]
 
         # determine shape-dimensions from data
         shape_all = da_train.sel({"variables": invars}).shape
@@ -125,8 +126,9 @@ class WGAN(keras.Model):
         # (n+1 optimization steps to train generator and critic). The validation dataset however does not perform
         # substeeping and thus does not be instantiated with an increased mini-batch size.
         train_iter = HandleDataClass.make_tf_dataset(da_train, self.hparams["batch_size"]
-                                                     * (self.hparams["d_steps"] + 1))
-        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False)
+                                                     * (self.hparams["d_steps"] + 1), var_tar2in=self.hparams["var_tar2in"])
+        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False, 
+                                                   var_tar2in=self.hparams["var_tar2in"])
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -140,7 +142,7 @@ class WGAN(keras.Model):
         if self.lsupervise:
             self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
                                                   save_best_only=True, mode="min")
-            self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=5)
+            self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
 
         return train_iter, val_iter
 
@@ -180,7 +182,7 @@ class WGAN(keras.Model):
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3,
+                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=300,
                                      verbose=2)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
@@ -344,7 +346,8 @@ class WGAN(keras.Model):
         """
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
-                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam"}
+                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                        "var_tar2in": None}
 
         return hparams_dict
 
