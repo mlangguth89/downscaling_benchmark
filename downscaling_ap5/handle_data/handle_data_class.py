@@ -138,7 +138,7 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-                        named_targets: bool = False, lembed: bool = False) -> tf.data.Dataset:
+            named_targets: bool = False, var_tar2in: str = None, lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         Note that all data is loaded into memory.
@@ -148,10 +148,13 @@ class HandleDataClass(object):
         :param lshuffle: flag if shuffling should be applied to dataset
         :param shuffle_samples: number of samples to load before applying shuffling
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography to the input)
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
+        if tar2in is not None:
+            da_in = xr.concat([da_in, da_tar.sel({"variables": var_tar2in})], "variables")
 
         varnames_tar = da_tar["variables"].values
 

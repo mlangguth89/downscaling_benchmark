@@ -49,9 +49,11 @@ def main(parser_args):
     benchmark_dict = {"loading data time": timer() - t0_save}
 
     # handle (hyper-) parameters
-    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "model_name", "no_supervision"]
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "no_z_tar2in", "model_name", "no_supervision"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
+    if not parser_args.no_z_tar2in:            # add high-resolved surface topography to preditor variable list
+        args_dict["var_tar2in"] = "hsurf_tar"
     supervise = not parser_args.no_supervision
     # set critic learning rate equal to generator if not supplied
     if not "lr_critic": args_dict["lr_critic"] = args_dict["lr_gen"]
@@ -196,6 +198,8 @@ if __name__ == "__main__":
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
+    parser.add_argument("--no_z_tar2in", "-no_z_tar2in", dest="no_z_tar2in", default=False, action="store_true",
+                        help="Flag if high-resolved target surface topography is excluded from the list of predictors.")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
                         help="Name for the trained WGAN.")
     parser.add_argument("--no_supervision", "-no_s", dest="no_supervision", default=False, action="store_true",
