@@ -153,7 +153,7 @@ class HandleDataClass(object):
         """
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
-        if tar2in is not None:
+        if var_tar2in is not None:
             da_in = xr.concat([da_in, da_tar.sel({"variables": var_tar2in})], "variables")
 
         varnames_tar = da_tar["variables"].values
