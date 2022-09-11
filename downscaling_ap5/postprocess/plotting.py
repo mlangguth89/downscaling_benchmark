@@ -109,11 +109,11 @@ def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
 
 
 def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
-                     filename: str):
+                     filename: str, x_coord: str = "hour"):
     
     fig, (ax) = plt.subplots(1,1)
-    ax.plot(data["daytime"].values, data.values, 'k-', label=model_name)
-    ax.fill_between(data["daytime"].values, data.values-data_std.values, data.values+data_std.values, facecolor="blue", alpha=0.2)
+    ax.plot(data[x_coord].values, data.values, 'k-', label=model_name)
+    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor="blue", alpha=0.2)
     ax.set_ylim(0.,4.)
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=16)
@@ -121,6 +121,5 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=16)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=14)
 
-    ax.legend(handles, labels, loc='upper right', numpoints=1)
     # save plot to file
     fig.savefig(filename)
