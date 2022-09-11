@@ -209,7 +209,8 @@ class Scores:
         :param data_fcst: forecast data to evaluate
         :param data_ref: reference or ground truth data
         """
-        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse}
+        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias, 
+                             "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr}
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
