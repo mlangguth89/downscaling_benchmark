@@ -37,28 +37,35 @@ def main(parser_args):
     outdir = parser_args.output_dir
     job_id = parser_args.id
 
-    model_savedir = os.path.join(outdir, parser_args.model_name)
+    model_name = parser_args.model_name
+    model_savedir = os.path.join(outdir, model_name)
     os.makedirs(model_savedir, exist_ok=True)
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
-    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
+    # handle (hyper-) parameters
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "no_z_tar2in", "model_name", "no_supervision"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
+    if not parser_args.no_z_tar2in:            # add high-resolved surface topography to preditor variable list
+        args_dict["var_tar2in"] = "hsurf_tar"
+    supervise = not parser_args.no_supervision
     # set critic learning rate equal to generator if not supplied
     if not "lr_critic": args_dict["lr_critic"] = args_dict["lr_gen"]
 
-    wgan_model = WGAN(build_unet, critic_model, args_dict)
+    # instantiate model
+    wgan_model = WGAN(build_unet, critic_model, args_dict, model_name, supervise, model_savedir)
 
+    # prepare training and validation data
     t0_preproc = timer()
+
     # slice data temporaly
     #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
-    
     da_train, da_val = HandleUnetData.reshape_ds(ds_train), HandleUnetData.reshape_ds(ds_val)
 
     norm_dims = ["time", "rlat", "rlon"]
@@ -67,6 +74,7 @@ def main(parser_args):
                                                                return_stat=True)
     da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
+    # clean up to save some memory
     del ds_train
     del ds_val
     gc.collect()
@@ -74,7 +82,7 @@ def main(parser_args):
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
-    # compile model and get dataset iterators
+    # compile model and get TF datasets for training and validation
     print("Start compiling WGAN-model.")
     train_iter, val_iter = wgan_model.compile(da_train.astype(np.float32), da_val.astype(np.float32))
 
@@ -122,8 +130,8 @@ def main(parser_args):
     # save trained model (generator and critic are saved seperately)
     t0_save = timer()
 
-    wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator".format(parser_args.model_name)))
-    wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic".format(parser_args.model_name)))
+    wgan_model.generator.save(os.path.join(model_savedir, "{0}_generator_last".format(parser_args.model_name)))
+    wgan_model.critic.save(os.path.join(model_savedir, "{0}_critic_last".format(parser_args.model_name)))
 
     tend = timer()
     benchmark_dict["saving model time"] = tend - t0_save
@@ -190,8 +198,13 @@ if __name__ == "__main__":
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
+    parser.add_argument("--no_z_tar2in", "-no_z_tar2in", dest="no_z_tar2in", default=False, action="store_true",
+                        help="Flag if high-resolved target surface topography is excluded from the list of predictors.")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
                         help="Name for the trained WGAN.")
+    parser.add_argument("--no_supervision", "-no_s", dest="no_supervision", default=False, action="store_true",
+                        help="Flag to suppress supervision of WGAN training. If True, only the model after the " +
+                             "last epoch is trained. If False, checkpointing and early stopping is applied.")
 
     args = parser.parse_args()
     main(args)

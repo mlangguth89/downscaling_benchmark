@@ -1,23 +1,21 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-06-28"
+__update__ = "2022-09-08"
 
 import os, sys
-import gc
 from collections import OrderedDict
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
-from tensorflow.keras.callbacks import LearningRateScheduler
+from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
+from tensorflow.python.keras.utils import tf_utils
+from tensorflow.python.platform import tf_logging as logging
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
-                                     Conv2DTranspose, Input, MaxPool2D, Dense, Flatten, GlobalAveragePooling2D
-)
+from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
-import xarray as xr
 import numpy as np
 
 from unet_model import build_unet, conv_block
@@ -69,12 +67,17 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict):
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model",
+                 lsupervise: bool = True, savedir: str = None):
         """
         Initiate Wasserstein GAN model.
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
         :param hparams: dictionary of hyperparameters
+        :param model_name: name of the WGAN-model
+        :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
+                           patience of eight epochs); if True, savedir must be provided
+        :param savedir: directory where checkpointed model will be saved
         :param l_embedding: Flag to enable time embeddings
         """
 
@@ -84,11 +87,20 @@ class WGAN(keras.Model):
         self.hparams = WGAN.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
+        self.modelname = model_name
+        self.lsupervise = lsupervise
+        if lsupervise and savedir is None:
+            raise ValueError("Add savedir to enable model saving when using checkpointing" +
+                             "and early stopping (lsupervise=True)")
+        elif lsupervise:
+            os.makedirs(savedir, exist_ok=True)
+        self.savedir = savedir
         # set in compile-method
         self.train_iter, self.val_iter = None, None
         self.shape_in, self.nsamples = None, None
-        self.lr_scheduler = None
         self.c_optimizer, self.g_optimizer = None, None
+        self.lr_scheduler = None
+        self.checkpoint, self.earlystopping = None, None
 
     def compile(self, da_train, da_val):
         """
@@ -98,6 +110,7 @@ class WGAN(keras.Model):
         :return: tf.Datasets for training and validation data
         """
         invars = [var for var in da_train["variables"].values if var.endswith("_in")]
+        invars = invars + ["hsurf_tar"]
 
         # determine shape-dimensions from data
         shape_all = da_train.sel({"variables": invars}).shape
@@ -113,8 +126,9 @@ class WGAN(keras.Model):
         # (n+1 optimization steps to train generator and critic). The validation dataset however does not perform
         # substeeping and thus does not be instantiated with an increased mini-batch size.
         train_iter = HandleDataClass.make_tf_dataset(da_train, self.hparams["batch_size"]
-                                                     * (self.hparams["d_steps"] + 1))
-        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False)
+                                                     * (self.hparams["d_steps"] + 1), var_tar2in=self.hparams["var_tar2in"])
+        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False, 
+                                                   var_tar2in=self.hparams["var_tar2in"])
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -124,6 +138,11 @@ class WGAN(keras.Model):
         # get learning rate schedule if desired
         if self.hparams["lr_decay"]:
             self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
+
+        if self.lsupervise:
+            self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
+                                                  save_best_only=True, mode="min")
+            self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
 
         return train_iter, val_iter
 
@@ -157,11 +176,13 @@ class WGAN(keras.Model):
 
     def fit(self, train_iter, val_iter, callbacks: List = [None]):
 
-        callbacks = [e for e in [self.lr_scheduler] + callbacks if e is not None]
+        wgan_callbacks = [self.lr_scheduler, self.checkpoint, self.earlystopping]
+
+        callbacks = [e for e in wgan_callbacks + callbacks if e is not None]
         steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
 
         return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=3,
+                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=300,
                                      verbose=2)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
@@ -224,7 +245,7 @@ class WGAN(keras.Model):
         gen_data = self.generator(predictors, training=False)
         rloss = self.recon_loss(predictands, gen_data)
 
-        return OrderedDict([("recon_loss_val", rloss)])
+        return OrderedDict([("recon_loss", rloss)])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
 
@@ -325,7 +346,8 @@ class WGAN(keras.Model):
         """
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
-                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam"}
+                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                        "var_tar2in": None}
 
         return hparams_dict
 
@@ -391,3 +413,84 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
         logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
         logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
 
+class ModelCheckpointWGAN(ModelCheckpoint):
+
+    def __init__(self, filepath,  monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
+                 mode='auto', save_freq='epoch', options=None, **kwargs):
+        super(ModelCheckpointWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
+                                                  save_weights_only, mode, save_freq, options=options, **kwargs)
+
+    def _save_model(self, epoch, batch, logs):
+        """Saves the model.
+        ML: The source-code is largely identical to Keras v2.6.0 implementation except that two models,
+            the critic and the generator, are saved separately in filepath_gen and filepath_critic (see below).
+            Modified source-code is envelopped between 'ML S' and 'ML E'-comment strings.
+
+        Args:
+            epoch: the epoch this iteration is in.
+            batch: the batch this iteration is in. `None` if the `save_freq`
+              is set to `epoch`.
+            logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
+        """
+        logs = logs or {}
+
+        if isinstance(self.save_freq, int) or self.epochs_since_last_save >= self.period:
+            # Block only when saving interval is reached.
+            logs = tf_utils.sync_to_numpy_or_python_type(logs)
+            self.epochs_since_last_save = 0
+            filepath = self._get_file_path(epoch, batch, logs)
+            # ML S
+            filepath_gen = os.path.join(filepath, f"{self.model.modelname}_generator")
+            filepath_critic = os.path.join(filepath, f"{self.model.modelname}_critic")
+            # ML E
+
+            try:
+                if self.save_best_only:
+                    current = logs.get(self.monitor)
+                    if current is None:
+                        logging.warning('Can save best model only with %s available, skipping.', self.monitor)
+                    else:
+                        if self.monitor_op(current, self.best):
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                      ' saving model to %s' % (epoch + 1, self.monitor,
+                                                               self.best, current, filepath))
+                            self.best = current
+                            # ML S
+                            if self.save_weights_only:
+                                self.model.generator.save_weights(
+                                    filepath_gen, overwrite=True, options=self._options)
+                                self.model.critic.save_weights(
+                                    filepath_critic, overwrite=True, options=self._options)
+                            else:
+                                self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                                self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                            # ML E
+                        else:
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s did not improve from %0.5f' %
+                                      (epoch + 1, self.monitor, self.best))
+                else:
+                    if self.verbose > 0:
+                        print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    # ML S
+                    if self.save_weights_only:
+                        self.model.generator.save_weights(
+                            filepath_gen, overwrite=True, options=self._options)
+                        self.model.critic.save_weights(
+                            filepath_critic, overwrite=True, options=self._options)
+                    else:
+                        self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                        self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                    # ML E
+                self._maybe_remove_file()
+            except IsADirectoryError as e:  # h5py 3.x
+                raise IOError('Please specify a non-directory filepath for'  
+                              'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+            except IOError as e:  # h5py 2.x
+                # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
+                if 'is a directory' in str(e.args[0]).lower():
+                    raise IOError('Please specify a non-directory filepath for '
+                                  'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+                # Re-throw the error for any other causes.
+                raise e
