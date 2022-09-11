@@ -142,7 +142,7 @@ class WGAN(keras.Model):
         if self.lsupervise:
             self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
                                                   save_best_only=True, mode="min")
-            self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
+            # self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
 
         return train_iter, val_iter
 
@@ -347,7 +347,7 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "var_tar2in": None}
+                        "var_tar2in": ""}
 
         return hparams_dict
 
