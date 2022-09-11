@@ -6,14 +6,13 @@
 Collection of auxiliary functions for statistical evaluation and class for Score-functions
 """
 
-__email__ = "b.gong@fz-juelich.de"
+__email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2021-05-xx"
+__date__ = "2022-09-11"
 
 import numpy as np
 import xarray as xr
 from typing import Union, List
-from skimage.metrics import structural_similarity as ssim
 import datetime
 import pandas as pd
 try:
@@ -21,7 +20,7 @@ try:
     l_tqdm = True
 except:
     l_tqdm = False
-from general_utils import provide_default, check_str_in_list
+from other_utils import provide_default, check_str_in_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -212,9 +211,8 @@ class Scores:
         :param dims: list of dimension over which the score shall operate
         :return: Score instance
         """
-        method = Scores.__init__.__name__
-        self.metrics_dict = {"mse": self.calc_mse_batch , "psnr": self.calc_psnr_batch,
-                             "ssim": self.calc_ssim_batch, "acc": self.calc_acc_batch,
+        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse,  "psnr": self.calc_psnr,
+                             "acc": self.calc_acc, "bias": self.calc_bias,
                              "texture": self.calc_spatial_variability}
         self.score_name = self.set_score_name(score_name)
         self.score_func = self.metrics_dict[score_name]
@@ -223,30 +221,26 @@ class Scores:
 
     def set_score_name(self, score_name):
 
-        method = Scores.set_score_name.__name__
-
         if score_name in self.metrics_dict.keys():
             return score_name
         else:
-            print("The following scores are currently implemented:".format(method))
+            print("The following scores are currently implemented:")
             for score in self.metrics_dict.keys():
                 print("* {0}".format(score))
-            raise ValueError("%{0}: The selected score '{1}' cannot be selected.".format(method, score_name))
+            raise ValueError("The selected score '{0}' cannot be selected.".format(score_name))
 
-    def calc_mse_batch(self, data_fcst, data_ref, **kwargs):
+    def calc_mse(self, data_fcst, data_ref, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
         :param data_fcst: forecasted data (xarray with dimensions [batch, lat, lon])
         :param data_ref: reference data (xarray with dimensions [batch, lat, lon])
         :return: averaged mse for each batch example, [batch,fore_hours]
         """
-        method = Scores.calc_mse_batch.__name__
-
         if kwargs:
-            print("%{0}: Passed keyword arguments are without effect.".format(method))
+            print("Passed keyword arguments to calc_mse are without effect.")
         # sanity checks
         if self.avg_dims is None:
-            print("%{0}: Squared difference is averaged over all dimensions.".format(method))
+            print("MSE is averaged over all dimensions.")
             dims = list(data_fcst.dims)
         else:
             dims = self.avg_dims
@@ -255,21 +249,42 @@ class Scores:
 
         return mse
 
-    def calc_psnr_batch(self, data_fcst, data_ref, **kwargs):
+    def calc_rmse(self, data_fcst, data_ref, **kwargs):
+
+        rmse = np.sqrt(self.calc_mse(data_fcst, data_ref, **kwargs))
+
+        return rmse
+
+    def calc_bias(self, data_fcst, data_ref, **kwargs):
+
+        if kwargs:
+            print("Passed keyword arguments to calc_bias are without effect.")
+        # sanity checks
+        if self.avg_dims is None:
+            print("Bias is averaged over all dimensions.")
+            dims = list(data_fcst.dims)
+        else:
+            dims = self.avg_dims
+
+        bias = (data_fcst - data_ref).mean(dim=dims)
+
+        return bias
+
+    def calc_psnr(self, data_fcst, data_ref, **kwargs):
         """
         Calculate psnr of forecast data w.r.t. reference data
         :param data_fcst: forecasted data (xarray with dimensions [batch,fore_hours, lat, lon])
         :param data_ref: reference data (xarray with dimensions [batch, fore_hours, lat, lon])
         :return: averaged psnr for each batch example [batch, fore_hours]
         """
-        method = Scores.calc_psnr_batch.__name__
+        method = Scores.calc_psnr.__name__
 
         if "pixel_max" in kwargs:
             pixel_max = kwargs.get("pixel_max")
         else:
             pixel_max = 1.
 
-        mse = self.calc_mse_batch(data_fcst, data_ref)
+        mse = self.calc_mse(data_fcst, data_ref)
         if np.count_nonzero(mse) == 0:
             psnr = mse
             psnr[...] = 100.
@@ -278,21 +293,7 @@ class Scores:
 
         return psnr
 
-    def calc_ssim_batch(self, data_fcst, data_ref, **kwargs):
-        """
-        Calculate ssim ealuation metric of forecast data w.r.t reference data
-        :param data_fcst: forecasted data (xarray with dimensions [batch, fore_hours, lat, lon])
-        :param data_ref: reference data (xarray with dimensions [batch, fore_hours, lat, lon])
-        :return: averaged ssim for each batch example, shape is [batch,fore_hours]
-        """
-        method = Scores.calc_ssim_batch.__name__
-        batch_size = np.array(data_ref).shape[0]
-        fore_hours = np.array(data_fcst).shape[1]
-        ssim_pred = [[ssim(data_ref[i,j, ...],data_fcst[i,j,...]) for j in range(fore_hours)]
-                     for i in range(batch_size)]
-        return ssim_pred
-
-    def calc_acc_batch(self, data_fcst, data_ref,  **kwargs):
+    def calc_acc(self, data_fcst, data_ref,  **kwargs):
         """
         Calculate acc ealuation metric of forecast data w.r.t reference data
         :param data_fcst: forecasted data (xarray with dimensions [batch, fore_hours, lat, lon])
@@ -300,11 +301,10 @@ class Scores:
         :param data_clim: climatology data (xarray with dimensions [monthly, hourly, lat, lon])
         :return: averaged acc for each batch example [batch, fore_hours]
         """
-        method = Scores.calc_acc_batch.__name__
         if "data_clim" in kwargs:
             data_clim = kwargs["data_clim"]
         else:
-            raise KeyError("%{0}: climatological data must be parsed to calculate the ACC.".format(method))        
+            raise KeyError("Climatological data must be parsed to calculate the ACC.")
 
         batch_size = data_fcst.shape[0]
         fore_hours = data_fcst.shape[1]
@@ -317,11 +317,7 @@ class Scores:
                 fcst_time = xr.Dataset({'time': pd.to_datetime(img_fcst.init_time.data) + datetime.timedelta(hours=j)})
                 img_month = fcst_time.time.dt.month
                 img_hour = fcst_time.time.dt.hour
-                img_clim = data_clim.sel(month=img_month, hour=img_hour)               
- 
-                ### HAVE TO SELECT FORM CLIMATE DATA DIRECTLY; done
-                #time_idx = (img_month-1)*24+img_hour
-                #img_clim = data_clim[time_idx,:,:] 
+                img_clim = data_clim.sel(month=img_month, hour=img_hour)
            
                 img1_ = img_ref - img_clim
                 img2_ = img_fcst - img_clim
@@ -336,17 +332,14 @@ class Scores:
         reference data
         :param data_fcst: data_fcst: forecasted data (xarray with dimensions [batch, fore_hours, lat, lon])
         :param data_ref: reference data (xarray with dimensions [batch, fore_hours, lat, lon])
-        :param kwargs: order to control the order of spatial differential operator, 'non_spatial_avg_dims' to perform
+        :param kwargs: 'order' to control the order of spatial differential operator, 'non_spatial_avg_dims' to perform
                        averaging
         :return: the ratio between spatial variabilty in the forecast and reference data field
         """
-
-        method = Scores.calc_spatial_variability.__name__
-
         if self.avg_dims is None:
             pass
         else:
-            print("%{0}: Passed dimensions to Scores-object instance are ignored.".format(method) +
+            print("Passed dimensions to Scores-object instance are ignored." +
                   "Make use of 'non_spatial_avg_dims' to pass a list over dimensions for averaging")
 
         if "order" in kwargs:
@@ -380,11 +373,9 @@ class Scores:
         :return: the amplitude of the gradient/laplacian at each grid point or over the whole domain (see avg_dom)
         """
         method = Scores.calc_geo_spatial_diff.__name__
-
         # sanity checks
-        assert isinstance(scalar_field, xr.DataArray), "%{0}: scalar_field must be a xarray DataArray."\
-                                                       .format(method)
-        assert order in [1, 2], "%{0}: Order must be either 1 or 2.".format(method)
+        assert isinstance(scalar_field, xr.DataArray), f"Scalar_field of {method} must be a xarray DataArray."
+        assert order in [1, 2], f"Order for {method} must be either 1 or 2."
 
         dims = list(scalar_field.dims)
         lat_dims = ["lat", "latitude"]
@@ -396,8 +387,8 @@ class Scores:
                 if stat:
                     return ind_coord[0], coord_names_data[ind_coord[0]] # just take the first value
 
-            raise ValueError("%{0}: Could not find one of the following coordinates in the passed dictionary."
-                             .format(method, ",".join(coord_names_expected)))
+            raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
+                             .format(",".join(coord_names_expected)))
 
         lat_ind, lat_name = check_for_coords(dims, lat_dims)
         lon_ind, lon_name = check_for_coords(dims, lon_dims)
