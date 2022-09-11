@@ -68,7 +68,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
 
 
 # for creating plot
-def create_plots(data1, data2, plt_fname ,opt_plot={}):
+def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
     # get coordinate data
     try:
         time, lat, lon = data1["time"].values, data1["lat"].values, data1["lon"].values
@@ -106,3 +106,21 @@ def create_plots(data1, data2, plt_fname ,opt_plot={}):
     
     fig.savefig(plt_fname+".png", bbox_inches="tight")
     plt.close(fig)
+
+
+def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
+                     filename: str):
+    
+    fig, (ax) = plt.subplots(1,1)
+    ax.plot(data["daytime"].values, data.values, 'k-', label=model_name)
+    ax.fill_between(data["daytime"].values, data.values-data_std.values, data.values+data_std.values, facecolor="blue", alpha=0.2)
+    ax.set_ylim(0.,4.)
+    # label axis
+    ax.set_xlabel("daytime [UTC]", fontsize=16)
+    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+    ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=16)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=14)
+
+    ax.legend(handles, labels, loc='upper right', numpoints=1)
+    # save plot to file
+    fig.savefig(filename)
