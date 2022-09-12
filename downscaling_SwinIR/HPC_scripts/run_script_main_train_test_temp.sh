@@ -4,19 +4,23 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=00:20:00
+#SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develgpus
+#SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=b.gong@fz-juelich.de
+#SBATCH --mail-user=maximbr@post.bgu.ac.il
 
 #source ../venv_booster/bin/activate
 
-#module purge
-module load Stages/2022 GCCcore/.11.2.0 dask/2021.9.1
+module purge
+module load Stages/2022 GCCcore/.11.2.0 GCC/11.2.0 
+ml OpenMPI 4.1.2
+ml netCDF/4.8.1
+module load dask/2021.9.1
 module load PyTorch/1.11-CUDA-11.5
 module load torchvision
-#ml SciPy-bundle/2021.10
+module load xarray/0.20.1
+
 source ../venv_booster/bin/activate
 
 train_data=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
