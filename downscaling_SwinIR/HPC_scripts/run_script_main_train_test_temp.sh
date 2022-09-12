@@ -32,3 +32,4 @@ epochs=2
 model_type=unet
 python ../main_scripts/main_train_test_temp.py --train_dir ${train_data} --test_dir ${test_data} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} > output.test
 
+wandb
