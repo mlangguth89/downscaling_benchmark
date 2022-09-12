@@ -22,11 +22,11 @@ from models.network_unet import UNet as unet
 from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from utils.data_loader import create_loader
-import wandb
+# import wandb
 
 os.environ["WANDB_MODE"] = "offline"
 # os.environ["WANDB_API_KEY"] = key
-wandb.init(project="Precip_downscaling", reinit=True)
+# wandb.init(project="Precip_downscaling", reinit=True)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class BuildModel:
@@ -47,7 +47,7 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
-        wandb.watch(self.netG, log_freq=100)
+        # wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
@@ -225,7 +225,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                wandb.log({"loss": model.G_loss, "lr": lr})
+                # wandb.log({"loss": model.G_loss, "lr": lr})
 
 
 def main():
