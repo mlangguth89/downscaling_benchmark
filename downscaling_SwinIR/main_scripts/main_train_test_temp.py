@@ -230,11 +230,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train_data", type = str, required = True,
+    parser.add_argument("--train_data", type = str, required = False,
+                        default= "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("--test_data", type = str, required = True,
+    parser.add_argument("--test_data", type = str, required = False,
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help = "The directory where testing data (.nc files) are stored")
-    parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
+    parser.add_argument("--save_dir", type = str, default="../results/exp_test", help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
     args = parser.parse_args()

@@ -30,7 +30,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc" #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
 
 # Creating train loader
-train_loader = create_loader(device, fl, batch_size=32, dataset_type="temperature")
+train_loader = create_loader(fl, batch_size=32, dataset_type="temperature")
 
 
 netG = unet(n_channels=9)
