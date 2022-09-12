@@ -13,6 +13,7 @@ sys.path.append('../')
 import xarray as xr
 import time
 import torch
+
 print(torch.__version__)
 import numpy as np
 import pathlib
@@ -47,7 +48,6 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.verbose = verbose
         self.seed = seed
         self.ds = xr.open_dataset(file_path)
-        # self.ds = xr.open_dataset("/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc")
         start = time.time()
         self.ds.load()
         end = time.time()
@@ -61,10 +61,9 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         start = time.time()
         self.idx_perm = self.shuffle()
         end = time.time()
-        print(f'Shuffling took {(end-start)/60} minutes')
+        print(f'Shuffling took {(end - start) / 60} minutes')
         self.log = self.ds.sizes['rlon']
         self.lat = self.ds.sizes['rlat']
-        # self.save_stats()
 
     def process_era5_netcdf(self):
         """
@@ -81,7 +80,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         start = time.time()
         da_train = reshape_ds(self.ds)
         end = time.time()
-        print(f'Reshaping took {(end-start)/60} minutes')
+        print(f'Reshaping took {(end - start) / 60} minutes')
 
         self.n_samples = da_train.sizes['time']
         print(da_train.sizes)
@@ -135,6 +134,9 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         return idx_perm
 
     def save_stats(self, to_save, name):
+        """
+        Saving the statistics of the train data set to a json file
+        """
         dict_to_save = to_save.to_dict()
         # json_object = json.dump(dict_to_save)
         path = self.file_path.split('\\')
@@ -143,6 +145,9 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             json.dump(dict_to_save, f)
 
     def load_stats(self, name):
+        """
+        Loading the statistics of the train data of normalization a validation/test dataset
+        """
         path = self.file_path.split('\\')
         path = '\\'.join(e for e in path[0:len(path) - 1]) + '\\' + name + '.json'
         with open(path) as json_file:
@@ -150,7 +155,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
         for key in data.keys():
             print(key)
-        ds = xr.DataArray.from_dict(data)
+
         return xr.DataArray.from_dict(data)
 
     def __iter__(self):
