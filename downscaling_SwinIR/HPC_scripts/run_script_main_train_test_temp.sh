@@ -20,7 +20,7 @@ module load dask/2021.9.1
 module load PyTorch/1.11-CUDA-11.5
 module load torchvision
 module load xarray/0.20.1
-
+moudle wandb
 source ../venv_booster/bin/activate
 
 train_data=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
@@ -32,4 +32,3 @@ epochs=2
 model_type=unet
 python ../main_scripts/main_train_test_temp.py --train_dir ${train_data} --test_dir ${test_data} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} > output.test
 
-wandb
