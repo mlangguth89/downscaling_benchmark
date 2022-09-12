@@ -56,7 +56,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
 
     ax_plot.set_extent([3.5, 16.5, 44.5, 54.])#, crs=prj_crs)
     ax_plot.minorticks_on()
-    ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=12)
+    ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=fs)
 
     # some labels
     if plot_xlabel:
@@ -107,19 +107,76 @@ def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
     fig.savefig(plt_fname+".png", bbox_inches="tight")
     plt.close(fig)
 
+    
+def create_map_score(score, plt_fname, **kwargs):
+    # get keywor arguments
+    score_dims = kwargs.get("score_dims", ["lat", "lon"])
+    title = kwargs.get("title", "Score")
+    levels = kwargs.get("levels", np.arange(-5., 5., 0.5))
+    # auxiliary variables
+    lvl = np.asarray(levels)
+    nbounds = len(lvl)
+    cmap = kwargs.get("cmap", mpl.cm.PuOr_r(np.linspace(0., 1., nbounds)))
+    fs = kwargs.get("fs", 16)
+    projection = kwargs.get("projection", ccrs.PlateCarree())
+    
+    # get coordinate data
+    try:
+        lat, lon = score[score_dims[0]].values, score[score_dims[1]].values
+    except Exception as err:
+        print("Failed to retrieve coordinates from score-data")
+        raise err
+    # construct array for edges of grid points
+    dy, dx = np.round((lat[1] - lat[0]), 3), np.round((lon[1] - lon[0]), 3)
+    lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)
+
+    # get colormap
+    # create colormap and corresponding norm
+    cmap_obj = mpl.colors.ListedColormap(cmap, name="temp" + "_map")
+    norm = mpl.colors.BoundaryNorm(lvl, cmap_obj.N)
+    # create plot objects
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8), subplot_kw={"projection": ccrs.PlateCarree()})
+
+    # perform plotting
+    plt1 = ax.pcolormesh(lon_e, lat_e, np.squeeze(score.values), cmap=cmap_obj, norm=norm, 
+                         transform=projection)
+
+    ax = decorate_plot(ax)
+
+    ax.set_title(title, size=fs)
+
+    # add colorbar
+    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
+    cbar.ax.tick_params(labelsize=fs-2)
+    
+    fig.savefig(plt_fname+".png", bbox_inches="tight")
+    plt.close(fig)
 
 def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
-                     filename: str, x_coord: str = "hour"):
+                     filename: str, x_coord: str = "hour", **kwargs):
+    
+    # get some plot parameters
+    linestyle = kwargs.get("linestyle", "k-")
+    err_col = kwargs.get("error_color", "blue")
+    val_range = kwargs.get("value_range", (0., 4.))
+    fs = kwargs.get("fs", 16)
+    ref_line = kwargs.get("ref_line", None)
+    ref_linestyle = kwargs.get("ref_linestyle", "k--")
     
     fig, (ax) = plt.subplots(1,1)
-    ax.plot(data[x_coord].values, data.values, 'k-', label=model_name)
-    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor="blue", alpha=0.2)
-    ax.set_ylim(0.,4.)
+    ax.plot(data[x_coord].values, data.values, linestyle, label=model_name)
+    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor=err_col, alpha=0.2)
+    if ref_line is not None:
+        nval = np.shape(data[x_coord].values)[0]
+        ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
+    ax.set_ylim(*val_range)
     # label axis
-    ax.set_xlabel("daytime [UTC]", fontsize=16)
+    ax.set_xlabel("daytime [UTC]", fontsize=fs)
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
-    ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=16)
-    ax.tick_params(axis="both", which="both", direction="out", labelsize=14)
+    ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
 
     # save plot to file
+    plt.tight_layout()
     fig.savefig(filename)
