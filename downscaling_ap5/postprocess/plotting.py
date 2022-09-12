@@ -150,7 +150,7 @@ def create_map_score(score, plt_fname, **kwargs):
     cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=fs-2)
     
-    fig.savefig(plt_fname+".png", bbox_inches="tight")
+    fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
 def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
