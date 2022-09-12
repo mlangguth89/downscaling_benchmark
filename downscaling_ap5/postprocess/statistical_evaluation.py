@@ -311,11 +311,7 @@ class Scores:
         :param kwargs: known keyword argument 'pixel_max' for maximum value of data
         :return: averaged PSNR
         """
-
-        if "pixel_max" in kwargs:
-            pixel_max = kwargs.get("pixel_max")
-        else:
-            pixel_max = 1.
+        pixel_max = kwargs.get("pixel_max", 1.)
 
         mse = self.calc_mse()
         if np.count_nonzero(mse) == 0:
@@ -325,34 +321,29 @@ class Scores:
             psnr = 20.*np.log10(pixel_max / np.sqrt(mse))
 
         return psnr
-
+    
     def calc_spatial_variability(self, **kwargs):
         """
         Calculates the ratio between the spatial variability of differental operator with order 1 (or 2) forecast and
-        reference data
+        reference data using the calc_geo_spatial-method.
         :param kwargs: 'order' to control the order of spatial differential operator
+                       'non_spatial_avg_dims' to add averaging in addition to spatial averaging performed with calc_geo_spatial
         :return: the ratio between spatial variabilty in the forecast and reference data field
         """
-        if self.avg_dims is None:
-            print("Bias is averaged over all dimensions.")
-            dims = self.data_dims
-        else:
-            dims = self.avg_dims
+        order = kwargs.get("order", 1)
+        avg_dims = kwargs.get("non_spatial_avg_dims", None)
 
-        if "order" in kwargs:
-            order = kwargs.get("order")
-        else:
-            order = 1
+        fcst_grad = self.calc_geo_spatial_diff(self.data_fcst, order=order)
+        ref_grd = self.calc_geo_spatial_diff(self.data_ref, order=order)
 
-        fcst_grad = Scores.calc_geo_spatial_diff(self.data_fcst, order=order)
-        ref_grd = Scores.calc_geo_spatial_diff(self.data_ref, order=order)
-
-        ratio_spat_variability = (fcst_grad/ref_grd).mean(dim=dims)
+        ratio_spat_variability = (fcst_grad/ref_grd)
+        if avg_dims is not None: 
+            ratio_spat_variability = ratio_spat_variability.mean(dim=avg_dims)
 
         return ratio_spat_variability
 
     @staticmethod
-    def calc_geo_spatial_diff(scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3):
+    def calc_geo_spatial_diff(scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
@@ -383,17 +374,17 @@ class Scores:
         lon_ind, lon_name = check_for_coords(dims, lon_dims)
 
         lat, lon = np.deg2rad(scalar_field[lat_name]), np.deg2rad(scalar_field[lon_name])
-
-        dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values
+        dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values    
 
         if order == 1:
-            dvar_dlambda = 1./(r_e*np.cos(lat)*np.deg2rad(dlambda))*scalar_field.differentiate(lon_name)
-            dvar_dphi = 1./(r_e*np.deg2rad(dphi))*scalar_field.differentiate(lat_name)
+            dvar_dlambda = 1./(r_e*np.cos(lat)*dlambda)*scalar_field.differentiate(lon_name)
+            dvar_dphi = 1./(r_e*dphi)*scalar_field.differentiate(lat_name)
             dvar_dlambda = dvar_dlambda.transpose(*scalar_field.dims)    # ensure that dimension ordering is not changed
 
             var_diff_amplitude = np.sqrt(dvar_dlambda**2 + dvar_dphi**2)
+            if dom_avg: var_diff_amplitude = var_diff_amplitude.mean(dim=[lat_name, lon_name])
         else:
-            raise ValueError("%{0}: Second-order differentation is not implemenetd yet.".format(method))
+            raise ValueError(f"Second-order differentation is not implemenetd in {method} yet.")
 
         return var_diff_amplitude
 
