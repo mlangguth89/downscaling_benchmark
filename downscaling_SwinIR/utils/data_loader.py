@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from dataset_prep import PrecipDatasetInter
 from dataset_temp import TempDatasetInter
 
-def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
+def create_loader(device, file_path: str = None, batch_size: int = 4, patch_size: int = 16,
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
@@ -28,7 +28,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
     if dataset_type == 'precip':
         dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
     elif dataset_type == 'temperature':
-        dataset = TempDatasetInter(file_path, batch_size)
+        dataset = TempDatasetInter(device, file_path, batch_size)
     return DataLoader(dataset, batch_size=None)
 
 

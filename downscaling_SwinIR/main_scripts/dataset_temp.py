@@ -28,7 +28,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
     This is the class used for generate dataset generator for precipitation downscaling
     """
 
-    def __init__(self, file_path: str = None, batch_size: int = 4, verbose: int = 0, seed: int = 1234):
+    def __init__(self, device, file_path: str = None, batch_size: int = 4, verbose: int = 0, seed: int = 1234):
         """
         file_path : the path to the .nc dataset
         batch_size: the number of samples per iteration
@@ -38,6 +38,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
         super(TempDatasetInter).__init__()
 
+        self.device = device
         self.n_samples = None
         self.ds_tar = None
         self.ds_in = None
@@ -169,8 +170,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
             for jj in range(self.batch_size):
                 cid = self.idx_perm[self.idx]
-                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1)
-                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1)
+                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1).to(self.device)
+                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1).to(self.device)
                 t[jj] = torch.from_numpy(self.times[cid])
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
