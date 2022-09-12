@@ -129,15 +129,15 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
-        self.L = data['L']
+        self.L = data['L'].to(device)
         if need_H:
-            self.H = data['H'][:,1,:]
+            self.H = data['H'][:,1,:].to(device)
 
     # ----------------------------------------
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)[:,0,:,:]
+        self.E = self.netG(self.L)[:,0,:,:].to(device)
 
     # ----------------------------------------
     # update parameters and get loss
@@ -193,10 +193,6 @@ for epoch in range(1):  # keep running
         # -------------------------------
         # 2) feed patch pairs
         # -------------------------------
-        train_data['L'].to(device)
-        train_data['H'].to(device)
-        train_data['T'].to(device)
-        train_data['idx'].to(device)
         model.feed_data(train_data)
 
         # -------------------------------
