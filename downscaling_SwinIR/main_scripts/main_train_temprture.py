@@ -28,24 +28,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Get data
 fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc" #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
-# train_dt = xr.open_dataset(fl)
-# fl_test = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_val.nc"
-# test_dt = xr.open_dataset(fl_test)
 
+# Creating train loader
 train_loader = create_loader(device, fl, batch_size=32, dataset_type="temperature")
-# train_set = DatasetSR(train_dt)
-# test_set =  DatasetSR(test_dt)
-
-#
-# train_loader = DataLoader(train_set,
-#                         batch_size=16,
-#                         shuffle=True,
-#                         num_workers=0,
-#                         drop_last=True,
-#                         pin_memory=True,
-#                         dataset_type='temperature')
-
-
 
 
 netG = unet(n_channels=9)
@@ -82,7 +67,7 @@ class BuildModel:
         elif self.G_lossfn_type == 'l2':
             self.G_lossfn = nn.MSELoss()
         else:
-            raise NotImplementedError('Loss type [{:s}] is not found.'.format(G_lossfn_type))
+            raise NotImplementedError('Loss type [{:s}] is not found.'.format(self.G_lossfn_type))
 
     # ----------------------------------------
     # define optimizer
@@ -179,7 +164,8 @@ model.init_train()
 current_step = 0
 
 
-for epoch in range(1):  # keep running
+for epoch in range(30):  # keep running
+    st_e = time.time()
     for i, train_data in enumerate(train_loader):
         st = time.time()
 
@@ -202,10 +188,13 @@ for epoch in range(1):  # keep running
 
 
 
-    print("Model Loss {} after step {}".format(model.G_loss, current_step))
-    print("Model Saved")
-    print("Time per step:", time.time() - st)
+        if current_step == 1 or current_step % 100 == 0:
 
+            print("Model Loss {} after step {}".format(model.G_loss, current_step))
+            print("Time per step:", time.time() - st)
+
+    print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
+    print("Time per epoch:", time.time() - st_e)
 
 
 
