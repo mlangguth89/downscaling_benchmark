@@ -170,8 +170,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
             for jj in range(self.batch_size):
                 cid = self.idx_perm[self.idx]
-                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1).to(self.device)
-                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1).to(self.device)
+                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1)
+                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1)
                 t[jj] = torch.from_numpy(self.times[cid])
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
