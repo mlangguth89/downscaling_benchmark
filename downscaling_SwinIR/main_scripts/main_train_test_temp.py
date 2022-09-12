@@ -245,7 +245,7 @@ def main():
     with open(os.path.join(args.save_dir, "options.json"), "w") as f:
         f.write(json.dumps(vars(args), sort_keys=True, indent=4))
 
-    run(train_dir=args.train_dir,
+    run(train_dir=args.train_data,
         n_channels=9,
         save_dir=args.save_dir,
         checkpoint_save=200,
