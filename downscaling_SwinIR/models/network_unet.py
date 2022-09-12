@@ -82,7 +82,7 @@ class Conv_Block_N(nn.Module):
         :param n           : the number of convolutional block
         """
         super().__init__()
-        n_layers = [Conv_Block(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True)]
+        n_layers = nn.ModuleList([Conv_Block(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True)])
         for i in np.arange(n - 1):
             print("i", i)
             n_layers.append(Conv_Block(out_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True))
