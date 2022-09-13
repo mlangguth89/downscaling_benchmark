@@ -194,10 +194,11 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     # print(model.summary())
     model.init_train()
     current_step = 0
-
+    total_time = 0
     for epoch in range(epochs):
+        st = time.time()
         for i, train_data in enumerate(train_loader):
-            st = time.time()
+
 
             current_step += 1
 
@@ -220,12 +221,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # -------------------------------
             # 6) Save model
             # -------------------------------
-            if current_step == 1 or current_step % checkpoint_save == 0:
-                model.save(current_step)
-                print("Model Loss {} after step {}".format(model.G_loss, current_step))
-                print("Model Saved")
-                print("Time per step:", time.time() - st)
-                # wandb.log({"loss": model.G_loss, "lr": lr})
+            model.save(current_step)
+            print("Model Loss {} after epoch {}".format(model.G_loss, current_step))
+            print("Model Saved")
+            print("Time per epoch:", time.time() - st)
+            total_time = total_time + time.time() - st
+
+        print(f'Total time for {epochs} is {total_time}')
 
 
 def main():
