@@ -47,10 +47,10 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         self.verbose = verbose
         self.seed = seed
         self.ds = xr.open_dataset(file_path)
-        start = time.time()
-        self.ds.load()
-        end = time.time()
-        print(f'Loading took {(end - start) / 60} minutes')
+        # start = time.time()
+        # self.ds.load()
+        # end = time.time()
+        # print(f'Loading took {(end - start) / 60} minutes')
         self.times = np.transpose(np.stack(
             [self.ds["time"].dt.year, self.ds["time"].dt.month, self.ds["time"].dt.day, self.ds["time"].dt.hour]))
         self.process_era5_netcdf()
@@ -98,7 +98,10 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             da_norm = HandleUnetData.z_norm_data(da_train, mu=mu_train, std=std_train)
 
         da_norm = da_norm.astype(np.float32)
-
+        start = time.time()
+        da_norm.load()
+        end = time.time()
+        print(f'Loading took {(end - start) / 60} minutes')
         def gen(darr_in, darr_tar):
             ds_train_in = []
             ds_train_tar = []
