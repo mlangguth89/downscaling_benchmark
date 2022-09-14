@@ -112,13 +112,13 @@ class BuildModel:
         # print("datat[L] shape",data["L"].shape)
         self.L = data['L'].to(device)
         if need_H:
-            self.H = data['H'].to(device) # [:, 1, :]
+            self.H = data['H'].to(device) # [:, 1, :] .to(device
 
     # ----------------------------------------
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L).to(device) # [:, 0, :, :]
+        self.E = self.netG(self.L) # [:, 0, :, :] .to(device)
 
     # ----------------------------------------
     # update parameters and get loss

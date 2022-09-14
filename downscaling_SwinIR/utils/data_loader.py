@@ -29,7 +29,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
         dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
     elif dataset_type == 'temperature':
         dataset = TempDatasetInter(file_path, batch_size)
-    return DataLoader(dataset, batch_size=None)
+    return DataLoader(dataset, batch_size=None, pin_memory=True)
 
 
 
