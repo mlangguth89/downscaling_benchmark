@@ -177,7 +177,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     # test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels=n_channels)
+        netG = unet(n_channels=n_channels, G_lossfn_type='l1')
         netG.to(device)
     elif type_net == "swinSR":
         netG = swinSR()
