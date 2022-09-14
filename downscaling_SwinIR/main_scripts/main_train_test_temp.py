@@ -112,13 +112,13 @@ class BuildModel:
         # print("datat[L] shape",data["L"].shape)
         self.L = data['L'].to(device)
         if need_H:
-            self.H = data['H'][:, 1, :].to(device)
+            self.H = data['H'].to(device) # [:, 1, :]
 
     # ----------------------------------------
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)[:, 0, :, :].to(device)
+        self.E = self.netG(self.L).to(device) # [:, 0, :, :]
 
     # ----------------------------------------
     # update parameters and get loss
@@ -177,7 +177,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     # test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels=n_channels, G_lossfn_type='l1')
+        netG = unet(n_channels=n_channels)
         netG.to(device)
     elif type_net == "swinSR":
         netG = swinSR()
@@ -190,7 +190,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainalbe parameters:", netG_params)
-    model = BuildModel(netG, save_dir=save_dir)
+    model = BuildModel(netG, save_dir=save_dir, G_lossfn_type='l1')
     # print(model.summary())
     model.init_train()
     current_step = 0
@@ -236,7 +236,7 @@ def main():
                         default= "C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help = "The directory where training data (.nc files) are stored")
     parser.add_argument("--test_data", type = str, required = False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\_preproc_era5_crea6small.nc",
                         help = "The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, default="../results/exp_test", help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")

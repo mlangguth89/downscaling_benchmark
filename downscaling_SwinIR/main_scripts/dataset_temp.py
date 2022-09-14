@@ -108,7 +108,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 ds_train_in.append(darr_in.isel({"time": t}).values)
-                ds_train_tar.append(darr_tar.isel({"time": t}).values)
+                vector_tar = darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis]
+                ds_train_tar.append(vector_tar)   # [:, :, 1]
             return ds_train_in, ds_train_tar
 
         start = time.time()
@@ -171,7 +172,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             # x  stores the low resolution images, y for high resolution,
             # t is the corresponding timestamps, cidx is the index
             x = torch.zeros(self.batch_size, 9, self.lat, self.log)
-            y = torch.zeros(self.batch_size, 2, self.lat, self.log)
+            y = torch.zeros(self.batch_size, 1, self.lat, self.log)
             t = torch.zeros(self.batch_size, 4, dtype=torch.int)
             cidx = torch.zeros(self.batch_size, 1, dtype=torch.int)  # store the index
 
