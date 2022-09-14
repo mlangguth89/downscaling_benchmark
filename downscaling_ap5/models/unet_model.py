@@ -11,7 +11,7 @@ Methods to set-up U-net models incl. its building blocks.
 import tensorflow as tf
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D)
+from tensorflow.keras.layers import (Concatenate, Dense, Conv2D,Reshape, Conv2DTranspose, Input, MaxPool2D)
 from tensorflow.keras.models import Model
 from model_utils import conv_block, conv_block_n
 
@@ -50,7 +50,7 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 
 # The particular U-net
-def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
+def build_unet(input_shape: tuple, embed_shape: tuple , channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model
     :param input_shape: shape of input-data
@@ -58,10 +58,23 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     :param z_branch: flag if z-branch is used.
     :return:
     """
+
+   # embedding input
+    in_label = Input(shape=(embed_shape))
+
+    # linear multiplication
+    n_nodes = input_shape[0] * input_shape[1]* input_shape[2]
+    li = Dense(n_nodes)(in_label)
+    # reshape to additional channel
+    li = Reshape((input_shape[0], input_shape[1],input_shape[2]))(li)
+    #image generator 
     inputs = Input(input_shape)
 
+    #merge image gen and label input
+    merge = Concatenate()([inputs, li])
+
     """ encoder """
-    s1, e1 = encoder_block(inputs, channels_start, l_large=True)
+    s1, e1 = encoder_block(merge, channels_start, l_large=True)
     s2, e2 = encoder_block(e1, channels_start * 2, l_large=False)
     s3, e3 = encoder_block(e2, channels_start * 4, l_large=False)
 
@@ -77,9 +90,9 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model([inputs, in_label], [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model([inputs,in_label], output_temp, name="t2m_downscaling_unet")
 
     return model
 

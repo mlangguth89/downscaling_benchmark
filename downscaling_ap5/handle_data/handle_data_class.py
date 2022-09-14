@@ -10,7 +10,10 @@ from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
 import tensorflow as tf
-
+import pandas as pd
+from sklearn.preprocessing import OneHotEncoder
+from sklearn import preprocessing 
+import numpy as np
 
 class HandleDataClass(object):
 
@@ -138,7 +141,7 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-                        named_targets: bool = False, lembed: bool = False) -> tf.data.Dataset:
+                        named_targets: bool = False, lembed: bool = True) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         Note that all data is loaded into memory.
@@ -167,7 +170,16 @@ class HandleDataClass(object):
             # darr_in, darr_tar = darr_in.load(), darr_tar.load()
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
-                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+                time = darr_in.isel({"time": t})["time"].values
+                h = pd.to_datetime(time).hour
+                print("hour",h)
+                times = list(range(24))
+                times = np.array(times).reshape((len(times), 1))
+                le= preprocessing.OneHotEncoder()
+                le.fit(times)
+                embed_train = le.transform(np.array([h]).reshape(1,1)).toarray()
+                print("embed_train", embed_train)
+                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values, embed_train))
 
         if named_targets is True:
             gen_now = gen_named
@@ -176,17 +188,22 @@ class HandleDataClass(object):
 
         # create output signatures from first sample
         s0 = next(iter(gen_now(da_in, da_tar)))
+        print("s0 shape", s0[0].shape, s0[0].dtype)
         sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
         if named_targets is True:
             sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
         else:
             sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
-
+      
+        
         # re-instantiate the generator and build TF dataset
         gen_train = gen_now(da_in, da_tar)
 
         if lembed is True:
-            raise ValueError("Time embedding is not supported yet.")
+            sample_spec_embed = tf.TensorSpec(s0[2].shape, dtype=s0[2].dtype)
+            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
+                                                       output_signature=(sample_spec_in, sample_spec_tar, sample_spec_embed))
+            #raise ValueError("Time embedding is not supported yet.")
         else:
             data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
                                                        output_signature=(sample_spec_in, sample_spec_tar))
