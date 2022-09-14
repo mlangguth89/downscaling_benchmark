@@ -19,7 +19,8 @@ from torch.optim import Adam
 import torch.nn as nn
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
+from models.network_swinir import SwinIR as swinSR
+#from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from utils.data_loader import create_loader
 import wandb
@@ -178,7 +179,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinSR":
-        netG = swinSR()
+        netG = swinSR(img_size=16,in_chans=n_channels,window_size=4,upscale=10)
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     else:
