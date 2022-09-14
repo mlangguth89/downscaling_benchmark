@@ -194,7 +194,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     # print(model.summary())
     model.init_train()
     current_step = 0
-    total_time = 0
+    total_time = 0 #
     for epoch in range(epochs):
         st = time.time()
         for i, train_data in enumerate(train_loader):
