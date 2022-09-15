@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=02:00:00
+#SBATCH --time=03:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
@@ -25,7 +25,7 @@ source ../venv_booster/bin/activate
 train_data=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
 test_data=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_val.nc
 save_dir=../results/exp_test
-epochs=30
+epochs=10
 #model_type=vitS
 #model_type=swinSR
 model_type=unet
