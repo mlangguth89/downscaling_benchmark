@@ -145,7 +145,7 @@ def run():
         file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
     #   /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
-    train_dataloader = DataLoader(data_loader, batch_size=64, shuffle=True)
+    train_dataloader = DataLoader(data_loader, batch_size=64, shuffle=False, num_workers=8)
     train_features, train_labels = next(iter(train_dataloader))
     print(train_features, train_labels)
     # print("created data_loader")
