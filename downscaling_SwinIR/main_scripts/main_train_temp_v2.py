@@ -158,7 +158,7 @@ class BuildModel:
         return out_dict
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model = BuildModel(netG, G_lossfn_type="l2")
+model = BuildModel(netG)
 
 model.init_train()
 current_step = 0
