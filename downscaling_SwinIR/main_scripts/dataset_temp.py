@@ -189,7 +189,7 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
 def run():
     data_loader = TempDatasetInter(
-        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc")
+        file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
     #   /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
     print("created data_loader")
@@ -200,12 +200,14 @@ def run():
         idx = train_data["idx"]
         times = train_data["T"]
         end = time.time()
-        print(f'getting 1 batch took {(end - start)} seconds')
-        print("inputs", inputs.size())
-        print("target", target.size())
-        print("idx", idx)
-        print("batch_idx", batch_idx)
-        print("timestamps,", times)
+        print(inputs[0][0][0])
+        break
+        # print(f'getting 1 batch took {(end - start)} seconds')
+        # print("inputs", inputs.size())
+        # print("target", target.size())
+        # print("idx", idx)
+        # print("batch_idx", batch_idx)
+        # print("timestamps,", times)
 
 
 def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):

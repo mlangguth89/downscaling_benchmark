@@ -147,7 +147,7 @@ def run():
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
     train_dataloader = DataLoader(data_loader, batch_size=64, shuffle=False, num_workers=8)
     train_features, train_labels = next(iter(train_dataloader))
-    print(train_features, train_labels)
+    print(train_features[0][0][0])
     # print("created data_loader")
     # for batch_idx, train_data in enumerate(data_loader):
     #     start = time.time()
