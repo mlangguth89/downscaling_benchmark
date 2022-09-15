@@ -190,7 +190,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainalbe parameters:", netG_params)
-    model = BuildModel(netG, save_dir=save_dir, G_lossfn_type='l2')
+    model = BuildModel(netG, save_dir=save_dir, G_lossfn_type='l1')
     # print(model.summary())
     model.init_train()
     current_step = 0
