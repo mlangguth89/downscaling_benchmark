@@ -164,7 +164,7 @@ model.init_train()
 current_step = 0
 
 
-for epoch in range(2):  # keep running
+for epoch in range(30):  # keep running
     st_e = time.time()
     for i, train_data in enumerate(train_dataloader):
         st = time.time()
@@ -188,10 +188,10 @@ for epoch in range(2):  # keep running
 
 
 
-        if current_step == 1 or current_step % 100 == 0:
-
-            print("Model Loss {} after step {}".format(model.G_loss, current_step))
-            print("Time per step:", time.time() - st)
+        # if current_step == 1 or current_step % 100 == 0:
+        #
+        #     print("Model Loss {} after step {}".format(model.G_loss, current_step))
+        #     print("Time per step:", time.time() - st)
 
     print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
     print("Time per epoch:", time.time() - st_e)
