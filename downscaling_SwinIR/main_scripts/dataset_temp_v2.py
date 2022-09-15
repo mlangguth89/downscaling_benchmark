@@ -69,10 +69,20 @@ class CustomTemperatureDataset(Dataset):
             ds_train_tar = []
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
+                a = darr_in.isel({"time": t}).values
+                b = torch.from_numpy(a)
+                c = b.permute(2, 0, 1)
                 ds_train_in.append(torch.from_numpy(darr_in.isel({"time": t}).values).permute(2, 0, 1))
                 vector_tar = torch.from_numpy(darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis])
                 ds_train_tar.append(vector_tar.permute(2, 0, 1))   # [:, :, 1]
-            return torch.stack(ds_train_in), torch.stack(ds_train_tar)
+
+            a = torch.stack(ds_train_in)
+            b = torch.stack(ds_train_tar)
+
+            idx = torch.randperm(a.shape[0])
+            a = a[idx].view(a.size())
+            b = b[idx].view(b.size())
+            return a, b
 
         start = time.time()
         da_in, da_tar = split_in_tar(da_norm)
@@ -145,23 +155,12 @@ def run():
         file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
     #   /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
-    train_dataloader = DataLoader(data_loader, batch_size=64, shuffle=False, num_workers=8)
-    train_features, train_labels = next(iter(train_dataloader))
-    print(train_features[0][0][0])
-    # print("created data_loader")
-    # for batch_idx, train_data in enumerate(data_loader):
-    #     start = time.time()
-    #     inputs = train_data["L"]
-    #     target = train_data["H"]
-    #     idx = train_data["idx"]
-    #     times = train_data["T"]
-    #     end = time.time()
-    #     print(f'getting 1 batch took {(end - start)} seconds')
-    #     print("inputs", inputs.size())
-    #     print("target", target.size())
-    #     print("idx", idx)
-    #     print("batch_idx", batch_idx)
-    #     print("timestamps,", times)
+    train_dataloader = DataLoader(data_loader, batch_size=1, shuffle=False, num_workers=8)
+    data_loader_iter = iter(data_loader)
+    train_features, train_labels = next(data_loader_iter)
+    train_features_2, train_labels_2 = next(data_loader_iter)
+    print()
+
 
 if __name__ == "__main__":
     run()

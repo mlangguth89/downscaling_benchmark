@@ -107,6 +107,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
             ds_train_tar = []
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
+                a = darr_in.isel({"time": t}).values
+                a = torch.from_numpy(a)
                 ds_train_in.append(darr_in.isel({"time": t}).values)
                 vector_tar = darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis]
                 ds_train_tar.append(vector_tar)   # [:, :, 1]
@@ -178,8 +180,12 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
             for jj in range(self.batch_size):
                 cid = self.idx_perm[self.idx]
-                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1)
-                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1)
+                a = torch.from_numpy(self.ds_in[0])
+                b = a.permute(2, 0, 1)
+                x[jj] = torch.from_numpy(self.ds_in[0]).permute(2, 0, 1)
+                y[jj] = torch.from_numpy(self.ds_tar[0]).permute(2, 0, 1)
+                c = torch.from_numpy(self.ds_in[1]).permute(2, 0, 1)
+                d = torch.from_numpy(self.ds_tar[1]).permute(2, 0, 1)
                 t[jj] = torch.from_numpy(self.times[cid])
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
