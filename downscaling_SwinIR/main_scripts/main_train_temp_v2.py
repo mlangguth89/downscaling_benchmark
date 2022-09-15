@@ -158,13 +158,13 @@ class BuildModel:
         return out_dict
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model = BuildModel(netG, G_lossfn_type="l1")
+model = BuildModel(netG, G_lossfn_type="l2")
 
 model.init_train()
 current_step = 0
 
 
-for epoch in range(30):  # keep running
+for epoch in range(3):  # keep running
     st_e = time.time()
     for i, train_data in enumerate(train_dataloader):
         st = time.time()
