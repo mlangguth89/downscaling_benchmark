@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-06-15"
+__update__ = "2022-09-11"
 
 import os
 import inspect
@@ -9,11 +9,13 @@ import numpy as np
 import pandas as pd
 import datetime as dt
 from dateutil.parser import parse as date_parser
-from typing import Any, List
+from typing import Any, List, Union
 try:
     from collections import Iterable
 except ImportError:
     from typing import Iterable
+
+str_or_List = Union[List, str]
 
 # doc-string
 """
@@ -28,6 +30,7 @@ Some auxiliary functions for the project:
     * last_day_of_month
     * flatten
     * remove_files
+    * check_str_in_list
 """
 # doc-string
 
@@ -140,15 +143,13 @@ def ensure_datetime(date):
     :param date: Any date that can be handled by to_datetime
     :param: Same as date, but as datetime.datetime-onject
     """
-    method = ensure_datetime.__name__
-
     if isinstance(date, dt.datetime):
         date_dt = date
     else:
         try:
             date_dt = pd.to_datetime(date).to_pydatetime()
         except Exception as err:
-            print("%{0}: Could not handle input date (as string: {1}, type: {2}).".format(method, str(date), type(date)))
+            print("Could not handle input date (as string: {0}, type: {1}).".format(str(date), type(date)))
             raise err
 
     return date_dt
@@ -193,3 +194,41 @@ def remove_files(files: List, lbreak: True):
                 raise ValueError(mess)
             else:
                 print(mess)
+
+
+def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True, return_ind: bool = False):
+    """
+    Checks if all strings are found in list
+    :param list_in: input list
+    :param str2check: string or list of strings to be checked if they are part of list_in
+    :param labort: Flag if error will be risen in case of missing string in list
+    :param return_ind: Flag if index for each string found in list will be returned
+    :return: True if existence of all strings was confirmed, if return_ind is True, the index of each string in list is
+             returned as well
+    """
+    stat = False
+    if isinstance(str2check, str):
+        str2check = [str2check]
+    elif isinstance(str2check, list):
+        assert np.all([isinstance(str1, str) for str1 in str2check]), "Not all elements of str2check are strings"
+    else:
+        raise ValueError("str2check-argument must be either a string or a list of strings")
+
+    stat_element = [True if str1 in list_in else False for str1 in str2check]
+
+    if np.all(stat_element):
+        stat = True
+    else:
+        print("The following elements are not part of the input list:")
+        inds_miss = np.where(list(~np.array(stat_element)))[0]
+        for i in inds_miss:
+            print("* index {0:d}: {1}".format(i, str2check[i]))
+        if labort:
+            raise ValueError("Could not find all expected strings in list.")
+    # return
+    if stat and not return_ind:
+        return stat
+    elif stat:
+        return stat, [list_in.index(str_curr) for str_curr in str2check]
+    else:
+        return stat, []
