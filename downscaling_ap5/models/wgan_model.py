@@ -240,9 +240,9 @@ class WGAN(keras.Model):
         :param val_iter: Tensorflow Dataset with validation data
         :return: dictionary with reconstruction loss on validation data
         """
-        predictors, predictands = val_iter
+        predictors, predictands, embeds = val_iter
 
-        gen_data = self.generator(predictors, training=False)
+        gen_data = self.generator([predictors, embeds[:,0,:]], training=False)
         rloss = self.recon_loss(predictands, gen_data)
 
         return OrderedDict([("recon_loss", rloss)])
