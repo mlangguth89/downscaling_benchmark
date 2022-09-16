@@ -38,8 +38,10 @@ netG.to(device)
 print()
 
 class BuildModel:
-    def __init__(self, netG, G_lossfn_type="l2", G_optimizer_type="adam",
-                 G_optimizer_lr=0.0002, G_optimizer_betas=[0.9, 0.999], G_optimizer_wd=0, save_dir="../results"):
+    def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
+                 G_optimizer_lr: float = 0.0002, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_wd: int = 0, save_dir: str = "../results"):
+
         # ------------------------------------
         # define network
         # ------------------------------------
@@ -53,9 +55,11 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
+        # wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
+        self.define_scheduler()
 
     # ----------------------------------------
     # define loss
@@ -80,18 +84,17 @@ class BuildModel:
             else:
                 print('Params [{:s}] will not optimize.'.format(k))
 
-        self.G_optimizer = Adam(G_optim_params, lr = self.G_optimizer_lr,
-                                betas = self.G_optimizer_betas,
-                                weight_decay = self.G_optimizer_wd)
+        self.G_optimizer = Adam(G_optim_params, lr=self.G_optimizer_lr,
+                                betas=self.G_optimizer_betas,
+                                weight_decay=self.G_optimizer_wd)
 
     # ----------------------------------------
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
         self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        [250000, 400000, 450000, 475000, 500000],
-                                                        0.5
-                                                        ))
+                                                        milestones=[1, 2, 3],
+                                                        gamma=0.1))
 
     # ----------------------------------------
     # save model / optimizer(optional)
@@ -114,15 +117,16 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
+        # print("datat[L] shape",data["L"].shape)
         self.L = data[0].to(device)
         if need_H:
-            self.H = data[1].to(device)
+            self.H = data[1].to(device) # [:, 1, :] .to(device
 
     # ----------------------------------------
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)
+        self.E = self.netG(self.L) # [:, 0, :, :] .to(device)
 
     # ----------------------------------------
     # update parameters and get loss
@@ -132,6 +136,7 @@ class BuildModel:
         self.netG_forward()
         self.G_loss = self.G_lossfn(self.E, self.H)
         self.G_loss.backward()
+        self.G_optimizer.step()
 
     def update_learning_rate(self, n):
         for scheduler in self.schedulers:
@@ -157,6 +162,11 @@ class BuildModel:
             out_dict['H'] = self.H.detach()[0].float()
         return out_dict
 
+    # get learning rate
+    def get_lr(self):
+        for param_group in self.G_optimizer.param_groups:
+            return param_group['lr']
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model = BuildModel(netG, G_lossfn_type="l2")
 
@@ -167,6 +177,7 @@ current_step = 0
 for epoch in range(10):  # keep running
     st_e = time.time()
     for i, train_data in enumerate(train_dataloader):
+
         st = time.time()
 
         current_step += 1
@@ -175,7 +186,7 @@ for epoch in range(10):  # keep running
         # 1) update learning rate
         # -------------------------------
         model.update_learning_rate(current_step)
-
+        lr = model.get_lr()
         # -------------------------------
         # 2) feed patch pairs
         # -------------------------------
@@ -192,7 +203,7 @@ for epoch in range(10):  # keep running
         #
         #     print("Model Loss {} after step {}".format(model.G_loss, current_step))
         #     print("Time per step:", time.time() - st)
-
+    print(train_data[0].shape)
     print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
     print("Time per epoch:", time.time() - st_e)
 

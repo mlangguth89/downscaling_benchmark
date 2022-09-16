@@ -129,7 +129,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         shuffle the index
         """
         multiformer_np_rng = np.random.default_rng(self.seed)
-        idx_perm = multiformer_np_rng.permutation(self.n_samples)
+        # idx_perm = multiformer_np_rng.permutation(self.n_samples)
+        idx_perm = np.arange(self.n_samples)
 
         # restrict to multiples of batch size
         idx = int(math.floor(self.n_samples / self.batch_size)) * self.batch_size
@@ -180,12 +181,9 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
 
             for jj in range(self.batch_size):
                 cid = self.idx_perm[self.idx]
-                a = torch.from_numpy(self.ds_in[0])
-                b = a.permute(2, 0, 1)
-                x[jj] = torch.from_numpy(self.ds_in[0]).permute(2, 0, 1)
-                y[jj] = torch.from_numpy(self.ds_tar[0]).permute(2, 0, 1)
-                c = torch.from_numpy(self.ds_in[1]).permute(2, 0, 1)
-                d = torch.from_numpy(self.ds_tar[1]).permute(2, 0, 1)
+
+                x[jj] = torch.from_numpy(self.ds_in[cid]).permute(2, 0, 1)
+                y[jj] = torch.from_numpy(self.ds_tar[cid]).permute(2, 0, 1)
                 t[jj] = torch.from_numpy(self.times[cid])
                 cidx[jj] = torch.tensor(cid, dtype=torch.int)
 
@@ -206,8 +204,9 @@ def run():
         idx = train_data["idx"]
         times = train_data["T"]
         end = time.time()
-        print(inputs[0][0][0])
-        break
+        print(inputs)
+        print('=====================================')
+        print(target)
         # print(f'getting 1 batch took {(end - start)} seconds')
         # print("inputs", inputs.size())
         # print("target", target.size())

@@ -12,7 +12,7 @@ from handle_data.handle_data_unet import HandleUnetData
 from torch.utils.data import DataLoader
 
 class CustomTemperatureDataset(Dataset):
-    def __init__(self, file_path: str = None, batch_size: int = 4, verbose: int = 0, seed: int = 1234):
+    def __init__(self, file_path: str = None, batch_size: int = 32, verbose: int = 0, seed: int = 1234):
         self.ds_tar = None
         self.ds_in = None
         self.file_path = file_path
@@ -69,9 +69,6 @@ class CustomTemperatureDataset(Dataset):
             ds_train_tar = []
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
-                a = darr_in.isel({"time": t}).values
-                b = torch.from_numpy(a)
-                c = b.permute(2, 0, 1)
                 ds_train_in.append(torch.from_numpy(darr_in.isel({"time": t}).values).permute(2, 0, 1))
                 vector_tar = torch.from_numpy(darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis])
                 ds_train_tar.append(vector_tar.permute(2, 0, 1))   # [:, :, 1]

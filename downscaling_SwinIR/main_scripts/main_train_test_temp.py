@@ -173,7 +173,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    train_loader = create_loader(train_dir, dataset_type="temperature")
+    train_loader = create_loader(train_dir, dataset_type="temperature", batch_size=32)
     # test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
@@ -190,7 +190,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainalbe parameters:", netG_params)
-    model = BuildModel(netG, save_dir=save_dir, G_lossfn_type='l1')
+    model = BuildModel(netG, save_dir=save_dir, G_lossfn_type='l2')
     # print(model.summary())
     model.init_train()
     current_step = 0
@@ -222,6 +222,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # 6) Save model
             # -------------------------------
             # model.save(current_step)
+        print(train_data[0].shape)
         print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
         print("Model Saved")
         print("Time per epoch:", time.time() - st)
