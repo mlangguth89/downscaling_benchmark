@@ -37,4 +37,5 @@ fi
 source_dir=/p/project/deepacf/maelstrom/data/downscaling_unet/
 destination_dir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_unet/trained_models/
 
-srun python3 ../main_scripts/main_train.py -in ${source_dir} -out ${destination_dir} -id ${SLURM_JOBID}
+# including temporal embedding; remove -embed_date to disabe this
+srun python3 ../main_scripts/main_train.py -in ${source_dir} -out ${destination_dir} -id ${SLURM_JOBID} -embed_date

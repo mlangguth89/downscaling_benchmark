@@ -45,6 +45,7 @@ lr_end=5.e-06
 lr_decay=True
 model_name=my_wgan_model
 
+# including temporal embedding; remove -l_embed_date to disabe this
 srun --overlap python3 ../main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -lr_gen ${lr_gen} -lr_critic ${lr_critic} -lr_gen_end ${lr_end} \
-                                                          -nepochs ${nepochs} -lr_decay -model_name ${model_name} -id ${SLURM_JOBID}
+                                                          -nepochs ${nepochs} -lr_decay -model_name ${model_name} -id ${SLURM_JOBID} -l_embed_date
 
