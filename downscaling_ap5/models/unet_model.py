@@ -8,10 +8,12 @@ Methods to set-up U-net models incl. its building blocks.
 """
 
 # import modules
+import numpy as np
 import tensorflow as tf
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Concatenate, Dense, Conv2D,Reshape, Conv2DTranspose, Input, MaxPool2D)
+from tensorflow.keras.layers import (Concatenate, Dense, Conv2D,Reshape, Conv2DTranspose, Input,
+                                     MaxPool2D, RepeatVector)
 from tensorflow.keras.models import Model
 from model_utils import conv_block, conv_block_n
 
@@ -50,28 +52,43 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 
 # The particular U-net
-def build_unet(input_shape: tuple, embed_shape: tuple , channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
+def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, l_embed: bool = False,
+               embed_sh: tuple = (12, 24), tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
     :param z_branch: flag if z-branch is used.
+    :param l_embed: flag if embedding with one-hot-encoding vectors is performed. The default embeds the date in terms
+                    of the month of the year as well as the hour of the day (see embed_sh)
+    :param embed_sh: shape of one-hot-encodings for date embedding. Default (12, 24) corresonds to the twelve months of
+                     a year and the 24 hours of a day
+    :param tar_channels: name of output channels, only active if z_branch is True
     :return:
     """
-
-   # embedding input
-    in_label = Input(shape=(embed_shape))
-
-    # linear multiplication
-    n_nodes = input_shape[0] * input_shape[1]* input_shape[2]
-    li = Dense(n_nodes)(in_label)
-    # reshape to additional channel
-    li = Reshape((input_shape[0], input_shape[1],input_shape[2]))(li)
-    #image generator 
+    # 'normal' input stream
     inputs = Input(input_shape)
 
-    #merge image gen and label input
-    merge = Concatenate()([inputs, li])
+    if l_embed:     # optional embedding with one-hot-encoding vectors
+        n_nodes = np.prod(input_shape[:-1])
+        tar_dim = tuple(list(input_shape[:-1]) + [1])
+
+        embed_vec_in = [Input(shape=i) for i in embed_sh]
+
+        # project embedding to scalar value
+        embed_vec_proj = [Dense(1)(i) for i in embed_vec_in]
+        # repeat and reshape to match input-data for concatenation
+        embed_vec_proj = [RepeatVector(int(n_nodes))(i) for i in embed_vec_proj]
+        embed_vec_proj = [Reshape(tar_dim)(i) for i in embed_vec_proj]
+
+        merge_list = [inputs] + [embed for embed in embed_vec_proj]
+
+        merge = Concatenate()(merge_list)
+
+        all_inputs = [inputs] + [input_embed for input_embed in embed_vec_in]
+    else:   # no merging with embedding required
+        merge = inputs
+        all_inputs = inputs
 
     """ encoder """
     s1, e1 = encoder_block(merge, channels_start, l_large=True)
@@ -90,9 +107,9 @@ def build_unet(input_shape: tuple, embed_shape: tuple , channels_start: int = 56
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model([inputs, in_label], [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(all_inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        model = Model([inputs,in_label], output_temp, name="t2m_downscaling_unet")
+        model = Model(all_inputs, output_temp, name="t2m_downscaling_unet")
 
     return model
 
