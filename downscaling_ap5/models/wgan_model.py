@@ -85,8 +85,6 @@ class WGAN(keras.Model):
 
         self.generator, self.critic = generator, critic
         self.hparams = WGAN.get_hparams_dict(hparams)
-        if self.hparams["l_embed"]:
-            raise ValueError("Embedding is not implemented yet.")
         self.modelname = model_name
         self.lsupervise = lsupervise
         if lsupervise and savedir is None:
@@ -120,16 +118,19 @@ class WGAN(keras.Model):
 
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
-        self.generator = self.generator(self.shape_in, self.embed_shape,channels_start=self.hparams["ngf"],
-                                        z_branch=self.hparams["z_branch"])
+        self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
+                                        z_branch=self.hparams["z_branch"], l_embed=self.hparams["l_embed"])
         self.critic = self.critic(tar_shape)
 
         # Note: The batch-size is increased for the training datset to allow substepping in WGAN
         # (n+1 optimization steps to train generator and critic). The validation dataset however does not perform
-        # substeeping and thus does not be instantiated with an increased mini-batch size.
+        # sub-stepping and thus does not be instantiated with an increased mini-batch size.
         train_iter = HandleDataClass.make_tf_dataset(da_train, self.hparams["batch_size"]
-                                                     * (self.hparams["d_steps"] + 1), var_tar2in=self.hparams["var_tar2in"])
-        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False, 
+                                                     * (self.hparams["d_steps"] + 1),
+                                                     lembed_date=self.hparams["l_embed"],
+                                                     var_tar2in=self.hparams["var_tar2in"])
+        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False,
+                                                   lembed_date=self.hparams["l_embed"],
                                                    var_tar2in=self.hparams["var_tar2in"])
 
         # call Keras compile method

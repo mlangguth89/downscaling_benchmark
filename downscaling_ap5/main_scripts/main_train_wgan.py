@@ -200,6 +200,8 @@ if __name__ == "__main__":
                              "(see Sha et al., 2020)")
     parser.add_argument("--no_z_tar2in", "-no_z_tar2in", dest="no_z_tar2in", default=False, action="store_true",
                         help="Flag if high-resolved target surface topography is excluded from the list of predictors.")
+    parser.add_argument("--embedding_of_date", "-embed_date", dest="l_embed", default=False, action="store_true",
+                        help="Flag if date-embedding (month and hour of day) should be performed.")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
                         help="Name for the trained WGAN.")
     parser.add_argument("--no_supervision", "-no_s", dest="no_supervision", default=False, action="store_true",
