@@ -1,7 +1,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-02-01"
+__update__ = "2022-09-16"
 
 import os, sys
 import socket
@@ -10,9 +10,9 @@ from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
 import tensorflow as tf
+import tensorflow.keras.utils.to_categorical as OneHotEncoder
 import pandas as pd
-from sklearn.preprocessing import OneHotEncoder
-from sklearn import preprocessing 
+from sklearn import preprocessing       # for one-hot-encoding of datetime
 import numpy as np
 
 class HandleDataClass(object):
@@ -141,7 +141,8 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-            named_targets: bool = False, var_tar2in: str = None, lembed: bool = True) -> tf.data.Dataset:
+                        named_targets: bool = False, var_tar2in: str = None,
+                        lembed_date: bool = True) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         Note that all data is loaded into memory.
@@ -151,8 +152,9 @@ class HandleDataClass(object):
         :param lshuffle: flag if shuffling should be applied to dataset
         :param shuffle_samples: number of samples to load before applying shuffling
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography to the input)
-        :param lembed: flag to trigger temporal embedding (not implemented yet!)
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                           to the input)
+        :param lembed_date: flag to trigger date embedding in terms of month of the year and hour of the day
         """
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
@@ -161,55 +163,68 @@ class HandleDataClass(object):
 
         varnames_tar = da_tar["variables"].values
 
-        def gen_named(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+        def gen_named(darr_in, darr_tar, lt_embed: bool = False):
+            """
+            Generator with named output streams (as dictionary).
+            """
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 tar_now = darr_tar.isel({"time": t})
-                yield tuple((darr_in.isel({"time": t}).values,
-                             {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
+                time = darr_in.isel({"time": t})["time"].values
+                all_streams = [darr_in.isel({"time": t}).values,
+                               {var: tar_now.sel({"variables": var}).values for var in varnames_tar}]
+                if lt_embed:
+                    time_embeds = get_date_embeds(pd.to_datetime(time))
+                    all_streams = all_streams + time_embeds
+                yield tuple(all_streams)
 
-        def gen_unnamed(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+        def gen_unnamed(darr_in, darr_tar, lt_embed: bool = False):
+            """
+            Generator with unnamed output-streams
+            """
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 time = darr_in.isel({"time": t})["time"].values
-                h = pd.to_datetime(time).hour
-                print("hour",h)
-                times = list(range(24))
-                times = np.array(times).reshape((len(times), 1))
-                le= preprocessing.OneHotEncoder()
-                le.fit(times)
-                embed_train = le.transform(np.array([h]).reshape(1,1)).toarray()
-                print("embed_train", embed_train)
-                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values, embed_train))
+                all_streams = [darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values]
+                if lt_embed:
+                    time_embeds = get_date_embeds(pd.to_datetime(time))
+                    all_streams = all_streams + time_embeds
+
+                yield tuple(all_streams)
+
+        def get_date_embeds(dt_obj):
+            """
+            Create one-hot-encoding for month and hour of the day
+            """
+            hour, month = dt_obj.hour, dt_obj.month - 1
+            date_embed = [OneHotEncoder(month, 12), OneHotEncoder(hour, 24)]
+
+            return date_embed
 
         if named_targets is True:
             gen_now = gen_named
         else:
             gen_now = gen_unnamed
 
-        # create output signatures from first sample
-        s0 = next(iter(gen_now(da_in, da_tar)))
-        print("s0 shape", s0[0].shape, s0[0].dtype)
+        # create in- and output signatures from first sample
+        s0 = next(iter(gen_now(da_in, da_tar, lembed_date)))
         sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
         if named_targets is True:
             sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
         else:
             sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
-      
-        
-        # re-instantiate the generator and build TF dataset
-        gen_train = gen_now(da_in, da_tar)
 
-        if lembed is True:
-            sample_spec_embed = tf.TensorSpec(s0[2].shape, dtype=s0[2].dtype)
-            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
-                                                       output_signature=(sample_spec_in, sample_spec_tar, sample_spec_embed))
-            #raise ValueError("Time embedding is not supported yet.")
+        # re-instantiate the generator and build TF dataset
+        gen_train = gen_now(da_in, da_tar, lembed_date)
+
+        if lembed_date is True:
+            sample_spec_embed = [tf.TensorSpec(s0[i].shape, dtype=s0[i].dtype) for i in np.arange(2, 4)]
+            sample_spec_all = [sample_spec_in, sample_spec_tar] + sample_spec_embed
+
         else:
-            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
-                                                       output_signature=(sample_spec_in, sample_spec_tar))
+            sample_spec_all = [sample_spec_in, sample_spec_tar]
+
+        data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=tuple(sample_spec_all))
 
         # Notes:
         # * cache is reuqired to make repeat work properly on datasets based on generators
