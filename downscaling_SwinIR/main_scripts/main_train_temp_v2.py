@@ -32,7 +32,7 @@ fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_
 #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
 
 dataset = CustomTemperatureDataset(file_path=fl)
-train_dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
+train_dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
 
 netG = unet(n_channels=9)
 netG.to(device)
