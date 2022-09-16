@@ -222,7 +222,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # 6) Save model
             # -------------------------------
             # model.save(current_step)
-        print(train_data[0].shape)
+        print(train_data['H'].shape)
         print("Model Loss {} after epoch {}".format(model.G_loss, epoch))
         print("Model Saved")
         print("Time per epoch:", time.time() - st)
