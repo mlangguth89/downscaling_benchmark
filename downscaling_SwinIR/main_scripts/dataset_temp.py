@@ -129,8 +129,8 @@ class TempDatasetInter(torch.utils.data.IterableDataset):
         shuffle the index
         """
         multiformer_np_rng = np.random.default_rng(self.seed)
-        # idx_perm = multiformer_np_rng.permutation(self.n_samples)
-        idx_perm = np.arange(self.n_samples)
+        idx_perm = multiformer_np_rng.permutation(self.n_samples)
+        # idx_perm = np.arange(self.n_samples)
 
         # restrict to multiples of batch size
         idx = int(math.floor(self.n_samples / self.batch_size)) * self.batch_size
