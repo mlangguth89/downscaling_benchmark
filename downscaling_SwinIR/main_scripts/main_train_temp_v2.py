@@ -28,7 +28,8 @@ CHECKPOINT_SAVE = 200 # how many steps to save checkpoint
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Get data
-fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc" #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
+fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc"
+#C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
 
 dataset = CustomTemperatureDataset(file_path=fl)
 train_dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
