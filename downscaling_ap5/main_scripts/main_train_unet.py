@@ -49,14 +49,13 @@ def main(parser_args):
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
-    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch", "embed_date"]
     args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
     args_dict["z_branch"] = not parser_args.no_z_branch
+    args_dict["embed_date"] = parser_args.embed_date
 
     # Start data preprocessing (reshaping, normalization and conversion to TF dataset)
     t0_preproc = timer()
-    # slice data temporally to save memory
-    #ds_train  = ds_train.sel(time=slice("2011-01-01", "2013-12-31"))
     if not args_dict["z_branch"]:
         # drop topography on target grid in case that z_branch is set to False
         ds_train, ds_val = ds_train.drop("hsurf_tar"), ds_val.drop("hsurf_var")
@@ -78,8 +77,10 @@ def main(parser_args):
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
     # get targets as dictionary for usage in fit-function
-    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"], named_targets=True)
-    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True)
+    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"], named_targets=True,
+                                                 lembed_date=args_dict["embed_date"])
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True,
+                                               lembed_date=args_dict["embed_date"])
 
     nsamples = da_train.shape[0]
     shape_in = train_iter.element_spec[0].shape[1:]
@@ -101,7 +102,8 @@ def main(parser_args):
 
     # build, compile and train the model
     varnames_tar = list(train_iter.element_spec[1].keys())
-    unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"], tar_channels=varnames_tar)
+    unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"], tar_channels=varnames_tar,
+                            l_embed=args_dict["embed_date"])
     steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
 
     nvars_tar = len(varnames_tar)
@@ -187,6 +189,8 @@ if __name__ == "__main__":
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
+    parser.add_argument("--embedding_of_date", "-embed_date", dest="embed_date", default=False, action="store_true",
+                        help="Flag if date-embedding (month and hour of day) should be performed.")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
                         help="Name for the trained U-Net.")
 
