@@ -30,7 +30,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Get data
 fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc" #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
 
-dataset = CustomTemperatureDataset(file_path='C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc')
+dataset = CustomTemperatureDataset(file_path=fl)
 train_dataloader = DataLoader(dataset, batch_size=4, shuffle=False)
 
 netG = unet(n_channels=9)
@@ -168,13 +168,13 @@ class BuildModel:
             return param_group['lr']
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-model = BuildModel(netG, G_lossfn_type="l2")
+model = BuildModel(netG, G_lossfn_type="l1")
 
 model.init_train()
 current_step = 0
 
 
-for epoch in range(5):  # keep running
+for epoch in range(30):  # keep running
     st_e = time.time()
     for i, train_data in enumerate(train_dataloader):
 
