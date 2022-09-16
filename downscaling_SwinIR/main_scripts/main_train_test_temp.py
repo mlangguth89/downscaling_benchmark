@@ -173,7 +173,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    train_loader = create_loader(train_dir, dataset_type="temperature", batch_size=4)
+    train_loader = create_loader(train_dir, dataset_type="temperature", batch_size=32)
     # test_loader = create_loader(test_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
