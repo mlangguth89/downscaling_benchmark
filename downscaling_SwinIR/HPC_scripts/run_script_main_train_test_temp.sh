@@ -29,5 +29,5 @@ epochs=30
 #model_type=vitS
 #model_type=swinSR
 model_type=unet
-python ../main_scripts/main_train_test_temp.py --train_data ${train_data} --test_data ${test_data} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} > output_l2_v2.test
+python ../main_scripts/main_train_test_temp.py --train_data ${train_data} --test_data ${test_data} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} > output_l2_v3.test
 
