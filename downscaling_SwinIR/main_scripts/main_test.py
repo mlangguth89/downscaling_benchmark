@@ -15,7 +15,8 @@ import numpy as np
 from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
+from models.network_swinir import SwinIR as swinSR
+#from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
@@ -45,7 +46,7 @@ def main():
     if args.model_type == "unet":
         netG = unet(n_channels = 8)
     elif args.model_type == "swinSR":
-        netG = swinSR()
+        netG = swinSR(img_size=16,patch_size=1,in_chans=8,window_size=8,upscale=4,upsampler='nearest+conv')
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     else:

@@ -10,6 +10,39 @@ import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
+class Upsampling(nn.Module):
+
+    def __init__(self, in_channels:int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: int = 1, stride: int = 2,
+                 upsampling:bool = True, sf: int = 2.5, mode = "bilinear"):
+        super().__init__()
+        """
+        This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
+        Note: The input data is assumed to be of the form minibatch x channels x [optional depth] x [optional height] x width.
+        :param in_channels : the number of input variables
+        :param out_channels: the output channels for each ConvTranspose2D layer
+        :param kernel_size : the kernel size
+        :param padding     : the padding size
+        :param stride      : the stride size
+        :param sf          : the scaling factor (low-resolution to high resolution)
+        :param upsampling  : use upsampling (True) to convert low to high resolution  or use transposed convolutional approach(False)
+        """
+
+        if upsampling:
+            self.deconv_block = nn.Upsample(scale_factor = sf, mode = mode, align_corners = True)
+        else:
+
+            layers = [nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = stride,
+                                         padding = padding) for i in range(3)]
+
+            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = 1,
+                                   padding = padding, output_padding = 31 ))
+
+            self.deconv_block = nn.Sequential(*layers)
+
+    def forward(self, x):
+         return self.deconv_block(x)
+
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
         super().__init__()
@@ -39,8 +72,6 @@ def window_partition(x, window_size):
         windows: (num_windows*B, window_size, window_size, C)
     """
     B, H, W, C = x.shape
-    print('x.shape: {}'.format(x.shape))
-    print('window_size: {}'.format(window_size))
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
     return windows
@@ -230,7 +261,7 @@ class SwinTransformerBlock(nn.Module):
                 img_mask[:, h, w, :] = cnt
                 cnt += 1
 
-        print('img_mask shape: {}'.format(img_mask.shape))
+        # print('img_mask shape: {}'.format(img_mask.shape))
         mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
@@ -585,9 +616,9 @@ class Upsample(nn.Sequential):
             for _ in range(int(math.log(scale, 2))):
                 m.append(nn.Conv2d(num_feat, 4 * num_feat, 3, 1, 1))
                 m.append(nn.PixelShuffle(2))
-        elif scale == 10: #origin is 3
-            m.append(nn.Conv2d(num_feat, 100 * num_feat, 3, 1, 1))
-            m.append(nn.PixelShuffle(10))
+        elif scale == 3: #origin is 3
+            m.append(nn.Conv2d(num_feat, 9 * num_feat, 3, 1, 1))
+            m.append(nn.PixelShuffle(3))
         else:
             raise ValueError(f'scale {scale} is not supported. ' 'Supported scales: 2^n and 3.')
         super(Upsample, self).__init__(*m)
@@ -649,13 +680,13 @@ class SwinIR(nn.Module):
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, upscale=2, img_range=1., upsampler='', resi_connection='1conv',
+                 use_checkpoint=False, upscale=4, img_range=1., upsampler='', resi_connection='1conv',
                  **kwargs):
         super(SwinIR, self).__init__()
         num_in_ch = in_chans
-        num_out_ch = in_chans
-        #num_feat = 64
-        num_feat = 100
+        num_out_ch = 1 # in_chans
+        num_feat = 96
+        #num_feat = 100
         self.img_range = img_range
         if in_chans == 3:
             rgb_mean = (0.4488, 0.4371, 0.4040)
@@ -665,6 +696,11 @@ class SwinIR(nn.Module):
         self.upscale = upscale
         self.upsampler = upsampler
         self.window_size = window_size
+
+        #####################################################################################################
+        ################################### 0, remapping the input images ###################################
+        upscale0 = 10/upscale
+        self.upsampling_first = Upsampling(in_channels=num_in_ch, sf=upscale0)
 
         #####################################################################################################
         ################################### 1, shallow feature extraction ###################################
@@ -745,6 +781,7 @@ class SwinIR(nn.Module):
                                                       nn.LeakyReLU(inplace=True))
             self.upsample = Upsample(upscale, num_feat)
             self.conv_last = nn.Conv2d(num_feat, num_out_ch, 3, 1, 1)
+            ##print('self.conv_last: {}'.format(self.conv_last))
         elif self.upsampler == 'pixelshuffledirect':
             # for lightweight SR (to save parameters)
             self.upsample = UpsampleOneStep(upscale, embed_dim, num_out_ch,
@@ -805,6 +842,9 @@ class SwinIR(nn.Module):
         return x
 
     def forward(self, x):
+        # remap for the first upsampling
+        x = self.upsampling_first(x)
+
         H, W = x.shape[2:]
         x = self.check_image_size(x)
         self.mean = self.mean.type_as(x)

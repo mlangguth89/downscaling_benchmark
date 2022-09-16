@@ -108,7 +108,7 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
-        print("datat[L] shape",data["L"].shape)
+        #print("datat[L] shape",data["L"].shape)
         self.L = data['L']
         if need_H:
             self.H = data['H']
@@ -117,7 +117,9 @@ class BuildModel:
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)[:,0,:,:]
+        #print('self.H shape: {}'.format(self.H.shape))
+        #print('self.netG(self.L) shape: {}'.format(self.netG(self.L).shape))
+        self.E = self.netG(self.L) #[:,0,:,:]
 
     # ----------------------------------------
     # update parameters and get loss
@@ -179,7 +181,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinSR":
-        netG = swinSR(img_size=16,in_chans=n_channels,window_size=4,upscale=10)
+        netG = swinSR(img_size=16,patch_size=1,in_chans=n_channels,window_size=8,upscale=4,upsampler='nearest+conv')
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     else:
