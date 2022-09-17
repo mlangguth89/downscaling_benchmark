@@ -78,7 +78,6 @@ class WGAN(keras.Model):
         :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
                            patience of eight epochs); if True, savedir must be provided
         :param savedir: directory where checkpointed model will be saved
-        :param l_embedding: Flag to enable time embeddings
         """
 
         super(WGAN, self).__init__()
@@ -113,8 +112,6 @@ class WGAN(keras.Model):
         # determine shape-dimensions from data
         shape_all = da_train.sel({"variables": invars}).shape
         self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
-        self.embed_shape = [24]
-
 
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
@@ -205,7 +202,7 @@ class WGAN(keras.Model):
             with tf.GradientTape() as tape_critic:
                 ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
                 if self.hparams["l_embed"]:
-                    predictor_list = [predictors[ist:ie, :, :, :], embeds_m[ist:ie,...], embeds_h[ist:ie,...]]
+                    predictor_list = [predictors[ist:ie, :, :, :], embeds_m[ist:ie, ...], embeds_h[ist:ie, ...]]
                 else:
                     predictor_list = predictors[ist:ie, :, :, :]
                 # critic only operates on first channel
@@ -230,7 +227,8 @@ class WGAN(keras.Model):
             # generate (downscaled) data
             if self.hparams["l_embed"]:
                 predictor_list = [predictors[-self.hparams["batch_size"]:, ...],
-                                  embeds_m[-self.hparams["batch_size"]:,...],embeds_h[-self.hparams["batch_size"]:,...]]
+                                  embeds_m[-self.hparams["batch_size"]:, ...],
+                                  embeds_h[-self.hparams["batch_size"]:, ...]]
             else:
                 predictor_list = predictors[-self.hparams["batch_size"]:, ...]
             gen_data = self.generator(predictor_list, training=True)
@@ -379,7 +377,7 @@ class WGAN(keras.Model):
         This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
         :param critic_real: critic on the real data
         :param critic_gen: critic on the generated data
-        :param c_loss: loss to optize the critic
+        :return c_loss: loss to optize the critic
         """
         c_loss = tf.reduce_mean(critic_gen - critic_real)
 
@@ -405,34 +403,35 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
             raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
 
         if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
-          raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
+            raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
         try:  # new API
-          lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
-                       float(K.get_value(self.model.c_optimizer.lr))
-          lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                         float(K.get_value(self.model.c_optimizer.lr))
+            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
         except TypeError:  # Support for old API for backward compatibility
-          raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
 
         if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
                 isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
             raise ValueError('The output of the "schedule" function '
-                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)' )
+                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)')
         if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
            and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
             raise ValueError(
                 f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
-                f'and {lr_c.dtype} (critic)' )
+                f'and {lr_c.dtype} (critic)')
         # set updated learning rate
         K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
         K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
         if self.verbose > 0:
             print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
-                f'rate for generator to {lr_g}, for critic to {lr_c}.')
+                  f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
         logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
         logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
+
 
 class ModelCheckpointWGAN(ModelCheckpoint):
 
