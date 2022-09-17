@@ -196,8 +196,7 @@ class WGAN(keras.Model):
         :return: Ordered dictionary with several losses of generator and critic
         """
 
-        predictors, predictands, embeds = data_iter
-        print("embedding ", embeds)
+        predictors, predictands, embeds_m, embeds_h = data_iter
         # train the critic d_steps-times
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
@@ -205,7 +204,7 @@ class WGAN(keras.Model):
                 # critic only operates on first channel
                 predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
                 # generate (downscaled) data
-                gen_data = self.generator([predictors[ist:ie, :, :, :], embeds[ist:ie,0,:]], training=True)
+                gen_data = self.generator([predictors[ist:ie, :, :, :], embeds_m[ist:ie,...], embeds_h[ist:ie,...]], training=True)
                 # calculate critics for both, the real and the generated data
                 critic_gen = self.critic(gen_data[0], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
@@ -222,7 +221,8 @@ class WGAN(keras.Model):
         # train generator
         with tf.GradientTape() as tape_generator:
             # generate (downscaled) data
-            gen_data = self.generator([predictors[-self.hparams["batch_size"]:, :, :, :],embeds[-self.hparams["batch_size"]:,0,:]], training=True)
+            gen_data = self.generator([predictors[-self.hparams["batch_size"]:, :, :, :], embeds_m[-self.hparams["batch_size"]:,...],
+                                       embeds_h[-self.hparams["batch_size"]:,...]], training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
             critic_gen = self.critic(gen_data[0], training=True)
             cg_loss = WGAN.critic_gen_loss(critic_gen)
@@ -243,18 +243,18 @@ class WGAN(keras.Model):
         :param val_iter: Tensorflow Dataset with validation data
         :return: dictionary with reconstruction loss on validation data
         """
-        predictors, predictands, embeds = val_iter
+        predictors, predictands, embeds_m, embeds_h = val_iter
 
-        gen_data = self.generator([predictors, embeds[:,0,:]], training=False)
+        gen_data = self.generator([predictors, embeds_m, embeds_h], training=False)
         rloss = self.recon_loss(predictands, gen_data)
 
         return OrderedDict([("recon_loss", rloss)])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
 
-        predictors, _ = test_iter
+        predictors, _, embeds_m, embeds_h = test_iter
 
-        return self.generator(predictors, training=False)
+        return self.generator([predictors, embeds_m, embeds_h], training=False)
 
     def gradient_penalty(self, real_data, gen_data):
         """
