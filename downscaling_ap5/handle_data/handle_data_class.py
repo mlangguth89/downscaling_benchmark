@@ -10,9 +10,8 @@ from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
 import tensorflow as tf
-import tensorflow.keras.utils.to_categorical as OneHotEncoder
+from tensorflow.keras.utils import to_categorical as OneHotEncoder
 import pandas as pd
-from sklearn import preprocessing       # for one-hot-encoding of datetime
 import numpy as np
 
 class HandleDataClass(object):
@@ -202,6 +201,7 @@ class HandleDataClass(object):
             return date_embed
 
         if named_targets is True:
+            print("TF dataset will contain named targets...")
             gen_now = gen_named
         else:
             gen_now = gen_unnamed
@@ -218,6 +218,7 @@ class HandleDataClass(object):
         gen_train = gen_now(da_in, da_tar, lembed_date)
 
         if lembed_date is True:
+            print("Add date-embedding to TF dataset...")
             sample_spec_embed = [tf.TensorSpec(s0[i].shape, dtype=s0[i].dtype) for i in np.arange(2, 4)]
             sample_spec_all = [sample_spec_in, sample_spec_tar] + sample_spec_embed
 
