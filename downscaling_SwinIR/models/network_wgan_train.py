@@ -139,7 +139,7 @@ class train_WGAN():
             # if self.best_cr_loss > loss_val_gen:
             #     self.best_cr_loss = loss_val_gen
 
-            self.update_lr()  # Updating learning rate
+            self.update_lr(self.hparams)  # Updating learning rate
 
     def update_lr(self, epoch: int = None):
         updater = get_lr_decay()
