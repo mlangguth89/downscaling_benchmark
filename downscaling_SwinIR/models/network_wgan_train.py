@@ -10,6 +10,7 @@ from network_unet import UNet
 from network_critic_model import Discriminator
 import gc
 import time
+import math
 
 sys.path.append('../')
 from main_scripts.dataset_temp_v2 import CustomTemperatureDataset
@@ -86,16 +87,24 @@ class train_WGAN():
             start = time.time()
             self.generator.train()
             self.critic.train()
+            max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
+            iterator = iter(self.train_dataloader)
+            ii = 0
+            while ii < max_iterations:
 
-            for batch_idx, train_data in enumerate(self.train_dataloader):
+            # for batch_idx, train_data in enumerate(self.train_dataloader):
                 self.generator.train()
                 self.critic.train()
-                input_data = train_data[0].to(device)
-                target_data = train_data[1].to(device)
 
                 # Training the critic model
                 for i in range(self.hparams.critic_iterations):
 
+                    train_data = next(iterator)
+                    input_data = train_data[0].to(device)
+                    target_data = train_data[1].to(device)
+                    ii += 1
+                    print(ii)
+                    start_c = time.time()
                     generator_output = self.generator(input_data)
                     critic_real = self.critic(target_data)
                     critic_fake = self.critic(generator_output)
@@ -112,7 +121,19 @@ class train_WGAN():
                     loss_critic.backward(retain_graph=True)
                     self.opt_critic.step()
 
+                    if ii >= max_iterations:
+                        break
+
                 # Training the generator model
+                if ii >= max_iterations:
+                    break
+
+                train_data = next(iterator)
+                input_data = train_data[0].to(device)
+                target_data = train_data[1].to(device)
+                ii += 1
+
+                generator_output = self.generator(input_data)
                 gen_fake = self.critic(generator_output).reshape(-1)
                 loss_gen = -torch.mean(gen_fake)
                 loss_rec = recon_loss(target_data, generator_output)
