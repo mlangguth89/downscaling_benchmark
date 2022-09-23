@@ -65,8 +65,8 @@ class train_WGAN():
         """
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
-        self.generator = generator
-        self.critic = critic
+        self.generator = generator.to(device)
+        self.critic = critic.to(device)
         self.hparams = hparams
 
         self.opt_critic = optim.Adam(self.critic.parameters(), lr=self.hparams.lr_critic, betas=(0.0, 0.9))
