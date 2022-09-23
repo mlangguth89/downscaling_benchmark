@@ -103,7 +103,6 @@ class train_WGAN():
                     input_data = train_data[0].to(device)
                     target_data = train_data[1].to(device)
                     ii += 1
-                    print(ii)
                     start_c = time.time()
                     generator_output = self.generator(input_data)
                     critic_real = self.critic(target_data)
