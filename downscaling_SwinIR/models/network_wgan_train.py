@@ -128,7 +128,7 @@ class train_WGAN():
         print(
             f"Epoch [{epoch}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
               Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
-            f"Loss D Val: {loss_val_c.item():.4f}, loss G Val: {loss_val_gen.item():.4f},"
+            f"Loss D Val: {loss_val_c:.4f}, loss G Val: {loss_val_gen:.4f},"
             f", Time per 1 epoch: {end-time:.4f} sec."
         )
 
