@@ -204,12 +204,13 @@ class Scores:
     """
     Class to calculate scores and skill scores.
     """
+
     def __init__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, dims: List[str]):
         """
         :param data_fcst: forecast data to evaluate
         :param data_ref: reference or ground truth data
         """
-        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias, 
+        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias,
                              "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr}
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
@@ -258,13 +259,17 @@ class Scores:
 
     @avg_dims.setter
     def avg_dims(self, dims):
-        dim_stat = [avg_dim in self.data_dims for avg_dim in dims]
-        if not all(dim_stat):
-            ind_bad = [i for i, x in enumerate(dim_stat) if x]
-            raise ValueError("The following dimensions for score-averaging are not" +
-                             "part of the data: {0}".format(", ".join(dims[ind_bad])))
+        if dims is None:
+            self.avg_dims = self.data_dims
+            print("Scores will be averaged across all data dimensions.")
+        else:
+            dim_stat = [avg_dim in self.data_dims for avg_dim in dims]
+            if not all(dim_stat):
+                ind_bad = [i for i, x in enumerate(dim_stat) if x]
+                raise ValueError("The following dimensions for score-averaging are not" +
+                                 "part of the data: {0}".format(", ".join(dims[ind_bad])))
 
-        self._avg_dims = dims
+            self._avg_dims = dims
 
     def calc_mse(self, **kwargs):
         """
@@ -273,14 +278,8 @@ class Scores:
         """
         if kwargs:
             print("Passed keyword arguments to calc_mse are without effect.")
-        # sanity checks
-        if self.avg_dims is None:
-            print("MSE is averaged over all dimensions.")
-            dims = self.data_dims
-        else:
-            dims = self.avg_dims
 
-        mse = np.square(self.data_fcst - self.data_ref).mean(dim=dims)
+        mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
         return mse
 
@@ -294,14 +293,8 @@ class Scores:
 
         if kwargs:
             print("Passed keyword arguments to calc_bias are without effect.")
-        # sanity checks
-        if self.avg_dims is None:
-            print("Bias is averaged over all dimensions.")
-            dims = self.data_dims
-        else:
-            dims = self.avg_dims
 
-        bias = (self.data_fcst - self.data_ref).mean(dim=dims)
+        bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
         return bias
 
@@ -318,10 +311,10 @@ class Scores:
             psnr = mse
             psnr[...] = 100.
         else:
-            psnr = 20.*np.log10(pixel_max / np.sqrt(mse))
+            psnr = 20. * np.log10(pixel_max / np.sqrt(mse))
 
         return psnr
-    
+
     def calc_spatial_variability(self, **kwargs):
         """
         Calculates the ratio between the spatial variability of differental operator with order 1 (or 2) forecast and
@@ -336,8 +329,8 @@ class Scores:
         fcst_grad = self.calc_geo_spatial_diff(self.data_fcst, order=order)
         ref_grd = self.calc_geo_spatial_diff(self.data_ref, order=order)
 
-        ratio_spat_variability = (fcst_grad/ref_grd)
-        if avg_dims is not None: 
+        ratio_spat_variability = (fcst_grad / ref_grd)
+        if avg_dims is not None:
             ratio_spat_variability = ratio_spat_variability.mean(dim=avg_dims)
 
         return ratio_spat_variability
@@ -362,29 +355,32 @@ class Scores:
         lon_dims = ["rlon", "lon", "longitude"]
 
         def check_for_coords(coord_names_data, coord_names_expected):
-            for coord in coord_names_expected:
-                stat, ind_coord = check_str_in_list(coord_names_data, coord, return_ind=True)
-                if stat:
-                    return ind_coord[0], coord_names_data[ind_coord[0]] # just take the first value
+            stat = False
+            for i, coord in enumerate(coord_names_expected):
+                if coord in coord_names_data:
+                    stat = True
+                    break
 
-            raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
-                             .format(",".join(coord_names_expected)))
+            if stat:
+                return i, coord_names_expected[i]  # just take the first value
+            else:
+                raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
+                                 .format(",".join(coord_names_expected)))
 
         lat_ind, lat_name = check_for_coords(dims, lat_dims)
         lon_ind, lon_name = check_for_coords(dims, lon_dims)
 
         lat, lon = np.deg2rad(scalar_field[lat_name]), np.deg2rad(scalar_field[lon_name])
-        dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values    
+        dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values
 
         if order == 1:
-            dvar_dlambda = 1./(r_e*np.cos(lat)*dlambda)*scalar_field.differentiate(lon_name)
-            dvar_dphi = 1./(r_e*dphi)*scalar_field.differentiate(lat_name)
-            dvar_dlambda = dvar_dlambda.transpose(*scalar_field.dims)    # ensure that dimension ordering is not changed
+            dvar_dlambda = 1. / (r_e * np.cos(lat) * dlambda) * scalar_field.differentiate(lon_name)
+            dvar_dphi = 1. / (r_e * dphi) * scalar_field.differentiate(lat_name)
+            dvar_dlambda = dvar_dlambda.transpose(*scalar_field.dims)  # ensure that dimension ordering is not changed
 
-            var_diff_amplitude = np.sqrt(dvar_dlambda**2 + dvar_dphi**2)
+            var_diff_amplitude = np.sqrt(dvar_dlambda ** 2 + dvar_dphi ** 2)
             if dom_avg: var_diff_amplitude = var_diff_amplitude.mean(dim=[lat_name, lon_name])
         else:
             raise ValueError(f"Second-order differentation is not implemenetd in {method} yet.")
 
         return var_diff_amplitude
-
