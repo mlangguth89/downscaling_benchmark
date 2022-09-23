@@ -182,8 +182,8 @@ class train_WGAN():
             loss_rec = recon_loss(target_data, generator_output)
             g_loss = loss_gen + self.hparams.recon_weight * loss_rec
 
-            loss_c += loss_critic
-            loss_g += g_loss
+            loss_c += loss_critic.item()
+            loss_g += g_loss.item()
 
         return loss_c, g_loss
 
