@@ -132,12 +132,12 @@ class train_WGAN():
             f", Time per 1 epoch: {end-start:.4f} sec."
         )
 
-        if self.best_g_loss > loss_val_gen:
-            self.best_g_loss = loss_val_gen
-            self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
-
-        if self.best_cr_loss > loss_val_gen:
-            self.best_cr_loss = loss_val_gen
+        # if self.best_g_loss > loss_val_gen:
+        #     self.best_g_loss = loss_val_gen
+        #     self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
+        #
+        # if self.best_cr_loss > loss_val_gen:
+        #     self.best_cr_loss = loss_val_gen
 
         self.update_lr()  # Updating learning rate
 
