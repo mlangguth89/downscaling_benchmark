@@ -123,8 +123,11 @@ class train_WGAN():
 
             end = time.time()
             # Printing the results for each epoch
-            gc.collect()
+            # gc.collect()
+            start_2 = time.time()
             loss_val_c, loss_val_gen = self.validation()
+            end_2 = time.time()
+            print(f'validation time: {end_2 - start_2}')
             print(
                 f"Epoch [{epoch+1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
                   Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
