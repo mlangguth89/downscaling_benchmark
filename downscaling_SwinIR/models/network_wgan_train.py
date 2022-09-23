@@ -121,25 +121,25 @@ class train_WGAN():
                 g_loss.backward()
                 self.opt_gen.step()
 
-        end = time.time()
-        # Printing the results for each epoch
-        gc.collect()
-        loss_val_c, loss_val_gen = self.validation()
-        print(
-            f"Epoch [{epoch}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
-              Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
-            f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},"
-            f", Time per 1 epoch: {end-start:.4f} sec."
-        )
+            end = time.time()
+            # Printing the results for each epoch
+            gc.collect()
+            loss_val_c, loss_val_gen = self.validation()
+            print(
+                f"Epoch [{epoch+1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
+                  Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
+                f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},"
+                f", Time per 1 epoch: {end-start:.4f} sec."
+            )
 
-        # if self.best_g_loss > loss_val_gen:
-        #     self.best_g_loss = loss_val_gen
-        #     self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
-        #
-        # if self.best_cr_loss > loss_val_gen:
-        #     self.best_cr_loss = loss_val_gen
+            # if self.best_g_loss > loss_val_gen:
+            #     self.best_g_loss = loss_val_gen
+            #     self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
+            #
+            # if self.best_cr_loss > loss_val_gen:
+            #     self.best_cr_loss = loss_val_gen
 
-        self.update_lr()  # Updating learning rate
+            self.update_lr()  # Updating learning rate
 
     def update_lr(self, epoch: int = None):
         updater = get_lr_decay()
