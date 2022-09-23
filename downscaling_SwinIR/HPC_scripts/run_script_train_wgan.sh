@@ -29,4 +29,4 @@ epochs=10
 save_dir=../results/exp_test
 checkpoint_dir=../results/exp_test
 
-python ../main_scripts/network_wgan_train.py
+python ../models/network_wgan_train.py
