@@ -48,7 +48,7 @@ def get_lr_decay(hparams: dict = None):
         if epoch < decay_st:
             return lr
         elif decay_st <= epoch < decay_end:
-            return lr * torch.exp(torch.from_numpy(decay_rate))
+            return lr * torch.exp(torch.from_numpy(np.array(decay_rate)))
         elif epoch >= decay_end:
             return lr
 
