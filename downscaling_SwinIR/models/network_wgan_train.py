@@ -244,7 +244,7 @@ def run():
                         help="The output directory")
     parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
     parser.add_argument("--batch_size", type=int, default=32, help="The checkpoint directory")
-    parser.add_argument("--critic_iterations", type=float, default=1, help="The checkpoint directory")
+    parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=5.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=5.e-06, help="The checkpoint directory")
     parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
