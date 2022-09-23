@@ -11,6 +11,7 @@ sys.path.append('../')
 from handle_data.handle_data_unet import HandleUnetData
 from torch.utils.data import DataLoader
 
+
 class CustomTemperatureDataset(Dataset):
     def __init__(self, file_path: str = None, batch_size: int = 32, verbose: int = 0, seed: int = 1234):
         self.ds_tar = None
@@ -152,11 +153,9 @@ def run():
         file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
     #   /p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc
     # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc"
-    train_dataloader = DataLoader(data_loader, batch_size=1, shuffle=False, num_workers=8)
-    data_loader_iter = iter(data_loader)
-    train_features, train_labels = next(data_loader_iter)
-    train_features_2, train_labels_2 = next(data_loader_iter)
-    print()
+    train_dataloader = DataLoader(data_loader, batch_size=32, shuffle=False, num_workers=8)
+    for i, train_data in enumerate(train_dataloader):
+        print(i, train_data[0].shape)
 
 
 if __name__ == "__main__":

@@ -31,7 +31,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fl = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/preproc_era5_crea6_train.nc"
 #C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
 
-dataset = CustomTemperatureDataset(file_path=fl)
+dataset = CustomTemperatureDataset(file_path='C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc')
 train_dataloader = DataLoader(dataset, batch_size=32, shuffle=False)
 
 netG = unet(n_channels=9)
