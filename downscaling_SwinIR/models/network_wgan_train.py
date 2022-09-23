@@ -128,16 +128,16 @@ class train_WGAN():
         print(
             f"Epoch [{epoch}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
               Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
-            f"Loss D Val: {loss_val_c:.4f}, loss G Val: {loss_val_gen:.4f},"
-            f", Time per 1 epoch: {end-time:.4f} sec."
+            f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},"
+            f", Time per 1 epoch: {end-start:.4f} sec."
         )
 
-        if self.best_g_loss > g_loss:
-            self.best_g_loss = g_loss.item()
-            self.save_checkpoint(epoch=epoch, loss_g=g_loss, loss_cr=loss_critic)
+        if self.best_g_loss > loss_val_gen:
+            self.best_g_loss = loss_val_gen
+            self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
 
-        if self.best_cr_loss > loss_critic:
-            self.best_cr_loss = loss_critic.item()
+        if self.best_cr_loss > loss_val_gen:
+            self.best_cr_loss = loss_val_gen
 
         self.update_lr()  # Updating learning rate
 
