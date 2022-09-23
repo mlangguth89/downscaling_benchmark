@@ -8,6 +8,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from network_unet import UNet
 from network_critic_model import Discriminator
+import gc
+import time
 
 sys.path.append('../')
 from main_scripts.dataset_temp_v2 import CustomTemperatureDataset
@@ -81,6 +83,7 @@ class train_WGAN():
         """
         for epoch in range(self.hparams.epochs):
 
+            start = time.time()
             self.generator.train()
             self.critic.train()
 
@@ -92,7 +95,7 @@ class train_WGAN():
 
                 # Training the critic model
                 for i in range(self.hparams.critic_iterations):
-                    print(i)
+
                     generator_output = self.generator(input_data)
                     critic_real = self.critic(target_data)
                     critic_fake = self.critic(generator_output)
@@ -118,12 +121,15 @@ class train_WGAN():
                 g_loss.backward()
                 self.opt_gen.step()
 
+        end = time.time()
         # Printing the results for each epoch
+        gc.collect()
         loss_val_c, loss_val_gen = self.validation()
         print(
             f"Epoch [{epoch}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
               Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
-            f"Loss D Val: {loss_val_c.item():.4f}, loss G Val: {loss_val_gen.item():.4f}"
+            f"Loss D Val: {loss_val_c.item():.4f}, loss G Val: {loss_val_gen.item():.4f},"
+            f", Time per 1 epoch: {end-time:.4f} sec."
         )
 
         if self.best_g_loss > g_loss:
