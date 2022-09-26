@@ -181,7 +181,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinSR":
-        netG = swinSR(img_size=16,patch_size=1,in_chans=n_channels,window_size=8,upscale=4,upsampler='nearest+conv')
+        netG = swinSR(img_size=16,patch_size=4,in_chans=n_channels,window_size=8,upscale=2,upsampler='pixelshuffle')
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     else:

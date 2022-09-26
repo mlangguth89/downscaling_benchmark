@@ -878,6 +878,7 @@ class SwinIR(nn.Module):
             x = x + self.conv_last(res)
 
         x = x / self.img_range + self.mean
+        print('x shape: {}'.format(x.shape))
 
         #return x[:, :, :H*self.upscale, :W*self.upscale] origin SWINIR
         return x[:, 0, :H*self.upscale, :W*self.upscale] 
