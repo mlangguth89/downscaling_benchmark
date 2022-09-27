@@ -274,7 +274,7 @@ def run():
     parser.add_argument("--decay_start", type=int, default=5, help="The checkpoint directory")
     parser.add_argument("--decay_end", type=int, default=10, help="The checkpoint directory")
     parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
-    parser.add_argument("--recon_weight", type=float, default=0.2, help="The checkpoint directory")
+    parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
     parser.add_argument("--checkpoint_dir", type=str, required=False,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom",
