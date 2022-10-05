@@ -1,69 +1,88 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
-__date__ = "2022-01-20"
-__update__ = "2022-02-01"
+__date__ = "2022-05-31"
+__update__ = "2022-06-01"
 
-import os, sys
+import os
 import argparse
 from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
-from timeit import default_timer as timer
+import gc
 import json as js
+from timeit import default_timer as timer
 import numpy as np
+import xarray as xr
+import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras.optimizers import Adam
-import tensorflow.keras.utils as ku
 from tensorflow.python.keras.utils.layer_utils import count_params
-from handle_data_unet import HandleUnetData
 from unet_model import build_unet, get_lr_scheduler
+from handle_data_unet import HandleUnetData
+from handle_data_class import HandleDataClass
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
+from other_utils import to_list
 
+# Open issues:
+# * customized input file (= data engine)
+# * customized choice on predictors and predictands
+# * harmonize and merge with main_train_unet.py
 
 def main(parser_args):
-
     # start timing
     t0 = timer()
 
-    method = main.__name__
+    # initialize benchmarking object
+    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training_unet.csv"))
 
-    # parse arguments
-    job_id = parser_args.job_id
+    # Get some basic directories and flags
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
+    job_id = parser_args.id
 
-    z_branch = not parser_args.no_z_branch
-    hour = parser_args.hour
-    nepochs = parser_args.nepochs
-    batch_size = parser_args.batch_size
-
-    # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training.csv"))
-    # read and normalize data for training
+    # Read training and validation data
     print("Start reading data from disk...")
-    data_obj = HandleUnetData(datadir, "training", purpose="train_aug")
-    data_obj.append_data("validation", purpose="val_aug")
+    t0_save = timer()
+    #ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
+    #                   xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
 
-    if "login" in data_obj.host:
-        raise EnvironmentError("%{0}: Training is only supported on the computing nodes, not on the login-node ('{1}')"
-                               .format(method, data_obj.host))
+    benchmark_dict = {"loading data time": timer() - t0_save}
 
-    int_data, tart_data, opt_norm = data_obj.normalize("train_aug", daytime=None)
-    inv_data, tarv_data = data_obj.normalize("val_aug", daytime=None, opt_norm=opt_norm)
+    keys_remove = ["input_dir", "output_dir", "id", "no_z_branch"]
+    args_dict = {k: v for k, v in vars(parser_args).items() if (v is not None) & (k not in keys_remove)}
+    args_dict["z_branch"] = not parser_args.no_z_branch
 
-    print(np.shape(int_data))
+    # Start data preprocessing (reshaping, normalization and conversion to TF dataset)
+    t0_preproc = timer()
+    # slice data temporally to save memory
+    #ds_train  = ds_train.sel(time=slice("2011-01-01", "2013-12-31"))
+    if not args_dict["z_branch"]:
+        # drop topography on target grid in case that z_branch is set to False
+        ds_train, ds_val = ds_train.drop("hsurf_tar"), ds_val.drop("hsurf_var")
 
-    # get dictionary for tracking benchmark parameters
-    tot_time_load = data_obj.timing["loading_times"]["train_aug"] + data_obj.timing["loading_times"]["val_aug"]
-    benchmark_dict = {"loading data time": tot_time_load}
+    # turn dataset into data-array and normalize
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
 
-    # some information on training data
-    nsamples = int_data.shape[0]
-    shape_in = int_data.shape[1:]
+    norm_dims = ["time", "rlat", "rlon"]
+    da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
+                                                               save_path=os.path.join(outdir, parser_args.model_name),
+                                                               return_stat=True)
+    da_val = HandleUnetData.z_norm_data(da_val, mu=mu_train, std=std_train)
 
-    # visualize model architecture on login-node
-    if "login" in data_obj.host:
-        unet_model = build_unet(shape_in, z_branch=True)
-        ku.plot_model(unet_model, to_file=os.path.join(outdir, "unet_downscaling_model.png"), show_shapes=True)
+    del ds_train
+    del ds_val
+    gc.collect()
+    
+    t0_compile = timer()
+    benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
+
+    # get targets as dictionary for usage in fit-function
+    train_iter = HandleDataClass.make_tf_dataset(da_train, args_dict["batch_size"], named_targets=True)
+    val_iter = HandleDataClass.make_tf_dataset(da_val, args_dict["batch_size"], lshuffle=False, named_targets=True)
+
+    nsamples = da_train.shape[0]
+    shape_in = train_iter.element_spec[0].shape[1:]
 
     # define class for creating timer callback
     class TimeHistory(keras.callbacks.Callback):
@@ -81,41 +100,51 @@ def main(parser_args):
     callback_list = [lr_scheduler, time_tracker]
 
     # build, compile and train the model
-    unet_model = build_unet(shape_in, z_branch=z_branch)
+    varnames_tar = list(train_iter.element_spec[1].keys())
+    unet_model = build_unet(shape_in, z_branch=args_dict["z_branch"], tar_channels=varnames_tar)
+    steps_per_epoch = int(np.ceil(nsamples / args_dict["batch_size"]))
 
-    if z_branch:
-        print("%{0}: Start training with optimization on surface topography (with z_branch).".format(method))
-        unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)),
-                           loss={"output_temp": "mae", "output_z": "mae"},
-                           loss_weights={"output_temp": 1.0, "output_z": 1.0})
+    nvars_tar = len(varnames_tar)
 
-        history = unet_model.fit(x=int_data.values, y={"output_temp": tart_data.isel(variable=0).values,
-                                                       "output_z": tart_data.isel(variable=1).values},
-                                 batch_size=batch_size, epochs=nepochs, callbacks=callback_list,
-                                 validation_data=(inv_data.values, {"output_temp": tarv_data.isel(variable=0).values,
-                                                                    "output_z": tarv_data.isel(variable=1).values}), 
+    if args_dict["z_branch"]:
+        print("Start training with optimization on surface topography (with z_branch).")
+        assert nvars_tar == 2, f"U-Net shall be trained with z_branch, but does not comprise two target variables (got {nvars_tar:d})."
+        unet_model.compile(optimizer=Adam(args_dict["lr"]),
+                           loss={varnames_tar[0]: "mae", varnames_tar[1]: "mae"},
+                           loss_weights={varnames_tar[0]: 1.0, varnames_tar[1]: 1.0})
+
+        history = unet_model.fit(train_iter,
+                                 epochs=args_dict["train_epochs"],
+                                 steps_per_epoch=steps_per_epoch,
+                                 callbacks=callback_list,
+                                 validation_data=val_iter,
+                                 validation_steps=3,
                                  verbose=2)
     else:
-        print("%{0}: Start training without optimization on surface topography (with z_branch).".format(method))
-        unet_model.compile(optimizer=Adam(learning_rate=5*10**(-4)), loss="mae")
+        print("Start training without optimization on surface topography (without z_branch).")
+        assert nvars_tar == 1, f"U-Net shall be trained without z_branch, but still comprises more than one target (got {nvars_tar:d})."
+        unet_model.compile(optimizer=Adam(learning_rate=args_dict["lr"]), loss="mae")
 
-        history = unet_model.fit(x=int_data.values, y=tart_data.isel(variable=0).values, batch_size=batch_size,
-                                 epochs=nepochs, callbacks=callback_list,
-                                 validation_data=(inv_data.values, tarv_data.isel(variable=0).values), 
+        history = unet_model.fit(train_iter,
+                                 epochs=args_dict["train_epochs"],
+                                 steps_per_epoch=steps_per_epoch,
+                                 callbacks=callback_list,
+                                 validation_data=val_iter,
+                                 validation_steps=3,
                                  verbose=2)
 
     # get some parameters from tracked training times and put to dictionary
-    training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*nepochs)
+    training_times = get_training_time_dict(time_tracker.epoch_times, nsamples*args_dict["batch_size"])
     benchmark_dict = {**benchmark_dict, **training_times}
     # also track losses
-    benchmark_dict["final training loss"] = history.history["output_temp_loss"][-1]
-    benchmark_dict["final validation loss"] = history.history["val_output_temp_loss"][-1]
+    benchmark_dict["final training loss"] = history.history[f"{varnames_tar[0]}_loss"][-1]
+    benchmark_dict["final validation loss"] = history.history[f"val_{varnames_tar[0]}_loss"][-1]
 
     # save trained model
-    model_name = "trained_downscaling_unet_t2m_hour{0:0d}_exp{1:d}".format(hour, bm_obj.exp_number)
-    print("%{0}: Save trained model '{1}' to '{2}'".format(method, model_name, outdir))
+    model_name = parser_args.model_name
+    print("Save trained model '{0}' to '{1}'".format(model_name, outdir))
     t0_save = timer()
-    unet_model.save(os.path.join(outdir, "{0}.h5".format(model_name)), save_format="h5")
+    unet_model.save(os.path.join(outdir, f"{model_name}"))
     benchmark_dict = {**benchmark_dict, "saving model time": timer() - t0_save}
 
     # finally, track total runtime...
@@ -130,42 +159,37 @@ def main(parser_args):
 
     js_file = os.path.join(os.getcwd(), "benchmark_training_static.json")
     if not os.path.isfile(js_file):
-        data_mem = data_obj.data_info["memory_datasets"]
         stat_info = {"static_model_info": {"trainable_parameters": count_params(unet_model.trainable_weights),
                                            "non-trainable_parameters": count_params(unet_model.non_trainable_weights)},
-                     "data_info": {"training data size": data_mem["train_aug"], "validation data size": data_mem["val_aug"],
-                                   "nsamples": nsamples, "shape_samples": shape_in, "batch_size": batch_size}}
+                     "data_info": {"training data size": -999., "validation data size": -999.,
+                                   "nsamples": nsamples, "shape_samples": shape_in,
+                                   "batch_size": args_dict["batch_size"]}}
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
-
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 
 
 if __name__ == "__main__":
-    # date format for logging
-    fmt_t = "%Y-%m-%d %H:%:%S"
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--input_dir", "-in", dest="input_dir", type=str, required=True,
                         help="Directory where input netCDF-files are stored.")
-    parser.add_argument("--output_dir", "-out", dest="output_dir",
-                        type=str, required=True, help="Output directory where model is savded.")
-    parser.add_argument("--number_epochs", "-nepochs", dest="nepochs", type=int, default=70,
-                        help="Number of epochs for training.")
-    parser.add_argument("--batch_size", "-bs", dest="batch_size", type=int, default=32,
-                        help = "Batch size during model training.")
-    parser.add_argument("--job_id", "-id", dest="job_id", type=int, help="Job-id from Slurm.")
-    parser.add_argument("--hour", "-hour", dest="hour", type=int, default=12,
-                        help="Daytime hour for which model will be trained. Currently not used!!!")
+    parser.add_argument("--output_dir", "-out", dest="output_dir", type=str, required=True,
+                        help="Output directory where model is savded.")
+    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
+    parser.add_argument("--number_epochs", "-nepochs", dest="train_epochs", type=int, required=True,
+                        help="Numer of epochs to train U-Net.")
+    parser.add_argument("--batch_size", "-bs", dest="batch_size", type=int, default=32, 
+                        help="Number of samples per mini-batch.")
+    parser.add_argument("--learning_rate", "-lr", dest="lr", type=float, required=True,
+                        help="Learning rate to train U-Net.")
     parser.add_argument("--no_z_branch", "-no_z", dest="no_z_branch", default=False, action="store_true",
                         help="Flag if U-net is optimzed on additional output branch for topography" +
                              "(see Sha et al., 2020)")
+    parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
+                        help="Name for the trained U-Net.")
 
     args = parser.parse_args()
-    print("Start running main-task at {0}".format(dt.strftime(dt.now(), fmt_t)))
     main(args)
-    print("Ended running main-task at {0}".format(dt.strftime(dt.now(), fmt_t)))
-
 

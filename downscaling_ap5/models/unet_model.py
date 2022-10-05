@@ -50,7 +50,7 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 
 # The particular U-net
-def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False) -> Model:
+def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model
     :param input_shape: shape of input-data
@@ -73,9 +73,9 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     d2 = decoder_block(d1, s2, channels_start * 2)
     d3 = decoder_block(d2, s1, channels_start)
 
-    output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name="output_temp")(d3)
+    output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
-        output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name="output_z")(d3)
+        output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
         model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:

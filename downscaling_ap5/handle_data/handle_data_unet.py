@@ -9,9 +9,10 @@ import numpy as np
 import xarray as xr
 import climetlab as cml
 from handle_data_class import HandleDataClass
-
+import os
+import json
 # basic data types
-arr_xr_np = Union[xr.Dataset, xr.Dataset, np.ndarray]
+ds_or_da = Union[xr.Dataset, xr.DataArray]
 
 
 class HandleUnetData(HandleDataClass):
@@ -118,7 +119,7 @@ class HandleUnetData(HandleDataClass):
             return in_data, tar_data
 
     @staticmethod
-    def denormalize(data: arr_xr_np, mu: float, std: float):
+    def denormalize(data: ds_or_da, mu: float, std: float):
         """
         Denoramlize data using z-score normalization.
         :param data: The data to be denormalized.
@@ -131,31 +132,65 @@ class HandleUnetData(HandleDataClass):
         return data_denorm
 
     @staticmethod
-    def z_norm_data(data: arr_xr_np, norm_method="norm", mu=None, std=None, dims=None, return_stat: bool = False):
+    def z_norm_data(data: ds_or_da, norm_method="norm", mu: ds_or_da = None, std: ds_or_da = None, save_path: str = "",
+                    dims=None, return_stat: bool = False):
         """
-        Perform z-score normalization on the data
-        :param data: the data as xarray-Dataset
+        Perform z-score normalization on the data. Three opitions for parsing/retrieving the normalization parameters
+        mu and std.
+        a) The file z_norm_dict.json already exists under save_path from which the parameters can be read.
+        b) mu and std are provided as arguments to this method (save_path must be empty then!)
+        c) The normalization parameters are obtained from the data (i.e. neither the json-file exists nor mu and std
+           have been parsed).
+        :param data: the data as xarray-Dataset or xarray-DataArray
         :param norm_method: 'direction' of normalization, i.e. "norm" for normalization, "denorm" for denormalization
-        :param mu: the mean used for normalization (set to False if calculation from data is desired)
-        :param std: the standard deviation used for normalization (set to False if calculation from data is desired)
+        :param mu: the mean to apply (de-)normalization on the data
+        :param std: the standard deviation to apply (de-)normalization on the data
+        :param save_path: path where z_norm_dict.json is stored (pre-existing) or will be stored
         :param dims: list of dimension over which statistical quantities for normalization are calculated
         :param return_stat: flag if normalization statistics are returned
         :return: the normalized data
         """
         method = HandleUnetData.z_norm_data.__name__
+        js_file = os.path.join(save_path, "z_norm_dict.json")
+        norm_dict = {}
+        assert isinstance(data, xr.Dataset) or isinstance(data, xr.DataArray), \
+            "%{0}: data must be a xarray Dataset or Array.".format(method)
 
-        if mu is None or std is None:
-            if norm_method == "denorm":
-                raise ValueError("%{0}: Denormalization requires parsing of mu and std.".format(method))
+        if not dims:
+            dims = list(data.dims)
 
-            assert isinstance(data, xr.Dataset) or isinstance(data, xr.DataArray), \
-                   "%{0}: data must be a xarray Dataset or Array.".format(method)
-
-            if not dims:
-                dims = list(data.dims)
+        if os.path.exists(js_file):
+            print(f"Read parameters for normalization from file {js_file}...")
+            with open(js_file, "r") as f:
+                norm_dict = json.load(f)
+                keys = list(norm_dict["mu"].keys())
+                mu = np.asarray(list(norm_dict["mu"].values()))
+                std = np.asarray(list(norm_dict["std"].values()))
+                mu = xr.DataArray(mu, coords={"variables": keys}, dims=["variables"])
+                std = xr.DataArray(std, coords={"variables": keys}, dims=["variables"])
+        elif mu is not None and std is not None:
+            print(f"Parameters for normalization are parsed directly to the method.")
+        else:
+            print(f"Parameters for normalization are obtained from the data.")
             mu = data.mean(dim=dims)
             std = data.std(dim=dims)
+            mu_dict, std_dict = mu.to_dict(), std.to_dict()
+            dict_mu, dict_std = {}, {}
+            dt_mu, dt_std = mu_dict["data"], std_dict["data"]
+            keys = mu_dict['coords']['variables']['data']
 
+            for i, var in enumerate(keys):
+                dict_mu[var] = dt_mu[i]
+                dict_std[var] = dt_std[i]
+
+            norm_dict["mu"] = dict_mu
+            norm_dict["std"] = dict_std
+            os.makedirs(save_path, exist_ok=True)
+            with open(js_file, "w") as f:
+                json.dump(norm_dict,f)
+                print(f"Statistical parameters for z-normalization (mu and std) saved to {js_file}")
+
+        # perform (de-)normalization
         if norm_method == "norm":
             data_out = (data - mu) / std
         elif norm_method == "denorm":
@@ -167,3 +202,5 @@ class HandleUnetData(HandleDataClass):
             return data_out, mu, std
         else:
             return data_out
+
+

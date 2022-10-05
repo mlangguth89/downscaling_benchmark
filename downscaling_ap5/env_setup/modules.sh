@@ -1,6 +1,6 @@
 #!/bin/bash
 
-ML_SCR=modules.sh
+ML_SCR=modules_train.sh
 
 ML_COLL=downscaling_unet_v1_0
 
