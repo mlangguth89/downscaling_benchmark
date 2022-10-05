@@ -98,43 +98,6 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
     return quantile_panel, data_cond
 
 
-def avg_metrics(metric: da_or_ds, dim_name: str):
-    """
-    Averages metric over given dimension
-    :param metric: DataArray or Dataset of metric that should be averaged
-    :param dim_name: name of the dimension on which division into blocks is applied
-    :return: DataArray or Dataset of metric averaged over given dimension. If a Dataset is passed, the averaged metrics
-             carry the suffix "_avg" in their variable names.
-    """
-    method = avg_metrics.__name__
-
-    if not isinstance(metric, da_or_ds.__args__):
-        raise ValueError("%{0}: Input metric must be a xarray DataArray or Dataset and not {1}".format(method,
-                                                                                                       type(metric)))
-
-    if isinstance(metric, xr.Dataset):
-        list_vars = [varname for varname in metric.data_vars if dim_name in metric[varname].dims]
-        if not list_vars:
-            raise ValueError("%{0}: {1} is not a dimension in the input metric dataset".format(method, dim_name))
-
-        metric2avg = metric[list_vars]
-    else:
-        if dim_name in metric.dims:
-            pass
-        else:
-            raise ValueError("%{0}: {1} is not a dimension in the input metric data-array".format(method, dim_name))
-
-        metric2avg = metric
-
-    metric_avg = metric2avg.mean(dim=dim_name)
-
-    if isinstance(metric, xr.Dataset):
-        new_varnames = ["{0}_avg".format(var) for var in list_vars]
-        metric_avg = metric_avg.rename(dict(zip(list_vars, new_varnames)))
-
-    return metric_avg
-
-
 def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length: int, nboots_block: int = 1000,
                                    seed: int = 42):
     """
