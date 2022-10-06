@@ -11,6 +11,31 @@ import numpy as np
 import tensorflow.keras.layers as layers
 from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
                                      Conv2DTranspose, Input, MaxPool2D)
+from unet_model import UNET, unet_model
+from wgan_model import WGAN, critic_model
+
+
+def get_model(model_name: str):
+    """
+    Get a Keras model given the provided model_name. Parse "help" to get an overview of existing models.
+    :param model_name: name of known models.
+    :return: model object or tuple of model objects for composite models. In case of help, None is returned!
+    """
+    known_models = {"u-net": UNET,
+                    "wgan": (WGAN, unet_model, critic_model)}
+
+    help_str = f"Known models are: {', '.join(list(known_models.keys()))}"
+    model_name_local = model_name.lower()
+
+    if model_name_local in known_models.keys():
+        model = known_models[model_name_local]
+    elif model_name_local == "help":
+        print(help_str)
+        model = None
+    else:
+        raise ValueError(f"Model '{model_name}' is unknown. Please specify a known model. {help_str}")
+
+    return model
 
 
 def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1, 1), padding: str = "same",
