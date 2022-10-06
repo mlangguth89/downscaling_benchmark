@@ -25,7 +25,8 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils.layer_utils import count_params
 from model_utils import get_model
-from handle_data_class import get_dataset_filename
+from handle_data_class import HandleDataClass, get_dataset_filename
+from all_normalizations import ZScore
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
@@ -76,14 +77,44 @@ def main(parser_args):
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
-    if callable(model_obj):
-        model_func = model_obj[0]
-        func_args = (*model_obj[1:], parser_args.exp_name, model_savedir, hparams_dict)
-    else:
-        model_func = model_obj
-        func_args = (parser_args.exp_name, model_savedir, hparams_dict)
+    model_instance = GetModel(parser_args.model_name)
+    model = model_instance.instantiate(parser_args.exp_name, model_savedir, hparams_dict)
 
-    model = model_func(*func_args)
+    # prepare training and validation data
+    t0_preproc = timer()
+
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
+
+    data_norm = ZScore(ds_dict["norm_dims"])
+    da_train = data_norm.normalize(da_train)
+    da_val = data_norm.normalize(da_val)
+    data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
+
+    bs_train = ds_dict["batch_size"] * ds_dict["d_steps"] if "d_steps" in ds_dict else ds_dict["batch_size"]
+    tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"])
+    tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
+                                               var_tar2in=ds_dict["var_tar2in"])
+
+    # clean up to save some memory
+    del ds_train
+    del ds_val
+    gc.collect()
+
+    t0_compile = timer()
+    benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
+
+    # train model
+    # define class for creating timer callback
+    class TimeHistory(keras.callbacks.Callback):
+        def on_train_begin(self, logs={}):
+            self.epoch_times = []
+
+        def on_epoch_begin(self, epoch, logs={}):
+            self.epoch_time_start = timer()
+
+        def on_epoch_end(self, epoch, logs={}):
+            self.epoch_times.append(timer() - self.epoch_time_start)
+
 
 
 
