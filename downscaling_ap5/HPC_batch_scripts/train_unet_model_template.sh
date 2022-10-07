@@ -6,11 +6,11 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=train_unet-model-out.%j
 #SBATCH --error=train_unet-model-err.%j
-#SBATCH --time=01:00:00
+#SBATCH --time=06:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develgpus
+#SBATCH --partition=booster
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=m.langguth@fz-juelich.de
+#SBATCH --mail-user=XXX@fz-juelich.de                   # add your e-mail script here!
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"
@@ -18,7 +18,7 @@ exit 99
 ######### Template identifier (don't remove) #########
 
 # Name of virtual environment
-VIRT_ENV_NAME="venv_juwels"
+VIRT_ENV_NAME=<my_venv>                       # add your virtual environment here!
 
 # Loading mouldes
 source ../env_setup/modules.sh
@@ -34,7 +34,13 @@ if [ -z ${VIRTUAL_ENV} ]; then
 fi
 
 # declare directory-variables which will be modified by config_runscript.py
-source_dir=/p/project/deepacf/maelstrom/data/downscaling_unet/
-destination_dir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_unet/trained_models/
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/
+outdir=<my_output_dir>                                   # add path to your output directory (trained model) here!
 
-srun python3 ../main_scripts/main_train.py -in ${source_dir} -out ${destination_dir} -id ${SLURM_JOBID}
+nepochs=70
+lr=5.e-05
+model_name=my_unet_model                           # can be modified to provide a customized name of the trained model
+
+srun python3 ../main_scripts/main_train_unet.py -in ${indir} -out ${outdir} \
+                                                -lr ${lr} -nepochs ${nepochs} -lr_decay -model_name ${model_name} \
+                                                -id ${SLURM_JOBID}
