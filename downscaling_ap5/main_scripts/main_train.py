@@ -3,27 +3,23 @@
 # SPDX-License-Identifier: MIT
 
 """
-Driver-script to train downscaling models
+Driver-script to train downscaling models.
 """
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2022-10-06"
+__update__ = "2022-10-07"
 
 import os
 import argparse
 from datetime import datetime as dt
-
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 import gc
 import json as js
 from timeit import default_timer as timer
-import numpy as np
 import xarray as xr
-import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.python.keras.utils.layer_utils import count_params
 from model_utils import ModelEngine
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
@@ -31,9 +27,7 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
 # Open issues:
-# * customized input file (= data engine)
 # * customized choice on predictors and predictands
-# * harmonize and merge with main_train_unet.py
 
 def main(parser_args):
     # start timing
