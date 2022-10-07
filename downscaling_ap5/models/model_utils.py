@@ -15,6 +15,81 @@ from unet_model import UNET, unet_model
 from wgan_model import WGAN, critic_model
 
 
+class ModelEngine(object):
+    """
+    Class to get and instantiate known models.
+    To add new models, please adapt known_models accoringly.
+    General info:
+    The key value of the implemented model should be based on keras.Model and should expect 'hparams', 'exp_name' and
+    'model_savedir' as arguments for initialization. Further keyword arguments are possible.
+    For composite models (e.g. GANs):
+    The key value should be a tuple whose first element constitutes the composited model (based on keras.Model).
+    The following arguments should then be model construction objects to define the components of the composite model.
+    Example: WGAN is a composite model consisting of a generator and critic (see wgan_model.py).
+             Thus, the derived class should be the first element of the tuple.
+             The model constructions of the generator (e.g. a U-Net) and the critic must then constitute the second and
+             third element of the tuple, i.e. {"wgan": (WGAN, unet_model, critic_model).
+    """
+
+    known_models = {"u-net": UNET,
+                    "wgan": (WGAN, unet_model, critic_model)}
+
+    def __init__(self, model_name: str):
+        """
+        Initialize the model if known.
+        :param model_name: name of the model (must match any key of self.known_models)
+        Hint: Pass help to get an overview of the available models.
+        """
+        self.modelname = model_name
+        if self.modelname is None:
+            self.model = None
+        else:
+            self.model = self.known_models[self.modelname]
+
+    def __call__(self, hparams_dict, exp_name, save_dir, **kwargs):
+        """
+        Instantiate the model with some required arguments.
+        """
+        model_list = list(self.model)
+        target_model = model_list[0]
+        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "model_savedir": save_dir, **kwargs}
+
+        try:
+            if len(model_list) == 1:
+                model = target_model(**model_args)
+            else:
+                submodels = model_list[1:]
+                model = target_model(*submodels, **model_args)
+        except Exception as e:
+            err_str = str(e)
+            raise RuntimeError(f"Failed to instantiate the model. The following error occured: \n {err_str}")
+
+        return model
+
+    @property
+    def modelname(self):
+        return self._modelname
+
+    @modelname.setter
+    def modelname(self, model_name):
+
+        help_str = self._get_help_ste()
+        model_name_local = model_name.lower()
+
+        if model_name_local in self.known_models.keys():
+            self._modelname = model_name_local
+        elif model_name_local == "help":
+            print(help_str)
+            self._modelname = None
+        else:
+            raise ValueError(f"Model '{model_name}' is unknown. Please specify a known model. {help_str}")
+
+    def _get_help_str(self):
+        """
+        Create help-string listing all known models.
+        """
+        return f"Known models are: {', '.join(list(self.known_models.keys()))}"
+
 def get_model(model_name: str):
     """
     Get a Keras model given the provided model_name. Parse "help" to get an overview of existing models.
