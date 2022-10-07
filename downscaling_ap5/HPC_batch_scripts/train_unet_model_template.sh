@@ -42,5 +42,5 @@ lr=5.e-05
 model_name=my_unet_model                           # can be modified to provide a customized name of the trained model
 
 srun python3 ../main_scripts/main_train_unet.py -in ${indir} -out ${outdir} \
-                                                -lr ${lr} -nepochs ${nepochs} -lr_decay -model_name ${model_name} \
+                                                -lr ${lr} -nepochs ${nepochs} -model_name ${model_name} \
                                                 -id ${SLURM_JOBID}
