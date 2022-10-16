@@ -22,11 +22,12 @@ from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinSR
 #from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
+from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
-import wandb
-os.environ["WANDB_MODE"]="offline"
-#os.environ["WANDB_API_KEY"] = key
-wandb.init(project="Precip_downscaling",reinit=True)
+#import wandb
+#os.environ["WANDB_MODE"]="offline"
+##os.environ["WANDB_API_KEY"] = key
+#wandb.init(project="Precip_downscaling",reinit=True)
 
 
 class BuildModel:
@@ -47,7 +48,7 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
-        wandb.watch(self.netG, log_freq=100)
+        #wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
@@ -163,7 +164,9 @@ class BuildModel:
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
-        epochs: int = 2, type_net: str = "unet"):
+        epochs: int = 2, type_net: str = "unet", patch_size: int = 2,
+        window_size: int = 4, upscale_swinIR: int = 4, 
+        upsampler_swinIR: str = "pixelshuffle"):
 
     """
     :param train_dir       : the directory that contains the training dataset NetCDF files
@@ -181,9 +184,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinSR":
-        netG = swinSR(img_size=16,patch_size=4,in_chans=n_channels,window_size=8,upscale=2,upsampler='pixelshuffle')
+        netG = swinSR(img_size=16,patch_size=patch_size,in_chans=n_channels,window_size=window_size,
+                upscale=upscale_swinIR,upsampler=upsampler_swinIR)
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
+    elif type_net == "swinUnet":
+        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],depths_decoder=[1,2,2],num_heads=[3,6,12],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first")
+
     else:
         NotImplementedError
 
@@ -223,7 +230,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                wandb.log({"loss":model.G_loss, "lr":lr})
+                #wandb.log({"loss":model.G_loss, "lr":lr})
                 
 
 def main():
@@ -235,6 +242,15 @@ def main():
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
+
+    # PARAMETERS FOR SWIN-IR & SWIN-UNET
+    parser.add_argument("--patch_size", type = int, default = 2)
+    parser.add_argument("--window_size", type = int, default = 4)
+
+    # PARAMETERS FOR SWIN-IR
+    parser.add_argument("--upscale_swinIR", type = int, default = 4)
+    parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
+
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
@@ -248,7 +264,12 @@ def main():
         save_dir = args.save_dir,
         checkpoint_save = 200,
         epochs = args.epochs,
-        type_net = args.model_type)
+        type_net = args.model_type,
+        patch_size = args.patch_size,
+        window_size = args.window_size,
+        upscale_swinIR = args.upscale_swinIR,
+        upsampler_swinIR = args.upsampler_swinIR        
+        )
 
 
 if __name__ == '__main__':

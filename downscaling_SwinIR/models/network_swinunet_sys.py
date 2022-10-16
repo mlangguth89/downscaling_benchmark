@@ -9,6 +9,37 @@ import torch.utils.checkpoint as checkpoint
 from einops import rearrange
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
 
+class Upsampling(nn.Module):
+
+    def __init__(self, in_channels:int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: int = 1, stride: int = 2,
+                 upsampling:bool = True, sf: int = 2.5, mode = "bilinear"):
+        super().__init__()
+        """
+        This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
+        Note: The input data is assumed to be of the form minibatch x channels x [optional depth] x [optional height] x width.
+        :param in_channels : the number of input variables
+        :param out_channels: the output channels for each ConvTranspose2D layer
+        :param kernel_size : the kernel size
+        :param padding     : the padding size
+        :param stride      : the stride size
+        :param sf          : the scaling factor (low-resolution to high resolution)
+        :param upsampling  : use upsampling (True) to convert low to high resolution  or use transposed convolutional approach(False)
+        """
+        if upsampling:
+            self.deconv_block = nn.Upsample(scale_factor = sf, mode = mode, align_corners = True)
+        else:
+
+            layers = [nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = stride,
+                                         padding = padding) for i in range(3)]
+
+            layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size = kernel_size, stride = 1,
+                                   padding = padding, output_padding = 31 ))
+
+            self.deconv_block = nn.Sequential(*layers)
+
+    def forward(self, x):
+         return self.deconv_block(x)
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -38,6 +69,7 @@ def window_partition(x, window_size):
         windows: (num_windows*B, window_size, window_size, C)
     """
     B, H, W, C = x.shape
+    print('x.shape: {}'.format(x.shape))
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
     return windows
@@ -598,6 +630,8 @@ class SwinTransformerSys(nn.Module):
         self.mlp_ratio = mlp_ratio
         self.final_upsample = final_upsample
 
+        self.upsampling_first = Upsampling(sf=10,mode="bilinear")
+
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
@@ -709,7 +743,7 @@ class SwinTransformerSys(nn.Module):
             if inx == 0:
                 x = layer_up(x)
             else:
-                x = torch.cat([x,x_downsample[3-inx]],-1)
+                x = torch.cat([x,x_downsample[2-inx]],-1) # 3-inx
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
 
@@ -731,7 +765,11 @@ class SwinTransformerSys(nn.Module):
         return x
 
     def forward(self, x):
+        # remap for the first upsampling
+        x = self.upsampling_first(x) # 16x16->160x160
+
         x, x_downsample = self.forward_features(x)
+        print('x_downsample is: {}'.format(x_downsample))
         x = self.forward_up_features(x,x_downsample)
         x = self.up_x4(x)
 

@@ -611,7 +611,7 @@ class Upsample(nn.Sequential):
 
     def __init__(self, scale, num_feat):
         m = []
-        print("upsample scale")
+        # print("upsample scale")
         if (scale & (scale - 1)) == 0:  # scale = 2^n
             for _ in range(int(math.log(scale, 2))):
                 m.append(nn.Conv2d(num_feat, 4 * num_feat, 3, 1, 1))
@@ -878,7 +878,7 @@ class SwinIR(nn.Module):
             x = x + self.conv_last(res)
 
         x = x / self.img_range + self.mean
-        print('x shape: {}'.format(x.shape))
+        # print('x shape: {}'.format(x.shape))
 
         #return x[:, :, :H*self.upscale, :W*self.upscale] origin SWINIR
         return x[:, 0, :H*self.upscale, :W*self.upscale] 
