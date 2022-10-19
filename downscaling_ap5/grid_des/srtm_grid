@@ -1,0 +1,13 @@
+#
+# Grid description of corrected and cropped SRTM-data
+# see topography_srtm_corr.nc-file
+#
+gridtype  = lonlat
+xsize     = 24000
+ysize     = 24000
+xname     = lon
+yname     = lat
+yfirst    = 60.
+yinc      = -0.00083333
+xfirst    = 4.00041667
+xinc      = 0.00083333

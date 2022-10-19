@@ -1,0 +1,11 @@
+#
+# Grid-description file for target data of 
+# IFS HRES to RADKLIM downscaling task (precipitation downscaling).
+#
+gridtype = lonlat
+xsize = 1181
+ysize = 931
+xfirst = 4.3
+xinc = 0.01
+yfirst = 46.5 
+yinc = 0.01
