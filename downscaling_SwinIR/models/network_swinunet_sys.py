@@ -69,7 +69,7 @@ def window_partition(x, window_size):
         windows: (num_windows*B, window_size, window_size, C)
     """
     B, H, W, C = x.shape
-    print('x.shape: {}'.format(x.shape))
+    #print("x.shape in window_partition: {}".format(x.shape))
     x = x.view(B, H // window_size, window_size, W // window_size, window_size, C)
     windows = x.permute(0, 1, 3, 2, 4, 5).contiguous().view(-1, window_size, window_size, C)
     return windows
@@ -392,7 +392,7 @@ class FinalPatchExpand_X4(nn.Module):
         self.input_resolution = input_resolution
         self.dim = dim
         self.dim_scale = dim_scale
-        self.expand = nn.Linear(dim, 16*dim, bias=False)
+        self.expand = nn.Linear(dim, dim_scale*dim_scale*dim, bias=False)
         self.output_dim = dim 
         self.norm = norm_layer(self.output_dim)
 
@@ -630,6 +630,7 @@ class SwinTransformerSys(nn.Module):
         self.mlp_ratio = mlp_ratio
         self.final_upsample = final_upsample
 
+        # upsampling the coarse resolution inputs (16x16) to high outputs (160x160)
         self.upsampling_first = Upsampling(sf=10,mode="bilinear")
 
         # split image into non-overlapping patches
@@ -674,7 +675,7 @@ class SwinTransformerSys(nn.Module):
         for i_layer in range(self.num_layers):
             concat_linear = nn.Linear(2*int(embed_dim*2**(self.num_layers-1-i_layer)),
             int(embed_dim*2**(self.num_layers-1-i_layer))) if i_layer > 0 else nn.Identity()
-            if i_layer ==0 :
+            if i_layer == 0:
                 layer_up = PatchExpand(input_resolution=(patches_resolution[0] // (2 ** (self.num_layers-1-i_layer)),
                 patches_resolution[1] // (2 ** (self.num_layers-1-i_layer))), dim=int(embed_dim * 2 ** (self.num_layers-1-i_layer)), dim_scale=2, norm_layer=norm_layer)
             else:
@@ -686,8 +687,8 @@ class SwinTransformerSys(nn.Module):
                                 window_size=window_size,
                                 mlp_ratio=self.mlp_ratio,
                                 qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                drop=drop_rate, attn_drop=attn_drop_rate,
-                                drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
+                                    drop=drop_rate, attn_drop=attn_drop_rate,
+                                    drop_path=dpr[sum(depths[:(self.num_layers-1-i_layer)]):sum(depths[:(self.num_layers-1-i_layer) + 1])],
                                 norm_layer=norm_layer,
                                 upsample=PatchExpand if (i_layer < self.num_layers - 1) else None,
                                 use_checkpoint=use_checkpoint)
@@ -699,7 +700,7 @@ class SwinTransformerSys(nn.Module):
 
         if self.final_upsample == "expand_first":
             print("---final upsample expand_first---")
-            self.up = FinalPatchExpand_X4(input_resolution=(img_size//patch_size,img_size//patch_size),dim_scale=4,dim=embed_dim)
+            self.up = FinalPatchExpand_X4(input_resolution=(img_size//patch_size,img_size//patch_size),dim_scale=2,dim=embed_dim) # dim_scale=4 -> x4
             self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
 
         self.apply(self._init_weights)
@@ -743,7 +744,7 @@ class SwinTransformerSys(nn.Module):
             if inx == 0:
                 x = layer_up(x)
             else:
-                x = torch.cat([x,x_downsample[2-inx]],-1) # 3-inx
+                x = torch.cat([x,x_downsample[2-inx]],-1) # 3-inx ~ the depth of downscaling layers
                 x = self.concat_back_dim[inx](x)
                 x = layer_up(x)
 
@@ -758,7 +759,7 @@ class SwinTransformerSys(nn.Module):
 
         if self.final_upsample=="expand_first":
             x = self.up(x)
-            x = x.view(B,4*H,4*W,-1)
+            x = x.view(B,2*H,2*W,-1) # x.view(B,4*H,4*W,-1) -> x4
             x = x.permute(0,3,1,2) #B,C,H,W
             x = self.output(x)
             
@@ -767,11 +768,13 @@ class SwinTransformerSys(nn.Module):
     def forward(self, x):
         # remap for the first upsampling
         x = self.upsampling_first(x) # 16x16->160x160
-
+        #print('x after upsampling_first: {}'.format(x.shape))
         x, x_downsample = self.forward_features(x)
-        print('x_downsample is: {}'.format(x_downsample))
+        #print('x after downsample: {}'.format(x.shape))
         x = self.forward_up_features(x,x_downsample)
+        #print('x after forward_up_features: {}'.format(x.shape))
         x = self.up_x4(x)
+        #print('x after up_x4: {}'.format(x.shape))
 
         return x
 

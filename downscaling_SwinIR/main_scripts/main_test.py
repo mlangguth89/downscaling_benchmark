@@ -18,6 +18,7 @@ from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinSR
 #from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
+from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
 import wandb
@@ -40,15 +41,29 @@ def main():
                         help = "The directory where the statistics json file of training data is stored")    
     parser.add_argument("--checkpoint_dir", type = str, required = True, help = "Please provide the checkpoint directory")
 
+    # PARAMETERS FOR SWIN-IR & SWIN-UNET
+    parser.add_argument("--patch_size", type = int, default = 2)
+    parser.add_argument("--window_size", type = int, default = 4)
+
+    # PARAMETERS FOR SWIN-IR
+    parser.add_argument("--upscale_swinIR", type = int, default = 4)
+    parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
+
     args = parser.parse_args()
 
+    n_channels = 8
     print("The model {} is selected for training".format(args.model_type))
     if args.model_type == "unet":
-        netG = unet(n_channels = 8)
+        netG = unet(n_channels = n_channels)
     elif args.model_type == "swinSR":
-        netG = swinSR(img_size=16,patch_size=1,in_chans=8,window_size=8,upscale=4,upsampler='nearest+conv')
+        netG = swinSR(img_size=16,patch_size=args.patch_size,in_chans=n_channels,window_size=args.window_size,
+                upscale=args.upscale_swinIR,upsampler=args.upsampler_swinIR)
+        # netG = swinSR(img_size=16,patch_size=1,in_chans=8,window_size=8,upscale=4,upsampler='nearest+conv')
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
+    elif args.model_type == "swinUnet":
+        netG = swinUnet(img_size=160,patch_size=args.patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],depths_decoder=[2,2,2],num_heads=[6,12,24],window_size=args.window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first")
+
     else:
         NotImplementedError()
 
@@ -80,8 +95,8 @@ def main():
             idx += 1
             cidx_temp = test_data["idx"].numpy()
             times_temp = test_data["T"].numpy()
-            print('times: {}'.format(times_temp))
-            print('cidx: {}'.format(cidx_temp))
+            #print('times: {}'.format(times_temp))
+            #print('cidx: {}'.format(cidx_temp))
             cidx_list.append(cidx_temp)
             times_list.append(times_temp)
 
@@ -90,7 +105,7 @@ def main():
 
             # log-transform -> log(x+k)-log(k)
             input_vars = test_data["L"].numpy()
-            print('input_vars shape: {}'.format(input_vars.shape))
+            #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
             #input_temp = np.exp(input_temp+np.log(args.k))-args.k
             input_list.append(input_temp)     
@@ -104,7 +119,7 @@ def main():
             ref_temp = model.H.numpy()*vars_out_patches_std+vars_out_patches_mean
             #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
             ref_list.append(ref_temp)            
-            print('model.E shape: {}'.format(model.E.shape))
+            #print('model.E shape: {}'.format(model.E.shape))
             #G_loss = model.G_lossfn(model.E, model.H)
             #print("forecast loss ", np.float(G_loss))
         
@@ -115,18 +130,23 @@ def main():
         intL = np.concatenate(input_list,0)
         outH = np.concatenate(output_list,0)
 
+        print('pred shape: {}'.format(pred.shape))
+        print('ref shape: {}'.format(ref.shape))
+        print('intL shape: {}'.format(intL.shape))
+        print('outH shape: {}'.format(outH.shape))
+
         datetimes = []
         for i in range(times.shape[0]):
             times_str = str(times[i][0])+str(times[i][1]).zfill(2)+str(times[i][2]).zfill(2)+str(times[i][3]).zfill(2)
-            print('times_str: {}'.format(times_str))
+            #print('times_str: {}'.format(times_str))
             datetimes.append(datetime.strptime(times_str,'%Y%m%d%H'))
 
-        print('cidx shape:{}'.format(cidx.shape))
+        #print('cidx shape:{}'.format(cidx.shape))
         ds = xr.Dataset(
             data_vars=dict(
                 inputs=(["time", "lat_in", "lon_in"], intL),
                 outputs=(["time", "lat", "lon"], outH),
-                fcst=(["time", "lat", "lon"], pred),
+                fcst=(["time", "lat", "lon"], np.squeeze(pred)),
                 refe=(["time", "lat", "lon"], ref),
             ),
             coords=dict(
