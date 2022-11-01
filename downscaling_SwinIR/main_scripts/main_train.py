@@ -24,10 +24,10 @@ from models.network_swinir import SwinIR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
-#import wandb
-#os.environ["WANDB_MODE"]="offline"
+import wandb
+os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
-#wandb.init(project="Precip_downscaling",reinit=True)
+wandb.init(project="Precip_downscaling",reinit=True)
 
 
 class BuildModel:

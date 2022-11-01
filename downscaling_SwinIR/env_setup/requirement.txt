@@ -1,7 +1,7 @@
 opencv-python
 requests
-timm
-wandb
+timm==0.6.7
+wandb==0.13.2
 xarray
 matplotlib
 numpy
