@@ -26,6 +26,8 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
 import wandb
 os.environ["WANDB_MODE"]="offline"
+runname = "test"
+wandb.run.name = runname
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
 
@@ -189,7 +191,9 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],depths_decoder=[2,2,2],num_heads=[6,12,24],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
+        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
+                        depths_decoder=[2,2,2],num_heads=[6,12,24],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
+                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
 
     else:
         NotImplementedError
@@ -230,7 +234,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                #wandb.log({"loss":model.G_loss, "lr":lr})
+                wandb.log({"loss":model.G_loss, "lr":lr})
                 
 
 def main():
