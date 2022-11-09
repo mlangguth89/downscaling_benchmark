@@ -26,7 +26,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
 
     dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed, k, mode, stat_path)
 
-    return DataLoader(dataset, batch_size=None)
+    return DataLoader(dataset, batch_size=None), batch_size
 
 
 

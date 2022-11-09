@@ -28,7 +28,6 @@ import wandb
 os.environ["WANDB_MODE"]="offline"
 runname = "test"
 wandb.run.name = runname
-##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
 
 
@@ -50,7 +49,7 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
-        #wandb.watch(self.netG, log_freq=100)
+        wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
@@ -164,7 +163,7 @@ class BuildModel:
             return param_group['lr']
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
-        test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
+        val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet", patch_size: int = 2,
         window_size: int = 4, upscale_swinIR: int = 4, 
@@ -180,8 +179,10 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    train_loader = create_loader(train_dir)
-    #test_loader = create_loader(test_dir)
+    train_loader,batch_size = create_loader(train_dir)
+    val_loader, batch_size =  create_loader(val_dir)
+
+
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
@@ -191,9 +192,14 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
-                        depths_decoder=[2,2,2],num_heads=[6,12,24],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
-                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
+        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,
+                        num_classes=1,embed_dim=96,depths=[2,2,2],
+                        depths_decoder=[2,2,2],num_heads=[6,12,24],
+                        window_size=window_size,mlp_ratio=4,
+                        qkv_bias=True,qk_scale=None,
+                        drop_rate=0.,attn_drop_rate=0.,
+                        drop_path_rate=0.1,ape=False,
+                        final_upsample="expand_first") # final_upsample="expand_first"
 
     else:
         NotImplementedError
@@ -203,6 +209,18 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     model = BuildModel(netG, save_dir = save_dir)
     model.init_train()
     current_step = 0
+
+
+    wandb.config = {
+        "lr": model.G_optimizer_lr,
+        "train_dir": train_dir,
+        "val_dir": val_dir,
+        "epochs": epochs,
+        "window_size": window_size,
+        "patch_size": patch_size,
+        "batch_size": batch_size
+    }
+
 
     for epoch in range(epochs):
         for i, train_data in enumerate(train_loader):
@@ -262,6 +280,8 @@ def main():
     #save the args to the checkpoint directory
     with open(os.path.join(args.save_dir, "options.json"), "w") as f:
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
+
+
 
     run(train_dir = args.train_dir,
         n_channels = 8,
