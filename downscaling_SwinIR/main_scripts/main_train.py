@@ -26,10 +26,11 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
 import wandb
 os.environ["WANDB_MODE"]="offline"
-runname = "test"
-wandb.run.name = runname
+#runname = "swinIR_1109"
+#wandb.run.name = "swinIR_1109"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
+wandb.run.name = "swinIR_1109"
 
 
 class BuildModel:
@@ -50,7 +51,7 @@ class BuildModel:
         self.save_dir = save_dir
 
     def init_train(self):
-        #wandb.watch(self.netG, log_freq=100)
+        wandb.watch(self.netG, log_freq=100)
         self.netG.train()
         self.define_loss()
         self.define_optimizer()
@@ -164,7 +165,7 @@ class BuildModel:
             return param_group['lr']
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
-        test_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test",
+        val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
         n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet", patch_size: int = 2,
         window_size: int = 4, upscale_swinIR: int = 4, 
@@ -181,7 +182,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     """
 
     train_loader = create_loader(train_dir)
-    #test_loader = create_loader(test_dir)
+    val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
@@ -234,15 +235,24 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                wandb.log({"loss":model.G_loss, "lr":lr})
+                 
+                with torch.no_grad():
+                    val_loss = 0
+                    for j, val_data in enumerate(val_loader):
+                        if j < 5:
+                            model.feed_data(val_data)
+                            model.netG_forward()
+                            val_loss = val_loss + model.G_lossfn(model.E, model.H)
+                    val_loss = val_loss/5
+                wandb.log({"loss":model.G_loss, "val_loss":val_loss, "lr":lr})
                 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type = str, required = True,
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("--test_dir", type = str, required = True,
-                        help = "The directory where testing data (.nc files) are stored")
+    parser.add_argument("--val_dir", type = str, required = True,
+                        help = "The directory where validation data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
@@ -264,6 +274,7 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
+        val_dir = args.val_dir,
         n_channels = 8,
         save_dir = args.save_dir,
         checkpoint_save = 200,
