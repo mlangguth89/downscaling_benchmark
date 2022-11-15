@@ -192,7 +192,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
                         depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
                         drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
-
     else:
         NotImplementedError
 
@@ -201,6 +200,18 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     model = BuildModel(netG, save_dir = save_dir)
     model.init_train()
     current_step = 0
+
+
+    wandb.config = {
+        "lr": model.G_optimizer_lr,
+        "train_dir": train_dir,
+        "val_dir": val_dir,
+        "epochs": epochs,
+        "window_size": window_size,
+        "patch_size": patch_size,
+        "batch_size": batch_size
+    }
+
 
     for epoch in range(epochs):
         for i, train_data in enumerate(train_loader):
@@ -269,6 +280,8 @@ def main():
     #save the args to the checkpoint directory
     with open(os.path.join(args.save_dir, "options.json"), "w") as f:
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
+
+
 
     run(train_dir = args.train_dir,
         val_dir = args.val_dir,
