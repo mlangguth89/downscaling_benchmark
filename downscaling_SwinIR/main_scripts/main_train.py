@@ -26,16 +26,13 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
 import wandb
 os.environ["WANDB_MODE"]="offline"
-#runname = "swinIR_1109"
-#wandb.run.name = "swinIR_1109"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-wandb.run.name = "swinIR_1109"
-
+wandb.run.name = "swinUnet_1115"
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 0.02, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_lr: float = 2e-4, G_optimizer_betas: list = [0.9, 0.999],
                  G_optimizer_wd: int= 0, save_dir: str = "../results"):
 
         # ------------------------------------
@@ -193,7 +190,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
         netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
-                        depths_decoder=[2,2,2],num_heads=[6,12,24],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
+                        depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
                         drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
 
     else:

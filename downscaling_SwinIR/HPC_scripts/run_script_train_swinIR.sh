@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-swinIR-out.%j
 #SBATCH --error=train-swinIR-err.%j
-#SBATCH --time=20:00:00
+#SBATCH --time=22:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=booster
 #SBATCH --mail-type=ALL
@@ -19,8 +19,8 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
 val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/val
-save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinSR_exp1109_origin_booster_3years_x2_5x4
-# save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinUnet_exp1017_origin_booster_3years
+save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinSR_exp1110_origin_booster_3years_x2_5x4
+
 epochs=4
 #model_type=vitSR
 model_type=swinSR
