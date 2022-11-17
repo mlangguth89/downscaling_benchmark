@@ -28,12 +28,12 @@ import wandb
 os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-wandb.run.name = "swinUnet_1115"
+wandb.run.name = "Unet_1117"
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 2e-4, G_optimizer_betas: list = [0.9, 0.999],
-                 G_optimizer_wd: int= 0, save_dir: str = "../results"):
+                 G_optimizer_lr: float = 2e-2, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_wd: int= 0, save_dir: str = "../results"): # G_optimizer_lr: float = 2e-4 for swinIR
 
         # ------------------------------------
         # define network
@@ -208,8 +208,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         "val_dir": val_dir,
         "epochs": epochs,
         "window_size": window_size,
-        "patch_size": patch_size,
-        "batch_size": batch_size
+        "patch_size": patch_size
     }
 
 
@@ -228,6 +227,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # -------------------------------
             # 2) feed patch pairs
             # -------------------------------
+            print(train_data)
             model.feed_data(train_data)
 
             # -------------------------------
