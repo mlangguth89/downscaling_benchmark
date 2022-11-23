@@ -102,33 +102,20 @@ class WGAN(keras.Model):
         self.lr_scheduler = None
         self.checkpoint, self.earlystopping = None, None
 
-    def compile(self, da_train, da_val):
+    def compile(self, nsamples: int, shape_in: tuple):
         """
-        Turn datasets into tf.Datasets, compile model and set learning rate schedule (optionally)
-        :param da_train: Data Array providing the training data (must have variables-dimension)
-        :param da_val: Data Array providing the validation data (must have variables-dimension)
-        :return: tf.Datasets for training and validation data
+        Compile model, set learning rate schedule (optionally) and add model checkpoint.
+        :param nsamples: Number of training samples
+        :param shape_in: input shape of data (nx, ny, nvars)
+        :return: -
         """
-        invars = [var for var in da_train["variables"].values if var.endswith("_in")]
-        invars = invars + ["hsurf_tar"]
-
-        # determine shape-dimensions from data
-        shape_all = da_train.sel({"variables": invars}).shape
-        self.nsamples, self.shape_in = shape_all[0], shape_all[1:]
+        self.nsamples, self.shape_in = nsamples, shape_in
 
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
-
-        # Note: The batch-size is increased for the training datset to allow substepping in WGAN
-        # (n+1 optimization steps to train generator and critic). The validation dataset however does not perform
-        # substeeping and thus does not be instantiated with an increased mini-batch size.
-        train_iter = HandleDataClass.make_tf_dataset(da_train, self.hparams["batch_size"]
-                                                     * (self.hparams["d_steps"] + 1), var_tar2in=self.hparams["var_tar2in"])
-        val_iter = HandleDataClass.make_tf_dataset(da_val, self.hparams["batch_size"], lshuffle=False, 
-                                                   var_tar2in=self.hparams["var_tar2in"])
 
         # call Keras compile method
         super(WGAN, self).compile()
@@ -144,7 +131,7 @@ class WGAN(keras.Model):
                                                   save_best_only=True, mode="min")
             # self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
 
-        return train_iter, val_iter
+        return True
 
     def get_lr_decay(self):
         """
@@ -295,6 +282,15 @@ class WGAN(keras.Model):
     # required for customized models, see here: https://www.tensorflow.org/guide/keras/save_and_serialize
     def get_config(self):
         return self.hparams
+
+    def save(self, model_savedir: str):
+        """
+        Save generator and critic seperately.
+        :param model_savedir: path to directory to save models
+        :return: -
+        """
+        self.generator.save(os.path.join(model_savedir, "{0}_generator_last".format(self.modelname)))
+        self.critic.save(os.path.join(model_savedir, "{0}_critic_last".format(self.modelname)))
 
     @classmethod
     def from_config(cls, config):
