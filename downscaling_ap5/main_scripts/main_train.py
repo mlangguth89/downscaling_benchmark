@@ -83,7 +83,10 @@ def main(parser_args):
     da_val = data_norm.normalize(da_val)
     data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
 
-    bs_train = ds_dict["batch_size"] * ds_dict["d_steps"] if "d_steps" in ds_dict else ds_dict["batch_size"]
+    # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
+    # are applied to train the critic, before the generator is trained once.
+    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
+    bs_train = ds_dict["batch_size"] * ds_dict["d_steps"] + 1 if "d_steps" in ds_dict else ds_dict["batch_size"]
     tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"])
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
                                                var_tar2in=ds_dict["var_tar2in"])
@@ -108,7 +111,7 @@ def main(parser_args):
     else:
         compile_opts = {}
 
-    model.compile(shape_in, **compile_opts)
+    model.compile(nsamples, shape_in, **compile_opts)
 
     # train model
     # define class for creating timer callback
