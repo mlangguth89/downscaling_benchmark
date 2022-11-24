@@ -102,9 +102,9 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 
 # The particular U-net
-def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
+def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, tar_channels=["output_temp", "output_z"]) -> Model:
     """
-    Builds up U-net model
+    Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
     :param z_branch: flag if z-branch is used.
@@ -152,7 +152,21 @@ def get_lr_scheduler():
 
 
 class UNET(keras.Model):
-    def __init__():
-        raise ValueError("Not implemented yet!")
+    def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
+                 model_name: str = "unet_model"):
+        self.unet = unet_model
+        self.shape_in = shape_in
+        self.hparams = UNET.get_hparams_dict(hparams)
+        if self.hparams["l_embed"]:
+            raise ValueError("Embedding is not implemented yet.")
+        self.modelname = model_name
+        if not os.path.isdir(savedir):
+            os.makedirs(savedir, exist_ok=True)
+        self.savedir = savedir
+
+        # instantiate model
+        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"])
+
+
 
 
