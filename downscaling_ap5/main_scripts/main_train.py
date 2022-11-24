@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2022-10-07"
+__update__ = "2022-11-24"
 
 import os
 import argparse
@@ -47,13 +47,15 @@ def main(parser_args):
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
 
+    print(ds_dict)
     with parser_args.conf_md as mdf:
         hparams_dict = js.load(mdf)
+    print(hparams_dict)
 
     # get model instance and path to data files
     model_instance = ModelEngine(parser_args.model)
-    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "training"), \
-                             get_dataset_filename(datadir, dataset, "validation")
+    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "train"), \
+                             get_dataset_filename(datadir, dataset, "val")
 
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), f"benchmark_training_{parser_args.model}.csv"))
@@ -174,19 +176,17 @@ if __name__ == "__main__":
                         help="Directory where input netCDF-files are stored.")
     parser.add_argument("--output_dir", "-out", dest="output_dir", type=str, required=True,
                         help="Output directory where model is savded.")
-    parser.add_argument("--downscaling_model", "-model", dest="model", type=str, default="U-Net",
-                        help="Downscaling model to train.")
-    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
     parser.add_argument("--downscaling_model", "-model", dest="model", type=str, required=True,
                         help="Name of model architeture used for downscaling.")
     parser.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
                         help="Name of dataset to be used for downscaling model.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                         help="Name for the current experiment.")
-    parser.add_argument("--configuration_model", "conf_md", dest="conf_md", type=argparse.FileType("r"), required=True,
+    parser.add_argument("--configuration_model", "-conf_md", dest="conf_md", type=argparse.FileType("r"), required=True,
                         help="JSON-file to configure model to be trained.")
-    parser.add_argument("--configuration_dataset", "conf_ds", dest="conf_ds", type=argparse.FileType("r"),
+    parser.add_argument("--configuration_dataset", "-conf_ds", dest="conf_ds", type=argparse.FileType("r"),
                         required=True, help="JSON-file to configure dataset to be used for training.")
+    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
 
     args = parser.parse_args()
     main(args)
