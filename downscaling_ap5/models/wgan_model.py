@@ -18,8 +18,7 @@ from tensorflow.keras.models import Model
 # other modules
 import numpy as np
 
-from unet_model import build_unet, conv_block
-from handle_data_class import HandleDataClass
+from unet_model import conv_block
 
 from typing import List, Tuple, Union
 
@@ -161,16 +160,17 @@ class WGAN(keras.Model):
 
         return lr_scheduler
 
-    def fit(self, train_iter, val_iter, callbacks: List = [None]):
+    def fit(self, callbacks: List = None, **kwargs):
+        """
+        Takes all (non-positional) arguments of Keras fit-method, but expands the list of callbacks to include
+        the learning rate scheduler, checkpointing and early stopping.
+        """
 
+        default_callbacks = list(callbacks)
         wgan_callbacks = [self.lr_scheduler, self.checkpoint, self.earlystopping]
+        all_callbacks = [e for e in wgan_callbacks + default_callbacks if e is not None]
 
-        callbacks = [e for e in wgan_callbacks + callbacks if e is not None]
-        steps_per_epoch = int(np.ceil(self.nsamples / self.hparams["batch_size"]))
-
-        return super(WGAN, self).fit(x=train_iter, callbacks=callbacks, epochs=self.hparams["train_epochs"],
-                                     steps_per_epoch=steps_per_epoch, validation_data=val_iter, validation_steps=300,
-                                     verbose=2)
+        return super(WGAN, self).fit(callbacks=all_callbacks, **kwargs)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
