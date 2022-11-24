@@ -89,9 +89,6 @@ def main(parser_args):
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
                                                var_tar2in=ds_dict["var_tar2in"])
 
-    nsamples = da_train.shape[0]
-    shape_in = tfds_train.element_spec[0].shape[1:]
-
     # clean up to save some memory
     del ds_train
     del ds_val
@@ -102,10 +99,11 @@ def main(parser_args):
 
     # instantiate model
     model = model_instance(hparams_dict, parser_args.exp_name, model_savedir)
+    model.nsamples, model.shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_options")
-    model.compile(nsamples, shape_in, **compile_opts)
+    model.compile(**compile_opts)
 
     # train model
     # define class for creating timer callback

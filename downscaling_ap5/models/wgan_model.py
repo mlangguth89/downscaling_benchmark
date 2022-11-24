@@ -36,7 +36,7 @@ def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tup
     :param stride: stride for convolutional layer
     :param activation: activation function to use (applies to convolutional and fully-connected layers)
     :param lbatch_norm: flag to perform batch normalization on convolutional layers
-    :return:
+    :return: critic-model
     """
     critic_in = Input(shape=shape)
     x = critic_in
@@ -69,7 +69,7 @@ class WGAN(keras.Model):
     def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model",
                  lsupervise: bool = True, savedir: str = None):
         """
-        Initiate Wasserstein GAN model.
+        Initiate Wasserstein GAN model
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
         :param hparams: dictionary of hyperparameters
@@ -101,15 +101,12 @@ class WGAN(keras.Model):
         self.lr_scheduler = None
         self.checkpoint, self.earlystopping = None, None
 
-    def compile(self, nsamples: int, shape_in: tuple):
+    def compile(self):
         """
-        Compile model, set learning rate schedule (optionally) and add model checkpoint.
-        :param nsamples: Number of training samples
-        :param shape_in: input shape of data (nx, ny, nvars)
+        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
+        supervision of fitting (checkpointing and early stopping.
         :return: -
         """
-        self.nsamples, self.shape_in = nsamples, shape_in
-
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
@@ -160,21 +157,27 @@ class WGAN(keras.Model):
 
         return lr_scheduler
 
-    def fit(self, callbacks: List = None, **kwargs):
+    def get_fit_opts(self, default_callbacks: List = None):
+        """
+        Add customized learning rate scheduler, checkpointing and early stopping to list of callbacks.
+        """
+        wgan_callbacks = {"wgan_callbacks": [self.lr_scheduler, self.checkpoint, self.earlystopping]}
+
+        return wgan_callbacks
+
+    def fit(self, callbacks=None, wgan_callbacks: List = None, **kwargs):
         """
         Takes all (non-positional) arguments of Keras fit-method, but expands the list of callbacks to include
-        the learning rate scheduler, checkpointing and early stopping.
+        the WGAN callbacks (see get_fit_opt-method)
         """
-
-        default_callbacks = list(callbacks)
-        wgan_callbacks = [self.lr_scheduler, self.checkpoint, self.earlystopping]
+        default_callbacks, wgan_callbacks = list(callbacks), list(wgan_callbacks)
         all_callbacks = [e for e in wgan_callbacks + default_callbacks if e is not None]
 
         return super(WGAN, self).fit(callbacks=all_callbacks, **kwargs)
 
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
-        Training step for Wasserstein GAN.
+        Training step for Wasserstein GAN
         :param data_iter: Tensorflow Dataset providing training data
         :param embed: embedding (not implemented yet)
         :return: Ordered dictionary with several losses of generator and critic
@@ -223,7 +226,7 @@ class WGAN(keras.Model):
 
     def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
         """
-        Implement step to test trained generator on validation data.
+        Implement step to test trained generator on validation data
         :param val_iter: Tensorflow Dataset with validation data
         :return: dictionary with reconstruction loss on validation data
         """
@@ -284,7 +287,7 @@ class WGAN(keras.Model):
         """
         Save generator and critic seperately.
         The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
-        :param filepath: path to SavedModel or H5 file to save both models.
+        :param filepath: path to SavedModel or H5 file to save both models
         :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
                           with a manual prompt.
         :param include_optimizer: If True, save optimizer's state together.
