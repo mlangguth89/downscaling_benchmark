@@ -38,17 +38,20 @@ if [ -z ${VIRTUAL_ENV} ]; then
    fi
 fi
 
-# data-directories
-indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/
+
+# data-directories 
+# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
 outdir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_ap5/trained_models/
 js_model_conf=${WORK_DIR}/config_wgan.json
 js_ds_conf=${WORK_DIR}/config_ds_tier2.json
 
-model_name=wgan
-exp_name=my_wgan_exp
-
+model=wgan
 dataset=tier2
 
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -md_name ${model_name} -ds_name ${dataset_name} \
-	                                                      -conf_ds ${js_conf_ds} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
+exp_name=<my_exp>
+
+# run job
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
+	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 
