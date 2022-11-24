@@ -8,6 +8,7 @@ Some auxiliary methods to create Keras models.
 """
 # import modules
 import numpy as np
+import tensorflow.keras as keras
 import tensorflow.keras.layers as layers
 from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
                                      Conv2DTranspose, Input, MaxPool2D)
@@ -73,7 +74,7 @@ class ModelEngine(object):
     @modelname.setter
     def modelname(self, model_name):
 
-        help_str = self._get_help_ste()
+        help_str = self._get_help_str()
         model_name_local = model_name.lower()
 
         if model_name_local in self.known_models.keys():
@@ -89,6 +90,7 @@ class ModelEngine(object):
         Create help-string listing all known models.
         """
         return f"Known models are: {', '.join(list(self.known_models.keys()))}"
+
 
 def get_model(model_name: str):
     """
@@ -111,6 +113,24 @@ def get_model(model_name: str):
         raise ValueError(f"Model '{model_name}' is unknown. Please specify a known model. {help_str}")
 
     return model
+
+
+def handle_opt_utils(model: keras.Model, opt_funcname: str):
+    """
+    Retrieves dictionary of optional parameters from model when a corresponding class method is available.
+    :param model: Keras model or derived Keras Model.
+    :param opt_funcname: name of method providing dictionary of options.
+    """
+    func_opt = getattr(model, opt_funcname, None)
+    if callable(func_opt):
+        opt_dict = func_opt()
+        assert isinstance(opt_dict, dict), f"Model method '{opt_funcname}' must provide a dictionary."
+    elif func_opt is None:
+        opt_dict = {}
+    else:
+        raise TypeError(f"Model method '{opt_funcname}' must be a callable providing dictionary of options.")
+
+    return opt_dict
 
 
 def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1, 1), padding: str = "same",
