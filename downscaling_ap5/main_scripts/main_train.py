@@ -43,18 +43,12 @@ def main(parser_args):
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
 
-    # read configuration files
-    try:
-        with open(parser_args.conf_ds, "r") as dsf:
-            ds_dict = js.load(dsf)
-    except Exception as err:
-        raise err
+    # read configuration files for model and dataset
+    with parser_args.conf_ds as dsf:
+        ds_dict = js.load(dsf)
 
-    try:
-        with open(parser_args.conf_md, "r") as mdf:
-            hparams_dict = js.load(mdf)
-    except Exception as err:
-        raise err
+    with parser_args.conf_md as mdf:
+        hparams_dict = js.load(mdf)
 
     # get model instance and path to data files
     model_instance = ModelEngine(parser_args.model_name)
@@ -185,6 +179,10 @@ if __name__ == "__main__":
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                         help="Name for the current experiment.")
+    parser.add_argument("--configuration_model", "conf_md", dest="conf_md", type=argparse.FileType("r"), required=True,
+                        help="JSON-file to configure model to be trained.")
+    parser.add_argument("--configuration_dataset", "conf_ds", dest="conf_ds", type=argparse.FileType("r"),
+                        required=True, help="JSON-file to configure dataset to be used for training.")
 
     args = parser.parse_args()
     main(args)
