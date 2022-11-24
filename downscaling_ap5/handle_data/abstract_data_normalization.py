@@ -92,10 +92,11 @@ class Normalize(ABC):
 
         return True
 
-    def save_norm_to_file(self, js_file):
+    def save_norm_to_file(self, js_file, missdir_ok: bool = True):
         """
         Write normalization parameters to file.
         :param js_file: Path to JSON-file to be created.
+        :param missdir_ok: If True, base-directory of JSON-file can be missing and will be created then.
         :return: -
         """
         if self.norm_stats is None:
@@ -105,6 +106,8 @@ class Normalize(ABC):
             raise AttributeError("Some parameters of norm_stats are None.")
 
         norm_serialized = {key: da.to_dict() for key, da in self.norm_stats.items()}
+
+        if missdir_ok: os.makedirs(os.path.dirname(js_file), exist_ok=True)
 
         with open(js_file, "w") as jsf:
             js.dump(norm_serialized, jsf)
