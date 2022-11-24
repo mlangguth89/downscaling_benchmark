@@ -38,7 +38,7 @@ def main(parser_args):
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
     job_id = parser_args.id
-    dataset = parser_args.dataset_name.lower()
+    dataset = parser_args.dataset.lower()
 
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
@@ -51,7 +51,7 @@ def main(parser_args):
         hparams_dict = js.load(mdf)
 
     # get model instance and path to data files
-    model_instance = ModelEngine(parser_args.model_name)
+    model_instance = ModelEngine(parser_args.model)
     fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "training"), \
                              get_dataset_filename(datadir, dataset, "validation")
 
@@ -177,6 +177,10 @@ if __name__ == "__main__":
     parser.add_argument("--downscaling_model", "-model", dest="model", type=str, default="U-Net",
                         help="Downscaling model to train.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
+    parser.add_argument("--downscaling_model", "-model", dest="model", type=str, required=True,
+                        help="Name of model architeture used for downscaling.")
+    parser.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
+                        help="Name of dataset to be used for downscaling model.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                         help="Name for the current experiment.")
     parser.add_argument("--configuration_model", "conf_md", dest="conf_md", type=argparse.FileType("r"), required=True,
