@@ -18,8 +18,8 @@ exit 99
 ######### Template identifier (don't remove) #########
 
 # basic directories
-WORK_DIR=`pwd`
-BASE_DIR=`dirname`
+WORK_DIR=$(pwd)
+BASE_DIR=$(dirname "${WORK_DIR}")
 
 # Name of virtual environment
 VENV_DIR=${BASE_DIR}/virtual_envs/
@@ -45,7 +45,7 @@ js_model_conf=${WORK_DIR}/config_wgan.json
 js_ds_conf=${WORK_DIR}/config_ds_tier2.json
 
 model_name=wgan
-exp_name=wgan_test
+exp_name=my_wgan_exp
 
 dataset=tier2
 
