@@ -279,18 +279,36 @@ class WGAN(keras.Model):
 
         return rloss
 
+    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
+             signatures=None, options=None, save_traces: bool = True):
+        """
+        Save generator and critic seperately.
+        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
+        :param filepath: path to SavedModel or H5 file to save both models.
+        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
+                          with a manual prompt.
+        :param include_optimizer: If True, save optimizer's state together.
+        :param save_format: Either `'tf'` or `'h5'`, indicating whether to save the model to Tensorflow SavedModel or
+                            HDF5. Defaults to 'tf' in TF 2.X, and 'h5' in TF 1.X.
+        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
+                           Please see the `signatures` argument in `tf.saved_model.save` for details.
+        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
+                        for saving to SavedModel.
+        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
+                            traces for each layer. This can be disabled, so that only the configs of each layer are
+                            stored.  Defaults to `True`. Disabling this will decrease
+                            serialization time and reduce file size, but it requires that
+                            all custom layers/models implement a `get_config()` method.
+        :return: -
+        """
+        generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self.modelname)), \
+                                      os.path.join(filepath, "{0}_critic_last".format(self.modelname))
+        self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+
     # required for customized models, see here: https://www.tensorflow.org/guide/keras/save_and_serialize
     def get_config(self):
         return self.hparams
-
-    def save(self, model_savedir: str):
-        """
-        Save generator and critic seperately.
-        :param model_savedir: path to directory to save models
-        :return: -
-        """
-        self.generator.save(os.path.join(model_savedir, "{0}_generator_last".format(self.modelname)))
-        self.critic.save(os.path.join(model_savedir, "{0}_critic_last".format(self.modelname)))
 
     @classmethod
     def from_config(cls, config):
