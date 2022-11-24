@@ -70,7 +70,8 @@ def main(parser_args):
     # prepare training and validation data
     t0_preproc = timer()
 
-    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False)), \
+                       HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
 
     data_norm = ZScore(ds_dict["norm_dims"])
     da_train = data_norm.normalize(da_train)
