@@ -49,6 +49,6 @@ exp_name=my_wgan_exp
 
 dataset=tier2
 
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -md_name ${model_name} -ds_name ${dataset_name} \
-	                                                           -conf_ds ${js_conf_ds} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -md_name ${model_name} -ds_name ${dataset_name} \
+	                                                      -conf_ds ${js_conf_ds} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 
