@@ -18,9 +18,10 @@ print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m
 import gc
 import json as js
 from timeit import default_timer as timer
+import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
-from model_utils import ModelEngine
+from model_utils import ModelEngine, handle_opt_utils
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
@@ -32,9 +33,6 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 def main(parser_args):
     # start timing
     t0 = timer()
-
-    # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), "benchmark_training_wgan.csv"))
 
     # Get some basic directories and flags
     datadir = parser_args.input_dir
@@ -102,15 +100,11 @@ def main(parser_args):
     t0_compile = timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
-    # instantiate and compile model
+    # instantiate model
     model = model_instance(hparams_dict, parser_args.exp_name, model_savedir)
 
-    func_compile_opt = getattr(model, "get_compile_options", None)
-    if callable(func_compile_opt):
-        compile_opts = func_compile_opt()
-    else:
-        compile_opts = {}
-
+    # get optional compile options and compile
+    compile_opts = handle_opt_utils(model, "get_compile_options")
     model.compile(nsamples, shape_in, **compile_opts)
 
     # train model
@@ -126,21 +120,19 @@ def main(parser_args):
             self.epoch_times.append(timer() - self.epoch_time_start)
 
     time_tracker = TimeHistory()
-    callback_list = [time_tracker]
+    cb_default= [time_tracker]
+    steps_per_epoch = int(np.ceil(model.nsamples / hparams_dict["batch_size"]))
 
-    # retrieve customize fit-options if required
-    func_fit_opt = getattr(model, "get_fit_options", None)
-    if callable(func_fit_opt):
-        fit_opts = func_fit_opt()
-    else:
-        fit_opts = {}
-
+    # get optional fit options and start training/fitting
+    fit_opts = handle_opt_utils(model, "get_fit_options")
     print("Start training of WGAN...")
-    history = model.fit(tfds_train, tfds_val, callbacks=callback_list, **fit_opts)
+    history = model.fit(x=tfds_train, callbacks=cb_default, epochs=model.hparams["train_epochs"],
+                        steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
+                        verbose=2, **fit_opts)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
-                                            model.nsamples * hparams_dict["train_epochs"])
+                                            model.nsamples * model.hparams["train_epochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
     print(f"Training of model '{parser_args.model_name}' training finished. Save model to '{model_savedir}'")
