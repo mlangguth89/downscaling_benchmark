@@ -248,4 +248,33 @@ class HandleDataClass(object):
         return False
 
 
+def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmented: bool = False):
+
+    allowed_subsets = ("train", "val", "test")
+
+    if subset in allowed_subsets:
+        pass
+    else:
+        raise ValueError(f"Unknown dataset subset '{subset}' chosen. Allowed subsets are {*allowed_subsets,}")
+
+    fname_suffix = "downscaling"
+
+    if dataset_name == "tier1":
+        fname_suffix = f"{fname_suffix}_{subset}"
+        if laugmented: fname_suffix = f"{fname_suffix}_aug"
+    elif dataset_name == "tier2":
+        fname_suffix = f"{fname_suffix}_{subset}"
+        if laugmented: raise ValueError("No augmented dataset available for Tier-2.")
+    else:
+        raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
+
+    ds_filename = os.path.join(datadir, f"{fname_suffix}.nc")
+
+    if not os.path.isfile(ds_filename):
+        raise FileNotFoundError(f"Could not find requested dataset file '{ds_filename}'")
+
+    return ds_filename
+
+
+
 
