@@ -66,55 +66,51 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model",
-                 lsupervise: bool = True, savedir: str = None):
+    def __init__(self, generator: keras.Model, critic: keras.Model, shape_in: List, hparams: dict, savedir: str,
+                 model_name: str = "wgan_model"):
         """
         Initiate Wasserstein GAN model
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
+        :param shape_in: shape of input data
         :param hparams: dictionary of hyperparameters
         :param model_name: name of the WGAN-model
-        :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
-                           patience of eight epochs); if True, savedir must be provided
         :param savedir: directory where checkpointed model will be saved
-        :param l_embedding: Flag to enable time embeddings
         """
 
         super(WGAN, self).__init__()
 
         self.generator, self.critic = generator, critic
+        self.shape_in = shape_in
         self.hparams = WGAN.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.modelname = model_name
-        self.lsupervise = lsupervise
-        if lsupervise and savedir is None:
-            raise ValueError("Add savedir to enable model saving when using checkpointing" +
-                             "and early stopping (lsupervise=True)")
-        elif lsupervise:
+        if not os.path.isdir(savedir):
             os.makedirs(savedir, exist_ok=True)
         self.savedir = savedir
-        # set in compile-method
-        self.train_iter, self.val_iter = None, None
-        self.shape_in, self.nsamples = None, None
-        self.c_optimizer, self.g_optimizer = None, None
-        self.lr_scheduler = None
-        self.checkpoint, self.earlystopping = None, None
 
-    def compile(self):
-        """
-        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
-        supervision of fitting (checkpointing and early stopping.
-        :return: -
-        """
+        # instantiate submodels
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
+        # attributes to be set in compile-method
+        self.c_optimizer, self.g_optimizer = None, None
+        self.lr_scheduler = None
+        self.lsupervise = None
+        self.checkpoint, self.earlystopping = None, None
+
+    def compile(self, **kwargs):
+        """
+        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
+        supervision of fitting (checkpointing and early stopping.
+        :return: -
+        """
         # call Keras compile method
-        super(WGAN, self).compile()
+        super(WGAN, self).compile(**kwargs)
         # set optimizers
         self.c_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
 
@@ -320,7 +316,7 @@ class WGAN(keras.Model):
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
         """
-        Merge user-defined and default hyperparameter dictionary to retrieve a complete customized one.
+        Merge user-defined and default hyperparameter dictionary to retrieve a complete customized one
         :param hparams_user: dictionary of hyperparameters parsed by user
         :return: merged hyperparameter dictionary
         """
