@@ -44,13 +44,13 @@ class ModelEngine(object):
         else:
             self.model = self.known_models[self.modelname]
 
-    def __call__(self, hparams_dict, exp_name, save_dir, **kwargs):
+    def __call__(self, shape_in, hparams_dict, exp_name, save_dir, **kwargs):
         """
         Instantiate the model with some required arguments.
         """
         model_list = list(self.model)
         target_model = model_list[0]
-        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "savedir": save_dir, **kwargs}
+        model_args = {"shape_in": shape_in, "hparams": hparams_dict, "exp_name": exp_name, "savedir": save_dir, **kwargs}
 
         try:
             if len(model_list) == 1:
