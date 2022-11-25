@@ -8,7 +8,7 @@ Abstract class to perform normalization on data
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2022-10-06"
+__date__ = "2022-11-24"
 
 from abc import ABC, abstractmethod
 from typing import Union, List

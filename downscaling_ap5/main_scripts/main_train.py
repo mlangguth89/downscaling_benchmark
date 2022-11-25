@@ -28,6 +28,8 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
 # Open issues:
+# * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
+#   are available
 # * customized choice on predictors and predictands
 
 def main(parser_args):
@@ -87,6 +89,9 @@ def main(parser_args):
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
                                                var_tar2in=ds_dict["var_tar2in"])
 
+    # get some key parameters from datasets
+    nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
+
     # clean up to save some memory
     del ds_train
     del ds_val
@@ -96,8 +101,7 @@ def main(parser_args):
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
     # instantiate model
-    model = model_instance(hparams_dict, parser_args.exp_name, model_savedir)
-    model.nsamples, model.shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
+    model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_opts")
@@ -117,7 +121,7 @@ def main(parser_args):
 
     time_tracker = TimeHistory()
     cb_default= [time_tracker]
-    steps_per_epoch = int(np.ceil(model.nsamples / ds_dict["batch_size"]))
+    steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
 
     # get optional fit options and start training/fitting
     fit_opts = handle_opt_utils(model, "get_fit_opts")
@@ -128,7 +132,7 @@ def main(parser_args):
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
-                                            model.nsamples * model.hparams["nepochs"])
+                                            nsamples * model.hparams["nepochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
     print(f"Training of model '{parser_args.model_name}' training finished. Save model to '{model_savedir}'")

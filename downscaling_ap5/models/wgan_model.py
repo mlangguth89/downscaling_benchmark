@@ -1,10 +1,16 @@
+# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+#
+# SPDX-License-Identifier: MIT
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-09-08"
+__update__ = "2022-11-25"
 
 import os, sys
+from typing import List, Tuple, Union
 from collections import OrderedDict
+import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
@@ -16,11 +22,7 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
-import numpy as np
-
 from unet_model import conv_block
-
-from typing import List, Tuple, Union
 from other_utils import to_list
 
 list_or_tuple = Union[List, Tuple]
@@ -67,55 +69,50 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, exp_name: str = "wgan_model",
-                 lsupervise: bool = True, savedir: str = None):
+    def __init__(self, generator: keras.Model, critic: keras.Model, shape_in: List, hparams: dict, savedir: str,
+                 exp_name: str = "wgan_model"):
         """
         Initiate Wasserstein GAN model
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
+        :param shape_in: shape of input data
         :param hparams: dictionary of hyperparameters
         :param exp_name: name of the WGAN experiment
-        :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
-                           patience of eight epochs); if True, savedir must be provided
         :param savedir: directory where checkpointed model will be saved
-        :param l_embedding: Flag to enable time embeddings
         """
 
         super(WGAN, self).__init__()
 
         self.generator, self.critic = generator, critic
+        self.shape_in = shape_in
         self.hparams = WGAN.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.modelname = exp_name
-        self.lsupervise = lsupervise
-        if lsupervise and savedir is None:
-            raise ValueError("Add savedir to enable model saving when using checkpointing" +
-                             "and early stopping (lsupervise=True)")
-        elif lsupervise:
+        if not os.path.isdir(savedir):
             os.makedirs(savedir, exist_ok=True)
         self.savedir = savedir
-        # set in compile-method
-        self.train_iter, self.val_iter = None, None
-        self.shape_in, self.nsamples = None, None
-        self.c_optimizer, self.g_optimizer = None, None
-        self.lr_scheduler = None
-        self.checkpoint, self.earlystopping = None, None
 
-    def compile(self):
-        """
-        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
-        supervision of fitting (checkpointing and early stopping.
-        :return: -
-        """
+        # instantiate submodels
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
+        # attributes to be set in compile-method
+        self.c_optimizer, self.g_optimizer = None, None
+        self.lr_scheduler = None
+        self.checkpoint, self.earlystopping = None, None
+
+    def compile(self, **kwargs):
+        """
+        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
+        supervision of fitting (checkpointing and early stopping.
+        :return: -
+        """
         # call Keras compile method
-        super(WGAN, self).compile()
+        super(WGAN, self).compile(**kwargs)
         # set optimizers
         self.c_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
 
@@ -123,7 +120,7 @@ class WGAN(keras.Model):
         if self.hparams["lr_decay"]:
             self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
 
-        if self.lsupervise:
+        if self.hparams["lscheduled_train"]:
             self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
                                                   save_best_only=True, mode="min")
             # self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
@@ -171,8 +168,6 @@ class WGAN(keras.Model):
         Takes all (non-positional) arguments of Keras fit-method, but expands the list of callbacks to include
         the WGAN callbacks (see get_fit_opt-method)
         """
-        print(callbacks)
-        print(wgan_callbacks)
         default_callbacks, wgan_callbacks = to_list(callbacks), to_list(wgan_callbacks)
         all_callbacks = [e for e in wgan_callbacks + default_callbacks if e is not None]
 
@@ -323,7 +318,7 @@ class WGAN(keras.Model):
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
         """
-        Merge user-defined and default hyperparameter dictionary to retrieve a complete customized one.
+        Merge user-defined and default hyperparameter dictionary to retrieve a complete customized one
         :param hparams_user: dictionary of hyperparameters parsed by user
         :return: merged hyperparameter dictionary
         """
@@ -367,7 +362,7 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "var_tar2in": ""}
+                        "lscheduled_train": True, "var_tar2in": ""}
 
         return hparams_dict
 
@@ -378,7 +373,7 @@ class WGAN(keras.Model):
         This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
         :param critic_real: critic on the real data
         :param critic_gen: critic on the generated data
-        :param c_loss: loss to optize the critic
+        :return c_loss: loss to optize the critic
         """
         c_loss = tf.reduce_mean(critic_gen - critic_real)
 
@@ -404,13 +399,13 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
             raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
 
         if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
-          raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
+            raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
         try:  # new API
-          lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
-                       float(K.get_value(self.model.c_optimizer.lr))
-          lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                         float(K.get_value(self.model.c_optimizer.lr))
+            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
         except TypeError:  # Support for old API for backward compatibility
-          raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
 
         if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
                 isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
@@ -426,12 +421,13 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
         K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
         if self.verbose > 0:
             print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
-                f'rate for generator to {lr_g}, for critic to {lr_c}.')
+                  f'rate for generator to {lr_g}, for critic to {lr_c}.')
 
     def on_epoch_end(self, epoch, logs=None):
         logs = logs or {}
         logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
         logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
+
 
 class ModelCheckpointWGAN(ModelCheckpoint):
 
