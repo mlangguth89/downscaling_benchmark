@@ -44,8 +44,8 @@ def main(parser_args):
     t0_save = timer()
     #ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
     #                   xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "downscaling_tier2_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "downscaling_tier2_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
@@ -62,7 +62,8 @@ def main(parser_args):
         ds_train, ds_val = ds_train.drop("hsurf_tar"), ds_val.drop("hsurf_var")
 
     # turn dataset into data-array and normalize
-    da_train, da_val = HandleDataClass.reshape_ds(ds_train), HandleDataClass.reshape_ds(ds_val)
+    da_train, da_val = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False)), \
+                       HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
 
     norm_dims = ["time", "rlat", "rlon"]
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
