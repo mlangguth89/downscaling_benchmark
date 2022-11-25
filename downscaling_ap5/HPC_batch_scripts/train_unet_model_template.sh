@@ -6,35 +6,52 @@
 #SBATCH --cpus-per-task=1
 #SBATCH --output=train_unet-model-out.%j
 #SBATCH --error=train_unet-model-err.%j
-#SBATCH --time=01:00:00
+#SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=develgpus
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=m.langguth@fz-juelich.de
+#SBATCH --mail-user=XXX@fz-juelich.de
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
+# basic directories
+WORK_DIR=$(pwd)
+BASE_DIR=$(dirname "${WORK_DIR}")
+
 # Name of virtual environment
-VIRT_ENV_NAME="venv_juwels"
+VENV_DIR=${BASE_DIR}/virtual_envs/
+VIRT_ENV_NAME=<my_venv>
 
 # Loading mouldes
 source ../env_setup/modules.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
-   if [[ -f ../virtual_envs/${VIRT_ENV_NAME}/bin/activate ]]; then
+   if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
       echo "Activating virtual environment..."
-      source ../virtual_envs/${VIRT_ENV_NAME}/bin/activate
+      source ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate
    else
       echo "ERROR: Requested virtual environment ${VIRT_ENV_NAME} not found..."
       exit 1
    fi
 fi
 
-# declare directory-variables which will be modified by config_runscript.py
-source_dir=/p/project/deepacf/maelstrom/data/downscaling_unet/
-destination_dir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_unet/trained_models/
 
-srun python3 ../main_scripts/main_train.py -in ${source_dir} -out ${destination_dir} -id ${SLURM_JOBID}
+# data-directories 
+# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
+outdir=<my_outdir>
+js_model_conf=${WORK_DIR}/config_unet.json
+js_ds_conf=${WORK_DIR}/config_ds_tier2.json
+
+model=unet
+dataset=tier2
+
+exp_name=<my_exp>
+
+# run job
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
+	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
+

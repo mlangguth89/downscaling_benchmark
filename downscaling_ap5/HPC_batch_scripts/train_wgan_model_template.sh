@@ -42,7 +42,7 @@ fi
 # data-directories 
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
 indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
-outdir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_ap5/trained_models/
+outdir=<my_outdir>
 js_model_conf=${WORK_DIR}/config_wgan.json
 js_ds_conf=${WORK_DIR}/config_ds_tier2.json
 
