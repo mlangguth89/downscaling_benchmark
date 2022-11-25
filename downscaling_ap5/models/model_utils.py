@@ -9,10 +9,7 @@ Some auxiliary methods to create Keras models.
 # import modules
 import numpy as np
 import tensorflow.keras as keras
-import tensorflow.keras.layers as layers
-from tensorflow.keras.layers import (Activation, BatchNormalization, Concatenate, Conv2D,
-                                     Conv2DTranspose, Input, MaxPool2D)
-from unet_model import build_unet, UNET 
+from unet_model import sha_unet, UNET
 from wgan_model import WGAN, critic_model
 
 
@@ -33,7 +30,7 @@ class ModelEngine(object):
     """
 
     known_models = {"u-net": UNET,
-                    "wgan": (WGAN, build_unet, critic_model)}
+                    "wgan": (WGAN, sha_unet, critic_model)}
 
     def __init__(self, model_name: str):
         """
@@ -53,7 +50,7 @@ class ModelEngine(object):
         """
         model_list = list(self.model)
         target_model = model_list[0]
-        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "model_savedir": save_dir, **kwargs}
+        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "savedir": save_dir, **kwargs}
 
         try:
             if len(model_list) == 1:
@@ -133,29 +130,3 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
     return opt_dict
 
 
-
-def advanced_activation(activation_name, *args, **kwargs):
-    """
-    Get layer to enable one of Keras' advanced activation, see https://keras.io/api/layers/activation_layers/
-    :param activation_name: name of the activation function to apply
-    :return: the respective layer to deploy desired activation
-    """
-    known_activations = ["LeakyReLU", "Softmax", "PReLU", "ELU", "ThresholdedReLU"]
-
-    activation_name = activation_name.lower()
-
-    if activation_name == "leakyrelu":
-        layer = layers.LeakyReLU(*args, **kwargs)
-    elif activation_name == "softmax":
-        layer = layers.Softmax(*args, **kwargs)
-    elif activation_name == "elu":
-        layer = layers.ELU(*args, **kwargs)
-    elif activation_name == "prelu":
-        layer = layers.PReLU(*args, **kwargs)
-    elif activation_name == "thresholdedrelu":
-        layer = layers.ThresholdedReLU(*args, **kwargs)
-    else:
-        raise ValueError("{0} is not a valid advanced activation function. Choose one of the following: {1}"
-                         .format(activation_name, ", ".join(known_activations)))
-
-    return layer
