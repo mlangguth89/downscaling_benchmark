@@ -168,7 +168,7 @@ def get_lr_scheduler():
 
 class UNET(keras.Model):
     def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
-                 model_name: str = "unet_model"):
+                 exp_name: str = "unet_model"):
 
         super(UNET, self).__init__()
 
@@ -177,7 +177,7 @@ class UNET(keras.Model):
         self.hparams = UNET.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
-        self.modelname = model_name
+        self.modelname = exp_name
         if not os.path.isdir(savedir):
             os.makedirs(savedir, exist_ok=True)
         self.savedir = savedir
@@ -294,9 +294,9 @@ class UNET(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr": 1.e-04, "nepochs": 70, "z_branch": True, "loss_func": "mae",
+        hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
                         "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
-                        "lr_end": 1.e-05, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
+                        "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
                         "var_tar2in": ""}
 
         return hparams_dict
