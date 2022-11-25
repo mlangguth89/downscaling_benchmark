@@ -12,6 +12,7 @@ __date__ = "2022-10-06"
 
 from abc import ABC, abstractmethod
 from typing import Union, List
+import os
 import json as js
 import numpy as np
 import xarray as xr

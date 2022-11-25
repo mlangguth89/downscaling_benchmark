@@ -53,7 +53,7 @@ class ModelEngine(object):
         """
         model_list = list(self.model)
         target_model = model_list[0]
-        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "model_savedir": save_dir, **kwargs}
+        model_args = {"hparams": hparams_dict, "exp_name": exp_name, "savedir": save_dir, **kwargs}
 
         try:
             if len(model_list) == 1:

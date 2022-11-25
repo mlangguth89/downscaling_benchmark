@@ -21,6 +21,7 @@ import numpy as np
 from unet_model import conv_block
 
 from typing import List, Tuple, Union
+from other_utils import to_list
 
 list_or_tuple = Union[List, Tuple]
 
@@ -66,14 +67,14 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, model_name: str = "wgan_model",
+    def __init__(self, generator: keras.Model, critic: keras.Model, hparams: dict, exp_name: str = "wgan_model",
                  lsupervise: bool = True, savedir: str = None):
         """
         Initiate Wasserstein GAN model
         :param generator: A generator model returning a data field
         :param critic: A critic model which returns a critic scalar on the data field
         :param hparams: dictionary of hyperparameters
-        :param model_name: name of the WGAN-model
+        :param exp_name: name of the WGAN experiment
         :param lsupervise: flag to supervise training with early stopping (best model saved and early stopping with
                            patience of eight epochs); if True, savedir must be provided
         :param savedir: directory where checkpointed model will be saved
@@ -86,7 +87,7 @@ class WGAN(keras.Model):
         self.hparams = WGAN.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
-        self.modelname = model_name
+        self.modelname = exp_name
         self.lsupervise = lsupervise
         if lsupervise and savedir is None:
             raise ValueError("Add savedir to enable model saving when using checkpointing" +
@@ -170,7 +171,9 @@ class WGAN(keras.Model):
         Takes all (non-positional) arguments of Keras fit-method, but expands the list of callbacks to include
         the WGAN callbacks (see get_fit_opt-method)
         """
-        default_callbacks, wgan_callbacks = list(callbacks), list(wgan_callbacks)
+        print(callbacks)
+        print(wgan_callbacks)
+        default_callbacks, wgan_callbacks = to_list(callbacks), to_list(wgan_callbacks)
         all_callbacks = [e for e in wgan_callbacks + default_callbacks if e is not None]
 
         return super(WGAN, self).fit(callbacks=all_callbacks, **kwargs)
@@ -361,7 +364,7 @@ class WGAN(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "train_epochs": 50, "z_branch": False,
+        hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                         "var_tar2in": ""}

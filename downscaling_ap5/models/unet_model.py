@@ -8,11 +8,16 @@ Methods to set-up U-net models incl. its building blocks.
 """
 
 # import modules
+import os
+from typing import List
+import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 # all the layers used for U-net
-from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D)
+from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization, 
+                                     Activation)
 from tensorflow.keras.models import Model
+import advanced_activations
 
 # building blocks for Unet
 
@@ -39,7 +44,7 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple 
     try:
         x = Activation(activation)(x)
     except ValueError:
-        ac_layer = advanced_activation(activation, *activation_args)
+        ac_layer = advanced_activations(activation, *activation_args)
         x = ac_layer(x)
 
     return x

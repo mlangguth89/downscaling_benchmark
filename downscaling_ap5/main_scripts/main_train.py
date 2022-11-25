@@ -81,7 +81,8 @@ def main(parser_args):
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
     # are applied to train the critic, before the generator is trained once.
     # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
-    bs_train = ds_dict["batch_size"] * ds_dict["d_steps"] + 1 if "d_steps" in ds_dict else ds_dict["batch_size"]
+    bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
+    print(bs_train)
     tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"])
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
                                                var_tar2in=ds_dict["var_tar2in"])
@@ -99,7 +100,7 @@ def main(parser_args):
     model.nsamples, model.shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
 
     # get optional compile options and compile
-    compile_opts = handle_opt_utils(model, "get_compile_options")
+    compile_opts = handle_opt_utils(model, "get_compile_opts")
     model.compile(**compile_opts)
 
     # train model
@@ -116,18 +117,18 @@ def main(parser_args):
 
     time_tracker = TimeHistory()
     cb_default= [time_tracker]
-    steps_per_epoch = int(np.ceil(model.nsamples / hparams_dict["batch_size"]))
+    steps_per_epoch = int(np.ceil(model.nsamples / ds_dict["batch_size"]))
 
     # get optional fit options and start training/fitting
-    fit_opts = handle_opt_utils(model, "get_fit_options")
+    fit_opts = handle_opt_utils(model, "get_fit_opts")
     print("Start training of WGAN...")
-    history = model.fit(x=tfds_train, callbacks=cb_default, epochs=model.hparams["train_epochs"],
+    history = model.fit(x=tfds_train, callbacks=cb_default, epochs=model.hparams["nepochs"],
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
                         verbose=2, **fit_opts)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
-                                            model.nsamples * model.hparams["train_epochs"])
+                                            model.nsamples * model.hparams["nepochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
     print(f"Training of model '{parser_args.model_name}' training finished. Save model to '{model_savedir}'")
@@ -163,7 +164,7 @@ def main(parser_args):
         stat_info = {"static_model_info": model_info,
                      "data_info": {"training data size": da_train.nbytes, "validation data size": da_val.nbytes,
                                    "nsamples": nsamples, "shape_samples": shape_in,
-                                   "batch_size": hparams_dict["batch_size"]}}
+                                   "batch_size": ds_dict["batch_size"]}}
 
         with open(js_file, "w") as jsf:
             js.dump(stat_info, jsf)
