@@ -19,6 +19,7 @@ class CustomTemperatureDataset(Dataset):
         self.file_path = file_path
         self.verbose = verbose
         self.ds = xr.open_dataset(file_path)
+        # self.ds = self.ds.sel(time=slice("2006-01-01", "2006-01-05"))
         self.log = self.ds.sizes['rlon']
         self.lat = self.ds.sizes['rlat']
         self.times = np.transpose(np.stack(

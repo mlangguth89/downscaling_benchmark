@@ -82,77 +82,82 @@ class train_WGAN():
         """
 
         """
+        jj = 0
+        max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
         for epoch in range(self.hparams.epochs):
 
             start = time.time()
             self.generator.train()
             self.critic.train()
-            max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
             iterator = iter(self.train_dataloader)
             ii = 0
+
             while ii < max_iterations:
 
-            # for batch_idx, train_data in enumerate(self.train_dataloader):
                 self.generator.train()
                 self.critic.train()
 
                 # Training the critic model
-                for i in range(self.hparams.critic_iterations):
-
-                    train_data = next(iterator)
-                    input_data = train_data[0].to(device)
-                    target_data = train_data[1].to(device)
-                    ii += 1
-                    start_c = time.time()
-                    generator_output = self.generator(input_data)
-                    critic_real = self.critic(target_data)
-                    critic_fake = self.critic(generator_output)
-                    # NEED TO VALIDATE
-                    # =-=-=-=-=-==-
-                    gp = self.gradient_penalty(target_data, generator_output, device=device)
-                    # =-=-=-=-=-==-
-
-                    loss_critic = (
-                            -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.hparams.lambada_gp * gp
-                    )
-
-                    self.critic.zero_grad()
-                    loss_critic.backward(retain_graph=True)
-                    self.opt_critic.step()
+                for i in range(self.hparams.critic_iterations + 1):
 
                     if ii >= max_iterations:
                         break
 
-                # Training the generator model
-                if ii >= max_iterations:
-                    break
+                    # Train generator
+                    if jj == i:
+                        print(f'epoch: {epoch} generator {i}')
+                        train_data = next(iterator)
+                        input_data = train_data[0].to(device)
+                        target_data = train_data[1].to(device)
+                        ii += 1
 
-                train_data = next(iterator)
-                input_data = train_data[0].to(device)
-                target_data = train_data[1].to(device)
-                ii += 1
+                        generator_output = self.generator(input_data)
+                        gen_fake = self.critic(generator_output).reshape(-1)
+                        loss_gen = -torch.mean(gen_fake)
+                        loss_rec = recon_loss(target_data, generator_output)
+                        g_loss = loss_gen + self.hparams.recon_weight * loss_rec
+                        self.generator.zero_grad()
+                        g_loss.backward()
+                        self.opt_gen.step()
 
-                generator_output = self.generator(input_data)
-                gen_fake = self.critic(generator_output).reshape(-1)
-                loss_gen = -torch.mean(gen_fake)
-                loss_rec = recon_loss(target_data, generator_output)
-                g_loss = loss_gen + self.hparams.recon_weight * loss_rec
-                self.generator.zero_grad()
-                g_loss.backward()
-                self.opt_gen.step()
+                    # Train critic
+                    else:
+                        print(f'epoch: {epoch} critic {i}')
+                        train_data = next(iterator)
+                        input_data = train_data[0].to(device)
+                        target_data = train_data[1].to(device)
+                        ii += 1
 
-            end = time.time()
-            # Printing the results for each epoch
-            # gc.collect()
+                        generator_output = self.generator(input_data)
+                        critic_real = self.critic(target_data)
+                        critic_fake = self.critic(generator_output)
+                        # NEED TO VALIDATE
+                        # =-=-=-=-=-==-
+                        gp = self.gradient_penalty(target_data, generator_output, device=device)
+                        # =-=-=-=-=-==-
+
+                        loss_critic = (
+                                -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.hparams.lambada_gp * gp
+                        )
+
+                        self.critic.zero_grad()
+                        loss_critic.backward(retain_graph=True)
+                        self.opt_critic.step()
+
+            if jj == self.hparams.critic_iterations:
+                jj = 0
+            else:
+                jj = jj + 1
             start_2 = time.time()
-            loss_val_c, loss_val_gen = self.validation()
+            loss_val_c, loss_val_gen, loss_rec = self.validation()
             end_2 = time.time()
             print(f'validation time: {end_2 - start_2}')
             print(
                 f"Epoch [{epoch+1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
                   Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
-                f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},"
-                f", Time per 1 epoch: {end-start:.4f} sec."
+                f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
+                Loss Rec Val :{loss_rec}"
+                f", Time per 1 epoch: {start_2-start:.4f} sec."
             )
 
             # if self.best_g_loss > loss_val_gen:
@@ -208,7 +213,7 @@ class train_WGAN():
             loss_c += loss_critic.item()
             loss_g += g_loss.item()
 
-        return loss_c, g_loss
+        return loss_c, g_loss, loss_rec
 
     def save_checkpoint(self, epoch: int = None, loss_g: float = None, loss_cr: float = None):
         """
@@ -265,14 +270,14 @@ def run():
                         help="The directory where test data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str, default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom",
                         help="The output directory")
-    parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
+    parser.add_argument("--epochs", type=int, default=250, help="The checkpoint directory")
     parser.add_argument("--batch_size", type=int, default=32, help="The checkpoint directory")
     parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=5.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=5.e-06, help="The checkpoint directory")
     parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
-    parser.add_argument("--decay_start", type=int, default=5, help="The checkpoint directory")
-    parser.add_argument("--decay_end", type=int, default=10, help="The checkpoint directory")
+    parser.add_argument("--decay_start", type=int, default=25, help="The checkpoint directory")
+    parser.add_argument("--decay_end", type=int, default=50, help="The checkpoint directory")
     parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
     parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
