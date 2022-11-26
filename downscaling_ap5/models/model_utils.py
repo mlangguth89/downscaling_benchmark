@@ -11,7 +11,7 @@ import numpy as np
 import tensorflow.keras as keras
 from unet_model import sha_unet, UNET
 from wgan_model import WGAN, critic_model
-
+from other_utils import to_list
 
 class ModelEngine(object):
     """
@@ -29,7 +29,7 @@ class ModelEngine(object):
              third element of the tuple, i.e. {"wgan": (WGAN, unet_model, critic_model).
     """
 
-    known_models = {"u-net": UNET,
+    known_models = {"unet": (UNET, sha_unet),
                     "wgan": (WGAN, sha_unet, critic_model)}
 
     def __init__(self, model_name: str):
@@ -48,7 +48,7 @@ class ModelEngine(object):
         """
         Instantiate the model with some required arguments.
         """
-        model_list = list(self.model)
+        model_list = to_list(self.model)
         target_model = model_list[0]
         model_args = {"shape_in": shape_in, "hparams": hparams_dict, "exp_name": exp_name, "savedir": save_dir, **kwargs}
 
