@@ -144,26 +144,14 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        return [output_temp,output_z]
+        #model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        return output_temp
+        #model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
-    return model
+    #return model
 
-
-def get_lr_scheduler():
-    # define a learning-rate scheduler
-    def lr_scheduler(epoch, lr):
-        if epoch < 5:
-            return lr
-        elif 5 <= epoch < 30:
-            return lr * tf.math.exp(-0.1)
-        elif epoch >= 30:
-            return lr
-
-    lr_scheduler_cb = tf.keras.callbacks.LearningRateScheduler(lr_scheduler)
-
-    return lr_scheduler_cb
 
 
 class UNET(keras.Model):
@@ -184,6 +172,9 @@ class UNET(keras.Model):
 
         # instantiate model
         self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"])
+
+    def call(self, inputs):
+        return self.unet
 
     def get_compile_opts(self):
 
