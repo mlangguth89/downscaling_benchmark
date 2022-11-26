@@ -102,6 +102,7 @@ def main(parser_args):
 
     # instantiate model
     model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
+    model.varnames_tar = list(tfds_train.element_spec[1].keys())
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_opts")

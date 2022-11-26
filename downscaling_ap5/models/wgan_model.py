@@ -100,6 +100,9 @@ class WGAN(keras.Model):
                                         z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
+        # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
+        self.varnames_tar = None
+
         # attributes to be set in compile-method
         self.c_optimizer, self.g_optimizer = None, None
         self.lr_scheduler = None
