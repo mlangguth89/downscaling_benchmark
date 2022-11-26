@@ -105,7 +105,6 @@ class train_WGAN():
 
                     # Train generator
                     if jj == i:
-                        print(f'epoch: {epoch} generator {i}')
                         train_data = next(iterator)
                         input_data = train_data[0].to(device)
                         target_data = train_data[1].to(device)
@@ -122,7 +121,6 @@ class train_WGAN():
 
                     # Train critic
                     else:
-                        print(f'epoch: {epoch} critic {i}')
                         train_data = next(iterator)
                         input_data = train_data[0].to(device)
                         target_data = train_data[1].to(device)
