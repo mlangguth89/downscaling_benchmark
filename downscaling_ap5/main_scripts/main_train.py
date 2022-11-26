@@ -30,6 +30,7 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
+# * ensure that dataset defaults are set
 # * customized choice on predictors and predictands
 
 def main(parser_args):
@@ -85,9 +86,10 @@ def main(parser_args):
     # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
     bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
     print(bs_train)
-    tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"])
+    tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
+                                                 named_targets=True)
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
-                                               var_tar2in=ds_dict["var_tar2in"])
+                                               var_tar2in=ds_dict["var_tar2in"], named_targets=True)
 
     # get some key parameters from datasets
     nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
