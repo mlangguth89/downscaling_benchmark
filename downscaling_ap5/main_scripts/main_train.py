@@ -56,7 +56,7 @@ def main(parser_args):
 
     # get model instance and path to data files
     model_instance = ModelEngine(parser_args.model)
-    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "train"), \
+    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "val"), \
                              get_dataset_filename(datadir, dataset, "val")
 
     # initialize benchmarking object
@@ -135,7 +135,7 @@ def main(parser_args):
                                             nsamples * model.hparams["nepochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
-    print(f"Training of model '{parser_args.model_name}' training finished. Save model to '{model_savedir}'")
+    print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
 
     # save trained model
     t0_save = timer()
