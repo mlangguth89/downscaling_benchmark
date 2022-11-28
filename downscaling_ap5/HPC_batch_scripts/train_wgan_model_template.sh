@@ -17,34 +17,41 @@ echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
+# basic directories
+WORK_DIR=$(pwd)
+BASE_DIR=$(dirname "${WORK_DIR}")
+
 # Name of virtual environment
+VENV_DIR=${BASE_DIR}/virtual_envs/
 VIRT_ENV_NAME=<my_venv>
 
 # Loading mouldes
 source ../env_setup/modules.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
-   if [[ -f ../virtual_envs/${VIRT_ENV_NAME}/bin/activate ]]; then
+   if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
       echo "Activating virtual environment..."
-      source ../virtual_envs/${VIRT_ENV_NAME}/bin/activate
+      source ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate
    else
       echo "ERROR: Requested virtual environment ${VIRT_ENV_NAME} not found..."
       exit 1
    fi
 fi
 
-# data-directories
-indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_ifs/netcdf_data/all_files/
-outdir=/p/project/deepacf/maelstrom/langguth1/downscaling_jsc_repo/downscaling_ap5/trained_models/
 
-# declare directory-variables which will be modified by config_runscript.py
-nepochs=30
-lr_gen=5.e-05
-lr_critic=1.e-06
-lr_end=5.e-06
-lr_decay=True
-model_name=my_wgan_model
+# data-directories 
+# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
+outdir=<my_outdir>
+js_model_conf=${WORK_DIR}/config_wgan.json
+js_ds_conf=${WORK_DIR}/config_ds_tier2.json
 
-srun --overlap python3 ../main_scripts/main_train_wgan.py -in ${indir} -out ${outdir} -lr_gen ${lr_gen} -lr_critic ${lr_critic} -lr_gen_end ${lr_end} \
-                                                          -nepochs ${nepochs} -lr_decay -model_name ${model_name} -id ${SLURM_JOBID}
+model=wgan
+dataset=tier2
+
+exp_name=<my_exp>
+
+# run job
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
+	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 
