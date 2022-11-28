@@ -90,12 +90,12 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   source modules.sh
 
-  python3 -m venv ${VENV_DIR}
+  python3 -m venv --system-site-packages "${VENV_DIR}"
 
   activate_virt_env=${VENV_DIR}/bin/activate
 
   echo "${SCR_SETUP}Entering virtual environment ${VENV_DIR} to install required Python modules..."
-  source ${activate_virt_env}
+  source "${activate_virt_env}"
  
   # handle systematic issues with Stages/2022 
   MACHINE=$(hostname -f | cut -d. -f2)
@@ -106,19 +106,12 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   echo "${SCR_SETUP}Appending PYTHONPATH on ${MACHINE} for Python version ${PY_VERSION} to ensure proper set-up..."
 
-  # append PYTHONPATH to a) avoid installation to local site-packages and b) ensure that wheel-package is found
-  export PYTHONPATH=${VENV_DIR}/lib/python${PY_VERSION}/site-packages:${PYTHONPATH} >> ${activate_virt_env}       
-  export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages:${PYTHONPATH} >> ${activate_virt_env} 
-
   req_file=${SETUP_DIR}/requirements.txt
 
   # Without the environmental variables set above, we need to install wheel and explictly set the target directory
-  #pip3 install --no-cache-dir --target=${VENV_DIR}/lib/python3.9/site-packages/ wheel
-  #pip3 install --no-cache-dir --target=${VENV_DIR}/lib/python3.9/site-packages/ --upgrade -r ${req_file}
-  pip3 install --no-cache-dir -r ${req_file}
+  pip3 install --no-cache-dir -r "${req_file}"
 
   # expand PYTHONPATH
-  #export PYTHONPATH=${VENV_DIR}/lib/python3.9/site-packages:$PYTHONPATH >> ${activate_virt_env}   # already done above
   export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> ${activate_virt_env} 
   export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> ${activate_virt_env}
@@ -129,8 +122,6 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   # ...and ensure that this also done when the
   echo "" >> ${activate_virt_env}
   echo "# Expand PYTHONPATH..." >> ${activate_virt_env}
-  echo "export PYTHONPATH=${VENV_DIR}/lib/python${PY_VERSION}/site-packages:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages/:\$PYTHONPATH" >> ${activate_virt_env} 
   echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> ${activate_virt_env}
