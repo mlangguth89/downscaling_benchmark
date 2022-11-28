@@ -700,7 +700,7 @@ class SwinTransformerSys(nn.Module):
 
         if self.final_upsample == "expand_first":
             print("---final upsample expand_first---")
-            self.up = FinalPatchExpand_X4(input_resolution=(img_size//patch_size,img_size//patch_size),dim_scale=2,dim=embed_dim) # dim_scale=4 -> x4
+            self.up = FinalPatchExpand_X4(input_resolution=(img_size//patch_size,img_size//patch_size),dim_scale=4,dim=embed_dim) # dim_scale=4 -> x4
             self.output = nn.Conv2d(in_channels=embed_dim,out_channels=self.num_classes,kernel_size=1,bias=False)
 
         self.apply(self._init_weights)
@@ -749,7 +749,7 @@ class SwinTransformerSys(nn.Module):
                 x = layer_up(x)
 
         x = self.norm_up(x)  # B L C
-  
+   
         return x
 
     def up_x4(self, x):
@@ -759,7 +759,7 @@ class SwinTransformerSys(nn.Module):
 
         if self.final_upsample=="expand_first":
             x = self.up(x)
-            x = x.view(B,2*H,2*W,-1) # x.view(B,4*H,4*W,-1) -> x4
+            x = x.view(B,4*H,4*W,-1) # x.view(B,4*H,4*W,-1) -> x4
             x = x.permute(0,3,1,2) #B,C,H,W
             x = self.output(x)
             
@@ -768,13 +768,13 @@ class SwinTransformerSys(nn.Module):
     def forward(self, x):
         # remap for the first upsampling
         x = self.upsampling_first(x) # 16x16->160x160
-        #print('x after upsampling_first: {}'.format(x.shape))
+        print('x after upsampling_first: {}'.format(x.shape))
         x, x_downsample = self.forward_features(x)
-        #print('x after downsample: {}'.format(x.shape))
+        print('x after downsample: {}'.format(x.shape))
         x = self.forward_up_features(x,x_downsample)
-        #print('x after forward_up_features: {}'.format(x.shape))
+        print('x after forward_up_features: {}'.format(x.shape))
         x = self.up_x4(x)
-        #print('x after up_x4: {}'.format(x.shape))
+        print('x after up_x4: {}'.format(x.shape))
 
         return x
 

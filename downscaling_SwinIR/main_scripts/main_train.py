@@ -26,15 +26,14 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from utils.data_loader import create_loader
 import wandb
 os.environ["WANDB_MODE"]="offline"
-runname = "test"
-wandb.run.name = runname
+##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-
+wandb.run.name = "Unet_1117"
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 0.02, G_optimizer_betas: list = [0.9, 0.999],
-                 G_optimizer_wd: int= 0, save_dir: str = "../results"):
+                 G_optimizer_lr: float = 2e-2, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_wd: int= 0, save_dir: str = "../results"): # G_optimizer_lr: float = 2e-4 for swinIR
 
         # ------------------------------------
         # define network
@@ -179,10 +178,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    train_loader,batch_size = create_loader(train_dir)
-    val_loader, batch_size =  create_loader(val_dir)
-
-
+    train_loader = create_loader(train_dir)
+    val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
@@ -192,15 +189,9 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,
-                        num_classes=1,embed_dim=96,depths=[2,2,2],
-                        depths_decoder=[2,2,2],num_heads=[6,12,24],
-                        window_size=window_size,mlp_ratio=4,
-                        qkv_bias=True,qk_scale=None,
-                        drop_rate=0.,attn_drop_rate=0.,
-                        drop_path_rate=0.1,ape=False,
-                        final_upsample="expand_first") # final_upsample="expand_first"
-
+        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
+                        depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
+                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
     else:
         NotImplementedError
 
@@ -217,8 +208,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         "val_dir": val_dir,
         "epochs": epochs,
         "window_size": window_size,
-        "patch_size": patch_size,
-        "batch_size": batch_size
+        "patch_size": patch_size
     }
 
 
@@ -237,6 +227,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # -------------------------------
             # 2) feed patch pairs
             # -------------------------------
+            print(train_data)
             model.feed_data(train_data)
 
             # -------------------------------
@@ -252,15 +243,24 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                wandb.log({"loss":model.G_loss, "lr":lr})
+                 
+                with torch.no_grad():
+                    val_loss = 0
+                    for j, val_data in enumerate(val_loader):
+                        if j < 5:
+                            model.feed_data(val_data)
+                            model.netG_forward()
+                            val_loss = val_loss + model.G_lossfn(model.E, model.H)
+                    val_loss = val_loss/5
+                wandb.log({"loss":model.G_loss, "val_loss":val_loss, "lr":lr})
                 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type = str, required = True,
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("--test_dir", type = str, required = True,
-                        help = "The directory where testing data (.nc files) are stored")
+    parser.add_argument("--val_dir", type = str, required = True,
+                        help = "The directory where validation data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
@@ -284,6 +284,7 @@ def main():
 
 
     run(train_dir = args.train_dir,
+        val_dir = args.val_dir,
         n_channels = 8,
         save_dir = args.save_dir,
         checkpoint_save = 200,
