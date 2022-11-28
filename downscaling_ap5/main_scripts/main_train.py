@@ -57,7 +57,7 @@ def main(parser_args):
 
     # get model instance and path to data files
     model_instance = ModelEngine(parser_args.model)
-    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "val"), \
+    fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "train"), \
                              get_dataset_filename(datadir, dataset, "val")
 
     # initialize benchmarking object
