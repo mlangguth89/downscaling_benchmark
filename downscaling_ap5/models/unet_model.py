@@ -171,13 +171,10 @@ class UNET(keras.Model):
             os.makedirs(savedir, exist_ok=True)
         self.savedir = savedir
 
-        # instantiate model
-        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"])
-
     def call(self, inputs, **kwargs):
         """
         Integrate call-function to make all built-in functions available.
-        See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-within-a-subclassed-mo
+        See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-train_unet-model-err.6387845within-a-subclassed-mo
         for a reference how a model based on Keras functional API has to be integrated into a subclass.
         """
         return self.unet(inputs, **kwargs)
@@ -203,6 +200,12 @@ class UNET(keras.Model):
             opt_dict["loss"] = self.hparams["loss_func"]
 
         return opt_dict
+
+    def compile(self, **kwargs):
+        # instantiate model
+        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=self.varnames_tar)
+
+        return super(UNET, self).compile(**kwargs)
 
     def get_lr_scheduler(self):
         """
