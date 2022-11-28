@@ -44,7 +44,7 @@ class ModelEngine(object):
         else:
             self.model = self.known_models[self.modelname]
 
-    def __call__(self, shape_in, hparams_dict, exp_name, save_dir, **kwargs):
+    def __call__(self, shape_in, hparams_dict, save_dir, exp_name, **kwargs):
         """
         Instantiate the model with some required arguments.
         """

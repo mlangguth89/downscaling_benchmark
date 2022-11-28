@@ -128,7 +128,7 @@ def main(parser_args):
 
     # get optional fit options and start training/fitting
     fit_opts = handle_opt_utils(model, "get_fit_opts")
-    print("Start training of WGAN...")
+    print(f"Start training of {parser_args.model.capitalize()}...")
     history = model.fit(x=tfds_train, callbacks=cb_default, epochs=model.hparams["nepochs"],
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
                         verbose=2, **fit_opts)
