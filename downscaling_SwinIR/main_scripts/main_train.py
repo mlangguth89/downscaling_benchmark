@@ -178,20 +178,23 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
+
     train_loader = create_loader(train_dir)
     val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
     elif type_net == "swinSR":
-        netG = swinSR(img_size=16,patch_size=patch_size,in_chans=n_channels,window_size=window_size,
-                upscale=upscale_swinIR,upsampler=upsampler_swinIR)
+        netG = swinSR(img_size=16, patch_size=patch_size, in_chans=n_channels,window_size=window_size,
+                upscale=upscale_swinIR, upsampler=upsampler_swinIR)
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
         netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
                         depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
                         drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
+
+
     else:
         NotImplementedError
 
@@ -243,7 +246,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                 print("Model Loss {} after step {}".format(model.G_loss, current_step))
                 print("Model Saved")
                 print("Time per step:", time.time() - st)
-                 
                 with torch.no_grad():
                     val_loss = 0
                     for j, val_data in enumerate(val_loader):
@@ -254,6 +256,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                     val_loss = val_loss/5
                 wandb.log({"loss":model.G_loss, "val_loss":val_loss, "lr":lr})
                 
+
 
 def main():
     parser = argparse.ArgumentParser()

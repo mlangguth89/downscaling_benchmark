@@ -450,7 +450,6 @@ class BasicLayer(nn.Module):
 
 class RSTB(nn.Module):
     """Residual Swin Transformer Block (RSTB).
-
     Args:
         dim (int): Number of input channels.
         input_resolution (tuple[int]): Input resolution.
