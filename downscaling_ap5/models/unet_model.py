@@ -125,6 +125,7 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :return:
     """
+    print(tar_channels[0], tar_channels[1])
     inputs = Input(input_shape)
 
     """ encoder """
@@ -142,9 +143,11 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
 
     output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
+        print("Use z_branch...")
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
         model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        print(model)
     else:
         model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
@@ -203,9 +206,11 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=self.varnames_tar)
+        print(self.varnames_tar)
+        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=to_list(self.varnames_tar))
 
-        return super(UNET, self).compile(**kwargs)
+        return self.unet.compile(**kwargs)
+       # return super(UNET, self).compile(**kwargs)
 
     def get_lr_scheduler(self):
         """
@@ -259,7 +264,8 @@ class UNET(keras.Model):
         default_callbacks, unet_callbacks = to_list(callbacks), to_list(unet_callbacks)
         all_callbacks = [e for e in unet_callbacks + default_callbacks if e is not None]
 
-        return super(UNET, self).fit(callbacks=all_callbacks, **kwargs)
+        return self.unet.fit(callbacks=all_callbacks, **kwargs)
+        #return super(UNET, self).fit(callbacks=all_callbacks, **kwargs)
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
