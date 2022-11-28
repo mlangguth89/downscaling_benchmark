@@ -125,7 +125,6 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :return:
     """
-    print(tar_channels[0], tar_channels[1])
     inputs = Input(input_shape)
 
     """ encoder """
@@ -147,7 +146,6 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
         model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
-        print(model)
     else:
         model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
@@ -206,7 +204,6 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        print(self.varnames_tar)
         self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=to_list(self.varnames_tar))
 
         return self.unet.compile(**kwargs)
