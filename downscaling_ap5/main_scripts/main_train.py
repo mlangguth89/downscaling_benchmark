@@ -30,8 +30,9 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
+# * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
 # * ensure that dataset defaults are set
-# * customized choice on predictors and predictands
+# * customized choice on predictors and predictands missing
 
 def main(parser_args):
     # start timing
@@ -53,7 +54,8 @@ def main(parser_args):
     print(ds_dict)
     with parser_args.conf_md as mdf:
         hparams_dict = js.load(mdf)
-    print(hparams_dict)
+    
+    named_targets = hparams_dict.get("named_targets", False)
 
     # get model instance and path to data files
     model_instance = ModelEngine(parser_args.model)
@@ -85,14 +87,14 @@ def main(parser_args):
     # are applied to train the critic, before the generator is trained once.
     # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
     bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
-    print(bs_train)
     tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
-                                                 named_targets=True)
+                                                 named_targets=named_targets)
     tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
-                                               var_tar2in=ds_dict["var_tar2in"], named_targets=True)
+                                               var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
 
     # get some key parameters from datasets
     nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
+    varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory
     del ds_train
@@ -104,7 +106,7 @@ def main(parser_args):
 
     # instantiate model
     model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
-    model.varnames_tar = list(tfds_train.element_spec[1].keys())
+    model.varnames_tar = varnames_tar
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_opts")
