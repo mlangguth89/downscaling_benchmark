@@ -144,17 +144,18 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        return [output_temp,output_z]
-        #model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        return output_temp
-        #model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
-    #return model
-
+    return model
 
 
 class UNET(keras.Model):
+    """
+    U-Net submodel class:
+    This subclass takes a U-Net implemented using Keras functional API as input to the instanciation.
+    """
     def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
                  exp_name: str = "unet_model"):
 
@@ -173,8 +174,13 @@ class UNET(keras.Model):
         # instantiate model
         self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"])
 
-    def call(self, inputs):
-        return self.unet
+    def call(self, inputs, **kwargs):
+        """
+        Integrate call-function to make all built-in functions available.
+        See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-within-a-subclassed-mo
+        for a reference how a model based on Keras functional API has to be integrated into a subclass.
+        """
+        return self.unet(inputs, **kwargs)
 
     def get_compile_opts(self):
 
