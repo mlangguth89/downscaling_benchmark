@@ -119,7 +119,7 @@ class HandleDataClass(object):
         Split data array with variables-dimension into input and target data for downscaling.
         :param da: The unsplitted data array.
         :param target_var: Name of target variable which should consttute the first channel
-        :return: The splitted data array.
+        :return: The split data array.
         """
         invars = [var for var in da["variables"].values if var.endswith("_in")]
         tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
@@ -153,7 +153,7 @@ class HandleDataClass(object):
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
                            to the input)
-        :param lembed_date: flag to trigger date embedding in terms of month of the year and hour of the day
+        :param lembed_date: flag to retrieve date indices of month and hour for date embedding
         """
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
@@ -173,8 +173,8 @@ class HandleDataClass(object):
                 all_streams = [darr_in.isel({"time": t}).values,
                                {var: tar_now.sel({"variables": var}).values for var in varnames_tar}]
                 if lt_embed:
-                    time_embeds = get_date_embeds(pd.to_datetime(time))
-                    all_streams = all_streams + time_embeds
+                    time_indices = get_date_index(pd.to_datetime(time))
+                    all_streams = all_streams + time_indices
                 yield tuple(all_streams)
 
         def gen_unnamed(darr_in, darr_tar, lt_embed: bool = False):
@@ -186,19 +186,18 @@ class HandleDataClass(object):
                 time = darr_in.isel({"time": t})["time"].values
                 all_streams = [darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values]
                 if lt_embed:
-                    time_embeds = get_date_embeds(pd.to_datetime(time))
-                    all_streams = all_streams + time_embeds
+                    time_indices = get_date_index(pd.to_datetime(time))
+                    all_streams = all_streams + time_indices
 
                 yield tuple(all_streams)
 
-        def get_date_embeds(dt_obj):
+        def get_date_index(dt_obj):
             """
-            Create one-hot-encoding for month and hour of the day
+            Retrieve hour and month as indices from date (i.e. both indices start with zero, also the month!)
             """
-            hour, month = dt_obj.hour, dt_obj.month - 1
-            date_embed = [OneHotEncoder(month, 12), OneHotEncoder(hour, 24)]
+            date_index = [dt_obj.hour, dt_obj.month - 1]
 
-            return date_embed
+            return date_index
 
         if named_targets is True:
             print("TF dataset will contain named targets...")

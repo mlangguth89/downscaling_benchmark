@@ -12,8 +12,8 @@ import numpy as np
 import tensorflow as tf
 
 # all the layers used for U-net
-from tensorflow.keras.layers import (Concatenate, Dense, Conv2D,Reshape, Conv2DTranspose, Input,
-                                     MaxPool2D, RepeatVector)
+from tensorflow.keras.layers import (Concatenate, Conv2D,Reshape, Conv2DTranspose, Input,
+                                     MaxPool2D, RepeatVector, Embedding)
 from tensorflow.keras.models import Model
 from model_utils import conv_block, conv_block_n
 
@@ -53,7 +53,7 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 # The particular U-net
 def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, l_embed: bool = False,
-               embed_sh: tuple = (12, 24), tar_channels=["output_temp", "output_z"]) -> Model:
+               embed_sh: tuple = (12, 24), embed_latent_dim: int = 8, tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model
     :param input_shape: shape of input-data
@@ -61,42 +61,39 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     :param z_branch: flag if z-branch is used.
     :param l_embed: flag if embedding with one-hot-encoding vectors is performed. The default embeds the date in terms
                     of the month of the year as well as the hour of the day (see embed_sh)
-    :param embed_sh: shape of one-hot-encodings for date embedding. Default (12, 24) corresonds to the twelve months of
+    :param embed_sh: maximum indices for date input. Default (12, 24) corresonds to the twelve months of
                      a year and the 24 hours of a day
+    :param embed_latent_dim: output dimension of embedding (latent representation vector)
     :param tar_channels: name of output channels, only active if z_branch is True
     :return:
     """
     # 'normal' input stream
     inputs = Input(input_shape)
 
-    if l_embed:     # optional embedding with one-hot-encoding vectors
-        n_nodes = np.prod(input_shape[:-1])
-        tar_dim = tuple(list(input_shape[:-1]) + [1])
-
-        embed_vec_in = [Input(shape=i) for i in embed_sh]
-
-        # project embedding to scalar value
-        embed_vec_proj = [Dense(1)(i) for i in embed_vec_in]
-        # repeat and reshape to match input-data for concatenation
-        embed_vec_proj = [RepeatVector(int(n_nodes))(i) for i in embed_vec_proj]
-        embed_vec_proj = [Reshape(tar_dim)(i) for i in embed_vec_proj]
-
-        merge_list = [inputs] + [embed for embed in embed_vec_proj]
-
-        merge = Concatenate()(merge_list)
-
-        all_inputs = [inputs] + [input_embed for input_embed in embed_vec_in]
-    else:   # no merging with embedding required
-        merge = inputs
-        all_inputs = inputs
-
     """ encoder """
-    s1, e1 = encoder_block(merge, channels_start, l_large=True)
+    s1, e1 = encoder_block(inputs, channels_start, l_large=True)
     s2, e2 = encoder_block(e1, channels_start * 2, l_large=False)
     s3, e3 = encoder_block(e2, channels_start * 4, l_large=False)
 
     """ bridge encoder <-> decoder """
     b1 = conv_block(e3, channels_start * 8)
+
+    if l_embed:  # optional embedding at the encode-decoder bridge
+        n_nodes = np.prod(b1[:-1])
+        tar_dim = tuple(list(b1[:-1]) + [1])
+
+        embed_inputs = [Input(shape=(1,)) for _ in embed_sh]
+        embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for n, i in enumerate(embed_sh)]
+
+        embeds_vec = [RepeatVector(n_nodes)(embed) for embed in embeds]
+        embeds_vec = [Reshape(tar_dim)(i) for i in embeds_vec]
+
+        merge_list = [b1] + [embed for embed in embeds_vec]
+
+        b1 = Concatenate()(merge_list)
+
+    else:  # no merging with embedding required
+        pass
 
     """ decoder """
     d1 = decoder_block(b1, s3, channels_start * 4)
@@ -107,9 +104,9 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(all_inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        model = Model(all_inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
     return model
 
