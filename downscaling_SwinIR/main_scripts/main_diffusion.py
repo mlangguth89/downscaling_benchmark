@@ -9,7 +9,6 @@ __author__ = "Bing Gong"
 __date__ = "2022-11-15"
 
 
-
 import matplotlib.pyplot as plt
 import xarray as xr
 import numpy as np
@@ -24,6 +23,7 @@ sys.path.append("..")
 from utils.data_loader import create_loader
 from models.network_unet import Upsampling
 from models.network_diffusion import UNet
+from torchvision.utils import save_image
 from main_scripts.dataset_prep import PrecipDatasetInter
 
 print(sys.version)
@@ -252,8 +252,6 @@ def p_sample(model, x, t, t_index):
         return model_mean + torch.sqrt(posterior_variance_t) * noise
 
 
-
-# Algorithm 2 (including returning all images)
 def p_sample_loop(model, shape):
     device = next(model.parameters()).device
 
@@ -270,8 +268,6 @@ def p_sample_loop(model, shape):
 
 def sample(model, image_size, batch_size=16, channels=3):
     return p_sample_loop(model, shape=(batch_size, channels, image_size, image_size))
-
-
 
 
 def num_to_groups(num, divisor):
@@ -294,7 +290,7 @@ model.to(device)
 optimizer = Adam(model.parameters(), lr=1e-3)
 
 
-from torchvision.utils import save_image
+
 epochs = 5
 for epoch in range(epochs):
     for step, batch in enumerate(train_loader):
