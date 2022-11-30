@@ -93,7 +93,7 @@ def main(parser_args):
                                                var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
 
     # get some key parameters from datasets
-    nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:]
+    nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory
@@ -146,7 +146,7 @@ def main(parser_args):
     t0_save = timer()
 
     os.makedirs(model_savedir, exist_ok=True)
-    model.save(model_savedir)
+    model.save(filepath=model_savedir)
 
     tend = timer()
     benchmark_dict["saving model time"] = tend - t0_save
