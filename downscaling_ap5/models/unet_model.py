@@ -264,6 +264,9 @@ class UNET(keras.Model):
         return self.unet.fit(callbacks=all_callbacks, **kwargs)
         #return super(UNET, self).fit(callbacks=all_callbacks, **kwargs)
 
+    def save(self, **kwargs):
+        self.unet.save(**kwargs)
+
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
         """
