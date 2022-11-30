@@ -23,8 +23,7 @@ sys.path.append("..")
 from utils.data_loader import create_loader
 from models.network_unet import Upsampling
 from models.network_diffusion import UNet
-from torchvision.utils import save_image
-from main_scripts.dataset_prep import PrecipDatasetInter
+import os
 
 print(sys.version)
 print(xr.__version__)
@@ -83,7 +82,8 @@ def spatial_plot(prcp, title, figname):
 
     # save to disk
     plt.savefig(figname, bbox_inches = "tight")
-    plt.show()
+    #plt.show()
+    plt.close()
 
 
 #############Define the schedules for T timestamps
@@ -156,7 +156,6 @@ def extract(a, t, x_shape):
     return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)
 
 
-
 # forward diffusion (using the nice property)
 def q_sample(x_start, t, noise=None):
     if not torch.is_tensor(x_start):
@@ -174,7 +173,6 @@ def q_sample(x_start, t, noise=None):
     return spls
 
 
-
 def get_noisy_image(x_start, t):
   # add noise
   noisy_image = q_sample(x_start, t=t)
@@ -184,7 +182,7 @@ def get_noisy_image(x_start, t):
 
 
 train_dir: str = "../../data/"
-train_loader, batch_size = create_loader(train_dir)
+train_loader = create_loader(train_dir)
 upsampling = Upsampling(in_channels = 8)
 
 # for i, train_data in enumerate(train_loader):
@@ -266,7 +264,7 @@ def p_sample_loop(model, shape):
     return imgs
 
 
-def sample(model, image_size, batch_size=16, channels=3):
+def sample(model, image_size=160, batch_size=16, channels=3):
     return p_sample_loop(model, shape=(batch_size, channels, image_size, image_size))
 
 
@@ -280,7 +278,7 @@ def num_to_groups(num, divisor):
 
 results_folder = Path("./results")
 results_folder.mkdir(exist_ok = True)
-save_and_sample_every = 1000
+save_and_sample_every = 5
 
 
 #training
@@ -290,29 +288,59 @@ model.to(device)
 optimizer = Adam(model.parameters(), lr=1e-3)
 
 
+def save_network(save_dir, network, network_label, iter_label):
+    save_filename = '{}_{}.pth'.format(iter_label, network_label)
+    save_path = os.path.join(save_dir, save_filename)
+    state_dict = network.state_dict()
+    for key, param in state_dict.items():
+        state_dict[key] = param.cpu()
+    torch.save(state_dict, save_path)
 
-epochs = 5
-for epoch in range(epochs):
-    for step, batch in enumerate(train_loader):
-        optimizer.zero_grad()
-        batch_size = batch["L"].shape[0]
-        batch = upsampling(batch["L"])
+# epochs = 5
+# for epoch in range(epochs):
+#     for step, batch in enumerate(train_loader):
+#         optimizer.zero_grad()
+#         batch_size = batch["L"].shape[0]
+#         batch = upsampling(batch["L"])
+#
+#         x1_start = batch[0][-1] # The fist variable
+#
+#         # Algorithm 1 line 3: sample t uniformally for every example in the batch
+#         t = torch.randint(0, timesteps, (batch_size,), device=device).long()
+#         loss = p_losses(model, batch, t, loss_type="huber")
+#         if step % 10 == 0:
+#             print("Loss:", loss.item())
+#
+#         loss.backward()
+#         optimizer.step()
+#         # save generated images
+#         if step != 0 and step % save_and_sample_every == 0:
+#             milestone = step // save_and_sample_every
+#             batches = num_to_groups(4, batch_size)
+#             print("batches", batches)
+#             all_images_list = list(map(lambda n: sample(model, batch_size=n, channels=8), batches))
+#             print("len of images", len(all_images_list))
+#             precp = np.array(all_images_list[0])[:, 0, -1, :, :]  #[n_samples,batch, channel, lat,lon]
+#             #print("the shape of the one sample", all_images_list[0].shape)
+#             title = "prep_pred"
+#             for j in [0,30,60,100,190]:
+#                 title = "step_" + str(step) + "_sample_" + str(j) + "precp_pred"
+#                 spatial_plot(precp[j], title, "./") #only collect the first sample in the batch
+#
+#             save_network("./", model, "G", str(epoch) + "_" + str(step))
+#
+#             #all_images = torch.cat((all_images_list), dim=0)
+#             #all_images = (all_images + 1) * 0.5
+#             #save_image(all_images, str(results_folder / f'sample-{milestone}.png'), nrow = 6)
+#             #spatial_plot(x1_start.to_numpy[0][-1], "raw", "./")
 
-        x1_start = batch[0][-1] # The fist variable
 
-        # Algorithm 1 line 3: sample t uniformally for every example in the batch
-        t = torch.randint(0, timesteps, (batch_size,), device=device).long()
-        loss = p_losses(model, batch, t, loss_type="huber")
-        if step % 10 == 0:
-            print("Loss:", loss.item())
 
-        loss.backward()
-        optimizer.step()
-        # save generated images
-        if step != 0 and step % save_and_sample_every == 0:
-            milestone = step // save_and_sample_every
-            batches = num_to_groups(4, batch_size)
-            all_images_list = list(map(lambda n: sample(model, batch_size=n, channels=8), batches))
-            all_images = torch.cat(all_images_list, dim=0)
-            all_images = (all_images + 1) * 0.5
-            save_image(all_images, str(results_folder / f'sample-{milestone}.png'), nrow = 6)
+for step, batch in enumerate(train_loader):
+    s = sample(model, batch_size = 64, channels = 8)
+    with torch.no_grad():
+        model.load_state_dict(torch.load("./", model, "G", str(0) + "_" + str(25)))
+
+    samples = sample(model, image_size=160, batch_size=64, channels=8)
+
+
