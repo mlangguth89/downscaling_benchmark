@@ -43,8 +43,8 @@ def main(parser_args):
     # Read training and validation data
     print("Start reading data from disk...")
     t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "downscaling_tier2_train.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "downscaling_tier2_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
@@ -66,7 +66,7 @@ def main(parser_args):
 
     # slice data temporaly
     #ds_train = ds_train.sel(time=slice("2014-01-01", "2016-12-30"))
-    da_train, da_val = HandleUnetData.reshape_ds(ds_train), HandleUnetData.reshape_ds(ds_val)
+    da_train, da_val = HandleUnetData.reshape_ds(ds_train.astype("float32", copy=False)), HandleUnetData.reshape_ds(ds_val.astype("float32", copy=False))
 
     norm_dims = ["time", "rlat", "rlon"]
     da_train, mu_train, std_train = HandleUnetData.z_norm_data(da_train, dims=norm_dims,
