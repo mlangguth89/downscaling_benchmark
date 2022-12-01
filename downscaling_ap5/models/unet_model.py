@@ -79,21 +79,25 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     b1 = conv_block(e3, channels_start * 8)
 
     if l_embed:  # optional embedding at the encode-decoder bridge
-        n_nodes = np.prod(b1[:-1])
-        tar_dim = tuple(list(b1[:-1]) + [1])
+        bridge_shape = b1.shape[1:]
+        n_nodes = int(np.prod(bridge_shape[:-1]))
+        tar_dim = tuple(list(bridge_shape[:-1]) + [embed_latent_dim])
 
         embed_inputs = [Input(shape=(1,)) for _ in embed_sh]
-        embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for n, i in enumerate(embed_sh)]
+        embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for i, n in enumerate(embed_sh)]
 
-        embeds_vec = [RepeatVector(n_nodes)(embed) for embed in embeds]
+        embeds_vec = [RepeatVector(n_nodes)(embed[:,0,:]) for embed in embeds]
         embeds_vec = [Reshape(tar_dim)(i) for i in embeds_vec]
 
         merge_list = [b1] + [embed for embed in embeds_vec]
 
         b1 = Concatenate()(merge_list)
+        # append input
+        all_inputs = [inputs] + embed_inputs
 
-    else:  # no merging with embedding required
-        pass
+    else:  
+        # no merging of embeddings required, so leave inputs unchanged
+        all_inputs = inputs
 
     """ decoder """
     d1 = decoder_block(b1, s3, channels_start * 4)
@@ -104,9 +108,9 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     if z_branch:
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(all_inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
     else:
-        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model(all_inputs, output_temp, name="t2m_downscaling_unet")
 
     return model
 
