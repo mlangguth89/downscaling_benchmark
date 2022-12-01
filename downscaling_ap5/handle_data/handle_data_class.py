@@ -194,8 +194,9 @@ class HandleDataClass(object):
         def get_date_index(dt_obj):
             """
             Retrieve hour and month as indices from date (i.e. both indices start with zero, also the month!)
+            The indices are converted to numpy-arrays of size 1 to be compatible with Keras.input
             """
-            date_index = [dt_obj.hour, dt_obj.month - 1]
+            date_index = [np.asarray([dt_obj.hour]), np.asarray([dt_obj.month - 1])]
 
             return date_index
 
