@@ -100,13 +100,24 @@ def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: 
     return x, p
 
 
+def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int = 2,
+                   padding: str = "same", activation: str = "relu", kernel_init: str = "he_normal"):
+
+    x = Conv2D(num_filters * (upscale_fac ** 2), kernel, padding=padding, kernel_initializer=kernel_init,
+               activation=activation)(inputs)
+    x = tf.nn.depth_to_space(x, upscale_fac)
+
+    return x
+
+
 def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), strides_up: int = 2,
                   padding: str = "same", activation="relu", kernel_init="he_normal",
                   l_batch_normalization: bool = True):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
-    x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
+    x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
+                       activation=activation, kernel_init=kernel)
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
                      l_batch_normalization=l_batch_normalization)
