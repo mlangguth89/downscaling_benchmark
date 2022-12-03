@@ -13,7 +13,7 @@ import tensorflow as tf
 
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D,Reshape, Conv2DTranspose, Input,
-                                     MaxPool2D, RepeatVector, Embedding)
+                                     MaxPool2D, RepeatVector, Embedding, Dense)
 from tensorflow.keras.models import Model
 from model_utils import conv_block, conv_block_n
 
@@ -86,7 +86,9 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
         embed_inputs = [Input(shape=(1,)) for _ in embed_sh]
         embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for i, n in enumerate(embed_sh)]
 
-        embeds_vec = [RepeatVector(n_nodes)(embed[:,0,:]) for embed in embeds]
+        embeds = [Dense(embed_latent_dim)(embed[:,0,:]) for embed in embeds]
+
+        embeds_vec = [RepeatVector(n_nodes)(embed[:,:]) for embed in embeds]
         embeds_vec = [Reshape(tar_dim)(i) for i in embeds_vec]
 
         merge_list = [b1] + [embed for embed in embeds_vec]
