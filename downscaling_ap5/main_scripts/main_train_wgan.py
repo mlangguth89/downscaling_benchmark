@@ -84,7 +84,7 @@ def main(parser_args):
 
     # compile model and get TF datasets for training and validation
     print("Start compiling WGAN-model.")
-    train_iter, val_iter = wgan_model.compile(da_train.astype(np.float32), da_val.astype(np.float32))
+    train_iter, val_iter = wgan_model.compile(da_train, da_val)
 
     benchmark_dict["model compile time"] = timer() - t0_compile
 
