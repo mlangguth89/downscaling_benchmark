@@ -117,7 +117,7 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
     One complete decoder block used in U-net (reverting the encoder)
     """
     x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
-                       activation=activation, kernel_init=kernel)
+                       activation=activation, kernel_init=kernel_init)
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
                      l_batch_normalization=l_batch_normalization)
