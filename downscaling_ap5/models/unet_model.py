@@ -111,13 +111,17 @@ def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int 
 
 
 def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), strides_up: int = 2,
-                  padding: str = "same", activation="relu", kernel_init="he_normal",
+                  subpixel_layer: bool = True, padding: str = "same", activation="relu", kernel_init="he_normal",
                   l_batch_normalization: bool = True):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
-    x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
-                       activation=activation, kernel_init=kernel_init)
+    if subpixel_layer:
+        x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
+                           activation=activation, kernel_init=kernel_init)
+    else:
+        x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
+
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
                      l_batch_normalization=l_batch_normalization)
@@ -126,13 +130,14 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
 
 
 # The particular U-net
-def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False,
+def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, subpixel_layer: bool = True,
              tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
     :param z_branch: flag if z-branch is used.
+    :param subpixel_layer: flag if subpixel layer instead of transposed convolution is used for upsampling
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :return:
     """
@@ -147,9 +152,9 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     b1 = conv_block(e3, channels_start * 8)
 
     """ decoder """
-    d1 = decoder_block(b1, s3, channels_start * 4)
-    d2 = decoder_block(d1, s2, channels_start * 2)
-    d3 = decoder_block(d2, s1, channels_start)
+    d1 = decoder_block(b1, s3, channels_start * 4, subpixel_layer=subpixel_layer)
+    d2 = decoder_block(d1, s2, channels_start * 2, subpixel_layer=subpixel_layer)
+    d3 = decoder_block(d2, s1, channels_start, subpixel_layer=subpixel_layer)
 
     output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
@@ -215,7 +220,8 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=to_list(self.varnames_tar))
+        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=to_list(self.varnames_tar),
+                              subpixel_layer= self.hparams["subpixel_layer"])
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
@@ -314,7 +320,7 @@ class UNET(keras.Model):
         hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
                         "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
                         "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
-                        "var_tar2in": ""}
+                        "var_tar2in": "", "subpixel_layer": True}
 
         return hparams_dict
 
