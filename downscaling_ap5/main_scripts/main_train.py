@@ -16,6 +16,7 @@ import argparse
 from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 import gc
+from shutil import copy
 import json as js
 from timeit import default_timer as timer
 import numpy as np
@@ -50,10 +51,12 @@ def main(parser_args):
     # read configuration files for model and dataset
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
+        copy(parser_args.conf_ds, outdir)
 
     print(ds_dict)
     with parser_args.conf_md as mdf:
         hparams_dict = js.load(mdf)
+        copy(parser_args.conf_md, outdir)
     
     named_targets = hparams_dict.get("named_targets", False)
 
