@@ -60,7 +60,7 @@ class Normalize(ABC):
 
         _ = self._check_norm_dims(data)
         # do the computation
-        norm_stats = self.get_required_stats(data, *stats)
+        norm_stats = self.get_required_stats(data, **stats)
         data_denorm = self.denormalize_data(data, *norm_stats)
 
         return data_denorm
