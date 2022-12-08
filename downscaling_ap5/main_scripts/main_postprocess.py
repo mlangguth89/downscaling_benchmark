@@ -153,18 +153,18 @@ def main(parser_args):
     logger.info("Start spatial evaluation...")
     lvl_rmse = np.arange(0., 3.1, 0.2)
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
-    _ = run_evaluation_spatial(score_engine, "rmse", "K", os.path.join(plt_dir, "rmse_spatial"), cmap=cmap_rmse,
+    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), cmap=cmap_rmse,
                                levels=lvl_rmse)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
-    _ = run_evaluation_spatial(score_engine, "bias", "K", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
+    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
                                levels=lvl_bias)
 
     logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot}s.")
 
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished." +
-                 "Elapsed total time: {t0 - timer()}s.")
+                f"Elapsed total time: {t0 - timer()}s.")
 
 
 if __name__ == "__main__":
