@@ -11,7 +11,7 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
 __update__ = "2022-12-08"
 
-import os, glob
+import os, sys, glob
 import logging
 import argparse
 from timeit import default_timer as timer
@@ -44,8 +44,10 @@ def main(parser_args):
                                                               parser_args.model_type)
     # create logger handlers
     os.makedirs(plt_dir, exist_ok=True)
-    fh = logging.FileHandler(os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log"))
-    ch = logging.StreamHandler()
+    logfile = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
+    if os.path.isfile(logfile): os.remove(logfile)
+    fh = logging.FileHandler(logfile)
+    ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
 
     fh.setFormatter(formatter)
@@ -114,8 +116,9 @@ def main(parser_args):
     data_in = da_test_in.squeeze().values
 
     # start inference
-    logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc}s." +
+    logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s." +
                  "Start inference on trained model...")
+    t0_train = timer()
     y_pred_trans = trained_model.predict(data_in, batch_size=32, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
@@ -129,7 +132,7 @@ def main(parser_args):
     y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
 
     # start evaluation
-    logger.info(f"Output data on test dataset successfully processed in {t0 - timer()}s. Start evaluation...")
+    logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
 
     # create plot directory if required
     os.makedirs(plt_dir, exist_ok=True)
@@ -145,7 +148,7 @@ def main(parser_args):
     _ = run_evaluation_time(score_engine, "grad_amplitude", "1", plt_dir, value_range=(0.7, 1.1),
                             ref_line=1., model_type=model_type)
 
-    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot}s.")
+    logger.info(f"Temporal evalutaion finished in {timer() - t0_tploti:.2f}s.")
 
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
@@ -161,10 +164,10 @@ def main(parser_args):
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
                                levels=lvl_bias)
 
-    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot}s.")
+    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished." +
-                f"Elapsed total time: {t0 - timer()}s.")
+                f"Elapsed total time: {timer() - t0:.1f}s.")
 
 
 if __name__ == "__main__":
