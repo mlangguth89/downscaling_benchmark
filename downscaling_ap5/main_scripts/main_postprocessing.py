@@ -11,7 +11,7 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
 __update__ = "2022-12-08"
 
-import os
+import os, glob
 import logging
 import argparse
 from timeit import default_timer as timer
@@ -54,15 +54,26 @@ def main(parser_args):
     logger.info(f"Start postprocessing at {t0}")
 
     # read configuration files
-    with parser_args.conf_ds as dsf:
-        logging.info(f"Read dataset configuration file '{parser_args.conf_ds}'.")
-        ds_dict = js.load(dsf)
-        logging.debug(ds_dict)
+    md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
+    md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
+                                     glob.glob(os.path.join(model_base, ds_config_pattern))
+    if not ds_config_file:
+        raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_file}' " +
+                                f"under '{model_dir}'")
+    else:
+        with ds_config_file[0] as dsf:
+            logging.info(f"Read dataset configuration file '{parser_args.conf_ds}'.")
+            ds_dict = js.load(dsf)
+            logging.debug(ds_dict)
 
-    with parser_args.conf_md as mdf:
-        logging.info(f"Read model configuration file '{parser_args.conf_md}'.")
-        hparams_dict = js.load(mdf)
-        logging.debug(hparams_dict)
+    if not md_config_file:
+        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_file}' " +
+                                f"under '{model_dir}'")
+    else:
+        with md_config_file[0] as mdf:
+            logging.info(f"Read model configuration file '{parser_args.conf_md}'.")
+            hparams_dict = js.load(mdf)
+            logging.debug(hparams_dict)
 
     # Load checkpointed model
     logging.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
