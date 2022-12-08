@@ -55,3 +55,6 @@ exp_name=<my_exp>
 srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
 	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 
+# copy logfiles to output directory
+cp ${SBATCH_OUTPUT} ${outdir}/${SBATCH_OUTPUT}
+cp ${SBATCH_ERROR} ${outdir}/${SBATCH_ERROR}
