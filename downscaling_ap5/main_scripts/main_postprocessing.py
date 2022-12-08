@@ -149,7 +149,8 @@ def main(parser_args):
 
     logging.info(f"Temporal evalutaion finished in {timer() - t0_tplot}s.")
 
-    logging.info(f"Postprocessing of experiment {} finished. Elapsed total time: {t0 - timer()}s.")
+    logging.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished." +
+                 "Elapsed total time: {t0 - timer()}s.")
 
 
 if __name__ == "__main__":
