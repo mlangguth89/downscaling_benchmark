@@ -69,7 +69,7 @@ def main(parser_args):
         with open(ds_config_file[0]) as dsf:
             logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
             ds_dict = js.load(dsf)
-            logging.debug(ds_dict)
+            logger.debug(ds_dict)
 
     if not md_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
@@ -78,7 +78,7 @@ def main(parser_args):
         with open(md_config_file[0]) as mdf:
             logger.info(f"Read model configuration file '{md_config_file[0]}'.")
             hparams_dict = js.load(mdf)
-            logging.debug(hparams_dict)
+            logger.debug(hparams_dict)
 
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
@@ -100,17 +100,18 @@ def main(parser_args):
 
     # perform normalization
     js_norm = os.path.join(norm_dir, "norm.json")
-    logging.debug("Read normalization file for subsequent data transformation.")
+    logger.debug("Read normalization file for subsequent data transformation.")
     norm = ZScore(ds_dict["norm_dims"])
     norm.read_norm_from_file(js_norm)
     da_test = norm.normalize(da_test)
 
     da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
     ground_truth, tar_varname = da_test_tar.isel(variables=0), da_test_tar['variables'][0]
-    logging.debug(f"Variable {tar_varname} serves as ground truth data.")
+    logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     if hparams_dict["z_branch"]:
         logger.info(f"Add high-resolved target topography to input features.")
+        print(da_test_tar["variables"][-1])
         da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
 
     data_in = da_test_in.squeeze().values
@@ -148,7 +149,7 @@ def main(parser_args):
     _ = run_evaluation_time(score_engine, "grad_amplitude", "1", plt_dir, value_range=(0.7, 1.1),
                             ref_line=1., model_type=model_type)
 
-    logger.info(f"Temporal evalutaion finished in {timer() - t0_tploti:.2f}s.")
+    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
