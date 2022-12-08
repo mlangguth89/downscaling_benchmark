@@ -111,6 +111,10 @@ class HandleDataClass(object):
         """
         da = ds.to_array(dim="variables")
         da = da.transpose(..., "variables")
+        da = da.load()
+
+        del ds
+        gc.collect()
         return da
 
     @staticmethod
@@ -155,7 +159,7 @@ class HandleDataClass(object):
                            to the input)
         :param lembed_date: flag to retrieve date indices of month and hour for date embedding
         """
-        da = da.load()
+        # da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
         if var_tar2in is not None:
             da_in = xr.concat([da_in, da_tar.sel({"variables": var_tar2in})], "variables")

@@ -44,8 +44,8 @@ def main(parser_args):
     t0_save = timer()
     #ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc"), chunks="auto"), \
     #                   xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"), chunks="auto")
-    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_train.nc")), \
-                       xr.open_dataset(os.path.join(datadir, "preproc_era5_crea6_val.nc"))
+    ds_train, ds_val = xr.open_dataset(os.path.join(datadir, "downscaling_tier2_val.nc")), \
+                       xr.open_dataset(os.path.join(datadir, "downscaling_tier2_val.nc"))
 
     benchmark_dict = {"loading data time": timer() - t0_save}
 
