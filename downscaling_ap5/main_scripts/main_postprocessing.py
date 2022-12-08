@@ -58,20 +58,20 @@ def main(parser_args):
     md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_file}' " +
+        raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
                                 f"under '{model_dir}'")
     else:
         with ds_config_file[0] as dsf:
-            logging.info(f"Read dataset configuration file '{parser_args.conf_ds}'.")
+            logging.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
             ds_dict = js.load(dsf)
             logging.debug(ds_dict)
 
     if not md_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_file}' " +
+        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
                                 f"under '{model_dir}'")
     else:
         with md_config_file[0] as mdf:
-            logging.info(f"Read model configuration file '{parser_args.conf_md}'.")
+            logging.info(f"Read model configuration file '{md_config_file[0]}'.")
             hparams_dict = js.load(mdf)
             logging.debug(hparams_dict)
 
@@ -174,14 +174,11 @@ if __name__ == "__main__":
                         help="Name of the experiment/trained model to postprocess.")
     parser.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
                         help="Name of dataset to be used for downscaling model.")
-    parser.add_argument("--configuration_model", "-conf_md", dest="conf_md", type=argparse.FileType("r"), required=True,
-                        help="JSON-file to configure model to be trained.")
     parser.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
                         help="Flag for evaluating last instead of best checkpointed model")
     parser.add_argument("--model_type", "-model_type", dest="model_tyoe", default=None,
                         help="Name of model architecture. Only required if custom model architecture is not" +
                              "implemented in get_model_info-function (see postprocess.py)")
-    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
 
     args = parser.parse_args()
     main(args)
