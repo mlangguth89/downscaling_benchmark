@@ -123,6 +123,9 @@ virt_env*/
 # Ignore Jupyter Notebooks for testing
 **/jupyter_notebooks_test
 
+# Ignore results
+**/results
+
 # Ignore file for diagnosis
 *.json
 *.csv
