@@ -106,7 +106,8 @@ def main(parser_args):
     da_test = norm.normalize(da_test)
 
     da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
-    ground_truth, tar_varname = da_test_tar.isel(variables=0), da_test_tar['variables'][0]
+    tar_varname = da_test_tar['variables'].values[0]
+    ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     if hparams_dict["z_branch"]:
