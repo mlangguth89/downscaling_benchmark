@@ -86,12 +86,13 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
         embed_inputs = [Input(shape=(1,)) for _ in embed_sh]
         embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for i, n in enumerate(embed_sh)]
 
-        embeds = [Dense(embed_latent_dim)(embed[:,0,:]) for embed in embeds]
+        embeds = Concatenate()([embed[:,0,:] for embed in embeds])
+        embeds = [Dense(embed_latent_dim*2)(embeds)
 
-        embeds_vec = [RepeatVector(n_nodes)(embed[:,:]) for embed in embeds]
-        embeds_vec = [Reshape(tar_dim)(i) for i in embeds_vec]
+        embeds_vec = RepeatVector(n_nodes)(embeds)
+        embeds_vec = Reshape(tar_dim)(embeds_vec)
 
-        merge_list = [b1] + [embed for embed in embeds_vec]
+        merge_list = [b1] + [embeds_vec]
 
         b1 = Concatenate()(merge_list)
         # append input
