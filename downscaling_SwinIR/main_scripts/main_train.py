@@ -16,6 +16,7 @@ import torch
 from collections import OrderedDict
 from torch.optim import lr_scheduler
 from torch.optim import Adam
+import torch.nn.functional as F
 import torch.nn as nn
 sys.path.append('../')
 from models.network_unet import UNet as unet
@@ -23,28 +24,37 @@ from models.network_swinir import SwinIR as swinSR
 #from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
+from models.network_diffusion  import UNet_diff
+from models.network_unet import Upsampling
 from utils.data_loader import create_loader
+from models.diffusion_utilse import q_sample
+###Weights and Bias
 import wandb
 os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
 wandb.run.name = "Unet_1117"
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 2e-2, G_optimizer_betas: list = [0.9, 0.999],
-                 G_optimizer_wd: int= 0, save_dir: str = "../results"): # G_optimizer_lr: float = 2e-4 for swinIR
+                 G_optimizer_wd: int= 0, save_dir: str = "../results", difussion=False):
 
         # ------------------------------------
         # define network
         # ------------------------------------
         self.netG = netG
+
+        self.netG.to(device)
         self.G_lossfn_type = G_lossfn_type
         self.G_optimizer_type = G_optimizer_type
         self.G_optimizer_lr = G_optimizer_lr
         self.G_optimizer_betas = G_optimizer_betas
         self.G_optimizer_wd = G_optimizer_wd
         self.schedulers = []
+        self.difussion = difussion
         self.save_dir = save_dir
 
     def init_train(self):
@@ -62,6 +72,8 @@ class BuildModel:
             self.G_lossfn = nn.L1Loss()
         elif self.G_lossfn_type == 'l2':
             self.G_lossfn = nn.MSELoss()
+        elif self.G_lossfn_type == "huber":
+            self.G_lossfn = nn.SmoothL1Loss() ##need to check if this works or not
         else:
             raise NotImplementedError('Loss type [{:s}] is not found.'.format(self.G_lossfn_type))
 
@@ -108,11 +120,27 @@ class BuildModel:
     # ----------------------------------------
     # feed L/H data
     # ----------------------------------------
-    def feed_data(self, data, need_H=True):
+    def feed_data(self, data):
         #print("datat[L] shape",data["L"].shape)
         self.L = data['L']
-        if need_H:
+        if self.difussion:
+            upsampling = Upsampling(in_channels = 8)
+            self.L = upsampling(self.L)
+        else:
             self.H = data['H']
+
+
+    # ----------------------------------------
+    # For difusion models
+    # ----------------------------------------
+    def denoise_process(self, x_start, timesteps=200):
+
+        noise = torch.randn_like(x_start)
+        t = torch.randint(0, timesteps, (x_start.shape[0],), device = device).long()
+        x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
+        #predicted_noise = self.netG(x_noisy, t)
+        return x_noisy, t, noise
+
 
     # ----------------------------------------
     # feed L to netG
@@ -120,12 +148,17 @@ class BuildModel:
     def netG_forward(self):
         #print('self.H shape: {}'.format(self.H.shape))
         #print('self.netG(self.L) shape: {}'.format(self.netG(self.L).shape))
-        self.E = self.netG(self.L) #[:,0,:,:]
+        if not self.difussion:
+            self.E = self.netG(self.L) #[:,0,:,:]
+        else:
+            x_noisy,t, noise = self.denoise_process(self.L)
+            self.E = self.netG(x_noisy, t)
+            self.H = noise
 
     # ----------------------------------------
     # update parameters and get loss
     # ----------------------------------------
-    def optimize_parameters(self, current_step):
+    def optimize_parameters(self):
         self.G_optimizer.zero_grad()
         self.netG_forward()
         self.G_loss = self.G_lossfn(self.E, self.H)
@@ -178,7 +211,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-
+    difussion= False
     train_loader = create_loader(train_dir)
     val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
@@ -190,17 +223,27 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],
-                        depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
-                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first") # final_upsample="expand_first"
+        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,
+                        num_classes=1,embed_dim=96,depths=[2,2,2],
+                        depths_decoder=[2,2,2],num_heads=[6,6,6],
+                        window_size=window_size,
+                        mlp_ratio=4, qkv_bias=True, qk_scale=None,
+                        drop_rate=0., attn_drop_rate=0.,drop_path_rate=0.1,
+                        ape=False,final_upsample="expand_first") # final_upsample="expand_first"
 
+    elif type_net == "difussion":
+        netG = UNet_diff(n_channels=n_channels)
+        difussion = True
 
     else:
         NotImplementedError
 
+
+
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
-    print("Total trainalbe parameters:", netG_params)
-    model = BuildModel(netG, save_dir = save_dir)
+    print("Total trainable parameters:", netG_params)
+
+    model = BuildModel(netG, save_dir = save_dir,difussion=difussion)
     model.init_train()
     current_step = 0
 
@@ -236,7 +279,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # -------------------------------
             # 3) optimize parameters
             # -------------------------------
-            model.optimize_parameters(current_step)
+            model.optimize_parameters()
 
             # -------------------------------
             # 6) Save model
@@ -254,7 +297,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                             model.netG_forward()
                             val_loss = val_loss + model.G_lossfn(model.E, model.H)
                     val_loss = val_loss/5
-                wandb.log({"loss":model.G_loss, "val_loss":val_loss, "lr":lr})
+                wandb.log({"loss": model.G_loss, "val_loss": val_loss, "lr": lr})
                 
 
 
@@ -301,6 +344,14 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
 
+    #main()
+    run(train_dir = "../../data/",
+        val_dir = "../../data/",
+        n_channels = 8,
+        save_dir = '.',
+        checkpoint_save = 20,
+        epochs = 1,
+        type_net = "difussion"
+        )
 

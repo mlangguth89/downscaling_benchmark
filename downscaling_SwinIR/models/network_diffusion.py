@@ -13,6 +13,8 @@ import torch
 from torch import nn,Tensor
 from einops import rearrange
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 def exists(x):
     return x is not None
 
@@ -22,7 +24,6 @@ class SinusoidalPositionEmbeddings(nn.Module):
         self.dim = dim
 
     def forward(self, time):
-        device = time.device
         half_dim = self.dim // 2
         embeddings = math.log(10000) / (half_dim - 1)
         embeddings = torch.exp(torch.arange(half_dim, device=device) * -embeddings)
@@ -138,10 +139,10 @@ class Decode_Block(nn.Module):
 
 #########Define Unet neural network for diffusion models ##############
 
-class UNet(nn.Module):
+class UNet_diff(nn.Module):
     def __init__(self, n_channels, channels_start: int = 56, with_time_emb: bool=True):
 
-        super(UNet, self).__init__()
+        super(UNet_diff, self).__init__()
         # time embeddings
         # The time embedding dims should be the same as the model dims in order to sum up of the two
         if with_time_emb:
