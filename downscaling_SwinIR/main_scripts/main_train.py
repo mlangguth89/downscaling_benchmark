@@ -288,7 +288,7 @@ def main():
     run(train_dir=args.train_dir,
         n_channels=9,
         save_dir=args.save_dir,
-        checkpoint_save=200,
+        checkpoint_save=5000,
         epochs=args.epochs,
         type_net=args.model_type,
         dataset_type=args.dataset_type,

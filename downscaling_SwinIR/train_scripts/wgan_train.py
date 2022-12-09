@@ -240,7 +240,7 @@ class BuildWGANModel:
 
             loss_c += loss_critic.item()
             loss_g += g_loss.item()
-            loss_r += loss_rec
+            loss_r += loss_rec.item()
 
         return loss_c, g_loss, loss_r
 
