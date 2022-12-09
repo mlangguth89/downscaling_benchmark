@@ -268,7 +268,7 @@ def main():
     parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
-    parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
+    parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=5.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=5.e-06, help="The checkpoint directory")
     parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
@@ -288,7 +288,7 @@ def main():
     run(train_dir=args.train_dir,
         n_channels=9,
         save_dir=args.save_dir,
-        checkpoint_save=5000,
+        checkpoint_save=10000,
         epochs=args.epochs,
         type_net=args.model_type,
         dataset_type=args.dataset_type,

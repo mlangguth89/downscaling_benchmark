@@ -172,6 +172,7 @@ class BuildWGANModel:
                 start_2 = time.time()
                 loss_val_c, loss_val_gen, loss_rec = self.validation()
                 end_2 = time.time()
+                self.save_checkpoint(epoch=epoch, step=current_step)
                 print(f'validation time: {end_2 - start_2}')
                 print(
                     f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
