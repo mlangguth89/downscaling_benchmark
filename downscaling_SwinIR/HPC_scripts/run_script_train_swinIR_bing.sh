@@ -21,13 +21,17 @@ train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
 test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
 save_dir=../results/exp_20221030
 # save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinUnet_exp1017_origin_booster_3years
+#train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
+#val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/val
+#save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinSR_exp1110_origin_booster_3years_x2_5x4
+
 epochs=4
 #model_type=vitSR
 model_type=swinSR
 #model_type=unet
 #model_type=swinUnet
 
-patch_size=2
+patch_size=4
 window_size=8
 upscale_swinIR=4
-srun --overlap python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} --patch_size ${patch_size} --window_size ${window_size} --upscale_swinIR ${upscale_swinIR}
+srun --overlap python ../main_scripts/main_train.py --train_dir ${train_dir} --val_dir ${val_dir} --save_dir ${save_dir} --epochs ${epochs} --model_type ${model_type} --patch_size ${patch_size} --window_size ${window_size} --upscale_swinIR ${upscale_swinIR}

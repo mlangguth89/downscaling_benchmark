@@ -100,7 +100,8 @@ netG = net(upscale=10,
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type="l2", G_optimizer_type="adam",
-                 G_optimizer_lr=0.0002, G_optimizer_betas=[0.9, 0.999], G_optimizer_wd=0, save_dir="../results"):
+                 G_optimizer_lr=0.0002, G_optimizer_betas=[0.9, 0.999],
+                 G_optimizer_wd=0, save_dir="../results"):
         # ------------------------------------
         # define network
         # ------------------------------------

@@ -17,9 +17,9 @@ from torch import Tensor
 
 class Upsampling(nn.Module):
 
-    def __init__(self, in_channels :int = None, out_channels: int = None,
+    def __init__(self, in_channels:int = None, out_channels: int = None,
                  kernel_size: int = 3, padding: int = 1, stride: int = 2,
-                 upsampling:bool = True, sf: int = 10 , mode = "bilinear"):
+                 upsampling: bool = True, sf: int = 10, mode: str = "bilinear"):
         super().__init__()
         """
         This block is used for transposed low-resolution to the same dim as high-resolution before performing UNet
@@ -131,10 +131,11 @@ class Decode_Block(nn.Module):
         super().__init__()
 
 
-        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 0)
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 1)
         self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
 
     def forward(self, x1: Tensor, x2:Tensor)->Tensor:
+
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
@@ -146,7 +147,7 @@ class UNet(nn.Module):
 
         super(UNet, self).__init__()
 
-        self.upsampling = Upsampling(n_channels,channels_start)
+        self.upsampling = Upsampling(n_channels, channels_start)
 
         """encoder """
         self.down1 = Encoder_Block(n_channels, channels_start)
