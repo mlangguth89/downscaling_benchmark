@@ -345,13 +345,13 @@ def main():
 
 if __name__ == '__main__':
 
-    #main()
-    run(train_dir = "../../data/",
-        val_dir = "../../data/",
-        n_channels = 8,
-        save_dir = '.',
-        checkpoint_save = 20,
-        epochs = 1,
-        type_net = "difussion"
-        )
+    main()
+    # run(train_dir = "../../data/",
+    #     val_dir = "../../data/",
+    #     n_channels = 8,
+    #     save_dir = '.',
+    #     checkpoint_save = 20,
+    #     epochs = 1,
+    #     type_net = "difussion"
+    #     )
 
