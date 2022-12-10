@@ -220,7 +220,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     """
 
     train_loader = create_loader(train_dir, batch_size=batch_size, dataset_type=dataset_type)
-    test_loader = create_loader(test_dir, batch_size=batch_size, dataset_type=dataset_type)
+    test_loader = create_loader(test_dir, batch_size=batch_size, dataset_type=dataset_type, verbose=1)
 
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
