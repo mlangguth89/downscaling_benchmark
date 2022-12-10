@@ -4,11 +4,11 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-swinIR-out.%j
 #SBATCH --error=train-swinIR-err.%j
-#SBATCH --time=20:00:00
+#SBATCH --time=00:20:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=booster
+#SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=y.ji@fz-juelich.de
+#SBATCH --mail-user=b.gong@fz-juelich.de
 
 #module purge
 module load Stages/2022 GCCcore/.11.2.0 dask/2021.9.1
@@ -17,9 +17,9 @@ module load torchvision
 #ml SciPy-bundle/2021.10
 source ../venv_booster/bin/activate
 
-train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
-test_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
-save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinSR_exp1017_origin_booster_3years_x2_5x4
+train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
+test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
+save_dir=../results/exp_20221030
 # save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinUnet_exp1017_origin_booster_3years
 epochs=4
 #model_type=vitSR
