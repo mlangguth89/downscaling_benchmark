@@ -12,7 +12,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
-                 seed: int = 1234, dataset_type: str = "precipitation"):
+                 seed: int = 1234, dataset_type: str = "precipitation", verbose: int = 0):
 
     """
     file_path       : the path to the directory of .nc files
@@ -29,7 +29,7 @@ def create_loader(file_path: str = None, batch_size: int = 4, patch_size: int = 
         dataset = PrecipDatasetInter(file_path, batch_size, patch_size, vars_in, var_out, sf, seed)
         dataloader = DataLoader(dataset, batch_size=None)
     elif dataset_type == "temperature":
-        dataset = CustomTemperatureDataset(file_path=file_path)
+        dataset = CustomTemperatureDataset(file_path=file_path, verbose=verbose)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     else:
         NotImplementedError
