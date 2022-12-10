@@ -178,7 +178,7 @@ class BuildWGANModel:
                     f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
                     Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
                     f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
-                    Loss Rec Val :{loss_rec}"
+                    Size Val: {len(self.val_dataloader)}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/len(self.val_dataloader)}"
                     f", Time per 1 epoch: {start_2 - start:.4f} sec."
                 )
             else:

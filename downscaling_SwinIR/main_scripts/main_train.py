@@ -220,7 +220,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     """
 
     train_loader = create_loader(train_dir, batch_size=batch_size, dataset_type=dataset_type)
-    test_loader = create_loader(train_dir, batch_size=batch_size, dataset_type=dataset_type)
+    test_loader = create_loader(test_dir, batch_size=batch_size, dataset_type=dataset_type)
 
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
@@ -263,7 +263,7 @@ def main():
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\saves",
                         help="The checkpoint directory")
-    parser.add_argument("--epochs", type=int, default=10, help="The checkpoint directory")
+    parser.add_argument("--epochs", type=int, default=250, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
     parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
@@ -286,6 +286,7 @@ def main():
         f.write(json.dumps(vars(args), sort_keys=True, indent=4))
 
     run(train_dir=args.train_dir,
+        test_dir=args.test_dir,
         n_channels=9,
         save_dir=args.save_dir,
         checkpoint_save=10000,
