@@ -19,13 +19,16 @@ from models.network_swinir import SwinIR as swinSR
 #from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
+from models.diffusion_utilse import sample
+from models.network_diffusion  import UNet_diff
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
-import wandb
 import os
 import json
 from datetime import datetime
 import xarray as xr
+
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -62,8 +65,15 @@ def main():
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     elif args.model_type == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=args.patch_size,in_chans=n_channels,num_classes=1,embed_dim=96,depths=[2,2,2],depths_decoder=[2,2,2],num_heads=[6,6,6],window_size=args.window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first")
+        netG = swinUnet(img_size=160,patch_size=args.patch_size,
+                        in_chans=n_channels,num_classes=1,embed_dim=96,
+                        depths=[2,2,2],depths_decoder=[2,2,2],num_heads=[6,6,6],
+                        window_size=args.window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
+                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first")
 
+    elif args.model_type == "difussion":
+        netG = UNet_diff(n_channels = n_channels)
+        difussion = True
     else:
         NotImplementedError()
 
@@ -90,9 +100,11 @@ def main():
         ref_list = []
         cidx_list = []
         times_list = []
-
+        all_sample_list = [] #this is ony for difussion model inference
         for i, test_data in enumerate(test_loader):
             idx += 1
+            batch_size = test_data.shape[0]
+            image_size = test_data.shape[1]
             cidx_temp = test_data["idx"].numpy()
             times_temp = test_data["T"].numpy()
             #print('times: {}'.format(times_temp))
@@ -103,13 +115,26 @@ def main():
             model.feed_data(test_data)
             model.netG_forward()
 
+
             # log-transform -> log(x+k)-log(k)
             input_vars = test_data["L"].numpy()
             #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
             #input_temp = np.exp(input_temp+np.log(args.k))-args.k
-            input_list.append(input_temp)     
-            output_temp = test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean
+            input_list.append(input_temp)
+
+            if args.model_type == "diffusion":
+                #now, we only use the unconditional difussion model, meaning the inputs are only noise.
+                #This is the first test, later, we will figure out how to use conditioanl difussion model.
+                samples = sample(netG, image_size = image_size, batch_size = batch_size, channels = 8)
+                #chose the last channle and last varialbe (precipitation)
+                sample_last = samples[-1][-1].numpy()*vars_out_patches_std+vars_out_patches_mean
+
+                # we can make some plot here
+                all_sample_list = all_sample_list.append(samples)
+
+            else:
+                output_temp = test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean
             #output_temp = np.exp(output_temp+np.log(args.k))-args.k
             output_list.append(output_temp)
 
