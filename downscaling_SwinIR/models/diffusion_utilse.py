@@ -15,7 +15,7 @@ import matplotlib.colors as mcolors
 import torch
 import torch.nn.functional as F
 import sys
-sys.path.append("..")
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
@@ -65,7 +65,6 @@ sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
 # calculations for diffusion q(x_t | x_{t-1}) and others
 sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
 sqrt_one_minus_alphas_cumprod = torch.sqrt(1. - alphas_cumprod)
-
 # calculations for posterior q(x_{t-1} | x_t, x_0)
 posterior_variance = betas * (1. - alphas_cumprod_prev) / (1. - alphas_cumprod)
 
@@ -74,8 +73,13 @@ sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
 
 def extract(a, t, x_shape):
     batch_size = t.shape[0]
-    out = a.gather(-1, t.cpu())
-    return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(t.device)
+    print("batch_suze",batch_size)
+    print("t",t)  
+    print("a",a)
+    a = a.to(device)
+    out = a.gather(-1, t.to(device))
+    print("devise",device)
+    return out.reshape(batch_size, *((1,) * (len(x_shape) - 1))).to(device)
 
 ######Forward difussion
 def q_sample(x_start, t, noise=None):

@@ -36,7 +36,7 @@ wandb.init(project="Precip_downscaling",reinit=True)
 wandb.run.name = "Unet_1117"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
+print("device",device)
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 2e-2, G_optimizer_betas: list = [0.9, 0.999],
@@ -137,6 +137,7 @@ class BuildModel:
 
         noise = torch.randn_like(x_start)
         t = torch.randint(0, timesteps, (x_start.shape[0],), device = device).long()
+        print("t2",t)
         x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
         #predicted_noise = self.netG(x_noisy, t)
         return x_noisy, t, noise
@@ -344,7 +345,9 @@ def main():
 
 
 if __name__ == '__main__':
-
+    cuda = torch.cuda.is_available()
+    if cuda:
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
     main()
     # run(train_dir = "../../data/",
     #     val_dir = "../../data/",
