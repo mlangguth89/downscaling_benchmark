@@ -81,13 +81,11 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
     if l_embed:  # optional embedding at the encode-decoder bridge
         bridge_shape = b1.shape[1:]
         n_nodes = int(np.prod(bridge_shape[:-1]))
-        tar_dim = tuple(list(bridge_shape[:-1]) + [embed_latent_dim*2])
+        tar_dim = tuple(list(bridge_shape[:-1]) + [embed_latent_dim])
 
-        embed_inputs = [Input(shape=(1,)) for _ in embed_sh]
-        embeds = [Embedding(n, embed_latent_dim, input_length=1)(embed_inputs[i]) for i, n in enumerate(embed_sh)]
-
-        embeds = Concatenate()([embed[:,0,:] for embed in embeds])
-        embeds = Dense(embed_latent_dim*2)(embeds)
+        embed_dim = 4
+        embed_input = Input(shape=(embed_dim,))
+        embeds = Dense(embed_latent_dim)(embed_input)
 
         embeds_vec = RepeatVector(n_nodes)(embeds)
         embeds_vec = Reshape(tar_dim)(embeds_vec)
@@ -96,7 +94,7 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
 
         b1 = Concatenate()(merge_list)
         # append input
-        all_inputs = [inputs] + embed_inputs
+        all_inputs = [inputs] + embed_input
 
     else:  
         # no merging of embeddings required, so leave inputs unchanged
