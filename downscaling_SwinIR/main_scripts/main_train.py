@@ -27,7 +27,7 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from models.network_diffusion  import UNet_diff
 from models.network_unet import Upsampling
 from utils.data_loader import create_loader
-from models.diffusion_utilse import q_sample
+from models.diffusion_utilse import GaussianDiffusion
 ###Weights and Bias
 import wandb
 os.environ["WANDB_MODE"]="offline"
@@ -131,15 +131,15 @@ class BuildModel:
 
 
     # ----------------------------------------
-    # For difusion models
+    # For diffusion models
     # ----------------------------------------
     def denoise_process(self, x_start, timesteps=200):
-
+        # Bing: maybe dinoise is not a proper name
         noise = torch.randn_like(x_start)
         t = torch.randint(0, timesteps, (x_start.shape[0],), device = device).long()
-        print("t2",t)
-        x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
-        #predicted_noise = self.netG(x_noisy, t)
+        gd = GaussianDiffusion(model = self.netG)
+        x_noisy = gd.q_sample(x_start=x_start, t=t, noise=noise)
+
         return x_noisy, t, noise
 
 
@@ -152,9 +152,9 @@ class BuildModel:
         if not self.difussion:
             self.E = self.netG(self.L) #[:,0,:,:]
         else:
-            x_noisy,t, noise = self.denoise_process(self.L)
+            x_noisy, t, noise = self.denoise_process(self.L)
             self.E = self.netG(x_noisy, t)
-            self.H = noise
+            self.H = noise #if using difussion, the output is not the prediction values, but the predicted noise
 
     # ----------------------------------------
     # update parameters and get loss
@@ -197,7 +197,8 @@ class BuildModel:
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
-        n_channels : int = 8, save_dir: str = "../results", checkpoint_save: int = 200,
+        n_channels : int = 8, save_dir: str = "../results",
+        checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet", patch_size: int = 2,
         window_size: int = 4, upscale_swinIR: int = 4, 
         upsampler_swinIR: str = "pixelshuffle"):
@@ -212,7 +213,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     :param type_net        : the type of the models
     """
 
-    difussion= False
+    difussion = False
     train_loader = create_loader(train_dir)
     val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
@@ -237,7 +238,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         difussion = True
 
     else:
-        NotImplementedError
+        raise NotImplementedError
 
 
 
@@ -348,13 +349,13 @@ if __name__ == '__main__':
     cuda = torch.cuda.is_available()
     if cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
-    main()
-    # run(train_dir = "../../data/",
-    #     val_dir = "../../data/",
-    #     n_channels = 8,
-    #     save_dir = '.',
-    #     checkpoint_save = 20,
-    #     epochs = 1,
-    #     type_net = "difussion"
-    #     )
+    #main()
+    run(train_dir = "../../data/",
+        val_dir = "../../data/",
+        n_channels = 8,
+        save_dir = '.',
+        checkpoint_save = 20,
+        epochs = 1,
+        type_net = "difussion"
+        )
 
