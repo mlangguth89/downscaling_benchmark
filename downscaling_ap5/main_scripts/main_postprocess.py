@@ -28,7 +28,7 @@ from postprocess import get_model_info, run_evaluation_time, run_evaluation_spat
 from datetime import datetime as dt
 
 # get logger
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 
@@ -49,6 +49,7 @@ def main(parser_args):
     fh = logging.FileHandler(logfile)
     ch = logging.StreamHandler(sys.stdout)
     ch.setLevel(logging.DEBUG)
+    fh.setLevel(logging.INFO)
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
@@ -65,7 +66,6 @@ def main(parser_args):
         raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
                                 f"under '{model_dir}'")
     else:
-        print(ds_config_file)
         with open(ds_config_file[0]) as dsf:
             logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
             ds_dict = js.load(dsf)
@@ -112,13 +112,12 @@ def main(parser_args):
 
     if hparams_dict["z_branch"]:
         logger.info(f"Add high-resolved target topography to input features.")
-        print(da_test_tar["variables"][-1])
         da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
 
     data_in = da_test_in.squeeze().values
 
     # start inference
-    logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s." +
+    logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
     y_pred_trans = trained_model.predict(data_in, batch_size=32, verbose=2)
@@ -166,9 +165,9 @@ def main(parser_args):
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
                                levels=lvl_bias)
 
-    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
+    logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
-    logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished." +
+    logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
 
 

@@ -76,7 +76,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_all = score_all.groupby("time.hour")
     score_hourly_mean, score_hourly_std = score_hourly_all.mean(), score_hourly_all.std()
     for hh in range(24):
-        func_logger.debug("Evaluation for {hh:02.d} UTC")
+        func_logger.debug(f"Evaluation for {hh:02d} UTC")
         if hh == 0:
             tmp = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season")
             score_hourly_mean_sea, score_hourly_std_sea = tmp.mean().copy(), tmp.std().copy()
@@ -91,7 +91,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
 
     for sea in score_hourly_mean_sea["season"]:
-        func_logger.debug("Evaluation for season '{sea}'...")
+        func_logger.debug(f"Evaluation for season '{sea}'...")
         create_line_plot(score_hourly_mean_sea.sel({"season": sea}),
                          score_hourly_std_sea.sel({"season": sea}),
                          model_type.upper(), {score_name.upper(): score_unit},
@@ -124,7 +124,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, **plt_k
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
-        func_logger.debug("Evaluation for {hh:02.d} UTC")
+        func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
         create_map_score(score_hourly_mean.sel({"hour": hh}), fname,
                          score_dims=["rlat", "rlon"], title=f"{score_name.upper()} {hh:02d} UTC",
@@ -133,7 +133,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, **plt_k
     for hh in range(24):
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
-            func_logger.debug("Evaluation for season '{sea}' at {hh:02.d} UTC")
+            func_logger.debug(f"Evaluation for season '{str(sea)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
             create_map_score(score_now.sel({"season": sea}), fname, score_dims=["rlat", "rlon"],
