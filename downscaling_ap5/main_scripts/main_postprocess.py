@@ -28,7 +28,7 @@ from postprocess import get_model_info, run_evaluation_time, run_evaluation_spat
 from datetime import datetime as dt
 
 # get logger
-logger = logging.getLogger("main_postprocessing_logger")
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 

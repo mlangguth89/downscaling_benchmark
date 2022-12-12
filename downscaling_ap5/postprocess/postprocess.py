@@ -18,13 +18,14 @@ from cartopy import crs
 from plotting import create_line_plot, create_map_score
 
 # auxiliary variable for logger
-module_name = os.path.basename(__file__).rstrip(".py")
+logger_module_name = f"main_postprocess.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 
 
 def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool = False, model_type: str = None):
 
     # get local logger
-    func_logger = logging.getLogger(f"postprocessing.{module_name}.{get_model_info.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{get_model_info.__name__}")
 
     model_name = os.path.basename(model_base)
 
@@ -61,7 +62,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     :param plot_dir: Directory to save plot files
     """
     # get local logger
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{run_evaluation_time.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
     os.makedirs(plot_dir, exist_ok=True)
     model_type = plt_kwargs.get("model_type", "wgan")
@@ -108,7 +109,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, **plt_k
     :param plot_dir: Directory to save plot files
     """
     # get local logger
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{run_evaluation_spatial.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
 
     os.makedirs(plot_dir, exist_ok=True)
 
