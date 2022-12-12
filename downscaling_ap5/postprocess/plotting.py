@@ -1,12 +1,19 @@
+# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+#
+# SPDX-License-Identifier: MIT
+
+"""
+Methods for creating plots.
+"""
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-01-22"
+__update__ = "2022-12-08"
 
-import os, sys
-from timeit import default_timer as timer
-import datetime as dt
 # for processing data
+import os
+import logging
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -16,9 +23,10 @@ import matplotlib.pyplot as plt
 import cartopy
 import cartopy.crs as ccrs
 # make class for handling data available
-sys.path.append("../utils")
 from other_utils import provide_default
-#from input_data_class import InputDataClass
+
+# auxiliary variable for logger
+module_name = os.path.basename(__file__).rstrip(".py")
 
 
 # auxiliary function for colormap
@@ -44,8 +52,8 @@ def get_colormap_temp(levels=None):
 # for making plot nice
 def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
     fs = 16
-    #if "login" in host:
-        # add nice coast- and borderlines
+    # if "login" in host:
+    # add nice coast- and borderlines
     ax_plot.coastlines(linewidth=0.75)
     ax_plot.coastlines(linewidth=0.75)
     ax_plot.add_feature(cartopy.feature.BORDERS)
@@ -54,7 +62,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
     ax_plot.set_xticks(np.arange(0., 360. + 0.1, 5.))  # ,crs=projection_crs)
     ax_plot.set_yticks(np.arange(-90., 90. + 0.1, 5.))  # ,crs=projection_crs)
 
-    ax_plot.set_extent([3.5, 16.5, 44.5, 54.])#, crs=prj_crs)
+    ax_plot.set_extent([3.5, 16.5, 44.5, 54.])    # , crs=prj_crs)
     ax_plot.minorticks_on()
     ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=fs)
 
@@ -68,7 +76,10 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
 
 
 # for creating plot
-def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
+def create_mapplot(data1, data2, plt_fname, opt_plot={}):
+
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_mapplot.__name__}")
+
     # get coordinate data
     try:
         time, lat, lon = data1["time"].values, data1["lat"].values, data1["lon"].values
@@ -91,8 +102,8 @@ def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
                                    subplot_kw={"projection": ccrs.PlateCarree()})
 
     # perform plotting
-    temp1 = ax1.pcolormesh(lon_e, lat_e, np.squeeze(data1.values - 273.15), cmap=cmap_temp, norm=norm_temp)
-    temp2 = ax2.pcolormesh(lon_e, lat_e, np.squeeze(data2.values - 273.15), cmap=cmap_temp, norm=norm_temp)
+    _ = ax1.pcolormesh(lon_e, lat_e, np.squeeze(data1.values), cmap=cmap_temp, norm=norm_temp)
+    temp2 = ax2.pcolormesh(lon_e, lat_e, np.squeeze(data2.values), cmap=cmap_temp, norm=norm_temp)
 
     ax1, ax2 = decorate_plot(ax1), decorate_plot(ax2, plot_ylabel=False)
 
@@ -103,12 +114,18 @@ def create_mapplot(data1, data2, plt_fname ,opt_plot={}):
     cax = fig.add_axes([0.92, 0.3, 0.02, 0.4])
     cbar = fig.colorbar(temp2, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=12)
-    
-    fig.savefig(plt_fname+".png", bbox_inches="tight")
+
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
+    fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
     
 def create_map_score(score, plt_fname, **kwargs):
+
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_map_score.__name__}")
+
     # get keywor arguments
     score_dims = kwargs.get("score_dims", ["lat", "lon"])
     title = kwargs.get("title", "Score")
@@ -149,13 +166,19 @@ def create_map_score(score, plt_fname, **kwargs):
     cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
     cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=fs-2)
-    
+
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
     fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
+
 def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
-                     filename: str, x_coord: str = "hour", **kwargs):
-    
+                     plt_fname: str, x_coord: str = "hour", **kwargs):
+
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_line_plot.__name__}")
+
     # get some plot parameters
     linestyle = kwargs.get("linestyle", "k-")
     err_col = kwargs.get("error_color", "blue")
@@ -164,9 +187,10 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     ref_line = kwargs.get("ref_line", None)
     ref_linestyle = kwargs.get("ref_linestyle", "k--")
     
-    fig, (ax) = plt.subplots(1,1)
+    fig, (ax) = plt.subplots(1, 1)
     ax.plot(data[x_coord].values, data.values, linestyle, label=model_name)
-    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor=err_col, alpha=0.2)
+    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor=err_col,
+                    alpha=0.2)
     if ref_line is not None:
         nval = np.shape(data[x_coord].values)[0]
         ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
@@ -177,6 +201,10 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
 
-    # save plot to file
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
+    fig.savefig(plt_fname, bbox_inches="tight")
     plt.tight_layout()
-    fig.savefig(filename)
+    fig.savefig(plt_fname)
+    plt.close(fig)

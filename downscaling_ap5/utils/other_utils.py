@@ -1,3 +1,24 @@
+# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+#
+# SPDX-License-Identifier: MIT
+
+# doc-string
+"""
+Some auxiliary functions for the project:
+    * provide_default
+    * remove_key_from_dict
+    * to_list
+    * get_func_kwargs
+    * subset_files_on_date
+    * extract_date
+    * ensure_datetime
+    * last_day_of_month
+    * flatten
+    * remove_files
+    * check_str_in_list
+"""
+# doc-string
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
@@ -16,23 +37,6 @@ except ImportError:
     from typing import Iterable
 
 str_or_List = Union[List, str]
-
-# doc-string
-"""
-Some auxiliary functions for the project:
-    * provide_default
-    * remove_key_from_dict
-    * to_list
-    * get_func_kwargs
-    * subset_files_on_date
-    * extract_date
-    * ensure_datetime
-    * last_day_of_month
-    * flatten
-    * remove_files
-    * check_str_in_list
-"""
-# doc-string
 
 
 def provide_default(dict_in, keyname, default=None, required=False):
