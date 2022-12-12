@@ -177,8 +177,8 @@ class HandleDataClass(object):
                 all_streams = [darr_in.isel({"time": t}).values,
                                {var: tar_now.sel({"variables": var}).values for var in varnames_tar}]
                 if lt_embed:
-                    time_indices = get_date_index(pd.to_datetime(time))
-                    all_streams = all_streams + time_indices
+                    time_embed = get_date_embed(pd.to_datetime(time))
+                    all_streams = all_streams + time_embed
                 yield tuple(all_streams)
 
         def gen_unnamed(darr_in, darr_tar, lt_embed: bool = False):
@@ -190,19 +190,21 @@ class HandleDataClass(object):
                 time = darr_in.isel({"time": t})["time"].values
                 all_streams = [darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values]
                 if lt_embed:
-                    time_indices = get_date_index(pd.to_datetime(time))
-                    all_streams = all_streams + time_indices
+                    time_embed = get_date_embed(pd.to_datetime(time))
+                    all_streams = all_streams + time_embed
 
                 yield tuple(all_streams)
 
-        def get_date_index(dt_obj):
+        def get_date_embed(dt_obj):
             """
-            Retrieve hour and month as indices from date (i.e. both indices start with zero, also the month!)
-            The indices are converted to numpy-arrays of size 1 to be compatible with Keras.input
+            Retrieve hour and month and do simple feature engineering by convertig to sin- and cos-representation.
+            :param dt_obj: datetime-object
+            :return date_embed: date representation
             """
-            date_index = [np.asarray([dt_obj.hour]), np.asarray([dt_obj.month - 1])]
+            hour_embed, month_embd = 2*np.pi*[dt_obj.hour]/23., 2*np.pi*[dt_obj.month - 1]/11.
+            date_embed = [np.sin(hour_embed), np.cos(hour_embed), np.sin(month_embd), np.cos(month_embd)]
 
-            return date_index
+            return date_embed
 
         if named_targets is True:
             print("TF dataset will contain named targets...")
