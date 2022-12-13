@@ -21,6 +21,7 @@ def exists(x):
 class SinusoidalPositionEmbeddings(nn.Module):
     def __init__(self, dim):
         super().__init__()
+        assert self.dim % 2 == 0
         self.dim = dim
 
     def forward(self, time):
@@ -56,12 +57,11 @@ class Conv_Block(nn.Module):
             nn.ReLU(inplace=True)
         )
 
-    def forward(self, x: Tensor, time_emb:Tensor=None)->Tensor:
+    def forward(self, x: Tensor, time_emb: Tensor = None)->Tensor:
 
         condition = self.mlp(time_emb)
         condition = rearrange(condition, "b c -> b c 1 1")
         x = x + condition
-
         return self.conv_block(x)
 
 
@@ -110,7 +110,7 @@ class Encoder_Block(nn.Module):
 
         self.maxpool_conv = nn.MaxPool2d(kernel_maxpool)
 
-    def forward(self, x:Tensor, time_emb: Tensor=None)->Tensor:
+    def forward(self, x:Tensor, time_emb: Tensor = None)->Tensor:
         x = self.layer1(x, time_emb)
         e = self.maxpool_conv(x)
         return x, e
@@ -140,16 +140,23 @@ class Decode_Block(nn.Module):
 #########Define Unet neural network for diffusion models ##############
 
 class UNet_diff(nn.Module):
-    def __init__(self, n_channels, channels_start: int = 56, with_time_emb: bool=True):
+    def __init__(self, img_size:int, n_channels:int, channels_start: int = 56, with_time_emb: bool=True):
+        """
+
+        :param img_size             :  the dimension of the images
+        :param n_channels      :  the channles of input images
+        :param channels_start  :  the output channel number of the first convolution block
+        :param with_time_emb   :  the time embedding
+        """
 
         super(UNet_diff, self).__init__()
         # time embeddings
         # The time embedding dims should be the same as the model dims in order to sum up of the two
         if with_time_emb:
-            time_dim = n_channels * 4
+            time_dim = img_size * 4
             self.time_mlp = nn.Sequential(
-                SinusoidalPositionEmbeddings(n_channels),
-                nn.Linear(n_channels, time_dim),
+                SinusoidalPositionEmbeddings(img_size),
+                nn.Linear(img_size, time_dim),
                 nn.GELU(),
                 nn.Linear(time_dim, time_dim),
             )
@@ -176,7 +183,6 @@ class UNet_diff(nn.Module):
 
 
     def forward(self, x:Tensor,time: Tensor=None)->Tensor:
-
 
         t = self.time_mlp(time) if exists(self.time_mlp) else None
 

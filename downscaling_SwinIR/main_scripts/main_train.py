@@ -37,10 +37,24 @@ wandb.run.name = "Unet_1117"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device",device)
+
 class BuildModel:
-    def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 2e-2, G_optimizer_betas: list = [0.9, 0.999],
-                 G_optimizer_wd: int= 0, save_dir: str = "../results", difussion=False):
+    def __init__(self, netG, G_lossfn_type: str = "l2",
+                 G_optimizer_type: str = "adam",
+                 G_optimizer_lr: float = 2e-2,
+                 G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_wd: int= 0, save_dir: str = "../results",
+                 difussion: bool=False, **kwargs):
+        """
+
+        :param netG:
+        :param G_lossfn_type:
+        :param G_optimizer_type:
+        :param G_optimizer_lr:
+        :param save_dir: str, the save model path
+        :param difussion: if enable difussion, the conditional must be defined
+        :param kwargs: conditional: bool
+        """
 
         # ------------------------------------
         # define network
@@ -56,6 +70,10 @@ class BuildModel:
         self.schedulers = []
         self.difussion = difussion
         self.save_dir = save_dir
+        if difussion:
+            self.conditional = kwargs["conditional"]
+            self.timesteps = kwargs["timesteps"]
+
 
     def init_train(self):
         wandb.watch(self.netG, log_freq=100)
@@ -126,21 +144,9 @@ class BuildModel:
         if self.difussion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
-        else:
-            self.H = data['H']
 
+        self.H = data['H']
 
-    # ----------------------------------------
-    # For diffusion models
-    # ----------------------------------------
-    def denoise_process(self, x_start, timesteps=200):
-        # Bing: maybe dinoise is not a proper name
-        noise = torch.randn_like(x_start)
-        t = torch.randint(0, timesteps, (x_start.shape[0],), device = device).long()
-        gd = GaussianDiffusion(model = self.netG)
-        x_noisy = gd.q_sample(x_start=x_start, t=t, noise=noise)
-
-        return x_noisy, t, noise
 
 
     # ----------------------------------------
@@ -152,8 +158,24 @@ class BuildModel:
         if not self.difussion:
             self.E = self.netG(self.L) #[:,0,:,:]
         else:
-            x_noisy, t, noise = self.denoise_process(self.L)
-            self.E = self.netG(x_noisy, t)
+            if len(self.H.shape) == 3:
+                self.H = torch.unsqueeze(self.H, dim = 1)
+            h_shape = self.H.shape
+
+            noise = torch.randn_like(self.H)
+            t = torch.randint(0, self.timesteps, (h_shape[0],), device = device).long()
+            gd = GaussianDiffusion(model = self.netG, timesteps = self.timesteps)
+            x_noisy = gd.q_sample(x_start = self.H, t = t, noise = noise)
+
+            if not self.conditional:
+                self.E = self.netG(x_noisy, t)
+
+            else:
+                print("shape of L", self.L.shape)
+                print("shape of x_noisy", x_noisy.shape)
+                print("t shape", t.shape)
+                self.E = self.netG(torch.cat([self.L, x_noisy], dim = 1), t)
+
             self.H = noise #if using difussion, the output is not the prediction values, but the predicted noise
 
     # ----------------------------------------
@@ -201,7 +223,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         checkpoint_save: int = 200,
         epochs: int = 2, type_net: str = "unet", patch_size: int = 2,
         window_size: int = 4, upscale_swinIR: int = 4, 
-        upsampler_swinIR: str = "pixelshuffle"):
+        upsampler_swinIR: str = "pixelshuffle", **kwargs):
 
     """
     :param train_dir       : the directory that contains the training dataset NetCDF files
@@ -214,6 +236,9 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     """
 
     difussion = False
+    conditional = None
+    timesteps = None
+
     train_loader = create_loader(train_dir)
     val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
     print("The model {} is selected for training".format(type_net))
@@ -225,17 +250,22 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=patch_size,in_chans=n_channels,
-                        num_classes=1,embed_dim=96,depths=[2,2,2],
-                        depths_decoder=[2,2,2],num_heads=[6,6,6],
+        netG = swinUnet(img_size=160, patch_size=patch_size, in_chans=n_channels,
+                        num_classes=1, embed_dim=96, depths=[2, 2, 2],
+                        depths_decoder=[2, 2, 2], num_heads=[6, 6, 6],
                         window_size=window_size,
                         mlp_ratio=4, qkv_bias=True, qk_scale=None,
-                        drop_rate=0., attn_drop_rate=0.,drop_path_rate=0.1,
-                        ape=False,final_upsample="expand_first") # final_upsample="expand_first"
+                        drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                        ape=False,
+                        final_upsample="expand_first")
+                       # final_upsample="expand_first"
 
     elif type_net == "difussion":
-        netG = UNet_diff(n_channels=n_channels)
+        conditional = kwargs["conditional"]
+        timesteps = kwargs["timesteps"]
+        netG = UNet_diff(img_size=160, n_channels=n_channels+1) #add one channel for the noise
         difussion = True
+
 
     else:
         raise NotImplementedError
@@ -245,7 +275,9 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainable parameters:", netG_params)
 
-    model = BuildModel(netG, save_dir = save_dir,difussion=difussion)
+    model = BuildModel(netG, save_dir = save_dir, difussion=difussion,
+                       conditional=conditional, timesteps=timesteps)
+
     model.init_train()
     current_step = 0
 
@@ -329,8 +361,6 @@ def main():
     with open(os.path.join(args.save_dir, "options.json"), "w") as f:
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
-
-
     run(train_dir = args.train_dir,
         val_dir = args.val_dir,
         n_channels = 8,
@@ -356,6 +386,9 @@ if __name__ == '__main__':
         save_dir = '.',
         checkpoint_save = 20,
         epochs = 1,
-        type_net = "difussion"
+        type_net = "difussion",
+        conditional = True,
+        timesteps=200
+
         )
 
