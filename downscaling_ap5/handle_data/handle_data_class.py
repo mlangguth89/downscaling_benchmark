@@ -178,7 +178,7 @@ class HandleDataClass(object):
                                {var: tar_now.sel({"variables": var}).values for var in varnames_tar}]
                 if lt_embed:
                     time_embed = get_date_embed(pd.to_datetime(time))
-                    all_streams = all_streams + time_embed
+                    all_streams = all_streams + [time_embed]
                 yield tuple(all_streams)
 
         def gen_unnamed(darr_in, darr_tar, lt_embed: bool = False):
@@ -191,7 +191,7 @@ class HandleDataClass(object):
                 all_streams = [darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values]
                 if lt_embed:
                     time_embed = get_date_embed(pd.to_datetime(time))
-                    all_streams = all_streams + time_embed
+                    all_streams = all_streams + [time_embed]
 
                 yield tuple(all_streams)
 
@@ -201,8 +201,8 @@ class HandleDataClass(object):
             :param dt_obj: datetime-object
             :return date_embed: date representation
             """
-            hour_embed, month_embd = 2*np.pi*[dt_obj.hour]/23., 2*np.pi*[dt_obj.month - 1]/11.
-            date_embed = [np.sin(hour_embed), np.cos(hour_embed), np.sin(month_embd), np.cos(month_embd)]
+            hour_embed, month_embd = 2*np.pi*dt_obj.hour/23., 2*np.pi*(dt_obj.month - 1)/11.
+            date_embed = np.asarray([np.sin(hour_embed), np.cos(hour_embed), np.sin(month_embd), np.cos(month_embd)])
 
             return date_embed
 
@@ -225,7 +225,7 @@ class HandleDataClass(object):
 
         if lembed_date is True:
             print("Add date-embedding to TF dataset...")
-            sample_spec_embed = [tf.TensorSpec(s0[i].shape, dtype=s0[i].dtype) for i in np.arange(2, 4)]
+            sample_spec_embed = [tf.TensorSpec(s0[i].shape, dtype=s0[i].dtype) for i in np.arange(2, 3)]
             sample_spec_all = [sample_spec_in, sample_spec_tar] + sample_spec_embed
 
         else:
