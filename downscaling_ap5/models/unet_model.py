@@ -53,7 +53,7 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple=(3,3), strid
 
 # The particular U-net
 def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False, l_embed: bool = False,
-               embed_sh: tuple = (12, 24), embed_latent_dim: int = 8, tar_channels=["output_temp", "output_z"]) -> Model:
+               embed_sh: tuple = (12, 24), embed_latent_dim: int = 16, tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model
     :param input_shape: shape of input-data
@@ -94,7 +94,7 @@ def build_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fa
 
         b1 = Concatenate()(merge_list)
         # append input
-        all_inputs = [inputs] + embed_input
+        all_inputs = [inputs] + [embed_input]
 
     else:  
         # no merging of embeddings required, so leave inputs unchanged
