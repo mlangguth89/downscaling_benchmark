@@ -12,7 +12,6 @@ import argparse
 import sys
 import torch
 import numpy as np
-from dataset_prep import PrecipDatasetInter
 sys.path.append('../')
 from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinSR
@@ -21,8 +20,10 @@ from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from models.diffusion_utilse import sample
 from models.network_diffusion  import UNet_diff
+from models.diffusion_utilise import GaussianDiffusion
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
+
 import os
 import json
 from datetime import datetime
@@ -74,6 +75,7 @@ def main():
     elif args.model_type == "difussion":
         netG = UNet_diff(n_channels = n_channels)
         difussion = True
+        gf = GaussianDiffusion(conditional=True, schedule_opt="linear", timesteps=200, model=netG)
     else:
         NotImplementedError()
 
@@ -126,12 +128,12 @@ def main():
             if args.model_type == "diffusion":
                 #now, we only use the unconditional difussion model, meaning the inputs are only noise.
                 #This is the first test, later, we will figure out how to use conditioanl difussion model.
-                samples = sample(netG, image_size = image_size, batch_size = batch_size, channels = 8)
+                samples = gf.sample(image_size = image_size, batch_size = batch_size, channels = 8 )
                 #chose the last channle and last varialbe (precipitation)
                 sample_last = samples[-1][-1].numpy()*vars_out_patches_std+vars_out_patches_mean
 
                 # we can make some plot here
-                all_sample_list = all_sample_list.append(samples)
+                all_sample_list = all_sample_list.append(sample_last)
 
             else:
                 output_temp = test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean

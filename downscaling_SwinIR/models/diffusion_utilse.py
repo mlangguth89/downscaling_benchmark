@@ -132,28 +132,33 @@ class GaussianDiffusion(nn.Module):
 
 
     @torch.no_grad()
-    def p_sample_loop(self, shape, condition_x=None):
+    def p_sample_loop(self, shape, x_in):
         #device = next(self.model.parameters()).device
 
         b = shape[0]
+        img = torch.randn(shape, device = device)
+        # start from pure noise (for each example in the batch)
+        imgs = []
         #The following code get from reference 2). However, this is some difference.
         #Need to furthe check. i do not understand why ret_img part
         if not self.conditional:
-
-            # start from pure noise (for each example in the batch)
-            img = torch.randn(shape, device = device)
-            imgs = []
-
-            for i in tqdm(reversed(range(0, self.timesteps)), desc = 'sampling loop time step',
+            for i in tqdm(reversed(range(0, self.timesteps)),
+                          desc = 'sampling loop time step',
                           total = self.timesteps):
                 img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long), i)
                 imgs.append(img.numpy())
             return imgs
         else:
-            #To do
-            pass
 
+            for i in tqdm(reversed(range(0, self.timesteps)),
+                          desc = 'sampling loop time step',
+                          total = self.timesteps):
+                img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long), i, condition_x = x_in)
+                imgs.append(img.numpy())
+            return imgs
 
-
-    def sample(self, image_size=160, batch_size=16, channels=3):
-         return self.p_sample_loop(shape=(batch_size, channels, image_size, image_size))
+    def sample(self, image_size=160, batch_size=16, channels=3, x_in=None):
+        if self.conditional:
+            return self.p_sample_loop(shape=(batch_size, channels, image_size, image_size), x_in=x_in)
+        else:
+            return self.p_sample_loop(shape=(batch_size, channels, image_size, image_size))
