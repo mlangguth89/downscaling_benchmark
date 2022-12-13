@@ -194,7 +194,7 @@ class WGAN(keras.Model):
         """
 
         if self.hparams["l_embed"]:
-            predictors, predictands, embeds_m, embeds_h = data_iter
+            predictors, predictands, embeds_times = data_iter
         else:
             predictors, predictands = data_iter
         # train the critic d_steps-times
@@ -202,7 +202,7 @@ class WGAN(keras.Model):
             with tf.GradientTape() as tape_critic:
                 ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
                 if self.hparams["l_embed"]:
-                    predictor_list = [predictors[ist:ie, :, :, :], embeds_m[ist:ie, ...], embeds_h[ist:ie, ...]]
+                    predictor_list = [predictors[ist:ie, :, :, :], embeds_times[ist:ie, ...]]
                 else:
                     predictor_list = predictors[ist:ie, :, :, :]
                 # critic only operates on first channel
@@ -227,8 +227,7 @@ class WGAN(keras.Model):
             # generate (downscaled) data
             if self.hparams["l_embed"]:
                 predictor_list = [predictors[-self.hparams["batch_size"]:, ...],
-                                  embeds_m[-self.hparams["batch_size"]:, ...],
-                                  embeds_h[-self.hparams["batch_size"]:, ...]]
+                                  embeds_times[-self.hparams["batch_size"]:, ...]]
             else:
                 predictor_list = predictors[-self.hparams["batch_size"]:, ...]
             gen_data = self.generator(predictor_list, training=True)
@@ -253,8 +252,8 @@ class WGAN(keras.Model):
         :return: dictionary with reconstruction loss on validation data
         """
         if self.hparams["l_embed"]:
-            predictors, predictands, embeds_m, embeds_h = val_iter
-            predictor_list = [predictors, embeds_m, embeds_h]
+            predictors, predictands, embeds_times = val_iter
+            predictor_list = [predictors, embeds_times]
         else:
             predictors, predictands = val_iter
             predictor_list = predictors
