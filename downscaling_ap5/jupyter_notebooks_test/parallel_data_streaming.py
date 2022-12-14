@@ -30,7 +30,6 @@ class StreamMonthlyNetCDF(object):
         return data
     
     def getitems(self, indices):
-        print(indices)
         return np.array(self.pool.map(self.__getitem__, indices))
     
     @property
@@ -107,13 +106,16 @@ def main(parser_args):
     print(f"Available samples in dataset: {nsamples:d}.")
     print(all_data.times)
 
-    tf_fun = lambda i: tf.numpy_function(all_data.getitems, [i], tf.float64)
+    #tf_fun = lambda i: tf.numpy_function(all_data.getitems, [i], tf.float64)
 
     nworkers_list = [int(workers/n) for n in range(1, 5)]
 
     log_dict = {}
 
     for nworkers in nworkers_list:
+        all_data = StreamMonthlyNetCDF(datadir, patt, workers=nworkers)
+        tf_fun = lambda i: tf.numpy_function(all_data.getitems, [i], tf.float64)
+        
         elapsed_times = []
         for j in range(ntests):
             time0 = timer()
@@ -126,8 +128,10 @@ def main(parser_args):
                 if k == 0 and j == 0:
                     print(f"Sanity check for test with {nworkers}:")
                     print(tf.shape(x))
-                else:
-                    pass
+                elif k >= 499:    # only draw 500 mini-batches
+                    break
+                #else:
+                #    pass
 
             elapsed_times.append(timer() - time0)
 
