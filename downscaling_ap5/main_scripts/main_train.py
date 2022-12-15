@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2022-11-24"
+__update__ = "2022-12-15"
 
 import os
 import argparse
@@ -150,8 +150,8 @@ def main(parser_args):
 
     # get some parameters from tracked training times and put to dictionary
     if l_deep500:
-        tmr.save_all_time_stats(os.path.join(outdir, f"deep500_timing_{job_id}.txt"))
-        training_times = {}
+        tmr.save_all_time_stats(os.path.join(model_savedir, f"deep500_timing_{job_id}.txt"))
+        training_times = get_training_time_dict(np.asarray([-999., -999., -999.]), 1)    # just placeholders for now
     else:
         training_times = get_training_time_dict(time_tracker_cb.epoch_times,
                                                 nsamples * model.hparams["nepochs"])
