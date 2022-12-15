@@ -149,8 +149,12 @@ def main(parser_args):
                         verbose=2, **fit_opts)
 
     # get some parameters from tracked training times and put to dictionary
-    training_times = get_training_time_dict(time_tracker.epoch_times,
-                                            nsamples * model.hparams["nepochs"])
+    if l_deep500:
+        tmr.save_all_time_stats(os.path.join(outdir, f"deep500_timing_{job_id}.txt"))
+        training_times = {}
+    else:
+        training_times = get_training_time_dict(time_tracker_cb.epoch_times,
+                                                nsamples * model.hparams["nepochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
     print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
