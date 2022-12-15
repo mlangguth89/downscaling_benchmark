@@ -17,7 +17,7 @@ from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 import gc
 import json as js
-from timeit import default_timer as timer
+from timeit import default_timer as std_timer
 import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
@@ -25,7 +25,12 @@ from model_utils import ModelEngine, handle_opt_utils
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
-
+try:
+    from deep500.utils import timer_tf as timer
+    deep500_avail = True
+except ImportError as _:
+    print("Could not load timer_tf from Deep500. Flags for enabling timing with Deep500 will be ignored.")
+    deep500_avail = False
 
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
@@ -34,15 +39,17 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 # * ensure that dataset defaults are set
 # * customized choice on predictors and predictands missing
 
+
 def main(parser_args):
     # start timing
-    t0 = timer()
+    t0 = std_timer()
 
     # Get some basic directories and flags
     datadir = parser_args.input_dir
     outdir = parser_args.output_dir
     job_id = parser_args.id
     dataset = parser_args.dataset.lower()
+    l_deep500 = parser_args.l_deep500 & deep500_avail
 
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
@@ -67,13 +74,13 @@ def main(parser_args):
 
     # Read data from disk and preprocess (normalization and conversion to TF dataset)
     print("Start reading data from disk...")
-    t0_save = timer()
+    t0_save = std_timer()
     ds_train, ds_val = xr.open_dataset(fdata_train), xr.open_dataset(fdata_val)
 
-    benchmark_dict = {"loading data time": timer() - t0_save}
+    benchmark_dict = {"loading data time": std_timer() - t0_save}
 
     # prepare training and validation data
-    t0_preproc = timer()
+    t0_preproc = std_timer()
 
     da_train, da_val = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False)), \
                        HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
@@ -101,7 +108,7 @@ def main(parser_args):
     del ds_val
     gc.collect()
 
-    t0_compile = timer()
+    t0_compile = std_timer()
     benchmark_dict["preprocessing data time"] = t0_compile - t0_preproc
 
     # instantiate model
@@ -113,19 +120,25 @@ def main(parser_args):
     model.compile(**compile_opts)
 
     # train model
-    # define class for creating timer callback
-    class TimeHistory(keras.callbacks.Callback):
-        def on_train_begin(self, logs={}):
-            self.epoch_times = []
+    # either use timer class or Deep500 timer
+    if l_deep500:
+        tmr = timer.CPUGPUTimer()
+        time_tracker_cb = timer.TimerCallback(tmr, gpu=True)
+    else:
+        # define class for creating timer callback
+        class TimeHistory(keras.callbacks.Callback):
+            def on_train_begin(self, logs={}):
+                self.epoch_times = []
 
-        def on_epoch_begin(self, epoch, logs={}):
-            self.epoch_time_start = timer()
+            def on_epoch_begin(self, epoch, logs={}):
+                self.epoch_time_start = std_timer()
 
-        def on_epoch_end(self, epoch, logs={}):
-            self.epoch_times.append(timer() - self.epoch_time_start)
+            def on_epoch_end(self, epoch, logs={}):
+                self.epoch_times.append(std_timer() - self.epoch_time_start)
 
-    time_tracker = TimeHistory()
-    cb_default= [time_tracker]
+        time_tracker_cb = TimeHistory()
+
+    cb_default= [time_tracker_cb]
     steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
 
     # get optional fit options and start training/fitting
@@ -143,12 +156,12 @@ def main(parser_args):
     print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
 
     # save trained model
-    t0_save = timer()
+    t0_save = std_timer()
 
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir)
 
-    tend = timer()
+    tend = std_timer()
     benchmark_dict["saving model time"] = tend - t0_save
 
     # finally, track total runtime...
@@ -198,6 +211,9 @@ if __name__ == "__main__":
     parser.add_argument("--configuration_dataset", "-conf_ds", dest="conf_ds", type=argparse.FileType("r"),
                         required=True, help="JSON-file to configure dataset to be used for training.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
+    parser.add_argument("--l_deep500_timer", "-l_deep500", dest="l_deep500", default=False, action="store_true",
+                        help="Flag if Deep500 timer is enables. Requires installation from " +
+                             "https://gist.github.com/ndryden/bfc337f9778509fee40cabe597f12b5d")
 
     args = parser.parse_args()
     main(args)
