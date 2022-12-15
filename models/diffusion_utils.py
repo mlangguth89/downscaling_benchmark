@@ -17,7 +17,7 @@ __date__ = "2022-11-28"
 import torch
 import torch.nn.functional as F
 from torch import nn, einsum
-import tqdm
+from tqdm import tqdm
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
@@ -61,6 +61,7 @@ class GaussianDiffusion(nn.Module):
         super().__init__()
         self.conditional = conditional
         self.model = model
+        self.timesteps = timesteps
 
         # define beta schedule
         if schedule_opt == "linear":
@@ -80,7 +81,7 @@ class GaussianDiffusion(nn.Module):
         # Returns the cumulative product of elements of input in the dimension dim
         alphas_cumprod = torch.cumprod(alphas, axis = 0)
         self.alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value = 1.0)
-        #sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
+        self.sqrt_recip_alphas = torch.sqrt(1.0 / alphas)
 
         # calculations for diffusion q(x_t | x_{t-1}) and others
         self.sqrt_alphas_cumprod = torch.sqrt(alphas_cumprod)
@@ -115,6 +116,8 @@ class GaussianDiffusion(nn.Module):
         # Use our model (noise predictor) to predict the mean
         if condition_x is not None:
             # this is conditional diffussion
+            print("conditiona_x shape", condition_x.shape)
+            print("x shape is ", x.shape)
             x_recon = self.model(torch.cat([condition_x, x], dim=1), t)
         else:
             x_recon = self.model(x, t)
@@ -132,7 +135,7 @@ class GaussianDiffusion(nn.Module):
 
 
     @torch.no_grad()
-    def p_sample_loop(self, shape, x_in):
+    def p_sample_loop(self, shape, x_in=None):
         #device = next(self.model.parameters()).device
 
         b = shape[0]
@@ -141,24 +144,28 @@ class GaussianDiffusion(nn.Module):
         imgs = []
         #The following code get from reference 2). However, this is some difference.
         #Need to furthe check. i do not understand why ret_img part
-        if not self.conditional:
+        if x_in is None:
+            print("Start the p_sample_loop for non-conditional diffusion")
             for i in tqdm(reversed(range(0, self.timesteps)),
                           desc = 'sampling loop time step',
                           total = self.timesteps):
-                img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long), i)
+                img = self.p_sample(img, torch.full((b,),
+                                    i, device = device, dtype = torch.long), i)
                 imgs.append(img.numpy())
             return imgs
         else:
-
+            print("Start the p_sample_loop for conditional diffusion")
             for i in tqdm(reversed(range(0, self.timesteps)),
                           desc = 'sampling loop time step',
                           total = self.timesteps):
-                img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long), i, condition_x = x_in)
+                img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long),
+                                    i, condition_x = x_in)
                 imgs.append(img.numpy())
             return imgs
 
     def sample(self, image_size=160, batch_size=16, channels=3, x_in=None):
         if self.conditional:
-            return self.p_sample_loop(shape=(batch_size, channels, image_size, image_size), x_in=x_in)
+            print("images size in sample", image_size)
+            return self.p_sample_loop(shape=(batch_size, 1, image_size, image_size), x_in=x_in)
         else:
             return self.p_sample_loop(shape=(batch_size, channels, image_size, image_size))
