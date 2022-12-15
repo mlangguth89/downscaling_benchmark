@@ -137,7 +137,8 @@ def main():
                 print("Start reverse process")
                 samples = gf.sample(image_size=image_size, batch_size=batch_size, channels=8, x_in=model.L)
                 #chose the last channle and last varialbe (precipitation)
-                sample_last = samples[-1][-1]*vars_out_patches_std+vars_out_patches_mean
+                print("shape of samples before index collection", np.array(samples).shape)
+                sample_last = samples[-1] *vars_out_patches_std+vars_out_patches_mean
                 print("shape of generate samples",sample_last.shape)
 
                 # we can make some plot here

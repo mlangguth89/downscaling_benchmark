@@ -21,8 +21,9 @@ def exists(x):
 class SinusoidalPositionEmbeddings(nn.Module):
     def __init__(self, dim):
         super().__init__()
-        assert self.dim % 2 == 0
         self.dim = dim
+        assert self.dim % 2 == 0
+
 
     def forward(self, time):
         half_dim = self.dim // 2
@@ -140,7 +141,7 @@ class Decode_Block(nn.Module):
 #########Define Unet neural network for diffusion models ##############
 
 class UNet_diff(nn.Module):
-    def __init__(self, img_size:int, n_channels:int, channels_start: int = 56, with_time_emb: bool=True):
+    def __init__(self, img_size: int, n_channels:int, channels_start: int = 56, with_time_emb: bool=True):
         """
 
         :param img_size             :  the dimension of the images
