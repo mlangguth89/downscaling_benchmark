@@ -7,7 +7,6 @@ __email__ = "b.gong@fz-juelich.de"
 __author__ = "Bing Gong"
 __date__ = "2022-08-22"
 
-import time
 import argparse
 import sys
 import torch
@@ -15,20 +14,17 @@ import numpy as np
 sys.path.append('../')
 from models.network_unet import UNet as unet
 from models.network_swinir import SwinIR as swinSR
-#from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
-from models.diffusion_utilse import sample
-from models.network_diffusion  import UNet_diff
-from models.diffusion_utilise import GaussianDiffusion
+from models.network_diffusion import UNet_diff
+from models.diffusion_utils import GaussianDiffusion
 from utils.data_loader import create_loader
 from main_scripts.main_train import BuildModel
-
+#System packages
 import os
 import json
 from datetime import datetime
 import xarray as xr
-
 
 
 def main():
@@ -66,20 +62,31 @@ def main():
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     elif args.model_type == "swinUnet":
-        netG = swinUnet(img_size=160,patch_size=args.patch_size,
+        netG = swinUnet(img_size=160, patch_size=args.patch_size,
                         in_chans=n_channels,num_classes=1,embed_dim=96,
-                        depths=[2,2,2],depths_decoder=[2,2,2],num_heads=[6,6,6],
-                        window_size=args.window_size,mlp_ratio=4,qkv_bias=True,qk_scale=None,
-                        drop_rate=0.,attn_drop_rate=0.,drop_path_rate=0.1,ape=False,final_upsample="expand_first")
+                        depths=[2, 2, 2],
+                        depths_decoder=[2,2,2],num_heads=[6,6,6],
+                        window_size=args.window_size,mlp_ratio=4,qkv_bias=True,
+                        qk_scale=None,
+                        drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                        ape=False, final_upsample="expand_first")
 
-    elif args.model_type == "difussion":
-        netG = UNet_diff(n_channels = n_channels)
+    elif args.model_type == "diffusion":
+        netG = UNet_diff(n_channels = n_channels+1, img_size=160)
         difussion = True
-        gf = GaussianDiffusion(conditional=True, schedule_opt="linear", timesteps=200, model=netG)
+        timesteps = 200
+        gf = GaussianDiffusion(conditional=True, schedule_opt="linear",
+                               timesteps=timesteps, model=netG)
     else:
         NotImplementedError()
 
-    model = BuildModel(netG)
+    if args.model_type == "diffusion":
+        model = BuildModel(netG,  difussion=difussion,
+                       conditional=True, timesteps=timesteps)
+
+    else:
+        model = BuildModel(netG)
+
     model.define_loss()
     total_loss = 0.
     test_len = []
@@ -105,16 +112,15 @@ def main():
         all_sample_list = [] #this is ony for difussion model inference
         for i, test_data in enumerate(test_loader):
             idx += 1
-            batch_size = test_data.shape[0]
-            image_size = test_data.shape[1]
+            batch_size = test_data["L"].shape[0]
             cidx_temp = test_data["idx"].numpy()
             times_temp = test_data["T"].numpy()
-            #print('times: {}'.format(times_temp))
-            #print('cidx: {}'.format(cidx_temp))
             cidx_list.append(cidx_temp)
             times_list.append(times_temp)
-
             model.feed_data(test_data)
+            #we must place calculate the shape of input here, due to for diffussion model, 
+            #The L is upsampling to higher resolution before feed into the model through 'feed_data' function
+            image_size = model.L.shape[2]
             model.netG_forward()
 
 
@@ -128,19 +134,24 @@ def main():
             if args.model_type == "diffusion":
                 #now, we only use the unconditional difussion model, meaning the inputs are only noise.
                 #This is the first test, later, we will figure out how to use conditioanl difussion model.
-                samples = gf.sample(image_size = image_size, batch_size = batch_size, channels = 8 )
+                print("Start reverse process")
+                samples = gf.sample(image_size=image_size, batch_size=batch_size, channels=8, x_in=model.L)
                 #chose the last channle and last varialbe (precipitation)
-                sample_last = samples[-1][-1].numpy()*vars_out_patches_std+vars_out_patches_mean
+                sample_last = samples[-1][-1]*vars_out_patches_std+vars_out_patches_mean
+                print("shape of generate samples",sample_last.shape)
 
                 # we can make some plot here
-                all_sample_list = all_sample_list.append(sample_last)
+                #all_sample_list = all_sample_list.append(sample_last)
+                pred_temp = sample_last * vars_out_patches_std + vars_out_patches_mean
 
             else:
-                output_temp = test_data["H"].numpy()*vars_out_patches_std+vars_out_patches_mean
+
+                pred_temp = model.E.numpy() * vars_out_patches_std + vars_out_patches_mean
             #output_temp = np.exp(output_temp+np.log(args.k))-args.k
+            output_temp = test_data["H"].numpy() * vars_out_patches_std + vars_out_patches_mean
             output_list.append(output_temp)
 
-            pred_temp = model.E.numpy()*vars_out_patches_std+vars_out_patches_mean
+
             #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
             pred_list.append(pred_temp)
             ref_temp = model.H.numpy()*vars_out_patches_std+vars_out_patches_mean
