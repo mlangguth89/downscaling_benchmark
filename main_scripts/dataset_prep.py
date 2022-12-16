@@ -19,7 +19,9 @@ import json
 import gc
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
+cuda = torch.cuda.is_available()
+if cuda:
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
     This is the class used for generate dataset generator for precipitation downscaling
@@ -187,7 +189,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("There are No. {} patches out of {} without Nan Values ".format(len(no_nan_idx), len(vars_out_patches)))
 
         # change the index from List to LongTensor type
-        no_nan_idx = torch.LongTensor(no_nan_idx)
+        no_nan_idx = torch.LongTensor(no_nan_idx).to(device)
 
         # Only get the patch that without NaN values
         vars_out_pathes_no_nan = torch.index_select(vars_out_patches, 0, no_nan_idx)
