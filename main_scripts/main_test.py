@@ -113,8 +113,8 @@ def main():
         for i, test_data in enumerate(test_loader):
             idx += 1
             batch_size = test_data["L"].shape[0]
-            cidx_temp = test_data["idx"].numpy()
-            times_temp = test_data["T"].numpy()
+            cidx_temp = test_data["idx"]
+            times_temp = test_data["T"]
             cidx_list.append(cidx_temp)
             times_list.append(times_temp)
             model.feed_data(test_data)
@@ -125,7 +125,7 @@ def main():
 
 
             # log-transform -> log(x+k)-log(k)
-            input_vars = test_data["L"].numpy()
+            input_vars = test_data["L"]
             #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
             #input_temp = np.exp(input_temp+np.log(args.k))-args.k
@@ -137,7 +137,6 @@ def main():
                 print("Start reverse process")
                 samples = gf.sample(image_size=image_size, batch_size=batch_size, channels=8, x_in=model.L)
                 #chose the last channle and last varialbe (precipitation)
-                print("shape of samples before index collection", np.array(samples).shape)
                 sample_last = samples[-1] *vars_out_patches_std+vars_out_patches_mean
                 print("shape of generate samples",sample_last.shape)
 
@@ -149,13 +148,13 @@ def main():
 
                 pred_temp = model.E.numpy() * vars_out_patches_std + vars_out_patches_mean
             #output_temp = np.exp(output_temp+np.log(args.k))-args.k
-            output_temp = test_data["H"].numpy() * vars_out_patches_std + vars_out_patches_mean
+            output_temp = test_data["H"]* vars_out_patches_std + vars_out_patches_mean
             output_list.append(output_temp)
 
 
             #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
             pred_list.append(pred_temp)
-            ref_temp = model.H.numpy()*vars_out_patches_std+vars_out_patches_mean
+            ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
             #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
             ref_list.append(ref_temp)            
             #print('model.E shape: {}'.format(model.E.shape))
@@ -199,4 +198,8 @@ def main():
         ds.to_netcdf(os.path.join(args.save_dir,'prcp_downs_'+args.model_type+'.nc'))
 
 if __name__ == '__main__':
+    cuda = torch.cuda.is_available()
+    if cuda:
+        torch.set_default_tensor_type('torch.cuda.FloatTensor')
+    
     main()
