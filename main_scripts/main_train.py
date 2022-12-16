@@ -27,7 +27,7 @@ from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from models.network_diffusion  import UNet_diff
 from models.network_unet import Upsampling
 from utils.data_loader import create_loader
-from models.diffusion_utilse import GaussianDiffusion
+from models.diffusion_utils import GaussianDiffusion
 ###Weights and Bias
 import wandb
 os.environ["WANDB_MODE"]="offline"
@@ -171,9 +171,6 @@ class BuildModel:
                 self.E = self.netG(x_noisy, t)
 
             else:
-                print("shape of L", self.L.shape)
-                print("shape of x_noisy", x_noisy.shape)
-                print("t shape", t.shape)
                 self.E = self.netG(torch.cat([self.L, x_noisy], dim = 1), t)
 
             self.H = noise #if using difussion, the output is not the prediction values, but the predicted noise
@@ -260,7 +257,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                         final_upsample="expand_first")
                        # final_upsample="expand_first"
 
-    elif type_net == "difussion":
+    elif type_net == "diffusion":
         conditional = kwargs["conditional"]
         timesteps = kwargs["timesteps"]
         netG = UNet_diff(img_size=160, n_channels=n_channels+1) #add one channel for the noise
@@ -307,7 +304,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # -------------------------------
             # 2) feed patch pairs
             # -------------------------------
-            print(train_data)
             model.feed_data(train_data)
 
             # -------------------------------
@@ -353,6 +349,9 @@ def main():
     parser.add_argument("--upscale_swinIR", type = int, default = 4)
     parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
 
+    #PARAMETERS FOR DIFFUSION
+    parser.add_argument("--conditional", type = bool, default=True)
+    parser.add_argument("--timesteps",type=int, default=200)
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
@@ -371,8 +370,9 @@ def main():
         patch_size = args.patch_size,
         window_size = args.window_size,
         upscale_swinIR = args.upscale_swinIR,
-        upsampler_swinIR = args.upsampler_swinIR        
-        )
+        upsampler_swinIR = args.upsampler_swinIR,
+        conditional=args.conditional,
+        timesteps = args.timesteps)
 
 
 if __name__ == '__main__':
