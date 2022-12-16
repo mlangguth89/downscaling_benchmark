@@ -151,7 +151,7 @@ class GaussianDiffusion(nn.Module):
                           total = self.timesteps):
                 img = self.p_sample(img, torch.full((b,),
                                     i, device = device, dtype = torch.long), i)
-                imgs.append(img.numpy())
+                imgs.append(img)
             return imgs
         else:
             print("Start the p_sample_loop for conditional diffusion")
@@ -160,7 +160,7 @@ class GaussianDiffusion(nn.Module):
                           total = self.timesteps):
                 img = self.p_sample(img, torch.full((b,), i, device = device, dtype = torch.long),
                                     i, condition_x = x_in)
-                imgs.append(img.numpy())
+                imgs.append(img)
             return imgs
 
     def sample(self, image_size=160, batch_size=16, channels=3, x_in=None):
