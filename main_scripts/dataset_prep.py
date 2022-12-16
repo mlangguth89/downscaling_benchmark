@@ -18,6 +18,8 @@ import os
 import json
 import gc
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
     This is the class used for generate dataset generator for precipitation downscaling
@@ -69,7 +71,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         # Search for files
         p = pathlib.Path(self.file_path)
-        assert(p.is_dir())
+        #assert(p.is_dir())
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
         #    print("pathname",path.name)
@@ -135,9 +137,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print('inputs_nparray shape: {}'.format(inputs_nparray.shape))
         print('inputs_nparray[self.prcp_indexes] shape: {}'.format(inputs_nparray[self.prcp_indexes].shape))
 
-        da_in = torch.from_numpy(inputs_nparray)
-        da_out = torch.from_numpy(outputs_nparray)
-        del inputs_nparray,outputs_nparray
+        da_in = torch.from_numpy(inputs_nparray).to(device)
+        da_out = torch.from_numpy(outputs_nparray).to(device)
+        del inputs_nparray, outputs_nparray
         gc.collect()
         times = inputs["time"].values  # get the timestamps
         times = np.transpose(np.stack([dt["time"].dt.year,dt["time"].dt.month,dt["time"].dt.day,dt["time"].dt.hour]))        
@@ -160,7 +162,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Input shape:", vars_in_patches.shape)
 
         ## Replicate times for patches in the same image
-        times_patches = torch.from_numpy(np.array([ x for x in times for _ in range(num_patches_img)]))
+        times_patches = torch.from_numpy(np.array([ x for x in times for _ in range(num_patches_img)])).to(device)
         
         ## sanity check 
         assert len(times_patches) ==  vars_in_patches_shape[1] * vars_in_patches_shape[2] * vars_in_patches_shape[3]
@@ -241,10 +243,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             #initialise x, y for each batch
             # x  stores the low resolution images, y for high resolution,
             # t is the corresponding timestamps, cidx is the index
-            x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
-            y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
-            t = torch.zeros(self.batch_size, 4, dtype = torch.int)
-            cidx = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
+            x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size).to(device)
+            y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf ).to(device)
+            t = torch.zeros(self.batch_size, 4, dtype = torch.int).to(device)
+            cidx = torch.zeros(self.batch_size, 1, dtype = torch.int).to(device) #store the index
 
             for jj in range(self.batch_size):
 
@@ -274,6 +276,7 @@ def run():
 
 if __name__ == "__main__":
     run()
+
 
 
 
