@@ -25,7 +25,8 @@ module load xarray/0.20.1
 
 source ../venv_booster/bin/activate
 
-
+WORK_DIR=$(pwd)
+BASE_DIR=$(dirname "${WORK_DIR}")
 
 # data-directories
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
