@@ -12,7 +12,8 @@
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
-
+WORK_DIR=$(pwd)
+BASE_DIR=$(dirname "${WORK_DIR}")
 
 module purge
 module load Stages/2022 GCCcore/.11.2.0 GCC/11.2.0
@@ -25,8 +26,7 @@ module load xarray/0.20.1
 
 source ../venv_booster/bin/activate
 
-WORK_DIR=$(pwd)
-BASE_DIR=$(dirname "${WORK_DIR}")
+
 
 # data-directories
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
