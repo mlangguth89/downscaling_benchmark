@@ -13,14 +13,14 @@ __date__ = "2022-09-11"
 import numpy as np
 import xarray as xr
 from typing import Union, List
-import datetime
-import pandas as pd
+import os, sys, glob
+sys.path.append('../')
 try:
     from tqdm import tqdm
     l_tqdm = True
 except:
     l_tqdm = False
-from other_utils import provide_default, check_str_in_list
+from downscaling_ap5.utils.other_utils import provide_default, check_str_in_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]

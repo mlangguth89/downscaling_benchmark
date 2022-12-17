@@ -10,6 +10,8 @@ from collections import OrderedDict
 from timeit import default_timer as timer
 import xarray as xr
 import tensorflow as tf
+import torch
+import numpy as np
 
 
 class HandleDataClass(object):
@@ -231,6 +233,22 @@ class HandleDataClass(object):
             raise err
 
         return True
+
+    @staticmethod
+    def gen(darr_in, darr_tar):
+        ds_train_in = []
+        ds_train_tar = []
+        ntimes = len(darr_in["time"])
+        for t in range(ntimes):
+            ds_train_in.append(torch.from_numpy(darr_in.isel({"time": t}).values).permute(2, 0, 1))
+            vector_tar = torch.from_numpy(darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis])
+            ds_train_tar.append(vector_tar.permute(2, 0, 1))   # [:, :, 1]
+
+        a = torch.stack(ds_train_in)
+        b = torch.stack(ds_train_tar)
+
+        return a, b
+
 
     @staticmethod
     def has_internet():

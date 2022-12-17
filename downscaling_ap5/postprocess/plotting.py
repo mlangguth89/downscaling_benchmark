@@ -23,7 +23,9 @@ import matplotlib.pyplot as plt
 import cartopy
 import cartopy.crs as ccrs
 # make class for handling data available
-from other_utils import provide_default
+import os, sys, glob
+sys.path.append('../')
+from downscaling_ap5.utils.other_utils import provide_default
 
 # auxiliary variable for logger
 module_name = os.path.basename(__file__).rstrip(".py")

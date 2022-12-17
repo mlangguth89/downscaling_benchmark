@@ -9,10 +9,12 @@ All implemented classes to perform normalization on data
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
-
+import os, sys, glob
+sys.path.append('../')
 from typing import List
-from abstract_data_normalization import Normalize
+from downscaling_ap5.handle_data.abstract_data_normalization import Normalize
 import xarray as xr
+
 
 class ZScore(Normalize):
 
