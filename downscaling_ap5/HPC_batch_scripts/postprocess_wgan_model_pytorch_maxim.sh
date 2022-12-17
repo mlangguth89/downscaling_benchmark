@@ -14,26 +14,17 @@
 
 
 
-# basic directories
-WORK_DIR=$(pwd)
-BASE_DIR=$(dirname "${WORK_DIR}")
+module purge
+module load Stages/2022 GCCcore/.11.2.0 GCC/11.2.0
+ml OpenMPI 4.1.2
+ml netCDF/4.8.1
+module load dask/2021.9.1
+module load PyTorch/1.11-CUDA-11.5
+module load torchvision
+module load xarray/0.20.1
 
-# Name of virtual environment
-VENV_DIR=${BASE_DIR}/virtual_envs/
-VIRT_ENV_NAME=<my_venv>
+source ../venv_booster/bin/activate
 
-# Loading mouldes
-source ../env_setup/modules.sh
-# Activate virtual environment if needed (and possible)
-if [ -z ${VIRTUAL_ENV} ]; then
-   if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
-      echo "Activating virtual environment..."
-      source ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate
-   else
-      echo "ERROR: Requested virtual environment ${VIRT_ENV_NAME} not found..."
-      exit 1
-   fi
-fi
 
 
 # data-directories
