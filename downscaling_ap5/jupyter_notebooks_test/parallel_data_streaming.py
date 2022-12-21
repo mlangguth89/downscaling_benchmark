@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+### NOTE ###
+# Outdated version (cf. Jupyter Notebook)!!!
+
 import os, glob
 import argparse
 from timeit import default_timer as timer
