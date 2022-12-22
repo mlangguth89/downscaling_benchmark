@@ -1,13 +1,18 @@
+# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+#
+# SPDX-License-Identifier: MIT
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-02-01"
+__update__ = "2022-12-22"
 
 import os, sys
 import socket
 import gc
 from collections import OrderedDict
 from timeit import default_timer as timer
+import numpy as np
 import xarray as xr
 import tensorflow as tf
 
@@ -135,6 +140,48 @@ class HandleDataClass(object):
         if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
 
         return da_in, da_tar
+
+    @staticmethod
+    def make_shuffled_dataset(ds: xr.Dataset, datadir: str, batch_size: int, sample_dim: str = "time",
+                              nfiles: int = None, samples_per_file: int = None):
+
+        sample_dim_data = ds[sample_dim].copy(deep=True)
+        nsampels = np.shape(sample_dim_data)[0]
+        ds = ds.rename_dims({sample_dim: "sample_ind"})
+        ds["sample_ind"] = range(np.shape(nsampels)[0])
+
+        inds = np.arange(nsampels)
+        np.random.shuffle(inds)
+
+        if nfiles is not None:
+            samples_per_file = int(nsampels/12)
+        else:
+            if samples_per_file is None:
+                raise ValueError("Either provide nfiles or samples_per_file-argument.")
+
+        if np.mod(samples_per_file, 32) > 0:
+            n = int(samples_per_file/batch_size)
+            samples_per_file = n*batch_size
+            print(f"Batch size is not a divider of samples per file. " +
+                  f"samples_per_file is adjusted to {samples_per_file:d}")
+
+        dropped_samples = np.mod(nsampels, samples_per_file)
+
+        if dropped_samples > 0:
+            print(f"{dropped_samples} samples will be dropped.")
+
+        for i in range(int(nsampels / samples_per_file)):
+            inds_now = inds[i * samples_per_file: (i + 1) * samples_per_file]
+            print(f"Load data to memory for {i + 1:d}th subset...")
+            ds_subset = ds.isel({"sample_ind": inds_now}).load()
+            print("Data loaded sucsessfully!")
+
+            nsamples_now = np.shape(ds_subset["sample_ind"])[0]
+            ds_subset["sample_ind"] = range(i * nsamples_now, (i + 1) * nsamples_now)
+            fname_now = os.path.join(datadir, "test", f"ds_resampled_{i:0d}.nc")
+
+            print(f"Write data subset to file '{fname_now}'.")
+            ds_subset.to_netcdf(fname_now)
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
