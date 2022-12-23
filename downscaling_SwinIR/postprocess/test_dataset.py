@@ -4,8 +4,8 @@ import torch
 from torch.utils.data import Dataset
 import xarray as xr
 import logging
-from handle_data.handle_data_class import HandleDataClass
-from handle_data.all_normalizations import ZScore
+from downscaling_SwinIR.handle_data.handle_data_class import HandleDataClass
+from downscaling_SwinIR.handle_data.all_normalizations import ZScore
 
 
 class test_dataset(Dataset):

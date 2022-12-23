@@ -24,11 +24,11 @@ import xarray as xr
 # import tensorflow.keras as keras
 import matplotlib as mpl
 # from handle_data_unet import *
-
-from postprocess.statistical_evaluation import Scores
-from postprocess.postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial
-from postprocess.test_dataset import test_dataset
-from models.network_unet import UNet as unet
+sys.path.append('../')
+from downscaling_SwinIR.postprocess.statistical_evaluation import Scores
+from downscaling_SwinIR.postprocess.postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial
+from downscaling_SwinIR.postprocess.test_dataset import test_dataset
+from downscaling_SwinIR.models.network_unet import UNet as unet
 from datetime import datetime as dt
 from torch.utils.data import DataLoader
 

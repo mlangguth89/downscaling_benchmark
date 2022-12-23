@@ -22,7 +22,7 @@ try:
     l_tqdm = True
 except:
     l_tqdm = False
-from utils.other_utils import provide_default, check_str_in_list
+from downscaling_SwinIR.utils.other_utils import provide_default, check_str_in_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
