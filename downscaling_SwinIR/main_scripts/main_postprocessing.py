@@ -121,8 +121,8 @@ def main(parser_args):
     for i, train_data in enumerate(train_dataloader):
         print(i*32, len(test))
         batch_output = model(train_data[0].to(device))
-        # for tens in batch_output:
-        #     output.append(tens)
+        for tens in batch_output:
+            output.append(tens.item())
 
     y_pred_trans = torch.stack(batch_output)
     y_pred_trans = torch.permute(y_pred_trans, (0, 2, 3, 1))
