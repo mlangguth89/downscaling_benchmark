@@ -15,7 +15,7 @@ import os
 import logging
 import xarray as xr
 # from cartopy import crs
-from downscaling_SwinIR.postprocess.plotting import create_line_plot, create_map_score
+from postprocess.plotting import create_line_plot, create_map_score
 
 # auxiliary variable for logger
 module_name = os.path.basename(__file__).rstrip(".py")
