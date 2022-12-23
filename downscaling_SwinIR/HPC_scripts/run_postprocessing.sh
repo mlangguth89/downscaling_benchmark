@@ -38,6 +38,6 @@ dataset=downscaling_tier2_train
 
 # run job
 python ../main_scripts/main_postprocessing_pytorch.py -data_dir ${datadir} -model_base_dir ${model_basedir} \
-                                                                    -exp_name ${exp_name} -dataset ${dataset} -model_name${model_name} \
+                                                                    -exp_name ${exp_name} -dataset ${dataset} -model_name ${model_name} \
                                                                     -output_base_directory ${outdir}
 
