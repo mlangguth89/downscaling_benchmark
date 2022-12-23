@@ -32,7 +32,7 @@ source ../venv_booster/bin/activate
 datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc
 model_basedir=../model_base_dir/
 outdir=../output/
-model_name = generator_step735000.pth
+model_name=generator_step735000.pth
 exp_name=wgan
 dataset=downscaling_tier2_train
 
