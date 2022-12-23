@@ -38,6 +38,8 @@ logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 def main(parser_args):
     t0 = timer()
@@ -92,6 +94,7 @@ def main(parser_args):
     model_path = glob.glob(os.path.join(model_dir, parser_args.model_name))[0]
     model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
     model.eval()
+    model.to(device)
     logger.info(f"Model was loaded successfully.")
 
     # get datafile and read netCDF
@@ -116,6 +119,7 @@ def main(parser_args):
     output = []
     train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
     for i, train_data in enumerate(train_dataloader):
+        print(i*32, len(test))
         batch_output = model(train_data[0])
         for tens in batch_output:
             output.append(tens)
