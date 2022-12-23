@@ -13,7 +13,7 @@ __date__ = "2022-10-06"
 import os, sys, glob
 sys.path.append('../')
 from typing import List
-from downscaling_SwinIR.handle_data.abstract_data_normalization import Normalize
+from handle_data.abstract_data_normalization import Normalize
 import xarray as xr
 
 
