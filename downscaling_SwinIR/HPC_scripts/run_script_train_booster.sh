@@ -20,8 +20,9 @@ module load dask/2021.9.1
 module load PyTorch/1.11-CUDA-11.5
 module load torchvision
 module load xarray/0.20.1
-moudle load matplotlib/3.4.3
-moudle load Cartopy/0.21.0
+module load Cartopy/0.20.0
+module load matplotlib/3.4.3
+
 
 source ../venv_booster/bin/activate
 
