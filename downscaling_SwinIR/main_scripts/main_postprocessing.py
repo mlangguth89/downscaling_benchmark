@@ -119,10 +119,11 @@ def main(parser_args):
     output = []
     train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
     for i, train_data in enumerate(train_dataloader):
-        print(i*32, len(test))
         batch_output = model(train_data[0].to(device)).detach()
         for tens in batch_output:
             output.append(tens)
+
+        break
 
     y_pred_trans = torch.stack(output)
     y_pred_trans = torch.permute(y_pred_trans, (0, 2, 3, 1))
@@ -131,7 +132,7 @@ def main(parser_args):
     # get coordinates and dimensions from target data
     coords = test.da_test_tar.isel(variables=0).squeeze().coords
     dims = test.da_test_tar.isel(variables=0).squeeze().dims
-    check = y_pred_trans.detach().numpy().squeeze()
+    check = y_pred_trans.cpu().detach().numpy().squeeze()
 
     y_pred = xr.DataArray(check, coords=coords, dims=dims)
     # perform denormalization
