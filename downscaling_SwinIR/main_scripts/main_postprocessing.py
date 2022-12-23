@@ -117,14 +117,14 @@ def main(parser_args):
                 "Start inference on trained model...")
     t0_train = timer()
     output = []
-    train_dataloader = DataLoader(test, batch_size=2046, shuffle=False)
+    train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
     for i, train_data in enumerate(train_dataloader):
-        print(i*2046, len(test))
+        print(i*32, len(test))
         batch_output = model(train_data[0].to(device))
-        for tens in batch_output:
-            output.append(tens)
+        # for tens in batch_output:
+        #     output.append(tens)
 
-    y_pred_trans = torch.stack(output)
+    y_pred_trans = torch.stack(batch_output)
     y_pred_trans = torch.permute(y_pred_trans, (0, 2, 3, 1))
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
