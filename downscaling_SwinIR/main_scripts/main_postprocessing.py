@@ -117,9 +117,9 @@ def main(parser_args):
                 "Start inference on trained model...")
     t0_train = timer()
     output = []
-    train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
+    train_dataloader = DataLoader(test, batch_size=2046, shuffle=False)
     for i, train_data in enumerate(train_dataloader):
-        print(i*32, len(test))
+        print(i*2046, len(test))
         batch_output = model(train_data[0].to(device))
         for tens in batch_output:
             output.append(tens)
