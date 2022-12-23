@@ -11,8 +11,7 @@
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
 #source ../venv_booster/bin/activate
-WORK_DIR=$(pwd)
-BASE_DIR=$(dirname "${WORK_DIR}")
+
 
 module purge
 module load Stages/2022 GCCcore/.11.2.0 GCC/11.2.0
@@ -38,7 +37,7 @@ exp_name=wgan
 dataset=downscaling_tier2_train
 
 # run job
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocessing_pytorch.py -data_dir ${datadir} -model_base_dir ${model_basedir} \
+python ../main_scripts/main_postprocessing_pytorch.py -data_dir ${datadir} -model_base_dir ${model_basedir} \
                                                                     -exp_name ${exp_name} -dataset ${dataset} -model_name${model_name} \
                                                                     -output_base_directory ${outdir}
 
