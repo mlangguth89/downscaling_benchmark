@@ -4,8 +4,8 @@ import torch
 from torch.utils.data import Dataset
 import xarray as xr
 import logging
-from downscaling_SwinIR.handle_data.handle_data_class import HandleDataClass
-from downscaling_SwinIR.handle_data.all_normalizations import ZScore
+from handle_data.handle_data_class import HandleDataClass
+from handle_data.all_normalizations import ZScore
 
 
 class test_dataset(Dataset):
@@ -14,7 +14,7 @@ class test_dataset(Dataset):
 
         """
         ds_test = xr.open_dataset(fdata_test)
-        ds_test = ds_test.sel(time=slice("2006-01-01", "2006-01-05"))
+        # ds_test = ds_test.sel(time=slice("2006-01-01", "2006-01-05"))
 
         self.da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
 
