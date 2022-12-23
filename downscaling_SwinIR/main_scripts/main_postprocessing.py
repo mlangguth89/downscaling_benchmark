@@ -120,7 +120,7 @@ def main(parser_args):
     train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
     for i, train_data in enumerate(train_dataloader):
         print(i*32, len(test))
-        batch_output = model(train_data[0])
+        batch_output = model(train_data[0].to(device))
         for tens in batch_output:
             output.append(tens)
 
