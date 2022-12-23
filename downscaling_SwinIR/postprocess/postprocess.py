@@ -14,7 +14,7 @@ __update__ = "2022-12-08"
 import os
 import logging
 import xarray as xr
-from cartopy import crs
+from Cartopy import crs
 from postprocess.plotting import create_line_plot, create_map_score
 
 # auxiliary variable for logger
