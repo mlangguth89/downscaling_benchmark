@@ -123,7 +123,6 @@ def main(parser_args):
         for tens in batch_output:
             output.append(tens)
 
-        break
 
     y_pred_trans = torch.stack(output)
     y_pred_trans = torch.permute(y_pred_trans, (0, 2, 3, 1))
