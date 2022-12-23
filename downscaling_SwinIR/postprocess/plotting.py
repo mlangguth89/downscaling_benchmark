@@ -20,8 +20,8 @@ import pandas as pd
 # for plotting
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import Cartopy
-import Cartopy.crs as ccrs
+import cartopy
+import cartopy.crs as ccrs
 # make class for handling data available
 # from other_utils import provide_default
 
