@@ -5,16 +5,22 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-12-22"
+__update__ = "2022-12-31"
 
-import os, sys
+import os, glob
+from typing import List
 import socket
 import gc
+import multiprocessing
 from collections import OrderedDict
 from timeit import default_timer as timer
+import random
 import numpy as np
 import xarray as xr
+import pandas as pd
 import tensorflow as tf
+from tools_utils import CDO
+from other_utils import to_list
 
 
 class HandleDataClass(object):
@@ -141,9 +147,48 @@ class HandleDataClass(object):
 
         return da_in, da_tar
 
-    @staticmethod
-    def make_shuffled_dataset(ds: xr.Dataset, datadir: str, batch_size: int, sample_dim: str = "time",
-                              nfiles: int = None, samples_per_file: int = None):
+    def gather_monthly_netcdf(self, file_list: List, nfiles_resampled: int = 36, loverwrite: bool = True):
+        """
+        Merges monthyl netCDF-files to larger netCDF-files to optiize building TensorFlow datasets later on.
+        Files are stored in a tmp-subdirectory of self.datadir
+        :param file_list: List of files to gather/merge
+        :param nfiles_resampled: number of files to merge to single netCDF files
+                                 (nfiles_resampled must be a divisor of len(file_list)).
+        :param loverwrite: Boolean to overwrite temp-data
+        """
+        cdo = CDO()
+
+        file_list = to_list(file_list)
+        nfiles_in = len(file_list)
+        nfiles_out = int(nfiles_in/nfiles_resampled)
+        if np.mod(nfiles_in, nfiles_resampled) != 0:
+            raise ValueError(f"nfiles_resampled ({nfiles_resampled:d}) must be a divisor of the total number" +
+                             f" of files ({nfiles_in:d})")
+
+        file_list_loc = random.shuffle(file_list)
+
+        tmp_dir = os.path.join(self.datadir, "tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
+
+        for i in range(nfiles_out):
+            files2merge = file_list_loc[i*nfiles_resampled:(i+1)*nfiles_resampled]
+
+            fname_now = os.path_join(tmp_dir, f"ds_resampled_{i:0d}.nc")
+            if os.path.isfile(fname_now):
+                mess = f"netCDF-file '{fname_now}' already exists."
+                if loverwrite:
+                    print(f"{mess} Existing file is overwritten.")
+                else:
+                    raise FileExistsError(mess)
+            print(f"Write merged data to file '{fname_now}'.")
+
+            cdo.run(files2merge + [fname_now], OrderedDict([("mergetime", "")]))
+
+    def make_shuffled_dataset(self, ds: xr.Dataset, batch_size: int, sample_dim: str = "time",  nfiles: int = None,
+                              samples_per_file: int = None, loverwrite: bool = True):
+
+        datadir_shuffled = os.path.join(self.datadir, "tmp")
+        os.makedirs(datadir_shuffled, exist_ok=True)
 
         sample_dim_data = ds[sample_dim].copy(deep=True)
         nsampels = np.shape(sample_dim_data)[0]
@@ -159,7 +204,7 @@ class HandleDataClass(object):
             if samples_per_file is None:
                 raise ValueError("Either provide nfiles or samples_per_file-argument.")
 
-        if np.mod(samples_per_file, 32) > 0:
+        if np.mod(samples_per_file, batch_size) > 0:
             n = int(samples_per_file/batch_size)
             samples_per_file = n*batch_size
             print(f"Batch size is not a divider of samples per file. " +
@@ -178,17 +223,63 @@ class HandleDataClass(object):
 
             nsamples_now = np.shape(ds_subset["sample_ind"])[0]
             ds_subset["sample_ind"] = range(i * nsamples_now, (i + 1) * nsamples_now)
-            fname_now = os.path.join(datadir, "test", f"ds_resampled_{i:0d}.nc")
+            fname_now = os.path.join(datadir_shuffled, f"ds_resampled_{i:0d}.nc")
 
+            if os.path.isfile(fname_now):
+                mess = f"netCDF-file '{fname_now}' already exists."
+                if loverwrite:
+                    print(f"{mess} Existing file is overwritten.")
+                else:
+                    raise FileExistsError(mess)
             print(f"Write data subset to file '{fname_now}'.")
             ds_subset.to_netcdf(fname_now)
 
+    def make_tf_dataset_dyn(self, datadir: str, file_patt: str, batch_size: int, samples_per_file: int,
+                            lshuffle: bool = True, nshuffle_per_file: int = None, lprefetch: bool = True,
+                            nworkers: int = None, selected_predictors: List = ()):
+        """
+        Build TensorFlow dataset from netCDF-files processed by make_shuffled_dataset or gather_monthly_netcdf.
+        In contrast to make_tf_dataset_allmem, this data streaming approach is memory-efficient, meaning that the
+        complete dataset is NOT loaded into memory.
+        :param datadir: directory where netCDF-files for TF dataset are strored
+        :param file_patt: filename pattern to glob files from datadir
+        :param batch_size: desired min-batch size
+        :param samples_per_file: number of samples in the streamed netCDF-files
+        :param lshuffle: boolean to enable sample shuffling (to be used when data was prepared
+                                                             with gather_monthly_netcdf)
+        :param nshuffle_per_file: buffer for shuffling operation
+        :param lprefetch: boolean to enable prefetching
+        :param nworkers: number of workers to stream from netCDF-files
+        :param selected_predictors: List of selected predictor variables
+        :return: TensorFlow dataset object
+        """
+
+        if nworkers is None:
+            nworkers = multiprocessing.cpu_count()
+
+        ds_obj = StreamNetCDF(os.path.join(self.datadir, "tmp"), file_patt, workers=int(nworkers), selected_predictors)
+
+        tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
+        tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
+
+        tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
+        tfds_range = tf.data.Dataset.range(samples_per_file)
+        if lshuffle:
+            nshuffle_per_file = samples_per_file if nshuffle_per_file is None else nshuffle_per_file
+            tfds_range = tfds.shuffle(nshuffle_per_file)
+        tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
+
+        if lprefetch:
+            tfds = tfds.prefetch(int(samples_per_file/2))
+
+        return tfds.repeat()
+
     @staticmethod
-    def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
+    def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
             named_targets: bool = False, var_tar2in: str = None, lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
-        Note that all data is loaded into memory.
+        NOTE: All data is loaded into memory.
         :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
                    Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables.
         :param batch_size: number of samples per mini-batch
@@ -321,6 +412,85 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         raise FileNotFoundError(f"Could not find requested dataset file '{ds_filename}'")
 
     return ds_filename
+
+
+class StreamMonthlyNetCDF(object):
+    def __init__(self, datadir, patt, workers=4, sample_dim: str = "time"):
+        self.data_dir = datadir
+        self.file_list = patt
+        self.ds = xr.open_mfdataset(list(self.file_list), parallel=True)
+        self.sample_dim = sample_dim
+        self.times = self.ds[sample_dim].load()
+        self.nsamples = self.ds.dims[sample_dim]
+        self.file_handles = {}
+        self.time_dict_times = {}
+        for fnc in self.file_list:
+            self.file_handles[fnc] = xr.open_dataset(fnc)
+            self.time_dict_times[fnc] = self.file_handles[fnc][sample_dim].load()
+
+        print(f"Number of used workers: {workers:d}")
+        self.pool = multiprocessing.pool.ThreadPool(workers)
+
+    def __len__(self):
+        return self.nsamples
+
+    def __getitem__(self, i):
+        data = self.index_to_sample(i)
+        return data
+
+    def getitems(self, indices):
+        print(indices)
+        return np.array(self.pool.map(self.__getitem__, indices))
+
+    @property
+    def data_dir(self):
+        return self._data_dir
+
+    @data_dir.setter
+    def data_dir(self, datadir):
+        if not os.path.isdir(datadir):
+            raise NotADirectoryError(f"Parsed data directory '{datadir}' does not exist.")
+
+        self._data_dir = datadir
+
+    @property
+    def file_list(self):
+        return self._file_list
+
+    @file_list.setter
+    def file_list(self, patt):
+        patt = patt if patt.endswith(".nc") else f"{patt}.nc"
+        files = glob.glob(os.path.join(self.data_dir, patt))
+
+        if not files:
+            raise FileNotFoundError(f"Could not find any files with pattern '{patt}' under '{self.data_dir}'.")
+
+        self._file_list = sorted(files)
+
+    @property
+    def sample_dim(self):
+        return self._sample_dim
+
+    @sample_dim.setter
+    def sample_dim(self, sample_dim):
+        if not sample_dim in self.ds.dims:
+            raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
+
+        self._sample_dim = sample_dim
+
+    def index_to_sample(self, index):
+        curr_time = pd.to_datetime(self.times[index].values)
+        date_ex = curr_time.strftime("%Y-%m-%d %H:%M UTC")
+
+        fname = [s for s in self.file_list if curr_time.strftime("%Y-%m") in s]
+        if not fname:
+            raise FileNotFoundError(f"Could not find a file matching requested date {date_ex}")
+        elif len(fname) > 1:
+            raise ValueError(f"Files found for requested date {date_ex} is not unique.")
+
+        ds = self.file_handles[fname[0]]  #
+        return ds.sel({self.sample_dim: curr_time}).to_array()
+
 
 
 
