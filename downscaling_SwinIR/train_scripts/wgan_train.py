@@ -95,7 +95,7 @@ class BuildWGANModel:
         # max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
         print(f' size of dataset {self.train_dataloader.dataset.n_samples} batch size {self.hparams.batch_size}' )
         print(f' iterations {self.train_dataloader.dataset.n_samples / self.hparams.batch_size}')
-        max_iterations = math.ceil(self.train_dataloader.dataset.n_samples / self.hparams.batch_size)
+        max_iterations = math.floor(self.train_dataloader.dataset.n_samples / self.hparams.batch_size)
         for epoch in range(self.hparams.epochs):
 
             start = time.time()
@@ -105,14 +105,14 @@ class BuildWGANModel:
             ii = 0
 
             while ii < max_iterations:
-                print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
+                # print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
 
                 self.generator.train()
                 self.critic.train()
 
                 # Training the critic model
                 for i in range(self.hparams.critic_iterations + 1):
-
+                    print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
                     if ii >= max_iterations:
                         break
 
