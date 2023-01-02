@@ -112,7 +112,6 @@ class BuildWGANModel:
 
                 # Training the critic model
                 for i in range(self.hparams.critic_iterations + 1):
-                    print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
                     if ii >= max_iterations:
                         break
 
