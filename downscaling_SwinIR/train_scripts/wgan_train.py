@@ -92,7 +92,8 @@ class BuildWGANModel:
         """
         jj = 0
         current_step = 0
-        max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
+        # max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
+        max_iterations = math.ceil(self.train_dataloader.dataset.n_samples / self.hparams.batch_size)
         for epoch in range(self.hparams.epochs):
 
             start = time.time()
@@ -116,8 +117,11 @@ class BuildWGANModel:
                     if jj == i:
                         current_step += 1
                         train_data = next(iterator)
-                        input_data = train_data[0].to(device)
-                        target_data = train_data[1].to(device)
+                        # input_data = train_data[0].to(device)
+                        # target_data = train_data[1].to(device)
+                        input_data = train_data['L'].to(device)
+                        target_data = train_data['H'].to(device)
+                        target_data = target_data[:, None]
                         ii += 1
 
                         generator_output = self.generator(input_data)
@@ -140,8 +144,9 @@ class BuildWGANModel:
                     else:
                         current_step += 1
                         train_data = next(iterator)
-                        input_data = train_data[0].to(device)
-                        target_data = train_data[1].to(device)
+                        input_data = train_data['L'].to(device)
+                        target_data = train_data['H'][:, None]
+                        target_data = target_data.to(device)
                         ii += 1
 
                         generator_output = self.generator(input_data)
@@ -175,10 +180,10 @@ class BuildWGANModel:
                 self.save_checkpoint(epoch=epoch, step=current_step)
                 print(f'validation time: {end_2 - start_2}')
                 print(
-                    f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{len(self.train_dataloader)} \
+                    f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{self.train_dataloader.dataset.n_samples} \
                     Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
                     f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
-                    Size Val: {len(self.val_dataloader)}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/len(self.val_dataloader)}"
+                    Size Val: {self.val_dataloader.dataset.n_samples}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/self.val_dataloader.dataset.n_samples}"
                     f", Time per 1 epoch: {start_2 - start:.4f} sec."
                 )
             else:
@@ -220,8 +225,9 @@ class BuildWGANModel:
         loss_g = 0
         loss_r = 0
         for batch_idx, train_data in enumerate(self.val_dataloader):
-            input_data = train_data[0].to(device)
-            target_data = train_data[1].to(device)
+            input_data = train_data['L'].to(device)
+            target_data = train_data['H'][:, None]
+            target_data = target_data.to(device)
 
             generator_output = self.generator(input_data)
             critic_real = self.critic(target_data)
