@@ -93,6 +93,8 @@ class BuildWGANModel:
         jj = 0
         current_step = 0
         # max_iterations = math.ceil(len(self.train_dataloader.dataset) / self.hparams.batch_size)
+        print(f' size of dataset {self.train_dataloader.dataset.n_samples} batch size {self.hparams.batch_size}' )
+        print(f' iterations {self.train_dataloader.dataset.n_samples / self.hparams.batch_size}')
         max_iterations = math.ceil(self.train_dataloader.dataset.n_samples / self.hparams.batch_size)
         for epoch in range(self.hparams.epochs):
 
@@ -103,6 +105,7 @@ class BuildWGANModel:
             ii = 0
 
             while ii < max_iterations:
+                print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
 
                 self.generator.train()
                 self.critic.train()
