@@ -115,7 +115,7 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
-        print("datat[L] shape", data["L"].shape)
+        # print("datat[L] shape", data["L"].shape)
         self.L = data['L']
         if need_H:
             self.H = data['H']
@@ -166,6 +166,7 @@ class BuildModel:
             return param_group['lr']
 
     def fit(self):
+        checkpoint_save = 10000
         self.init_train()
         current_step = 0
 
@@ -194,12 +195,12 @@ class BuildModel:
                 # -------------------------------
                 # 6) Save model
                 # -------------------------------
-                if current_step == 1 or current_step % checkpoint_save == 0:
-                    self.save(current_step)
-                    print("Model Loss {} after step {}".format(self.G_loss, current_step))
-                    print("Model Saved")
-                    print("Time per step:", time.time() - st)
-                    wandb.log({"loss": self.G_loss, "lr": lr})
+            # if current_step == 1 or current_step % checkpoint_save == 0:
+            self.save(current_step)
+            print("Model Loss {} after step {}".format(self.G_loss, epoch))
+            print("Model Saved")
+            print("Time per step:", time.time() - st)
+            wandb.log({"loss": self.G_loss, "lr": lr})
 
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train", test_dir: str = None,
@@ -263,8 +264,8 @@ def main():
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\saves",
                         help="The checkpoint directory")
-    parser.add_argument("--epochs", type=int, default=250, help="The checkpoint directory")
-    parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
+    parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
+    parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
     parser.add_argument("--dataset_type", type=str, default="precipitation",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
