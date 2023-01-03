@@ -28,7 +28,7 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
 test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
-epochs=2
+epochs=50
 save_dir=../saves_prep/unet
 checkpoint_dir=../results/exp_test
 
