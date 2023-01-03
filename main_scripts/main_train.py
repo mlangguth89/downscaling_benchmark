@@ -33,7 +33,7 @@ import wandb
 os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-wandb.run.name = "Unet_1117"
+wandb.run.name = "diff_lr"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device",device)
@@ -41,7 +41,7 @@ print("device",device)
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2",
                  G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 2e-2,
+                 G_optimizer_lr: float = 2e-1,
                  G_optimizer_betas: list = [0.9, 0.999],
                  G_optimizer_wd: int= 0, save_dir: str = "../results",
                  difussion: bool=False, **kwargs):
@@ -115,8 +115,8 @@ class BuildModel:
     # ----------------------------------------
     def define_scheduler(self):
         self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        milestones = [4000, 8000, 12000],
-                                                        gamma = 0.1))
+                                                        milestones = [4000, 20000, 50000],
+                                                        gamma = 0.01))
 
     # ----------------------------------------
     # save model / optimizer(optional)
@@ -144,7 +144,6 @@ class BuildModel:
         if self.difussion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
-
         self.H = data['H']
 
 
@@ -327,6 +326,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                             model.netG_forward()
                             val_loss = val_loss + model.G_lossfn(model.E, model.H)
                     val_loss = val_loss/5
+                    print("training loss:", model.G_loss)
+                    print("validation loss:", val_loss)
                 wandb.log({"loss": model.G_loss, "val_loss": val_loss, "lr": lr})
                 
 
@@ -364,7 +365,7 @@ def main():
         val_dir = args.val_dir,
         n_channels = 8,
         save_dir = args.save_dir,
-        checkpoint_save = 200,
+        checkpoint_save = 1000,
         epochs = args.epochs,
         type_net = args.model_type,
         patch_size = args.patch_size,

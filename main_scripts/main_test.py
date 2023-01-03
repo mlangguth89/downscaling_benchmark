@@ -48,7 +48,10 @@ def main():
     # PARAMETERS FOR SWIN-IR
     parser.add_argument("--upscale_swinIR", type = int, default = 4)
     parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
-
+    
+    #PARAMETERS FOR DIFFUSION
+    parser.add_argument("--conditional", type = bool, default=True)
+    parser.add_argument("--timesteps",type=int, default=200)
     args = parser.parse_args()
 
     n_channels = 8
@@ -74,15 +77,14 @@ def main():
     elif args.model_type == "diffusion":
         netG = UNet_diff(n_channels = n_channels+1, img_size=160)
         difussion = True
-        timesteps = 200
         gf = GaussianDiffusion(conditional=True, schedule_opt="linear",
-                               timesteps=timesteps, model=netG)
+                timesteps=args.timesteps, model=netG)
     else:
         NotImplementedError()
 
     if args.model_type == "diffusion":
         model = BuildModel(netG,  difussion=difussion,
-                       conditional=True, timesteps=timesteps)
+                       conditional=True, timesteps=args.timesteps)
 
     else:
         model = BuildModel(netG)
@@ -109,14 +111,17 @@ def main():
         ref_list = []
         cidx_list = []
         times_list = []
+        noise_pred_list = []
         all_sample_list = [] #this is ony for difussion model inference
         for i, test_data in enumerate(test_loader):
+            if i > 20:
+                break
             idx += 1
             batch_size = test_data["L"].shape[0]
             cidx_temp = test_data["idx"]
             times_temp = test_data["T"]
-            cidx_list.append(cidx_temp)
-            times_list.append(times_temp)
+            cidx_list.append(cidx_temp.cpu().numpy())
+            times_list.append(times_temp.cpu().numpy())
             model.feed_data(test_data)
             #we must place calculate the shape of input here, due to for diffussion model, 
             #The L is upsampling to higher resolution before feed into the model through 'feed_data' function
@@ -129,8 +134,7 @@ def main():
             #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
             #input_temp = np.exp(input_temp+np.log(args.k))-args.k
-            input_list.append(input_temp)
-
+            input_list.append(input_temp.cpu().numpy())
             if args.model_type == "diffusion":
                 #now, we only use the unconditional difussion model, meaning the inputs are only noise.
                 #This is the first test, later, we will figure out how to use conditioanl difussion model.
@@ -138,41 +142,62 @@ def main():
                 samples = gf.sample(image_size=image_size, batch_size=batch_size, channels=8, x_in=model.L)
                 #chose the last channle and last varialbe (precipitation)
                 sample_last = samples[-1] *vars_out_patches_std+vars_out_patches_mean
-                print("shape of generate samples",sample_last.shape)
 
                 # we can make some plot here
                 #all_sample_list = all_sample_list.append(sample_last)
                 pred_temp = sample_last * vars_out_patches_std + vars_out_patches_mean
-
+                #pred_temp = np.exp(pred_temp.cpu().numpy()+np.log(args.k))-args.k
+                ref_temp = model.H #this is the true noise
+                noise_pred = model.E
+                print("Predicted noise:", model.E)
+                print("Reference noise", ref_temp)
+                noise_pred_list.append(noise_pred.cpu().numpy())
             else:
 
                 pred_temp = model.E.numpy() * vars_out_patches_std + vars_out_patches_mean
+                #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
+                ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
+                #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
+
+            #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
+            ref_list.append(ref_temp.cpu().numpy())
+               
             #output_temp = np.exp(output_temp+np.log(args.k))-args.k
             output_temp = test_data["H"]* vars_out_patches_std + vars_out_patches_mean
-            output_list.append(output_temp)
+            #output_temp = np.exp(output_temp.cpu().numpy()+np.log(args.k))-args.k
+            output_list.append(output_temp.cpu().numpy())
 
 
             #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
-            pred_list.append(pred_temp)
-            ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
+            pred_list.append(pred_temp.cpu().numpy())
+            
+            #ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
             #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
-            ref_list.append(ref_temp)            
+            #ref_list.append(ref_temp.cpu().numpy())            
             #print('model.E shape: {}'.format(model.E.shape))
-            #G_loss = model.G_lossfn(model.E, model.H)
-            #print("forecast loss ", np.float(G_loss))
-        
+
+
+
         cidx = np.squeeze(np.concatenate(cidx_list,0))
         times = np.concatenate(times_list,0)
         pred = np.concatenate(pred_list,0)
         ref = np.concatenate(ref_list,0)
         intL = np.concatenate(input_list,0)
         outH = np.concatenate(output_list,0)
+        noiseP = np.concatenate(noise_pred_list,0)
 
+        if len(pred.shape) ==4:
+            pred = pred[:,0,:,:]
+        if len(ref.shape) ==4:
+            ref = ref[:,0,:,:]
+        
+        if len(noiseP.shape)==4:
+            noiseP = noiseP[:,0,:,:]
         print('pred shape: {}'.format(pred.shape))
         print('ref shape: {}'.format(ref.shape))
         print('intL shape: {}'.format(intL.shape))
         print('outH shape: {}'.format(outH.shape))
-
+        print("noisep shape: {}".format(noiseP.shape))
         datetimes = []
         for i in range(times.shape[0]):
             times_str = str(times[i][0])+str(times[i][1]).zfill(2)+str(times[i][2]).zfill(2)+str(times[i][3]).zfill(2)
@@ -186,6 +211,7 @@ def main():
                 outputs=(["time", "lat", "lon"], outH),
                 fcst=(["time", "lat", "lon"], np.squeeze(pred)),
                 refe=(["time", "lat", "lon"], ref),
+                noiseP=(["time", "lat", "lon"],noiseP)
             ),
             coords=dict(
                 time=datetimes,

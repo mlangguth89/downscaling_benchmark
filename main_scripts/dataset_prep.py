@@ -139,8 +139,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print('inputs_nparray shape: {}'.format(inputs_nparray.shape))
         print('inputs_nparray[self.prcp_indexes] shape: {}'.format(inputs_nparray[self.prcp_indexes].shape))
 
-        da_in = torch.from_numpy(inputs_nparray).to(device)
-        da_out = torch.from_numpy(outputs_nparray).to(device)
+        da_in = torch.from_numpy(inputs_nparray)
+        da_out = torch.from_numpy(outputs_nparray)
         del inputs_nparray, outputs_nparray
         gc.collect()
         times = inputs["time"].values  # get the timestamps
@@ -164,7 +164,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("Input shape:", vars_in_patches.shape)
 
         ## Replicate times for patches in the same image
-        times_patches = torch.from_numpy(np.array([ x for x in times for _ in range(num_patches_img)])).to(device)
+        times_patches = torch.from_numpy(np.array([ x for x in times for _ in range(num_patches_img)]))
         
         ## sanity check 
         assert len(times_patches) ==  vars_in_patches_shape[1] * vars_in_patches_shape[2] * vars_in_patches_shape[3]
@@ -189,7 +189,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print("There are No. {} patches out of {} without Nan Values ".format(len(no_nan_idx), len(vars_out_patches)))
 
         # change the index from List to LongTensor type
-        no_nan_idx = torch.LongTensor(no_nan_idx).to(device)
+        no_nan_idx = torch.LongTensor(no_nan_idx)
 
         # Only get the patch that without NaN values
         vars_out_pathes_no_nan = torch.index_select(vars_out_patches, 0, no_nan_idx)
@@ -245,10 +245,10 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
             #initialise x, y for each batch
             # x  stores the low resolution images, y for high resolution,
             # t is the corresponding timestamps, cidx is the index
-            x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size).to(device)
-            y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf ).to(device)
-            t = torch.zeros(self.batch_size, 4, dtype = torch.int).to(device)
-            cidx = torch.zeros(self.batch_size, 1, dtype = torch.int).to(device) #store the index
+            x = torch.zeros(self.batch_size, len(self.vars_in), self.patch_size, self.patch_size)
+            y = torch.zeros(self.batch_size, self.patch_size * self.sf, self.patch_size * self.sf )
+            t = torch.zeros(self.batch_size, 4, dtype = torch.int)
+            cidx = torch.zeros(self.batch_size, 1, dtype = torch.int) #store the index
 
             for jj in range(self.batch_size):
 
