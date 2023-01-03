@@ -4,9 +4,9 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=10:30:00
+#SBATCH --time=00:30:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=booster
+#SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
@@ -28,8 +28,8 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
 test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
-epochs=150
-save_dir=../saves_prep
+epochs=2
+save_dir=../saves_prep/unet
 checkpoint_dir=../results/exp_test
 
 python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --epochs ${epochs} --save_dir ${save_dir}
