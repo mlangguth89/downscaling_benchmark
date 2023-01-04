@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-12-31"
+__update__ = "2023-01-04"
 
 import os, glob
 from typing import List
@@ -19,6 +19,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import tensorflow as tf
+from all_normalizations import ZScore
 from tools_utils import CDO
 from other_utils import to_list
 
@@ -257,10 +258,11 @@ class HandleDataClass(object):
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
 
-        ds_obj = StreamNetCDF(os.path.join(self.datadir, "tmp"), file_patt, workers=int(nworkers), selected_predictors)
+        ds_obj = StreamMonthlyNetCDF(os.path.join(self.datadir, "tmp"), file_patt, workers=int(nworkers),
+                                     selected_predictors=selected_predictors)
 
         tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
-        tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
+        tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
 
         tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
         tfds_range = tf.data.Dataset.range(samples_per_file)
@@ -415,18 +417,21 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 
 class StreamMonthlyNetCDF(object):
-    def __init__(self, datadir, patt, workers=4, sample_dim: str = "time"):
+    def __init__(self, datadir, patt, workers=4, norm_dims: List, sample_dim: str = "time",
+                 selected_predictors: List = None, var_tar2in: str = None, samples_per_file: int = 8640):
         self.data_dir = datadir
         self.file_list = patt
-        self.ds = xr.open_mfdataset(list(self.file_list), parallel=True)
+        self.ds = xr.open_mfdataset(list(self.file_list))  # , parallel=True)
+        self.data_norm = ZScore(norm_dims)
+        self.norm_params = self.data_norm.get_required_stats(self.ds)
         self.sample_dim = sample_dim
         self.times = self.ds[sample_dim].load()
         self.nsamples = self.ds.dims[sample_dim]
-        self.file_handles = {}
-        self.time_dict_times = {}
-        for fnc in self.file_list:
-            self.file_handles[fnc] = xr.open_dataset(fnc)
-            self.time_dict_times[fnc] = self.file_handles[fnc][sample_dim].load()
+        self.variables = list(self.ds.variables)
+        self.samples_per_file = samples_per_file
+        self.predictor_list = selected_predictors
+        self.var_tar2in = var_tar2in
+        self.predictors_now, self.predictands_now = None, None
 
         print(f"Number of used workers: {workers:d}")
         self.pool = multiprocessing.pool.ThreadPool(workers)
@@ -439,7 +444,6 @@ class StreamMonthlyNetCDF(object):
         return data
 
     def getitems(self, indices):
-        print(indices)
         return np.array(self.pool.map(self.__getitem__, indices))
 
     @property
@@ -465,7 +469,7 @@ class StreamMonthlyNetCDF(object):
         if not files:
             raise FileNotFoundError(f"Could not find any files with pattern '{patt}' under '{self.data_dir}'.")
 
-        self._file_list = sorted(files)
+        self._file_list = np.asarray(sorted(files, key=lambda s: int(re.search(r'\d+', os.path.basename(s)).group())))
 
     @property
     def sample_dim(self):
@@ -478,18 +482,42 @@ class StreamMonthlyNetCDF(object):
 
         self._sample_dim = sample_dim
 
+    @property
+    def predictor_list(self):
+        return self._predictor_list
+
+    @predictor_list.setter
+    def predictor_list(self, selected_predictors):
+        stat_list = [predictor in self.variables for predictor in selected_predictors]
+        if not all(stat_list):
+            miss_inds = [i for i, x in enumerate(stat_list) if x]
+            miss_vars = [selected_predictors[i] for i in miss_inds]
+            raise ValueError(f"Could not find the following predictor variables in dataset: {*miss_vars,}")
+
+        self._predictor_list = selected_predictors
+
+    def read_netcdf(self, fname):
+        fname = tf.keras.backend.get_value(fname)
+        fname = str(fname).lstrip("b'").rstrip("'")
+        print(f"Load data from {fname}...")
+        ds_now = xr.open_dataset(str(fname), engine="netcdf4")
+        ds_now = self.data_norm(ds_now)
+        da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
+        predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
+        self.predictors_now = predictors_now.sel({"variables": self.predictor_list})
+
+        return True
+
     def index_to_sample(self, index):
-        curr_time = pd.to_datetime(self.times[index].values)
-        date_ex = curr_time.strftime("%Y-%m-%d %H:%M UTC")
 
-        fname = [s for s in self.file_list if curr_time.strftime("%Y-%m") in s]
-        if not fname:
-            raise FileNotFoundError(f"Could not find a file matching requested date {date_ex}")
-        elif len(fname) > 1:
-            raise ValueError(f"Files found for requested date {date_ex} is not unique.")
+        in_sample = self.predictors_now.isel({self.sample_dim: index}).astype("float32", copy=False)
+        tar_sample = self.predictands_now.isel({self.sample_dim: index}).astype("float32", copy=False)
 
-        ds = self.file_handles[fname[0]]  #
-        return ds.sel({self.sample_dim: curr_time}).to_array()
+        if self.var_tar2in is not None:
+            in_sample = xr.concat([in_sample, tar_sample.sel({"variables": self.var_tar2in})], "variables")
+
+        return in_sample.to_array(), tar_sample.to_array()
+
 
 
 
