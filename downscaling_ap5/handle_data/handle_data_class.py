@@ -238,17 +238,17 @@ class HandleDataClass(object):
             ds_subset.to_netcdf(fname_now)
 
     @staticmethod
-    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, samples_per_file: int,
-                            lshuffle: bool = True, nshuffle_per_file: int = None, lprefetch: bool = True,
-                            nworkers: int = None, selected_predictors: List = ()):
+    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, norm_dims: List, lshuffle: bool = True,
+                            nshuffle_per_file: int = None, lprefetch: bool = True, nworkers: int = None,
+                            selected_predictors: List = ()):
         """
         Build TensorFlow dataset from netCDF-files processed by make_shuffled_dataset or gather_monthly_netcdf.
         In contrast to make_tf_dataset_allmem, this data streaming approach is memory-efficient, meaning that the
         complete dataset is NOT loaded into memory.
         :param datadir: directory where netCDF-files for TF dataset are strored
         :param file_patt: filename pattern to glob files from datadir
-        :param batch_size: desired min-batch size
-        :param samples_per_file: number of samples in the streamed netCDF-files
+        :param norm_dims: names of dimension over which normalization is applied
+        :param batch_size: desired mini-batch size
         :param lshuffle: boolean to enable sample shuffling (to be used when data was prepared
                                                              with gather_monthly_netcdf)
         :param nshuffle_per_file: buffer for shuffling operation
@@ -261,21 +261,21 @@ class HandleDataClass(object):
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
 
-        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, workers=int(nworkers),
-                                     selected_predictors=selected_predictors)
+        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, norm_dims, workers=int(nworkers),
+                                     var_tar2in="hsurf_tar", selected_predictors=selected_predictors)
 
         tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
         tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
 
         tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
-        tfds_range = tf.data.Dataset.range(samples_per_file)
+        tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
         if lshuffle:
-            nshuffle_per_file = samples_per_file if nshuffle_per_file is None else nshuffle_per_file
+            nshuffle_per_file = ds_obj.samples_per_file if nshuffle_per_file is None else nshuffle_per_file
             tfds_range = tfds.shuffle(nshuffle_per_file)
         tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
 
         if lprefetch:
-            tfds = tfds.prefetch(int(samples_per_file/2))
+            tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
 
         return tfds.repeat()
 
@@ -420,7 +420,11 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 
 class StreamMonthlyNetCDF(object):
-    def __init__(self, datadir, patt, workers=4, norm_dims: List, sample_dim: str = "time",
+    # TO-DO:
+    # - check if normalization works from dataset rather than data array
+    # - save normalization parameters to file
+
+    def __init__(self, datadir, patt, norm_dims: List, workers=4, sample_dim: str = "time",
                  selected_predictors: List = None, var_tar2in: str = None, samples_per_file: int = 8640):
         self.data_dir = datadir
         self.file_list = patt
@@ -507,7 +511,10 @@ class StreamMonthlyNetCDF(object):
         ds_now = self.data_norm(ds_now)
         da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
         predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
-        self.predictors_now = predictors_now.sel({"variables": self.predictor_list})
+        if self.predictor_list is not None:
+            self.predictors_now = predictors_now.sel({"variables": self.predictor_list})
+        else:
+            self.predictors_now = predictors_now
 
         return True
 

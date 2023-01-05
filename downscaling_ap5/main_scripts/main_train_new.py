@@ -58,50 +58,55 @@ def main(parser_args):
     
     named_targets = hparams_dict.get("named_targets", False)
 
-    # get model instance and path to data files
+    # get model instance and set-up batch size
     model_instance = ModelEngine(parser_args.model)
-    #fdata_train, fdata_val = get_dataset_filename(datadir, dataset, "train", ds_dict.get("laugmented", False)), \
-    #                         get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
-    train_files = glob.glob(os.path.join(datadir, "downscaling_tier2_*.nc"))
-    HandleDataClass.gather_monthly_netcdf(train_files)
+    # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
+    # are applied to train the critic, before the generator is trained once.
+    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
+    bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
 
+    # start handling training and validation data
+    #   - training data is iterated
+    #   - validation data is loaded into memory
+
+    # training data
+    print("Start preparing training data...")
+    t0_train = timer()
+    file_patt = "downscaling_tier2_train_*.nc"
+    train_files = glob.glob(os.path.join(datadir, file_patt))
+    HandleDataClass.gather_monthly_netcdf(train_files)
+    tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train)
+    print(f"Preparing training data took {timer() - t0_train:.2f}s.")
+
+    # validation data
+    print("Start preparing validation data...")
+    t0_val = timer()
+    fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
+    ds_val = xr.open_dataset(fdata_val)
+    da_val = HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
+    data_norm = ZScore(ds_dict["norm_dims"])
+    data_norm.read_norm_from_file(js_file=xxx)    # TO-DO: set path to JSON-file
+    da_val = data_norm.normalize(da_val)
+
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"], lshuffle=False,
+                                                      var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
+    print(f"Preparing validation data took {timer() - t0_val:.2f}s.")
 
     # initialize benchmarking object
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), f"benchmark_training_{parser_args.model}.csv"))
 
     # Read data from disk and preprocess (normalization and conversion to TF dataset)
-    print("Start reading data from disk...")
-    t0_save = timer()
-    ds_train, ds_val = xr.open_dataset(fdata_train), xr.open_dataset(fdata_val)
-
-    benchmark_dict = {"loading data time": timer() - t0_save}
+    benchmark_dict = {"loading data time": timer() - t0_train)
 
     # prepare training and validation data
     t0_preproc = timer()
 
-    da_train, da_val = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False)), \
-                       HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
-
-    data_norm = ZScore(ds_dict["norm_dims"])
-    da_train = data_norm.normalize(da_train)
-    da_val = data_norm.normalize(da_val)
-    data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
-
-    # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
-    # are applied to train the critic, before the generator is trained once.
-    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
-    bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
-    tfds_train = HandleDataClass.make_tf_dataset(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
-                                                 named_targets=named_targets)
-    tfds_val = HandleDataClass.make_tf_dataset(da_val, ds_dict["batch_size"], lshuffle=False,
-                                               var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
-
     # get some key parameters from datasets
+    # TO-DO: get total number of samples
     nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory
-    del ds_train
     del ds_val
     gc.collect()
 
