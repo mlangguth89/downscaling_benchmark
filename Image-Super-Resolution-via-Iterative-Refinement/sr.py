@@ -8,7 +8,7 @@ import core.metrics as Metrics
 from core.wandb_logger import WandbLogger
 from tensorboardX import SummaryWriter
 import os
-import numpy as np
+import json
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -21,6 +21,8 @@ if __name__ == "__main__":
     parser.add_argument('-enable_wandb', action='store_true')
     parser.add_argument('-log_wandb_ckpt', action='store_true')
     parser.add_argument('-log_eval', action='store_true')
+    parser.add_argument('-stat_dir', type=str,
+                        help='The path to the training statistic json file directory (used for denormalise output)')
 
     # parse configs
     args = parser.parse_args()
@@ -214,61 +216,52 @@ if __name__ == "__main__":
             diffusion.test(continous=True)
             visuals = diffusion.get_current_visuals()
 
-            hr_img = Metrics.tensor2img(visuals['HR'])  # uint8
-            lr_img = Metrics.tensor2img(visuals['LR'])  # uint8
-            fake_img = Metrics.tensor2img(visuals['INF'])  # uint8
+            #Denormalise dataset
 
-            sr_img_mode = 'grid'
-            if sr_img_mode == 'single':
-                # single img series
-                sr_img = visuals['SR']  # uint8
-                sample_num = sr_img.shape[0]
-                for iter in range(0, sample_num):
-                    Metrics.save_img(
-                        Metrics.tensor2img(sr_img[iter]), '{}/{}_{}_sr_{}.png'.format(result_path, current_step, idx, iter))
-            else:
-                # grid img
-                print("visual SR",visuals['SR'].shape) #[44,1,160,160]
-                #sr_img = Metrics.tensor2img(visuals['SR'])  # uint8
-                sr_img  = Metrics.tensor2np(visuals['SR'])
-                #print("sr_img shape",sr_img.shape) #[160,160,44]
-                Metrics.save_to_nc(
-                    sr_img, '{}/{}_{}_sr_process.nc'.format(result_path, current_step, idx))
-                #Metrics.save_img(
-                #    Metrics.tensor2img(visuals['SR'][-1]), '{}/{}_{}_sr.png'.format(result_path, current_step, idx))
+            stat_file = os.path.join(args.stat_dir, "statistics.json")
+            with open(stat_file, 'r') as f:
+                stat_data = json.load(f)
+            vars_out_patches_mean = stat_data['yw_hourly_tar_mean']
+            vars_out_patches_std = stat_data['yw_hourly_tar_std']
 
-            
-            #Metrics.save_img(
-            #    hr_img, '{}/{}_{}_hr.png'.format(result_path, current_step, idx))
-            #Metrics.save_img(
-            #    lr_img, '{}/{}_{}_lr.png'.format(result_path, current_step, idx))
-            #Metrics.save_img(
-            #    fake_img, '{}/{}_{}_inf.png'.format(result_path, current_step, idx))
+
+            # grid img
+            print("visual SR",visuals['SR'].shape) #[44,1,160,160]
+            #sr_img = Metrics.tensor2img(visuals['SR'])
+            sr_img = Metrics.tensor2np(visuals['SR'],vars_out_patches_std,vars_out_patches_mean)
+            hr_img = Metrics.tensor2np(visuals['HR'],vars_out_patches_std,vars_out_patches_mean)
+            lr_img = Metrics.tensor2np(visuals['LR'],vars_out_patches_std,vars_out_patches_mean)
+            #fake_img = Metrics.tensor2img(visuals['INF'])  # uint8
+            #print("sr_img shape",sr_img.shape) #[160,160,44]
+
+
+            Metrics.save_to_nc(
+                sr_img, hr_img, lr_img, '{}/{}_{}_sr_process.nc'.format(result_path, current_step, idx))
 
             # generation
-            eval_psnr = Metrics.calculate_psnr(Metrics.tensor2img(visuals['SR'][-1]), hr_img)
-            eval_ssim = Metrics.calculate_ssim(Metrics.tensor2img(visuals['SR'][-1]), hr_img)
+            # eval_psnr = Metrics.calculate_psnr(Metrics.tensor2img(visuals['SR'][-1]), hr_img)
+            # eval_ssim = Metrics.calculate_ssim(Metrics.tensor2img(visuals['SR'][-1]), hr_img)
+            #
+            # avg_psnr += eval_psnr
+            # avg_ssim += eval_ssim
 
-            avg_psnr += eval_psnr
-            avg_ssim += eval_ssim
-
-            if wandb_logger and opt['log_eval']:
-                wandb_logger.log_eval_data(fake_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img, eval_psnr, eval_ssim)
-
-        avg_psnr = avg_psnr / idx
-        avg_ssim = avg_ssim / idx
-
-        # log
-        logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
-        logger.info('# Validation # SSIM: {:.4e}'.format(avg_ssim))
-        logger_val = logging.getLogger('val')  # validation logger
-        logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}, ssim：{:.4e}'.format(
-            current_epoch, current_step, avg_psnr, avg_ssim))
-
-        if wandb_logger:
-            if opt['log_eval']:
-                wandb_logger.log_eval_table()
-            wandb_logger.log_metrics({
-                'PSNR': float(avg_psnr),
-                'SSIM': float(avg_ssim)
-            })
+            # if wandb_logger and opt['log_eval']:
+            #     wandb_logger.log_eval_data(fake_img, Metrics.tensor2img(visuals['SR'][-1]), hr_img, eval_psnr, eval_ssim)
+        #
+        # avg_psnr = avg_psnr / idx
+        # avg_ssim = avg_ssim / idx
+        #
+        # # log
+        # logger.info('# Validation # PSNR: {:.4e}'.format(avg_psnr))
+        # logger.info('# Validation # SSIM: {:.4e}'.format(avg_ssim))
+        # logger_val = logging.getLogger('val')  # validation logger
+        # logger_val.info('<epoch:{:3d}, iter:{:8,d}> psnr: {:.4e}, ssim：{:.4e}'.format(
+        #     current_epoch, current_step, avg_psnr, avg_ssim))
+        #
+        # if wandb_logger:
+        #     if opt['log_eval']:
+        #         wandb_logger.log_eval_table()
+        #     wandb_logger.log_metrics({
+        #         'PSNR': float(avg_psnr),
+        #         'SSIM': float(avg_ssim)
+        #     })

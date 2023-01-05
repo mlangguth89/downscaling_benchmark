@@ -33,34 +33,50 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(-1, 1)):
         # Important. Unlike matlab, numpy.unit8() WILL NOT round by default.
     return img_np.astype(out_type)
 
-def tensor2np(tensor):
+def tensor2np(tensor, std, avg):
+
     n_dim = tensor.dim()
     img_np = tensor.numpy()
+
     if n_dim == 4:
        img_np = img_np[:,0,:,:]
+
+    elif n_dim ==3:
+        img_np = img_np[0, :, :]
     else:
-        pass
+        raise TypeError("Only support 4D and 3D tensor")
+
+    img_np = img_np * std + avg
     #img_np = np.transpose(img_np, (1, 2, 0))  # HWC, RGB
     print("After tensor2np the shape is", img_np.shape)
     return img_np
+
+
+
 def save_img(img, img_path, mode='RGB'):
     cv2.imwrite(img_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
     # cv2.imwrite(img_path, img)
 
-def save_to_nc(img,img_path):
-    times = list(range(img.shape[0]))
+def save_to_nc(sr,hr,lr,img_path):
+
+    assert len(sr) == 3
+    assert len(hr) == 2
+    assert len(lr) == 2
+
+    times = list(range(sr.shape[0]))
     ds = xr.Dataset(
             data_vars=dict(
-                inputs=(["times","lat_in", "lon_in"], img)
+                sr=(["times", "lat_in", "lon_in"], sr),
+                hr=(["lat_in", "lon_in"], hr),
+                lr=(["lat_in", "lon_in"], lr)
             ),
             coords=dict(
                 time=times
             ),
             attrs=dict(description="Precipitation downscaling data."),
             )
-
-    
     ds.to_netcdf(img_path)
+
 
 
 def calculate_psnr(img1, img2):
