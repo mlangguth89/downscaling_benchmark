@@ -148,7 +148,8 @@ class HandleDataClass(object):
 
         return da_in, da_tar
 
-    def gather_monthly_netcdf(self, file_list: List, nfiles_resampled: int = 36, loverwrite: bool = True):
+    @staticmethod
+    def gather_monthly_netcdf(file_list: List, nfiles_resampled: int = 36, loverwrite: bool = True):
         """
         Merges monthyl netCDF-files to larger netCDF-files to optiize building TensorFlow datasets later on.
         Files are stored in a tmp-subdirectory of self.datadir
@@ -168,13 +169,14 @@ class HandleDataClass(object):
 
         file_list_loc = random.shuffle(file_list)
 
-        tmp_dir = os.path.join(self.datadir, "tmp")
+        datadir = os.path.dirname(file_list[0])
+        tmp_dir = os.path.join(datadir, "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
 
         for i in range(nfiles_out):
             files2merge = file_list_loc[i*nfiles_resampled:(i+1)*nfiles_resampled]
 
-            fname_now = os.path_join(tmp_dir, f"ds_resampled_{i:0d}.nc")
+            fname_now = os.path.join(tmp_dir, f"ds_resampled_{i:0d}.nc")
             if os.path.isfile(fname_now):
                 mess = f"netCDF-file '{fname_now}' already exists."
                 if loverwrite:
@@ -235,7 +237,8 @@ class HandleDataClass(object):
             print(f"Write data subset to file '{fname_now}'.")
             ds_subset.to_netcdf(fname_now)
 
-    def make_tf_dataset_dyn(self, datadir: str, file_patt: str, batch_size: int, samples_per_file: int,
+    @staticmethod
+    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, samples_per_file: int,
                             lshuffle: bool = True, nshuffle_per_file: int = None, lprefetch: bool = True,
                             nworkers: int = None, selected_predictors: List = ()):
         """
@@ -258,7 +261,7 @@ class HandleDataClass(object):
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
 
-        ds_obj = StreamMonthlyNetCDF(os.path.join(self.datadir, "tmp"), file_patt, workers=int(nworkers),
+        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, workers=int(nworkers),
                                      selected_predictors=selected_predictors)
 
         tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
