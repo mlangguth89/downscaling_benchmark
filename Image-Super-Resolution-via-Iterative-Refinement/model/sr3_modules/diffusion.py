@@ -191,15 +191,14 @@ class GaussianDiffusion(nn.Module):
             shape = x.shape
             #Bing 20230101
             shape = [shape[0], 1,shape[2],shape[3]]
-            print("shape is", shape)
             img = torch.randn(shape, device=device)
-            #ret_img = x
-            ret_img = img
+            ret_img = x[:,-2:-1,:,:]
+            
+            #ret_img = img
             for i in tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps):
                 img = self.p_sample(img, i, condition_x=x)
-         
                 if i % sample_inter == 0:
-                    ret_img = torch.cat([ret_img, img], dim=0)
+                    ret_img = torch.cat([ret_img, img], dim=1)
            
         if continous:
             return ret_img

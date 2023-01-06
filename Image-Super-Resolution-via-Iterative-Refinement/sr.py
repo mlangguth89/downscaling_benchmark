@@ -226,14 +226,16 @@ if __name__ == "__main__":
 
 
             # grid img
-            print("visual SR",visuals['SR'].shape) #[44,1,160,160]
+            print("visual SR",visuals['SR'].shape) #[44,1,160,160], [4,11,160,160]
+            print("visual LR", visuals["LR"].shape) #[4,8,16,16]
+            print("visual HR", visuals["HR"].shape) #[4, 1, 160, 160]
             #sr_img = Metrics.tensor2img(visuals['SR'])
             sr_img = Metrics.tensor2np(visuals['SR'],vars_out_patches_std,vars_out_patches_mean)
-            hr_img = Metrics.tensor2np(visuals['HR'],vars_out_patches_std,vars_out_patches_mean)
-            lr_img = Metrics.tensor2np(visuals['LR'],vars_out_patches_std,vars_out_patches_mean)
+            hr_img = Metrics.tensor2np(val_data["HR"][:,0,:,:],vars_out_patches_std,vars_out_patches_mean)
+            lr_img = Metrics.tensor2np(val_data['LR'][0,:,-1,:,:],vars_out_patches_std,vars_out_patches_mean)
             #fake_img = Metrics.tensor2img(visuals['INF'])  # uint8
-            #print("sr_img shape",sr_img.shape) #[160,160,44]
-
+            print("sr_img shape",sr_img.shape) #[160,160,44]
+            print("hr_image.shape",hr_img.shape) #[4,160,160]
 
             Metrics.save_to_nc(
                 sr_img, hr_img, lr_img, '{}/{}_{}_sr_process.nc'.format(result_path, current_step, idx))
