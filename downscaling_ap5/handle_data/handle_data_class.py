@@ -19,6 +19,7 @@ import numpy as np
 import xarray as xr
 import pandas as pd
 import tensorflow as tf
+from abstract_data_normalization import Normalize
 from all_normalizations import ZScore
 from tools_utils import CDO
 from other_utils import to_list
@@ -238,31 +239,50 @@ class HandleDataClass(object):
             ds_subset.to_netcdf(fname_now)
 
     @staticmethod
-    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, norm_dims: List, lshuffle: bool = True,
+    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, lshuffle: bool = True,
                             nshuffle_per_file: int = None, lprefetch: bool = True, nworkers: int = None,
-                            selected_predictors: List = ()):
+                            predictors: List = (), var_tar2in: str = None, norm_obj=None, norm_dims: List = None):
         """
         Build TensorFlow dataset from netCDF-files processed by make_shuffled_dataset or gather_monthly_netcdf.
         In contrast to make_tf_dataset_allmem, this data streaming approach is memory-efficient, meaning that the
         complete dataset is NOT loaded into memory.
+        Note: Data will be normalized with the help of the parameters stored in norm_obj. In case norm_obj is None,
+              the normalization parameters are derived from the processed data itself using norm_dims.
+
+        TO-DOs:
+            - allow for named targets (cf. make_tf_dataset_allmem-method)
+
         :param datadir: directory where netCDF-files for TF dataset are strored
         :param file_patt: filename pattern to glob files from datadir
-        :param norm_dims: names of dimension over which normalization is applied
         :param batch_size: desired mini-batch size
         :param lshuffle: boolean to enable sample shuffling (to be used when data was prepared
                                                              with gather_monthly_netcdf)
         :param nshuffle_per_file: buffer for shuffling operation
         :param lprefetch: boolean to enable prefetching
-        :param nworkers: number of workers to stream from netCDF-files
-        :param selected_predictors: List of selected predictor variables
-        :return: TensorFlow dataset object
+        :param nworkers: number of workers to stream from netCDF-files. If not set, all CPUs will be used
+        :param predictors: List of selected predictor variables
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
+        :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
+        :param norm_obj: normalization instance used to normalize the data.
+                         If not passed, the normalization instance is retrieved from the data
+        :return: tuple of (normalization object, TensorFlow dataset object)
         """
+
+        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
+
+        if norm_obj and norm_dims:
+            print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+            norm_dims = None
+
+        if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
 
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
 
-        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, norm_dims, workers=int(nworkers),
-                                     var_tar2in="hsurf_tar", selected_predictors=selected_predictors)
+        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, workers=int(nworkers),
+                                     var_tar2in=var_tar2in, selected_predictors=predictors, norm_obj=norm_obj,
+                                     norm_dims=norm_dims)
 
         tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
         tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
@@ -277,7 +297,11 @@ class HandleDataClass(object):
         if lprefetch:
             tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
 
-        return tfds.repeat()
+        # retrieve norm_obj from ds_obj if it has not been passed to the function call
+        if not norm_obj:
+            norm_obj = ds_obj.data_norm
+
+        return norm_obj, tfds.repeat(), ds_obj.nsamples
 
     @staticmethod
     def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
@@ -291,7 +315,8 @@ class HandleDataClass(object):
         :param lshuffle: flag if shuffling should be applied to dataset
         :param shuffle_samples: number of samples to load before applying shuffling
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography to the input)
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
@@ -424,11 +449,21 @@ class StreamMonthlyNetCDF(object):
     # - check if normalization works from dataset rather than data array
     # - save normalization parameters to file
 
-    def __init__(self, datadir, patt, norm_dims: List, workers=4, sample_dim: str = "time",
-                 selected_predictors: List = None, var_tar2in: str = None, samples_per_file: int = 8640):
+    def __init__(self, datadir, patt, workers=4, sample_dim: str = "time", selected_predictors: List = None,
+                 var_tar2in: str = None, samples_per_file: int = 8640, norm_dims: List = None, norm_obj = None):
         self.data_dir = datadir
         self.file_list = patt
         self.ds = xr.open_mfdataset(list(self.file_list))  # , parallel=True)
+        # check if norm_dims or norm_obj should be used
+        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
+        if norm_obj and norm_dims:
+            print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+            norm_dims = None
+        if norm_obj:
+            assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
+            self.data_norm = norm_obj
+        else:
+            self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
         self.data_norm = ZScore(norm_dims)
         self.norm_params = self.data_norm.get_required_stats(self.ds)
         self.sample_dim = sample_dim

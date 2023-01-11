@@ -75,7 +75,8 @@ def main(parser_args):
     file_patt = "downscaling_tier2_train_*.nc"
     train_files = glob.glob(os.path.join(datadir, file_patt))
     HandleDataClass.gather_monthly_netcdf(train_files)
-    tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train)
+    data_norm, tfds_train, nsamples = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train,
+                                                                          norm_dims=ds_dict["norm_dims"])
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data
@@ -83,10 +84,8 @@ def main(parser_args):
     t0_val = timer()
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     ds_val = xr.open_dataset(fdata_val)
+    ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
-    data_norm = ZScore(ds_dict["norm_dims"])
-    data_norm.read_norm_from_file(js_file=xxx)    # TO-DO: set path to JSON-file
-    da_val = data_norm.normalize(da_val)
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
@@ -96,14 +95,13 @@ def main(parser_args):
     bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), f"benchmark_training_{parser_args.model}.csv"))
 
     # Read data from disk and preprocess (normalization and conversion to TF dataset)
-    benchmark_dict = {"loading data time": timer() - t0_train)
+    benchmark_dict = {"loading data time": timer() - t0_train}
 
     # prepare training and validation data
     t0_preproc = timer()
 
     # get some key parameters from datasets
-    # TO-DO: get total number of samples
-    nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
+    shape_in = tfds_train.element_spec[0].shape[1:].as_list()
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory
