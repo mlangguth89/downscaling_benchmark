@@ -19,6 +19,7 @@ import torch.nn as nn
 
 sys.path.append('../')
 from models.network_unet import UNet as unet
+from models.network_unet_temp import UNet as unet_temp
 from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_critic import Discriminator as critic
@@ -29,7 +30,7 @@ import wandb
 os.environ["WANDB_MODE"] = "offline"
 # os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling", reinit=True)
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
@@ -116,9 +117,9 @@ class BuildModel:
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         # print("datat[L] shape", data["L"].shape)
-        self.L = data['L']
+        self.L = data[0].to(device)
         if need_H:
-            self.H = data['H']
+            self.H = data[1].to(device)
 
     # ----------------------------------------
     # feed L to netG
@@ -231,7 +232,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim=768)
     elif type_net == "wgan":
-        netG = unet(n_channels=n_channels)
+        netG = unet_temp(n_channels=n_channels)
         netC = critic((1, 160, 160))
     else:
         NotImplementedError
@@ -256,17 +257,17 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\saves",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
-    parser.add_argument("--dataset_type", type=str, default="precipitation",
+    parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
@@ -288,7 +289,7 @@ def main():
 
     run(train_dir=args.train_dir,
         test_dir=args.test_dir,
-        n_channels=8,
+        n_channels=9,
         save_dir=args.save_dir,
         checkpoint_save=10000,
         epochs=args.epochs,
