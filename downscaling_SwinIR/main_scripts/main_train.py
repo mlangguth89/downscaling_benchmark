@@ -197,7 +197,7 @@ class BuildModel:
                 # 6) Save model
                 # -------------------------------
             # if current_step == 1 or current_step % checkpoint_save == 0:
-            self.save(current_step)
+            self.save(epoch)
             print("Model Loss {} after step {}".format(self.G_loss, epoch))
             print("Model Saved")
             print("Time per step:", time.time() - st)
@@ -263,7 +263,7 @@ def main():
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\saves",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
