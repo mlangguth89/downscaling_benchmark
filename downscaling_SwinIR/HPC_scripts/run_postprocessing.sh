@@ -31,11 +31,11 @@ source ../venv_booster/bin/activate
 
 # data-directories
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc
+datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_test.nc
 model_basedir=../model_base_dir/
 outdir=../output/
-model_name=generator_step735000.pth
-exp_name=wgan
+model_name=49_G.pth
+exp_name=unet
 dataset=downscaling_tier2_train
 
 # run job

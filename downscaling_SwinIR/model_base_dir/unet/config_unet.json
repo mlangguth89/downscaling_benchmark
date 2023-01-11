@@ -1,0 +1,11 @@
+{
+  "nepochs": 50,
+  "d_steps": 5,
+  "z_branch": true,
+  "lr_gen": 5e-05,
+  "lr_critic": 1e-06,
+  "lr_gen_end": 5e-06,
+  "lr_decay": true,
+  "named_targets": false
+
+}

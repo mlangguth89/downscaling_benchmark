@@ -92,7 +92,7 @@ def main(parser_args):
     model = unet(n_channels=9)
     model.to(torch.float64)
     model_path = glob.glob(os.path.join(model_dir, parser_args.model_name))[0]
-    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))['model_state_dict'])
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))) ######## cpu ['model_state_dict']
     model.eval()
     model.to(device)
     logger.info(f"Model was loaded successfully.")
@@ -184,7 +184,7 @@ if __name__ == "__main__":
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\downscaling_SwinIR\\model_base_dir\\wgan\\downscaling_tier2_train.nc",
                         help="Directory where test dataset (netCDF-file) is stored.")
     parser.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=False,
-                        default="generator_step735000.pth",
+                        default="5880_G.pth",
                         help="Directory where test dataset (netCDF-file) is stored.")
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=False,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\downscaling_ap5\\output\\",
@@ -193,7 +193,7 @@ if __name__ == "__main__":
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\downscaling_SwinIR\\model_base_dir\\",
                         help="Base directory where trained models are saved.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=False,
-                        default="wgan", # generator_step735000.pth
+                        default="unet", # generator_step735000.pth
                         help="Name of the experiment/trained model to postprocess.")
     parser.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=False,
                         default="downscaling_tier2_train",
