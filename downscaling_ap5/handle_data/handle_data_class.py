@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-01-04"
+__update__ = "2023-01-11"
 
 import os, glob
 from typing import List
@@ -447,7 +447,7 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 class StreamMonthlyNetCDF(object):
     # TO-DO:
     # - check if normalization works from dataset rather than data array
-    # - save normalization parameters to file
+    # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, workers=4, sample_dim: str = "time", selected_predictors: List = None,
                  var_tar2in: str = None, samples_per_file: int = 8640, norm_dims: List = None, norm_obj = None):
