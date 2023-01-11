@@ -19,7 +19,7 @@ import torch.nn as nn
 
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_unet_temp import UNet as unet_temp
+# from models.network_unet_temp import UNet as unet_temp
 from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_critic import Discriminator as critic
