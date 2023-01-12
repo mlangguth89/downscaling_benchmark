@@ -9,6 +9,7 @@ __update__ = "2023-01-11"
 
 import os, glob
 from typing import List
+import re
 import socket
 import gc
 import multiprocessing
@@ -450,7 +451,7 @@ class StreamMonthlyNetCDF(object):
     # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, workers=4, sample_dim: str = "time", selected_predictors: List = None,
-                 var_tar2in: str = None, samples_per_file: int = 8640, norm_dims: List = None, norm_obj = None):
+                 var_tar2in: str = None, norm_dims: List = None, norm_obj = None):
         self.data_dir = datadir
         self.file_list = patt
         self.ds = xr.open_mfdataset(list(self.file_list))  # , parallel=True)
@@ -470,7 +471,7 @@ class StreamMonthlyNetCDF(object):
         self.times = self.ds[sample_dim].load()
         self.nsamples = self.ds.dims[sample_dim]
         self.variables = list(self.ds.variables)
-        self.samples_per_file = samples_per_file
+        self.samples_per_file = None
         self.predictor_list = selected_predictors
         self.var_tar2in = var_tar2in
         self.predictors_now, self.predictands_now = None, None
@@ -545,6 +546,8 @@ class StreamMonthlyNetCDF(object):
         ds_now = xr.open_dataset(str(fname), engine="netcdf4")
         ds_now = self.data_norm(ds_now)
         da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
+
+        self.nsamples = len(ds_now[self.sample_dim])
         predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
         if self.predictor_list is not None:
             self.predictors_now = predictors_now.sel({"variables": self.predictor_list})
