@@ -72,7 +72,7 @@ class CustomTemperatureDataset(Dataset):
             ntimes = len(darr_in["time"])
             for t in range(ntimes):
                 ds_train_in.append(torch.from_numpy(darr_in.isel({"time": t}).values).permute(2, 0, 1))
-                vector_tar = torch.from_numpy(darr_tar.isel({"time": t}).values[:, :, 1][..., np.newaxis])
+                vector_tar = torch.from_numpy(darr_tar.isel({"time": t}).values[:, :, 0][..., np.newaxis])
                 ds_train_tar.append(vector_tar.permute(2, 0, 1))   # [:, :, 1]
 
             a = torch.stack(ds_train_in)
@@ -134,6 +134,8 @@ def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr
     """
     invars = [var for var in da["variables"].values if var.endswith("_in")]
     tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
+    # darr_tar.sel({"variables": "t_2m_tar"}).isel( < ... >)
+
 
     # ensure that ds_tar has a channel coordinate even in case of single target variable
     roll = False
