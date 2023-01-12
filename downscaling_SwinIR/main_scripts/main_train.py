@@ -33,7 +33,7 @@ wandb.init(project="Precip_downscaling", reinit=True)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class BuildModel:
-    def __init__(self, netG, G_lossfn_type: str = "l2", G_optimizer_type: str = "adam",
+    def __init__(self, netG, G_lossfn_type: str = "l1", G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 0.0002, G_optimizer_betas: list = [0.9, 0.999],
                  G_optimizer_wd: int = 0, save_dir: str = "../results",
                  train_loader: object = None, epochs: int = 30, checkpoint_save: int = 200):
@@ -66,6 +66,7 @@ class BuildModel:
     def define_loss(self):
 
         if self.G_lossfn_type == 'l1':
+            print('l1')
             self.G_lossfn = nn.L1Loss()
         elif self.G_lossfn_type == 'l2':
             self.G_lossfn = nn.MSELoss()
