@@ -10,6 +10,7 @@ __update__ = "2023-01-11"
 import os, glob
 from typing import List
 import re
+from operator import itemgetter
 import socket
 import gc
 import multiprocessing
@@ -18,7 +19,6 @@ from timeit import default_timer as timer
 import random
 import numpy as np
 import xarray as xr
-import pandas as pd
 import tensorflow as tf
 from abstract_data_normalization import Normalize
 from all_normalizations import ZScore
@@ -307,7 +307,7 @@ class HandleDataClass(object):
         if not norm_obj:
             norm_obj = ds_obj.data_norm
 
-        return norm_obj, tfds.repeat(), ds_obj.nsamples
+        return ds_obj, tfds.repeat()
 
     @staticmethod
     def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
@@ -452,7 +452,6 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 class StreamMonthlyNetCDF(object):
     # TO-DO:
-    # - check if normalization works from dataset rather than data array
     # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, workers=4, sample_dim: str = "time", selected_predictors: List = None,
@@ -472,9 +471,12 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
         self.data_norm = ZScore(norm_dims)
         self.sample_dim = sample_dim
+        self.data_dim = self.get_data_dim()
         self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
-        self.times = self.ds[sample_dim].load()
         self.nsamples = self.ds.dims[sample_dim]
+        data_dim = list(self.ds.dims)
+        data_dim.remove(sample_dim)
+        self.data_dim = data_dim
         self.variables = list(self.ds.variables)
         self.samples_per_file = 28175                # TO-DO avoid hard-coding
         self.predictor_list = selected_predictors
@@ -493,6 +495,22 @@ class StreamMonthlyNetCDF(object):
 
     def getitems(self, indices):
         return np.array(self.pool.map(self.__getitem__, indices))
+
+    def get_data_dim(self):
+        """
+        Retrieve the dimensionality of the data to be handled, i.e. without sample_dim which will be batched in a
+        data stream.
+        :return: tuple of data dimensions
+        """
+        # get existing dimension names and remove sample_dim
+        dimnames = list(self.ds.coords)
+        dimnames.remove(self.sample_dim)
+
+        # get the dimensionality of the data of interest
+        all_dims = dict(self.ds.dims)
+        data_dim = itemgetter(*dimnames)(all_dims)
+
+        return data_dim
 
     @property
     def data_dir(self):
