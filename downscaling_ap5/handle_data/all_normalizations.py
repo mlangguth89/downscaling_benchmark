@@ -12,6 +12,7 @@ __date__ = "2022-10-06"
 
 from typing import List
 from abstract_data_normalization import Normalize
+import dask
 import xarray as xr
 
 class ZScore(Normalize):
@@ -37,6 +38,11 @@ class ZScore(Normalize):
         else:
             print("Mu and sigma are parsed for (de-)normalization.")
 
+        # the following ensure that both parameters are computed in one graph! 
+        # This significantly reduces memory footprint as we don't end up having data duplicates 
+        # in memory due to multiple graphs (and also seem to enfore usage of data chunks as well)
+        mu, std = dask.compute(mu, std)
+        
         return mu, std
 
     @staticmethod
