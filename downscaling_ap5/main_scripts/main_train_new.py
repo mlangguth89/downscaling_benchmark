@@ -101,7 +101,8 @@ def main(parser_args):
     t0_preproc = timer()
 
     # get some key parameters from datasets
-    shape_in = ds_obj.data_dim
+    shape_in = (*ds_obj.data_dim[::-1], 9)
+    print(shape_in)
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory

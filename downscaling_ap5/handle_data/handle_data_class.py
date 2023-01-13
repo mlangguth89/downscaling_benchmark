@@ -474,12 +474,10 @@ class StreamMonthlyNetCDF(object):
         self.data_dim = self.get_data_dim()
         self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
         self.nsamples = self.ds.dims[sample_dim]
-        data_dim = list(self.ds.dims)
-        data_dim.remove(sample_dim)
-        self.data_dim = data_dim
         self.variables = list(self.ds.variables)
         self.samples_per_file = 28175                # TO-DO avoid hard-coding
-        self.predictor_list = selected_predictors
+        # self.predictor_list = selected_predictors
+        self.predictor_list = None                   # TO-DO: enable selection
         self.var_tar2in = var_tar2in
         self.predictors_now, self.predictands_now = None, None
 
@@ -548,19 +546,19 @@ class StreamMonthlyNetCDF(object):
 
         self._sample_dim = sample_dim
 
-    @property
-    def predictor_list(self):
-        return self._predictor_list
+    #@property
+    #def predictor_list(self):
+    #    return self._predictor_list
 
-    @predictor_list.setter
-    def predictor_list(self, selected_predictors):
-        stat_list = [predictor in self.variables for predictor in selected_predictors]
-        if not all(stat_list):
-            miss_inds = [i for i, x in enumerate(stat_list) if x]
-            miss_vars = [selected_predictors[i] for i in miss_inds]
-            raise ValueError(f"Could not find the following predictor variables in dataset: {*miss_vars,}")
-
-        self._predictor_list = selected_predictors
+    #@predictor_list.setter
+    #def predictor_list(self, selected_predictors):
+    #    stat_list = [predictor in self.variables for predictor in selected_predictors]
+    #    if not all(stat_list):
+    #        miss_inds = [i for i, x in enumerate(stat_list) if x]
+    #        miss_vars = [selected_predictors[i] for i in miss_inds]
+    #        raise ValueError(f"Could not find the following predictor variables in dataset: {*miss_vars,}")
+    #
+    #    self._predictor_list = selected_predictors
 
     def read_netcdf(self, fname):
         fname = tf.keras.backend.get_value(fname)
@@ -569,7 +567,7 @@ class StreamMonthlyNetCDF(object):
         ds_now = xr.open_dataset(str(fname), engine="netcdf4")
         # ds_now = self.data_norm(ds_now)
         da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
-        da_now = self.data_norm(da_now)
+        da_now = self.data_norm.normalize(da_now)
         
         self.nsamples = len(ds_now[self.sample_dim])
         predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
@@ -588,7 +586,7 @@ class StreamMonthlyNetCDF(object):
         if self.var_tar2in is not None:
             in_sample = xr.concat([in_sample, tar_sample.sel({"variables": self.var_tar2in})], "variables")
 
-        return in_sample.to_array(), tar_sample.to_array()
+        return in_sample.values, tar_sample.values
 
 
 
