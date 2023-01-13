@@ -74,8 +74,9 @@ def main(parser_args):
     file_patt = "downscaling_tier2_train_*.nc"
     train_files = glob.glob(os.path.join(datadir, file_patt))
     HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40)
-    data_norm, tfds_train, nsamples = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
-                                                                          norm_dims=ds_dict["norm_dims"])
+    ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
+                                                             norm_dims=ds_dict["norm_dims"])
+    data_norm = ds_obj.data_norm
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data
@@ -100,7 +101,7 @@ def main(parser_args):
     t0_preproc = timer()
 
     # get some key parameters from datasets
-    shape_in = tfds_train.element_spec[0].shape[1:].as_list()
+    shape_in = ds_obj.data_dim
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # clean up to save some memory
@@ -132,7 +133,7 @@ def main(parser_args):
 
     time_tracker = TimeHistory()
     cb_default= [time_tracker]
-    steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
+    steps_per_epoch = int(np.ceil(ds_obj.nsamples / ds_dict["batch_size"]))
 
     # get optional fit options and start training/fitting
     fit_opts = handle_opt_utils(model, "get_fit_opts")
@@ -143,7 +144,7 @@ def main(parser_args):
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
-                                            nsamples * model.hparams["nepochs"])
+                                            ds_obj.nsamples * model.hparams["nepochs"])
     benchmark_dict = {**benchmark_dict, **training_times}
 
     print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
@@ -178,7 +179,7 @@ def main(parser_args):
             model_info = {}
         stat_info = {"static_model_info": model_info,
                      "data_info": {"training data size": da_train.nbytes, "validation data size": da_val.nbytes,
-                                   "nsamples": nsamples, "shape_samples": shape_in,
+                                   "nsamples": ds_obj.nsamples, "shape_samples": shape_in,
                                    "batch_size": ds_dict["batch_size"]}}
 
         with open(js_file, "w") as jsf:
