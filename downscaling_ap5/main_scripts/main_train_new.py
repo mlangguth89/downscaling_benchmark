@@ -73,8 +73,8 @@ def main(parser_args):
     t0_train = timer()
     file_patt = "downscaling_tier2_train_*.nc"
     train_files = glob.glob(os.path.join(datadir, file_patt))
-    HandleDataClass.gather_monthly_netcdf(train_files)
-    data_norm, tfds_train, nsamples = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train,
+    HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40)
+    data_norm, tfds_train, nsamples = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
                                                                           norm_dims=ds_dict["norm_dims"])
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
@@ -83,8 +83,8 @@ def main(parser_args):
     t0_val = timer()
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     ds_val = xr.open_dataset(fdata_val)
-    ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
+    da_val = data_norm.normalize(da_val)
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)

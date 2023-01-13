@@ -169,7 +169,7 @@ class HandleDataClass(object):
             raise ValueError(f"nfiles_resampled ({nfiles_resampled:d}) must be a divisor of the total number" +
                              f" of files ({nfiles_in:d})")
 
-        file_list_loc = random.shuffle(file_list)
+        file_list_loc = random.sample(file_list, len(file_list))
 
         datadir = os.path.dirname(file_list[0])
         tmp_dir = os.path.join(datadir, "tmp")
@@ -183,6 +183,9 @@ class HandleDataClass(object):
                 mess = f"netCDF-file '{fname_now}' already exists."
                 if loverwrite:
                     print(f"{mess} Existing file is overwritten.")
+                    os.remove(fname_now)
+                    #print(f"{mess} Existing file is kept.")
+                    #continue
                 else:
                     raise FileExistsError(mess)
             print(f"Write merged data to file '{fname_now}'.")
@@ -289,11 +292,13 @@ class HandleDataClass(object):
         tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
 
         tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
-        tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
-        if lshuffle:
-            nshuffle_per_file = ds_obj.samples_per_file if nshuffle_per_file is None else nshuffle_per_file
-            tfds_range = tfds.shuffle(nshuffle_per_file)
-        tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
+        #tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
+        #if lshuffle:
+        #    nshuffle_per_file = ds_obj.samples_per_file if nshuffle_per_file is None else nshuffle_per_file
+        #    tfds_range = tfds.shuffle(nshuffle_per_file)
+        tfds = tfds.interleave(lambda x: tf.data.Dataset.range(ds_obj.samples_per_file).shuffle(ds_obj.samples_per_file)\
+                               .batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
+        #tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
 
         if lprefetch:
             tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
@@ -454,7 +459,7 @@ class StreamMonthlyNetCDF(object):
                  var_tar2in: str = None, norm_dims: List = None, norm_obj = None):
         self.data_dir = datadir
         self.file_list = patt
-        self.ds = xr.open_mfdataset(list(self.file_list))  # , parallel=True)
+        self.ds = xr.open_mfdataset(list(self.file_list), combine="nested", concat_dim=sample_dim)  # , parallel=True)
         # check if norm_dims or norm_obj should be used
         assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
         if norm_obj and norm_dims:
@@ -466,12 +471,12 @@ class StreamMonthlyNetCDF(object):
         else:
             self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
         self.data_norm = ZScore(norm_dims)
-        self.norm_params = self.data_norm.get_required_stats(self.ds)
         self.sample_dim = sample_dim
+        self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
         self.times = self.ds[sample_dim].load()
         self.nsamples = self.ds.dims[sample_dim]
         self.variables = list(self.ds.variables)
-        self.samples_per_file = None
+        self.samples_per_file = 28175                # TO-DO avoid hard-coding
         self.predictor_list = selected_predictors
         self.var_tar2in = var_tar2in
         self.predictors_now, self.predictands_now = None, None
@@ -544,9 +549,10 @@ class StreamMonthlyNetCDF(object):
         fname = str(fname).lstrip("b'").rstrip("'")
         print(f"Load data from {fname}...")
         ds_now = xr.open_dataset(str(fname), engine="netcdf4")
-        ds_now = self.data_norm(ds_now)
+        # ds_now = self.data_norm(ds_now)
         da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
-
+        da_now = self.data_norm(da_now)
+        
         self.nsamples = len(ds_now[self.sample_dim])
         predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
         if self.predictor_list is not None:
