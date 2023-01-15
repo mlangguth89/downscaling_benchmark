@@ -6,6 +6,18 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch import Tensor
+from functools import reduce
+from operator import __add__
+
+
+class Conv2dSamePadding(nn.Conv2d):
+    def __init__(self,*args,**kwargs):
+        super(Conv2dSamePadding, self).__init__(*args, **kwargs)
+        self.zero_pad_2d = nn.ZeroPad2d(reduce(__add__,
+            [(k // 2 + (k - 2 * (k // 2)) - 1, k // 2) for k in self.kernel_size[::-1]]))
+
+    def forward(self, input):
+        return  self._conv_forward(self.zero_pad_2d(input), self.weight, self.bias)
 
 
 class Upsampling(nn.Module):
@@ -55,7 +67,7 @@ class Conv_Block(nn.Module):
         """
         super().__init__()
         self.conv_block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=bias),
+            nn.Conv2dSamePadding(in_channels, out_channels, kernel_size=kernel_size, bias=bias),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
@@ -155,7 +167,7 @@ class UNet(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # print("input shape",x.shape)
-        x = self.upsampling(x)
+        # x = self.upsampling(x)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
         s3, e3 = self.down3(e2)
