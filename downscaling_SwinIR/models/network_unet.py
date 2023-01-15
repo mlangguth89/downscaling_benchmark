@@ -67,7 +67,7 @@ class Conv_Block(nn.Module):
         """
         super().__init__()
         self.conv_block = nn.Sequential(
-            nn.Conv2dSamePadding(in_channels, out_channels, kernel_size=kernel_size, bias=bias),
+            Conv2dSamePadding(in_channels, out_channels, kernel_size=kernel_size, bias=bias),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
