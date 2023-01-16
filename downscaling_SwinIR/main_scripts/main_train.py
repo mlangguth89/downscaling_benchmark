@@ -34,7 +34,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l1", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 0.0002, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_lr: float = 5.e-05, G_optimizer_betas: list = [0.9, 0.999],
                  G_optimizer_wd: int = 0, save_dir: str = "../results",
                  train_loader: object = None, epochs: int = 30, checkpoint_save: int = 200):
 
@@ -53,6 +53,8 @@ class BuildModel:
         self.checkpoint_save = checkpoint_save
         self.epochs = epochs
         self.train_loader = train_loader
+
+
     def init_train(self):
         wandb.watch(self.netG, log_freq=100)
         self.netG.train()
@@ -126,7 +128,8 @@ class BuildModel:
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        self.E = self.netG(self.L)[:, 0, :, :]
+        self.E = self.netG(self.L)#[:, 0, :, :]
+
 
     # ----------------------------------------
     # update parameters and get loss
@@ -181,7 +184,7 @@ class BuildModel:
                 # -------------------------------
                 # 1) update learning rate
                 # -------------------------------
-                self.update_learning_rate(current_step)
+                # self.update_learning_rate(current_step)
                 lr = self.get_lr()  # get learning rate
 
                 # -------------------------------
