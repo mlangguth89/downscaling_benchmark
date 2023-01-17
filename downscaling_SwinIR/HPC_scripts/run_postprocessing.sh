@@ -34,7 +34,7 @@ source ../venv_booster/bin/activate
 datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_test.nc
 model_basedir=../model_base_dir/
 outdir=../output/
-model_name=49_G.pth
+model_name=69_G.pth
 exp_name=unet
 dataset=downscaling_tier2_train
 
