@@ -34,9 +34,10 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l1", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 5.e-05, G_optimizer_betas: list = [0.9, 0.999],
+                 G_optimizer_lr: float = 0.1, G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0, save_dir: str = "../results",
-                 train_loader: object = None, epochs: int = 30, checkpoint_save: int = 200):
+                 train_loader: object = None, val_loader: object = None, epochs: int = 30, checkpoint_save: int = 200,
+                 decay_start: int = 5, decay_end: int = 30):
 
         # ------------------------------------
         # define network
@@ -53,6 +54,9 @@ class BuildModel:
         self.checkpoint_save = checkpoint_save
         self.epochs = epochs
         self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.decay_start = decay_start
+        self.decay_end = decay_end
 
 
     def init_train(self):
@@ -184,9 +188,11 @@ class BuildModel:
                 # -------------------------------
                 # 1) update learning rate
                 # -------------------------------
-                # self.update_learning_rate(current_step)
-                lr = self.get_lr()  # get learning rate
+                # if epoch > self.decay_start and epoch < self.decay_start:
+                self.update_learning_rate(current_step)
 
+                lr = self.get_lr()  # get learning rate
+                print(lr)
                 # -------------------------------
                 # 2) feed patch pairs
                 # -------------------------------
@@ -206,6 +212,18 @@ class BuildModel:
             print("Model Saved")
             print("Time per step:", time.time() - st)
             wandb.log({"loss": self.G_loss, "lr": lr})
+
+            with torch.no_grad():
+                val_loss = 0
+                counter = 0
+                for j, val_data in enumerate(self.val_loader):
+                    counter = counter + 1
+                    self.feed_data(val_data)
+                    self.netG_forward()
+                    val_loss = val_loss + self.G_lossfn(self.E, self.H).detach()
+                val_loss = val_loss / counter
+                print("training loss:", self.G_loss.item())
+                print("validation loss:", val_loss. item())
 
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train", test_dir: str = None,
@@ -236,8 +254,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim=768)
     elif type_net == "wgan":
-        netG = unet_temp(n_channels=n_channels)
-        netC = critic((1, 160, 160))
+        netG = unet(n_channels=n_channels)
+        netC = critic((1, 120, 96))
     else:
         NotImplementedError
 
@@ -253,7 +271,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         model = BuildWGANModel(generator=netG, save_dir=save_dir, critic=netC, train_dataloader=train_loader,
                       val_dataloader=test_loader, checkpoint_save=checkpoint_save, hparams=args)
     else:
-        model = BuildModel(netG, save_dir=save_dir, train_loader=train_loader, epochs=epochs,
+        model = BuildModel(netG, save_dir=save_dir, train_loader=train_loader, val_loader=test_loader, epochs=epochs,
                        checkpoint_save=checkpoint_save)
     model.fit()
 
@@ -269,14 +287,14 @@ def main():
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
-    parser.add_argument("--epochs", type=int, default=2, help="The checkpoint directory")
-    parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
+    parser.add_argument("--epochs", type=int, default=5, help="The checkpoint directory")
+    parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
     parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
-    parser.add_argument("--lr_gn", type=float, default=5.e-05, help="The checkpoint directory")
-    parser.add_argument("--lr_gn_end", type=float, default=5.e-06, help="The checkpoint directory")
+    parser.add_argument("--lr_gn", type=float, default=1.e-05, help="The checkpoint directory")
+    parser.add_argument("--lr_gn_end", type=float, default=1.e-06, help="The checkpoint directory")
     parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
     parser.add_argument("--decay_start", type=int, default=25, help="The checkpoint directory")
     parser.add_argument("--decay_end", type=int, default=50, help="The checkpoint directory")
