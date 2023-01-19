@@ -178,7 +178,7 @@ class BuildWGANModel:
             if jj == self.hparams.critic_iterations:
                 jj = 0
                 start_2 = time.time()
-                loss_val_c, loss_val_gen, loss_rec, count_1 = self.validation()
+                loss_val_c, loss_val_gen, loss_rec, count_1, lr_g, lr_c = self.validation()
                 end_2 = time.time()
                 self.save_checkpoint(epoch=epoch, step=current_step)
                 print(f'validation time: {end_2 - start_2}')
@@ -187,7 +187,7 @@ class BuildWGANModel:
                     Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f}, Loss Rec train :{loss_train_rec/max_iterations}, '{max_iterations}, {ii-1}"
                     f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
                     Size Val: {self.val_dataloader.dataset.n_samples}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/count_1}"
-                    f", Time per 1 epoch: {start_2 - start:.4f} sec."
+                    f", Time per 1 epoch: {start_2 - start:.4f} sec. loss_g: {lr_g} loss_c: {lr_c}"
                 )
             else:
                 jj = jj + 1
@@ -254,7 +254,14 @@ class BuildWGANModel:
             loss_g += g_loss.item()
             loss_r += loss_rec.item()
 
-        return loss_c, g_loss, loss_r, count
+        def get_lr(optimizer):
+            for param_group in optimizer.param_groups:
+                return param_group['lr']
+
+        lr_g = get_lr(self.opt_gen)
+        lr_c = get_lr(self.opt_critic)
+
+        return loss_c, g_loss, loss_r, count, lr_g, lr_c
 
     def save_checkpoint(self, epoch: int = None, loss_g: float = None, loss_cr: float = None, step: int = None):
         """
