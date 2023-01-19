@@ -289,7 +289,7 @@ class HandleDataClass(object):
                                      norm_dims=norm_dims)
 
         tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
-        tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
+        tf_fun2 = lambda i: tf.py_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
 
         tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
         #tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
