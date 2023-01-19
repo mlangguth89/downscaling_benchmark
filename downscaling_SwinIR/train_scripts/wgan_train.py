@@ -119,11 +119,11 @@ class BuildWGANModel:
                     if jj == i:
                         current_step += 1
                         train_data = next(iterator)
-                        # input_data = train_data[0].to(device)
-                        # target_data = train_data[1].to(device)
-                        input_data = train_data['L'].to(device)
-                        target_data = train_data['H'].to(device)
-                        target_data = target_data[:, None]
+                        input_data = train_data[0].to(device)
+                        target_data = train_data[1].to(device)
+                        # input_data = train_data['L'].to(device)
+                        # target_data = train_data['H'].to(device)
+                       # target_data = target_data#[:, None] # validate
                         ii += 1
 
                         generator_output = self.generator(input_data)
@@ -146,8 +146,8 @@ class BuildWGANModel:
                     else:
                         current_step += 1
                         train_data = next(iterator)
-                        input_data = train_data['L'].to(device)
-                        target_data = train_data['H'][:, None]
+                        input_data = train_data[0].to(device)
+                        target_data = train_data[1]#[:, None]
                         target_data = target_data.to(device)
                         ii += 1
 
@@ -227,8 +227,8 @@ class BuildWGANModel:
         loss_g = 0
         loss_r = 0
         for batch_idx, train_data in enumerate(self.val_dataloader):
-            input_data = train_data['L'].to(device)
-            target_data = train_data['H'][:, None]
+            input_data = train_data[0].to(device)
+            target_data = train_data[1]#[:, None]
             target_data = target_data.to(device)
 
             generator_output = self.generator(input_data)
@@ -307,10 +307,10 @@ def run():
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
                         help="The directory where test data (.nc files) are stored")
-    parser.add_argument("--save_dir", type=str, default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom",
+    parser.add_argument("--save_dir", type=str, default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The output directory")
     parser.add_argument("--epochs", type=int, default=250, help="The checkpoint directory")
-    parser.add_argument("--batch_size", type=int, default=32, help="The checkpoint directory")
+    parser.add_argument("--batch_size", type=int, default=16, help="The checkpoint directory")
     parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=5.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=5.e-06, help="The checkpoint directory")
@@ -321,7 +321,7 @@ def run():
     parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
     parser.add_argument("--checkpoint_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="Please provide the checkpoint directory")
 
     args = parser.parse_args()
