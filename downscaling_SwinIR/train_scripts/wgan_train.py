@@ -103,7 +103,7 @@ class BuildWGANModel:
             self.critic.train()
             iterator = iter(self.train_dataloader)
             ii = 0
-
+            loss_train_rec = 0
             while ii < max_iterations:
                 # print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
 
@@ -130,6 +130,7 @@ class BuildWGANModel:
                         gen_fake = self.critic(generator_output).reshape(-1)
                         loss_gen = -torch.mean(gen_fake)
                         loss_rec = recon_loss(target_data, generator_output)
+                        loss_train_rec += loss_rec.item()
                         g_loss = loss_gen + self.hparams.recon_weight * loss_rec
                         self.generator.zero_grad()
                         g_loss.backward()
@@ -177,15 +178,15 @@ class BuildWGANModel:
             if jj == self.hparams.critic_iterations:
                 jj = 0
                 start_2 = time.time()
-                loss_val_c, loss_val_gen, loss_rec = self.validation()
+                loss_val_c, loss_val_gen, loss_rec, count_1 = self.validation()
                 end_2 = time.time()
                 self.save_checkpoint(epoch=epoch, step=current_step)
                 print(f'validation time: {end_2 - start_2}')
                 print(
                     f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{self.train_dataloader.dataset.n_samples} \
-                    Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f},"
+                    Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f}, Loss Rec train :{loss_train_rec/max_iterations}, '{max_iterations}, {ii-1}"
                     f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
-                    Size Val: {self.val_dataloader.dataset.n_samples}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/self.val_dataloader.dataset.n_samples}"
+                    Size Val: {self.val_dataloader.dataset.n_samples}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/count_1}"
                     f", Time per 1 epoch: {start_2 - start:.4f} sec."
                 )
             else:
@@ -226,7 +227,9 @@ class BuildWGANModel:
         loss_c = 0
         loss_g = 0
         loss_r = 0
+        count = 1
         for batch_idx, train_data in enumerate(self.val_dataloader):
+            count += 1
             input_data = train_data[0].to(device)
             target_data = train_data[1]#[:, None]
             target_data = target_data.to(device)
@@ -251,7 +254,7 @@ class BuildWGANModel:
             loss_g += g_loss.item()
             loss_r += loss_rec.item()
 
-        return loss_c, g_loss, loss_r
+        return loss_c, g_loss, loss_r, count
 
     def save_checkpoint(self, epoch: int = None, loss_g: float = None, loss_cr: float = None, step: int = None):
         """
