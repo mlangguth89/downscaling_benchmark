@@ -19,6 +19,8 @@ import torch.nn as nn
 
 sys.path.append('../')
 from models.network_unet import UNet as unet
+from models.network_unet_precip import UNet as unet_p
+
 # from models.network_unet_temp import UNet as unet_temp
 from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
@@ -124,9 +126,9 @@ class BuildModel:
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         # print("datat[L] shape", data["L"].shape)
-        self.L = data[0].to(device)
+        self.L = data['L'].to(device)
         if need_H:
-            self.H = data[1].to(device)
+            self.H = data['H'].to(device)
 
     # ----------------------------------------
     # feed L to netG
@@ -250,7 +252,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels=n_channels)
+        netG = unet_p(n_channels=n_channels)
     elif type_net == "swinSR":
         netG = swinSR()
     elif type_net == "vitSR":
@@ -281,17 +283,17 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=15, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
-    parser.add_argument("--dataset_type", type=str, default="temperature",
+    parser.add_argument("--dataset_type", type=str, default="precipitation",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
@@ -313,7 +315,7 @@ def main():
 
     run(train_dir=args.train_dir,
         test_dir=args.test_dir,
-        n_channels=9,
+        n_channels=8,
         save_dir=args.save_dir,
         checkpoint_save=10000,
         epochs=args.epochs,
