@@ -28,8 +28,8 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc
 test_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_val.nc
-epochs=150
-save_dir=../saves/wgan
-checkpoint_dir=../results/exp_test/wgan
+epochs=70
+save_dir=../saves/unet
+checkpoint_dir=../results/exp_test/unet
 
 python ../main_scripts/main_train.py --train_dir ${train_dir} --test_dir ${test_dir} --epochs ${epochs} --save_dir ${save_dir}

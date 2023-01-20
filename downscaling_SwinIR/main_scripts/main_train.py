@@ -34,9 +34,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l1", G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 0.1, G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
+                 G_optimizer_lr: float = 5.e-05, G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0, save_dir: str = "../results",
-                 train_loader: object = None, val_loader: object = None, epochs: int = 30, checkpoint_save: int = 200,
+                 train_loader: object = None, val_loader: object = None, epochs: int = 70, checkpoint_save: int = 200,
                  decay_start: int = 5, decay_end: int = 30):
 
         # ------------------------------------
@@ -98,9 +98,9 @@ class BuildModel:
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
-        self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        milestones=[1, 2, 3],
-                                                        gamma=0.1))
+        self.schedulers.append(lr_scheduler.ReduceLROnPlateau(self.G_optimizer))
+                                                        # milestones=[1, 2, 3],
+                                                        # gamma=0.1))
 
     # ----------------------------------------
     # save model / optimizer(optional)
@@ -189,7 +189,7 @@ class BuildModel:
                 # 1) update learning rate
                 # -------------------------------
                 # if epoch > self.decay_start and epoch < self.decay_start:
-                self.update_learning_rate(current_step)
+                # self.update_learning_rate(current_step)
 
                 lr = self.get_lr()  # get learning rate
                 print(lr)
@@ -223,7 +223,9 @@ class BuildModel:
                     val_loss = val_loss + self.G_lossfn(self.E, self.H).detach()
                 val_loss = val_loss / counter
                 print("training loss:", self.G_loss.item())
-                print("validation loss:", val_loss. item())
+                print("validation loss:", val_loss.item())
+
+            self.schedulers[0].step(val_loss.item())
 
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train", test_dir: str = None,
@@ -288,7 +290,7 @@ def main():
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=15, help="The checkpoint directory")
-    parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
+    parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
     parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
