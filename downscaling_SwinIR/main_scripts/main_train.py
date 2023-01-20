@@ -194,7 +194,7 @@ class BuildModel:
                 # self.update_learning_rate(current_step)
 
                 lr = self.get_lr()  # get learning rate
-                print(lr)
+
                 # -------------------------------
                 # 2) feed patch pairs
                 # -------------------------------
@@ -226,6 +226,7 @@ class BuildModel:
                 val_loss = val_loss / counter
                 print("training loss:", self.G_loss.item())
                 print("validation loss:", val_loss.item())
+                print("lr", lr)
 
             self.schedulers[0].step(val_loss.item())
 
@@ -283,20 +284,20 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=15, help="The checkpoint directory")
-    parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir, wgan")
-    parser.add_argument("--dataset_type", type=str, default="precipitation",
+    parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
+    parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
-    parser.add_argument("--critic_iterations", type=float, default=4, help="The checkpoint directory")
+    parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=1.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=1.e-06, help="The checkpoint directory")
     parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
@@ -315,7 +316,7 @@ def main():
 
     run(train_dir=args.train_dir,
         test_dir=args.test_dir,
-        n_channels=8,
+        n_channels=9,
         save_dir=args.save_dir,
         checkpoint_save=10000,
         epochs=args.epochs,
