@@ -94,7 +94,7 @@ def main(parser_args):
     model_path = glob.glob(os.path.join(model_dir, parser_args.model_name))[0]
     # model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))) ######## cpu ['model_state_dict']
     print(model_path)
-    model.load_state_dict(torch.load(model_path))
+    model.load_state_dict(torch.load(model_path)['model_state_dict'])
     model.eval()
     model.to(device)
     logger.info(f"Model was loaded successfully.")
