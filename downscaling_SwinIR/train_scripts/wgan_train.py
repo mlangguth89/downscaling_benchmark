@@ -14,20 +14,24 @@ from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 from models.network_unet import UNet
 from models.network_critic import Discriminator
+from torch.autograd import Variable
+import torch.autograd as autograd
 import gc
 import time
 import math
 import os
 from main_scripts.dataset_temp import CustomTemperatureDataset
+from torch.optim import lr_scheduler
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+cuda = True if torch.cuda.is_available() else False
+Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 def recon_loss(real_data, gen_data):
     # initialize reconstruction loss
-    rloss = 0.
-
-    rloss += (torch.abs(gen_data - real_data)).mean()
+    b_loss = torch.mean(torch.abs(gen_data - real_data))
+    rloss = torch.abs(gen_data - real_data).mean()
 
     return rloss
 
@@ -80,8 +84,11 @@ class BuildWGANModel:
         self.checkpoint_save = checkpoint_save
         self.save_dir = save_dir
 
-        self.opt_critic = optim.Adam(self.critic.parameters(), lr=self.hparams.lr_critic, betas=(0.0, 0.9))
-        self.opt_gen = optim.Adam(self.generator.parameters(), lr=self.hparams.lr_gn, betas=(0.0, 0.9))
+        self.opt_critic = optim.Adam(self.critic.parameters(), lr=self.hparams.lr_critic, betas=(0.5, 0.999))
+        self.opt_gen = optim.Adam(self.generator.parameters(), lr=self.hparams.lr_gn, betas=(0.5, 0.999))
+
+        self.scheduler_critic = lr_scheduler.ReduceLROnPlateau(self.opt_critic)
+        self.scheduler_gen = lr_scheduler.ReduceLROnPlateau(self.opt_gen)
 
         self.best_cr_loss = 1000
         self.best_g_loss = 1000
@@ -96,114 +103,90 @@ class BuildWGANModel:
         print(f' size of dataset {self.train_dataloader.dataset.n_samples} batch size {self.hparams.batch_size}' )
         print(f' iterations {self.train_dataloader.dataset.n_samples / self.hparams.batch_size}')
         max_iterations = math.floor(self.train_dataloader.dataset.n_samples / self.hparams.batch_size)
+        counter_2 = 0
+        loss_train_rec = 0
+        jj = 0
+
         for epoch in range(self.hparams.epochs):
-
-            start = time.time()
-            self.generator.train()
-            self.critic.train()
-            iterator = iter(self.train_dataloader)
-            ii = 0
-            loss_train_rec = 0
-            while ii < max_iterations:
-                # print(ii * self.hparams.batch_size, (ii + 1) * self.hparams.batch_size)
-
-                self.generator.train()
-                self.critic.train()
-
-                # Training the critic model
-                for i in range(self.hparams.critic_iterations + 1):
-                    if ii >= max_iterations:
-                        break
-
-                    # Train generator
-                    if jj == i:
-                        current_step += 1
-                        train_data = next(iterator)
-                        input_data = train_data[0].to(device)
-                        target_data = train_data[1].to(device)
-                        # input_data = train_data['L'].to(device)
-                        # target_data = train_data['H'].to(device)
-                       # target_data = target_data#[:, None] # validate
-                        ii += 1
-
-                        generator_output = self.generator(input_data)
-                        gen_fake = self.critic(generator_output).reshape(-1)
-                        loss_gen = -torch.mean(gen_fake)
-                        loss_rec = recon_loss(target_data, generator_output)
-                        loss_train_rec += loss_rec.item()
-                        g_loss = loss_gen + self.hparams.recon_weight * loss_rec
-                        self.generator.zero_grad()
-                        g_loss.backward()
-                        self.opt_gen.step()
-
-                        # -------------------------------
-                        # 6) Save model
-                        # -------------------------------
-                        if current_step == 1 or current_step % self.checkpoint_save == 0:
-                            self.save_checkpoint(epoch=epoch, step=current_step)
-                            print("Model Saved")
-
-                    # Train critic
-                    else:
-                        current_step += 1
-                        train_data = next(iterator)
-                        input_data = train_data[0].to(device)
-                        target_data = train_data[1]#[:, None]
-                        target_data = target_data.to(device)
-                        ii += 1
-
-                        generator_output = self.generator(input_data)
-                        critic_real = self.critic(target_data)
-                        critic_fake = self.critic(generator_output)
-                        # NEED TO VALIDATE
-                        # =-=-=-=-=-==-
-                        gp = self.gradient_penalty(target_data, generator_output, device=device)
-                        # =-=-=-=-=-==-
-
-                        loss_critic = (
-                                -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.hparams.lambada_gp * gp
-                        )
-
-                        self.critic.zero_grad()
-                        loss_critic.backward(retain_graph=True)
-                        self.opt_critic.step()
-
-                        # -------------------------------
-                        # 6) Save model
-                        # -------------------------------
-                        if current_step == 1 or current_step % self.checkpoint_save == 0:
-                            self.save_checkpoint(epoch=epoch, step=current_step)
-                            print("Model Saved")
 
             if jj == self.hparams.critic_iterations:
                 jj = 0
-                start_2 = time.time()
-                loss_val_c, loss_val_gen, loss_rec, count_1, lr_g, lr_c = self.validation()
-                end_2 = time.time()
-                self.save_checkpoint(epoch=epoch, step=current_step)
-                print(f'validation time: {end_2 - start_2}')
-                print(
-                    f"Epoch [{epoch + 1}/{self.hparams.epochs}] Batch {self.hparams.batch_size}/{self.train_dataloader.dataset.n_samples} \
-                    Loss D Train: {loss_critic.item():.4f}, loss G Train: {loss_gen.item():.4f}, Loss Rec train :{loss_train_rec/max_iterations}, '{max_iterations}, {ii-1}"
-                    f"Loss D Val: {loss_val_gen:.4f}, loss G Val: {loss_val_gen:.4f},\
-                    Size Val: {self.val_dataloader.dataset.n_samples}, Loss Rec Val :{loss_rec}, Normalized Rec Loss: {loss_rec/count_1}"
-                    f", Time per 1 epoch: {start_2 - start:.4f} sec. loss_g: {lr_g} loss_c: {lr_c}"
-                )
-            else:
-                jj = jj + 1
 
+            for i, train_data in enumerate(self.train_dataloader):
 
+                current_step += 1
+                self.generator.train()
+                self.critic.train()
 
+                # ---------------------
+                #  Train Discriminator
+                # ---------------------
 
+                self.opt_critic.zero_grad()
 
-            # if self.best_g_loss > loss_val_gen:
-            #     self.best_g_loss = loss_val_gen
-            #     self.save_checkpoint(epoch=epoch, loss_g=loss_val_gen, loss_cr=loss_val_gen)
-            #
-            # if self.best_cr_loss > loss_val_gen:
-            #     self.best_cr_loss = loss_val_gen
+                input_data = train_data[0].to(device)
+                target_data = train_data[1].to(device)
 
-            self.update_lr(epoch=epoch)  # Updating learning rate
+                generator_output = self.generator(input_data)
+                critic_real = self.critic(target_data)
+                critic_fake = self.critic(generator_output)
+
+                gp = self.compute_gradient_penalty(target_data, generator_output, device=device)
+                # check = self.gradient_penalty(target_data, generator_output, device=device)
+                loss_critic = -torch.mean(critic_real) + torch.mean(critic_fake) + self.hparams.lambada_gp * gp
+
+                loss_critic.backward()
+                self.opt_critic.step()
+
+                self.opt_gen.zero_grad()
+
+                # -----------------
+                #  Train Generator
+                # -----------------
+
+                if jj == (i % self.hparams.critic_iterations):
+
+                    generator_output = self.generator(input_data)
+
+                    critic_fake = self.critic(generator_output)
+
+                    loss_gen = -torch.mean(critic_fake)
+                    loss_rec = recon_loss(target_data, generator_output)
+
+                    g_loss = loss_gen + self.hparams.recon_weight * loss_rec
+
+                    g_loss.backward()
+                    self.opt_gen.step()
+
+                    # print(
+                    #     "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [Rec loss: %f]"
+                    #     % (epoch, self.hparams.epochs, i, len(self.train_dataloader), loss_critic.item(), g_loss.item(),
+                    #        loss_rec.item())
+                    # )
+
+            print('++++++++++++++++++++++++++++++++')
+            print(
+                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [Rec loss: %f]"
+                % (epoch, self.hparams.epochs, i, len(self.train_dataloader), loss_critic.item(), g_loss.item(),
+                   loss_rec.item())
+            )
+
+            loss_val_c, loss_val_gen, loss_rec, count_1, lr_g, lr_c = self.validation()
+            self.save_checkpoint(epoch=epoch, step=current_step)
+
+            print(
+                "[Epoch %d/%d] [Validation Size %d] [D Val loss: %f] [G loss: %f] [Rec loss: %f] [LR C: %f] [LR G: %f]"
+                % (epoch, self.hparams.epochs, len(self.train_dataloader), loss_val_c / count_1, loss_val_gen / count_1, loss_rec / count_1,
+                   lr_c, lr_g)
+            )
+
+            print('++++++++++++++++++++++++++++++++')
+
+            self.scheduler_critic.step(loss_rec / count_1)
+            self.scheduler_gen.step(loss_rec / count_1)
+
+            jj += 1
+
 
     def update_lr(self, epoch: int = None):
         updater = get_lr_decay(self.hparams)
@@ -227,7 +210,7 @@ class BuildWGANModel:
         loss_c = 0
         loss_g = 0
         loss_r = 0
-        count = 1
+        count = 0
         for batch_idx, train_data in enumerate(self.val_dataloader):
             count += 1
             input_data = train_data[0].to(device)
@@ -239,10 +222,12 @@ class BuildWGANModel:
             critic_fake = self.critic(generator_output)
 
             # Critic loss calculation
-            gp = self.gradient_penalty(target_data, generator_output, device=device)
+            gp = self.compute_gradient_penalty(target_data, generator_output, device=device)
             loss_critic = (
                     -(torch.mean(critic_real) - torch.mean(critic_fake)) + self.hparams.lambada_gp * gp
             )
+
+            check = self.gradient_penalty(target_data, generator_output, device=device)
 
             # Generator loss calculation
             gen_fake = self.critic(generator_output).reshape(-1)
@@ -304,6 +289,28 @@ class BuildWGANModel:
         gradient = gradient.view(gradient.shape[0], -1)
         gradient_norm = gradient.norm(2, dim=1)
         gradient_penalty = torch.mean((gradient_norm - 1) ** 2)
+        return gradient_penalty
+
+    # Taken from: https://github.com/eriklindernoren/PyTorch-GAN/blob/36d3c77e5ff20ebe0aeefd322326a134a279b93e/implementations/wgan_gp/wgan_gp.py#L119
+    def compute_gradient_penalty(self, real_samples, fake_samples, device="cpu"):
+        """Calculates the gradient penalty loss for WGAN GP"""
+        # Random weight term for interpolation between real and fake samples
+        alpha = Tensor(np.random.random((real_samples.size(0), 1, 1, 1)))
+        # Get random interpolation between real and fake samples
+        interpolates = (alpha * real_samples + ((1 - alpha) * fake_samples)).requires_grad_(True)
+        d_interpolates = self.critic(interpolates)
+        fake = Variable(Tensor(real_samples.shape[0], 1).fill_(1.0), requires_grad=False)
+        # Get gradient w.r.t. interpolates
+        gradients = autograd.grad(
+            outputs=d_interpolates,
+            inputs=interpolates,
+            grad_outputs=fake,
+            create_graph=True,
+            retain_graph=True,
+            only_inputs=True,
+        )[0]
+        gradients = gradients.view(gradients.size(0), -1)
+        gradient_penalty = ((gradients.norm(2, dim=1) - 1) ** 2).mean()
         return gradient_penalty
 
 
