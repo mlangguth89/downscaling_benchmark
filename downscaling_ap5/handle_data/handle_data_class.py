@@ -14,6 +14,7 @@ from operator import itemgetter
 import socket
 import gc
 import multiprocessing
+import dask
 from collections import OrderedDict
 from timeit import default_timer as timer
 import random
@@ -151,7 +152,8 @@ class HandleDataClass(object):
         return da_in, da_tar
 
     @staticmethod
-    def gather_monthly_netcdf(file_list: List, nfiles_resampled: int = 36, loverwrite: bool = True):
+    def gather_monthly_netcdf(file_list: List, nfiles_resampled: int = 36, loverwrite: bool = False,
+                              lnormalize: bool = True, norm_dims = None):
         """
         Merges monthyl netCDF-files to larger netCDF-files to optiize building TensorFlow datasets later on.
         Files are stored in a tmp-subdirectory of self.datadir
@@ -159,6 +161,7 @@ class HandleDataClass(object):
         :param nfiles_resampled: number of files to merge to single netCDF files
                                  (nfiles_resampled must be a divisor of len(file_list)).
         :param loverwrite: Boolean to overwrite temp-data
+        :param lnormalize: normalized data will be written to resulting netCDF-files
         """
         cdo = CDO()
 
@@ -187,10 +190,38 @@ class HandleDataClass(object):
                     #print(f"{mess} Existing file is kept.")
                     #continue
                 else:
-                    raise FileExistsError(mess)
-            print(f"Write merged data to file '{fname_now}'.")
+                    print(f"{mess} Please clean directory '{tmp_dir}' if you meant to create a fresh dataset.")
+                    lnormalize = False
+            else:
+                print(f"Write merged data to file '{fname_now}'.")
 
-            cdo.run(files2merge + [fname_now], OrderedDict([("mergetime", "")]))
+                cdo.run(files2merge + [fname_now], OrderedDict([("mergetime", "")]))
+
+        if lnormalize:
+            if norm_dims is None:
+                raise ValueError("norm_dims must be parsed when lnormalize is True")
+
+            ds_obj = StreamMonthlyNetCDF(tmp_dir, "ds_resampled_*.nc", norm_dims=norm_dims)
+
+            for i in range(nfiles_out):
+                fname_now = os.path.join(tmp_dir, f"ds_resampled_{i:0d}.nc")
+
+                print(f"Read netCDF file '{fname_now}' for normalization.")
+                ds_now = xr.open_dataset(fname_now)
+                da_now = ds_now.to_array("variables").transpose(..., "variables")
+                da_now = ds_obj.data_norm.normalize(da_now).astype("float32", copy=False)
+
+                ds_now = da_now.to_dataset("variables")
+                # overwrite existing netCDF
+                print(f"Write normalized data to file '{fname_now}'.")
+                ds_now.to_netcdf(fname_now)
+
+            # ensure single precision in data norm
+            data_norm = ds_obj.data_norm
+            for param, param_data in data_norm.norm_stats.items():
+                data_norm.norm_stats[param] = param_data.astype("float32", copy=False)
+
+            data_norm.save_norm_to_file(os.path.join(tmp_dir, "norm_zscore.json"))
 
     def make_shuffled_dataset(self, ds: xr.Dataset, batch_size: int, sample_dim: str = "time",  nfiles: int = None,
                               samples_per_file: int = None, loverwrite: bool = True):
@@ -288,24 +319,23 @@ class HandleDataClass(object):
                                      var_tar2in=var_tar2in, selected_predictors=predictors, norm_obj=norm_obj,
                                      norm_dims=norm_dims)
 
-        tf_fun1 = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
-        tf_fun2 = lambda i: tf.numpy_function(ds_obj.getitems, [i], (tf.float32, tf.float32))
+        tf_read_nc = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
+        tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
+        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
-        tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_fun1)
+        tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_read_nc)
         #tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
         #if lshuffle:
         #    nshuffle_per_file = ds_obj.samples_per_file if nshuffle_per_file is None else nshuffle_per_file
         #    tfds_range = tfds.shuffle(nshuffle_per_file)
-        tfds = tfds.interleave(lambda x: tf.data.Dataset.range(ds_obj.samples_per_file).shuffle(ds_obj.samples_per_file)\
-                               .batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
+        tfds = tfds.flat_map(lambda x: tf.data.Dataset.range(ds_obj.samples_per_file).shuffle(ds_obj.samples_per_file)
+                                                      .batch(batch_size, drop_remainder=True)
+                                                      .map(tf_getdata, num_parallel_calls=tf.data.AUTOTUNE)
+                                                      .map(tf_split))
         #tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
 
         if lprefetch:
             tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
-
-        # retrieve norm_obj from ds_obj if it has not been passed to the function call
-        if not norm_obj:
-            norm_obj = ds_obj.data_norm
 
         return ds_obj, tfds.repeat()
 
@@ -455,7 +485,7 @@ class StreamMonthlyNetCDF(object):
     # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, workers=4, sample_dim: str = "time", selected_predictors: List = None,
-                 var_tar2in: str = None, norm_dims: List = None, norm_obj = None):
+                 selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None):
         self.data_dir = datadir
         self.file_list = patt
         self.ds = xr.open_mfdataset(list(self.file_list), combine="nested", concat_dim=sample_dim)  # , parallel=True)
@@ -469,17 +499,17 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = norm_obj
         else:
             self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
-        self.data_norm = ZScore(norm_dims)
         self.sample_dim = sample_dim
         self.data_dim = self.get_data_dim()
         self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
         self.nsamples = self.ds.dims[sample_dim]
         self.variables = list(self.ds.variables)
         self.samples_per_file = 28175                # TO-DO avoid hard-coding
-        # self.predictor_list = selected_predictors
-        self.predictor_list = None                   # TO-DO: enable selection
+        self.predictor_list = selected_predictors
+        self.predictand_list = selected_predictands
+        self.n_predictands = len(self.predictand_list)
         self.var_tar2in = var_tar2in
-        self.predictors_now, self.predictands_now = None, None
+        self.data = None
 
         print(f"Number of used workers: {workers:d}")
         self.pool = multiprocessing.pool.ThreadPool(workers)
@@ -546,35 +576,60 @@ class StreamMonthlyNetCDF(object):
 
         self._sample_dim = sample_dim
 
-    #@property
-    #def predictor_list(self):
-    #    return self._predictor_list
+    @property
+    def predictor_list(self):
+        return self._predictor_list
 
-    #@predictor_list.setter
-    #def predictor_list(self, selected_predictors):
-    #    stat_list = [predictor in self.variables for predictor in selected_predictors]
-    #    if not all(stat_list):
-    #        miss_inds = [i for i, x in enumerate(stat_list) if x]
-    #        miss_vars = [selected_predictors[i] for i in miss_inds]
-    #        raise ValueError(f"Could not find the following predictor variables in dataset: {*miss_vars,}")
-    #
-    #    self._predictor_list = selected_predictors
+    @predictor_list.setter
+    def predictor_list(self, selected_predictors: List):
+        """
+        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in` in their names are selected.
+        In case that a list of selected_predictors is parsed, their availability is checked.
+        :param selected_predictors: list of predictor variables or None
+        """
+        self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
+
+    @property
+    def predictand_list(self):
+        return self._predictand_list
+
+    @predictand_list.setter
+    def predictand_list(self, selected_predictands: List):
+        self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
+
+    def check_and_choose_vars(self, var_list, suffix: str = "*"):
+        """
+        Checks list of variables for availability or retrieves all variables named with a given suffix (for var_list = None)
+        :param var_list: list of predictor variables or None
+        :param suffix: optional suffix of variables to selected. Only effective if var_list is None.
+        :return selected_vars: list of selected variables
+        """
+        if var_list is None:
+            selected_vars = [var for var in self.variables if var.endswith(suffix)]
+        else:
+            stat_list = [var in self.variables for var in var_list]
+            if all(stat_list):
+                selected_vars = var_list
+            else:
+                miss_inds = [i for i, x in enumerate(stat_list) if x]
+                miss_vars = [var_list[i] for i in miss_inds]
+                raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
+
+        return selected_vars
 
     def read_netcdf(self, fname):
         fname = tf.keras.backend.get_value(fname)
         fname = str(fname).lstrip("b'").rstrip("'")
         print(f"Load data from {fname}...")
         ds_now = xr.open_dataset(str(fname), engine="netcdf4")
-        # ds_now = self.data_norm(ds_now)
-        da_now = HandleDataClass.reshape_ds(ds_now.astype("float32", copy=False))
-        da_now = self.data_norm.normalize(da_now)
-        
         self.nsamples = len(ds_now[self.sample_dim])
-        predictors_now, self.predictands_now = HandleDataClass.split_in_tar(da_now)
-        if self.predictor_list is not None:
-            self.predictors_now = predictors_now.sel({"variables": self.predictor_list})
-        else:
-            self.predictors_now = predictors_now
+        var_list = list(self.predictor_list) + list(self.predictand_list)
+        ds_now = ds_now[var_list]
+        da_now = ds_now.to_array("variables").transpose(..., "variables").astype("float32", copy=False)
+        # da_now = self.data_norm.normalize(da_now)
+        # da_now = xr.concat([da_now.sel({"variables": "hsurf_tar"}), da_now], dim="variables")
+
+        self.data = dask.compute(da_now)[0]
 
         return True
 
@@ -586,7 +641,9 @@ class StreamMonthlyNetCDF(object):
         if self.var_tar2in is not None:
             in_sample = xr.concat([in_sample, tar_sample.sel({"variables": self.var_tar2in})], "variables")
 
-        return in_sample.values, tar_sample.values
+        return xr.concat([in_sample, tar_sample], "variables")
+
+
 
 
 
