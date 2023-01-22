@@ -185,10 +185,10 @@ class HandleDataClass(object):
             if os.path.isfile(fname_now):
                 mess = f"netCDF-file '{fname_now}' already exists."
                 if loverwrite:
-                    print(f"{mess} Existing file is overwritten.")
-                    os.remove(fname_now)
-                    #print(f"{mess} Existing file is kept.")
-                    #continue
+                    #print(f"{mess} Existing file is overwritten.")
+                    #os.remove(fname_now)
+                    print(f"{mess} Existing file is kept.")
+                    continue
                 else:
                     print(f"{mess} Please clean directory '{tmp_dir}' if you meant to create a fresh dataset.")
                     lnormalize = False
@@ -529,7 +529,7 @@ class StreamMonthlyNetCDF(object):
         return data
 
     def getitems(self, indices):
-        return np.array(self.pool.map(self.__getitem__, indices))
+        return self.pool.map(self.__getitem__, indices)
 
     def get_data_dim(self):
         """
