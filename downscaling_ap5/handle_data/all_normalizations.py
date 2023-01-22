@@ -35,8 +35,8 @@ class ZScore(Normalize):
             print("Retrieve mu and sigma from data...")
             mu, std = data.mean(self.norm_dims), data.std(self.norm_dims)
             self.norm_stats = {"mu": mu, "sigma": std}
-        else:
-            print("Mu and sigma are parsed for (de-)normalization.")
+        # else:
+        #    print("Mu and sigma are parsed for (de-)normalization.")
 
         # the following ensure that both parameters are computed in one graph! 
         # This significantly reduces memory footprint as we don't end up having data duplicates 
