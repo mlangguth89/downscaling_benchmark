@@ -73,10 +73,9 @@ def main(parser_args):
     t0_train = timer()
     file_patt = "downscaling_tier2_train_*.nc"
     train_files = glob.glob(os.path.join(datadir, file_patt))
-    HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40)
+    data_norm = HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40, norm_dims=ds_dict["norm_dims"])
     ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
-                                                             norm_dims=ds_dict["norm_dims"])
-    data_norm = ds_obj.data_norm
+                                                             norm_obj=data_norm)
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data

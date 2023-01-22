@@ -197,6 +197,8 @@ class HandleDataClass(object):
 
                 cdo.run(files2merge + [fname_now], OrderedDict([("mergetime", "")]))
 
+        data_norm = None
+
         if lnormalize:
             if norm_dims is None:
                 raise ValueError("norm_dims must be parsed when lnormalize is True")
@@ -222,6 +224,8 @@ class HandleDataClass(object):
                 data_norm.norm_stats[param] = param_data.astype("float32", copy=False)
 
             data_norm.save_norm_to_file(os.path.join(tmp_dir, "norm_zscore.json"))
+
+        return data_norm
 
     def make_shuffled_dataset(self, ds: xr.Dataset, batch_size: int, sample_dim: str = "time",  nfiles: int = None,
                               samples_per_file: int = None, loverwrite: bool = True):
@@ -501,7 +505,10 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
         self.sample_dim = sample_dim
         self.data_dim = self.get_data_dim()
-        self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
+        if self.data_norm.norm_stats is None:
+            self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
+        else:
+            self.norm_params = self.data_norm.norm_stats
         self.nsamples = self.ds.dims[sample_dim]
         self.variables = list(self.ds.variables)
         self.samples_per_file = 28175                # TO-DO avoid hard-coding
@@ -635,13 +642,7 @@ class StreamMonthlyNetCDF(object):
 
     def index_to_sample(self, index):
 
-        in_sample = self.predictors_now.isel({self.sample_dim: index}).astype("float32", copy=False)
-        tar_sample = self.predictands_now.isel({self.sample_dim: index}).astype("float32", copy=False)
-
-        if self.var_tar2in is not None:
-            in_sample = xr.concat([in_sample, tar_sample.sel({"variables": self.var_tar2in})], "variables")
-
-        return xr.concat([in_sample, tar_sample], "variables")
+        return self.data.isel({self.sample_dim: index})
 
 
 

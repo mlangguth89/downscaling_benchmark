@@ -15,8 +15,8 @@ from abstract_data_normalization import Normalize
 import dask
 import xarray as xr
 
-class ZScore(Normalize):
 
+class ZScore(Normalize):
     def __init__(self, norm_dims: List):
         super().__init__("z_score", norm_dims)
         self.norm_stats = {"mu": None, "sigma": None}
