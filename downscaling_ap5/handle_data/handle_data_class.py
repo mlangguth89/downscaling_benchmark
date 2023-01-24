@@ -177,6 +177,7 @@ class HandleDataClass(object):
         datadir = os.path.dirname(file_list[0])
         tmp_dir = os.path.join(datadir, "tmp")
         os.makedirs(tmp_dir, exist_ok=True)
+        data_norm = None
 
         for i in range(nfiles_out):
             files2merge = file_list_loc[i*nfiles_resampled:(i+1)*nfiles_resampled]
@@ -185,19 +186,21 @@ class HandleDataClass(object):
             if os.path.isfile(fname_now):
                 mess = f"netCDF-file '{fname_now}' already exists."
                 if loverwrite:
-                    #print(f"{mess} Existing file is overwritten.")
-                    #os.remove(fname_now)
-                    print(f"{mess} Existing file is kept.")
-                    continue
+                    print(f"{mess} Existing file is overwritten.")
+                    os.remove(fname_now)
+                    #print(f"{mess} Existing file is kept.")
+                    #break
                 else:
                     print(f"{mess} Please clean directory '{tmp_dir}' if you meant to create a fresh dataset.")
+                    if lnormalize: 
+                        print("Read normalization parameters from file")
+                        data_norm = ZScore(norm_dims)
+                        data_norm.read_norm_from_file(os.path.join(tmp_dir, "norm_zscore.json"))   # To-Do: Make generic
                     lnormalize = False
+                    break
             else:
                 print(f"Write merged data to file '{fname_now}'.")
-
                 cdo.run(files2merge + [fname_now], OrderedDict([("mergetime", "")]))
-
-        data_norm = None
 
         if lnormalize:
             if norm_dims is None:
@@ -216,6 +219,7 @@ class HandleDataClass(object):
                 ds_now = da_now.to_dataset("variables")
                 # overwrite existing netCDF
                 print(f"Write normalized data to file '{fname_now}'.")
+                os.remove(fname_now)
                 ds_now.to_netcdf(fname_now)
 
             # ensure single precision in data norm
@@ -279,7 +283,7 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, lshuffle: bool = True,
-                            nshuffle_per_file: int = None, lprefetch: bool = True, nworkers: int = None,
+                            nshuffle_per_file: int = None, lprefetch: bool = False, nworkers: int = None,
                             predictors: List = (), var_tar2in: str = None, norm_obj=None, norm_dims: List = None):
         """
         Build TensorFlow dataset from netCDF-files processed by make_shuffled_dataset or gather_monthly_netcdf.
@@ -319,13 +323,13 @@ class HandleDataClass(object):
         if nworkers is None:
             nworkers = multiprocessing.cpu_count()
 
-        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, workers=int(nworkers),
-                                     var_tar2in=var_tar2in, selected_predictors=predictors, norm_obj=norm_obj,
+        ds_obj = StreamMonthlyNetCDF(os.path.join(datadir, "tmp"), file_patt, workers=1,
+                                     var_tar2in="hsurf_tar", norm_obj=norm_obj,
                                      norm_dims=norm_dims)
 
         tf_read_nc = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
-        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+        tf_split = lambda arr: (arr[..., 0:-2], arr[..., -2:])
 
         tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_read_nc)
         #tfds_range = tf.data.Dataset.range(ds_obj.samples_per_file)
@@ -334,14 +338,15 @@ class HandleDataClass(object):
         #    tfds_range = tfds.shuffle(nshuffle_per_file)
         tfds = tfds.flat_map(lambda x: tf.data.Dataset.range(ds_obj.samples_per_file).shuffle(ds_obj.samples_per_file)
                                                       .batch(batch_size, drop_remainder=True)
-                                                      .map(tf_getdata, num_parallel_calls=tf.data.AUTOTUNE)
-                                                      .map(tf_split))
+                                                      .map(tf_getdata))
+                                                      #.map(tf_split))
         #tfds = tfds.interleave(lambda x: tfds_range.batch(nworkers).map(tf_fun2).unbatch().batch(batch_size))
 
+        tfds = tfds.map(tf_split).repeat()
         if lprefetch:
             tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
 
-        return ds_obj, tfds.repeat()
+        return ds_obj, tfds
 
     @staticmethod
     def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
@@ -505,9 +510,12 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
         self.sample_dim = sample_dim
         self.data_dim = self.get_data_dim()
-        if self.data_norm.norm_stats is None:
+        print(self.data_norm.norm_stats)
+        if any([val is None for val in self.data_norm.norm_stats.values()]):
+            print("Get normalization stats from data.")
             self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
         else:
+            print("Normalization stats already available.")
             self.norm_params = self.data_norm.norm_stats
         self.nsamples = self.ds.dims[sample_dim]
         self.variables = list(self.ds.variables)
@@ -529,7 +537,7 @@ class StreamMonthlyNetCDF(object):
         return data
 
     def getitems(self, indices):
-        return self.pool.map(self.__getitem__, indices)
+        return np.array(self.pool.map(self.__getitem__, indices))
 
     def get_data_dim(self):
         """
@@ -636,7 +644,11 @@ class StreamMonthlyNetCDF(object):
         # da_now = self.data_norm.normalize(da_now)
         # da_now = xr.concat([da_now.sel({"variables": "hsurf_tar"}), da_now], dim="variables")
 
-        self.data = dask.compute(da_now)[0]
+        da_now = dask.compute(da_now)[0]
+        #da_now = self.data_norm.normalize(da_now)
+        self.data = xr.concat([da_now.sel({"variables": "hsurf_tar"}), da_now], dim="variables")     
+     
+        self.nsamples = len(ds_now[self.sample_dim])
 
         return True
 

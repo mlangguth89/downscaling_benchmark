@@ -83,10 +83,10 @@ def main(parser_args):
     t0_val = timer()
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     ds_val = xr.open_dataset(fdata_val)
-    da_val = HandleDataClass.reshape_ds(ds_val.astype("float32", copy=False))
+    da_val = HandleDataClass.reshape_ds(ds_val)
     da_val = data_norm.normalize(da_val)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"], lshuffle=False,
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=False), ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
     print(f"Preparing validation data took {timer() - t0_val:.2f}s.")
 
@@ -100,7 +100,7 @@ def main(parser_args):
     t0_preproc = timer()
 
     # get some key parameters from datasets
-    shape_in = (*ds_obj.data_dim[::-1], 9)
+    shape_in = (*ds_obj.data_dim[::-1], 10)
     print(shape_in)
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
