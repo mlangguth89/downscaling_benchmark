@@ -72,10 +72,11 @@ class BuildWGANModel:
 
     def __init__(self, generator: nn.Module = None, critic: nn.Module = None, train_dataloader: DataLoader = None
                  , val_dataloader: DataLoader = None, hparams: dict = None, checkpoint_save: int = None,
-                 save_dir: str = None):
+                 save_dir: str = None, dataset_type: str = 'precipitation'):
         """
 
         """
+        self.dataset_type = dataset_type
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
         self.generator = generator.to(device)
@@ -111,7 +112,7 @@ class BuildWGANModel:
 
             if jj == self.hparams.critic_iterations:
                 jj = 0
-
+            val_loss = 0
             for i, train_data in enumerate(self.train_dataloader):
 
                 current_step += 1
@@ -124,8 +125,12 @@ class BuildWGANModel:
 
                 self.opt_critic.zero_grad()
 
-                input_data = train_data[0].to(device)
-                target_data = train_data[1].to(device)
+                if self.dataset_type == 'precipitation':
+                    input_data = train_data['L'].to(device)
+                    target_data = train_data['H'][:, None].to(device)
+                else:
+                    input_data = train_data[0].to(device)
+                    target_data = train_data[1].to(device)
 
                 generator_output = self.generator(input_data)
                 critic_real = self.critic(target_data)
@@ -143,7 +148,6 @@ class BuildWGANModel:
                 # -----------------
                 #  Train Generator
                 # -----------------
-
                 if jj == (i % self.hparams.critic_iterations):
 
                     generator_output = self.generator(input_data)
@@ -158,6 +162,8 @@ class BuildWGANModel:
                     g_loss.backward()
                     self.opt_gen.step()
 
+                    val_loss = loss_rec.item()
+
                     # print(
                     #     "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [Rec loss: %f]"
                     #     % (epoch, self.hparams.epochs, i, len(self.train_dataloader), loss_critic.item(), g_loss.item(),
@@ -166,17 +172,17 @@ class BuildWGANModel:
 
             print('++++++++++++++++++++++++++++++++')
             print(
-                "[Epoch %d/%d] [Batch %d/%d] [D loss: %f] [G loss: %f] [Rec loss: %f]"
-                % (epoch, self.hparams.epochs, i, len(self.train_dataloader), loss_critic.item(), g_loss.item(),
-                   loss_rec.item())
+                "[Epoch %d/%d] [Batch %d] [D loss: %f] [G loss: %f] [Rec loss: %f]"
+                % (epoch, self.hparams.epochs, i, loss_critic.item(), g_loss.item(),
+                   val_loss)
             )
 
             loss_val_c, loss_val_gen, loss_rec, count_1, lr_g, lr_c = self.validation()
             self.save_checkpoint(epoch=epoch, step=current_step)
 
             print(
-                "[Epoch %d/%d] [Validation Size %d] [D Val loss: %f] [G loss: %f] [Rec loss: %f] [LR C: %f] [LR G: %f]"
-                % (epoch, self.hparams.epochs, len(self.train_dataloader), loss_val_c / count_1, loss_val_gen / count_1, loss_rec / count_1,
+                "[Epoch %d/%d] [D Val loss: %f] [G loss: %f] [Rec loss: %f] [LR C: %f] [LR G: %f]"
+                % (epoch, self.hparams.epochs, loss_val_c / count_1, loss_val_gen / count_1, loss_rec / count_1,
                    lr_c, lr_g)
             )
 
@@ -213,8 +219,13 @@ class BuildWGANModel:
         count = 0
         for batch_idx, train_data in enumerate(self.val_dataloader):
             count += 1
-            input_data = train_data[0].to(device)
-            target_data = train_data[1]#[:, None]
+            if self.dataset_type == 'precipitation':
+                input_data = train_data['L'].to(device)
+                target_data = train_data['H'][:, None].to(device)
+            else:
+                input_data = train_data[0].to(device)
+                target_data = train_data[1].to(device)
+
             target_data = target_data.to(device)
 
             generator_output = self.generator(input_data)

@@ -34,16 +34,18 @@ os.environ["WANDB_MODE"] = "offline"
 wandb.init(project="Precip_downscaling", reinit=True)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
 class BuildModel:
     def __init__(self, netG, G_lossfn_type: str = "l1", G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 5.e-05, G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0, save_dir: str = "../results",
                  train_loader: object = None, val_loader: object = None, epochs: int = 70, checkpoint_save: int = 200,
-                 decay_start: int = 5, decay_end: int = 30):
+                 decay_start: int = 5, decay_end: int = 30, dataset_type: str = 'precipitation'):
 
         # ------------------------------------
         # define network
         # ------------------------------------
+        self.dataset_type = dataset_type
         self.netG = netG
         self.G_lossfn_type = G_lossfn_type
         self.G_optimizer_type = G_optimizer_type
@@ -126,9 +128,15 @@ class BuildModel:
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         # print("datat[L] shape", data["L"].shape)
-        self.L = data['L'].to(device)
-        if need_H:
-            self.H = data['H'].to(device)
+        if self.dataset_type == 'precipitation':
+            self.L = data['L'].to(device)
+            if need_H:
+                self.H = data['H'][:, None].to(device)
+
+        else:
+            self.L = data[0].to(device)
+            if need_H:
+                self.H = data[1].to(device)
 
     # ----------------------------------------
     # feed L to netG
@@ -253,13 +261,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet_p(n_channels=n_channels)
+        netG = unet(n_channels=n_channels, dataset_type=dataset_type)
     elif type_net == "swinSR":
         netG = swinSR()
     elif type_net == "vitSR":
         netG = vitSR(embed_dim=768)
     elif type_net == "wgan":
-        netG = unet(n_channels=n_channels)
+        netG = unet(n_channels=n_channels, dataset_type=dataset_type)
         netC = critic((1, 120, 96))
     else:
         NotImplementedError
@@ -274,27 +282,27 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     if type_net == "wgan":
         model = BuildWGANModel(generator=netG, save_dir=save_dir, critic=netC, train_dataloader=train_loader,
-                      val_dataloader=test_loader, checkpoint_save=checkpoint_save, hparams=args)
+                      val_dataloader=test_loader, checkpoint_save=checkpoint_save, hparams=args, dataset_type=dataset_type)
     else:
         model = BuildModel(netG, save_dir=save_dir, train_loader=train_loader, val_loader=test_loader, epochs=epochs,
-                       checkpoint_save=checkpoint_save)
+                       checkpoint_save=checkpoint_save, dataset_type=dataset_type)
     model.fit()
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=15, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir, wgan")
-    parser.add_argument("--dataset_type", type=str, default="temperature",
+    parser.add_argument("--dataset_type", type=str, default="precipitation",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
@@ -316,7 +324,7 @@ def main():
 
     run(train_dir=args.train_dir,
         test_dir=args.test_dir,
-        n_channels=9,
+        n_channels=8,
         save_dir=args.save_dir,
         checkpoint_save=10000,
         epochs=args.epochs,
