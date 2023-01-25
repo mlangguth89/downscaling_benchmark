@@ -198,7 +198,7 @@ class HandleDataClass(object):
                     if lnormalize: 
                         print("Read normalization parameters from file")
                         data_norm = ZScore(norm_dims)
-                        data_norm.read_norm_from_file(os.path.join(tmp_dir, "norm_zscore.json"))   # To-Do: Make generic
+                        data_norm.read_norm_from_file(os.path.join(tmp_dir, "norm.json"))
                     lnormalize = False
                     break
             else:
