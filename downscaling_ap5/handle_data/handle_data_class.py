@@ -341,7 +341,7 @@ class HandleDataClass(object):
 
         tf_read_nc = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
-        tf_split = lambda arr: (arr[..., 0:ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
         if lshuffle:
             nshuffle = ds_obj.samples_per_file if nshuffle_per_file is None else nshuffle_per_file
@@ -559,7 +559,7 @@ class StreamMonthlyNetCDF(object):
         Retrieves data corresponding to the provided list of indices using __getitem__
         :param indices: List of indices to sample along sample dimension
         """
-        return np.array(map(self.__getitem__, indices))
+        return np.array(list(map(self.__getitem__, indices)))
 
     def get_data_dim(self):
         """
