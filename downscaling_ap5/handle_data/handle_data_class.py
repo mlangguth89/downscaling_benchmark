@@ -316,10 +316,10 @@ class HandleDataClass(object):
         :param batch_size: desired mini-batch size
         :param lshuffle: boolean to enable sample shuffling (to be used when data was prepared
                                                              with gather_monthly_netcdf)
-        :param nshuffle_per_file: buffer for shuffling operation
+        :param nshuffle_per_file: buffer for shuffling operation; parse None to shuffle accross all files
         :param lprefetch: boolean to enable prefetching
-        :param predictors: List of selected predictor variables
-        :param predictands: List of selected predictor variables
+        :param predictors: List of selected predictor variables; parse None to use all data
+        :param predictands: List of selected predictor variables; parse None to use all data
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
                                                                          to the input)
         :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed

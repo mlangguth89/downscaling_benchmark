@@ -75,7 +75,7 @@ def main(parser_args):
     train_files = glob.glob(os.path.join(datadir, file_patt))
     data_norm = HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40, norm_dims=ds_dict["norm_dims"])
     ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
-                                                             norm_obj=data_norm)
+                                                             var_tar2in=ds_dict["var_tar2in"], norm_obj=data_norm)
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data
