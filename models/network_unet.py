@@ -1,19 +1,24 @@
-
-# SPDX-FileCopyrightText: 2021 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
-#
-# SPDX-License-Identifier: MIT
-
-
 __email__ = "b.gong@fz-juelich.de"
 __author__ = "Bing Gong"
 __date__ = "2022-07-13"
-
 
 import torch
 import torch.nn as nn
 import numpy as np
 from torch import Tensor
-from flopth import flopth
+from functools import reduce
+from operator import __add__
+
+
+class Conv2dSamePadding(nn.Conv2d):
+    def __init__(self,*args,**kwargs):
+        super(Conv2dSamePadding, self).__init__(*args, **kwargs)
+        self.zero_pad_2d = nn.ZeroPad2d(reduce(__add__,
+            [(k // 2 + (k - 2 * (k // 2)) - 1, k // 2) for k in self.kernel_size[::-1]]))
+
+    def forward(self, input):
+        return  self._conv_forward(self.zero_pad_2d(input), self.weight, self.bias)
+
 
 class Upsampling(nn.Module):
 
@@ -49,11 +54,10 @@ class Upsampling(nn.Module):
          return self.deconv_block(x)
 
 
-
 class Conv_Block(nn.Module):
 
-    def __init__(self, in_channels :int = None, out_channels: int = None,
-                 kernel_size: int = 3, padding: str = "same",bias=True):
+    def __init__(self, in_channels: int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: str = "same", bias=True):
         """
         The convolutional block consists of one convolutional layer, bach normalization and activation function
         :param in_channels : the number of input channels
@@ -63,20 +67,19 @@ class Conv_Block(nn.Module):
         """
         super().__init__()
         self.conv_block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=bias),
+            Conv2dSamePadding(in_channels, out_channels, kernel_size=kernel_size, bias=bias),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True)
         )
 
-    def forward(self, x: Tensor)->Tensor: 
+    def forward(self, x: Tensor) -> Tensor:
         return self.conv_block(x)
-
 
 
 class Conv_Block_N(nn.Module):
 
-    def __init__(self, in_channels:int = None, out_channels: int = None,
-                 kernel_size: int = 3, padding: str = "same", n :int = 2):
+    def __init__(self, in_channels: int = None, out_channels: int = None,
+                 kernel_size: int = 3, padding: str = "same", n: int = 2):
         """
 
         :param in_channels : the number of input channels
@@ -86,9 +89,9 @@ class Conv_Block_N(nn.Module):
         :param n           : the number of convolutional block
         """
         super().__init__()
-        n_layers = [Conv_Block(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True)]
-        for i in np.arange(n-1):
-            print("i",i)
+        n_layers = nn.ModuleList([Conv_Block(in_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True)])
+        for i in np.arange(n - 1):
+            print("i", i)
             n_layers.append(Conv_Block(out_channels, out_channels, kernel_size=kernel_size, padding=padding, bias=True))
 
         self.conv_block_n = nn.Sequential(*n_layers)
@@ -100,7 +103,8 @@ class Conv_Block_N(nn.Module):
 class Encoder_Block(nn.Module):
     """Downscaling with maxpool then convol block"""
 
-    def __init__(self, in_channels: int = None, out_channels: int = None, kernel_maxpool: int = 2, l_large: bool = True):
+    def __init__(self, in_channels: int = None, out_channels: int = None, kernel_maxpool: int = 2,
+                 l_large: bool = True):
         """
         One complete encoder-block used in U-net.
         :param in_channels   : the number of input channels
@@ -111,62 +115,61 @@ class Encoder_Block(nn.Module):
         super().__init__()
 
         if l_large:
-            self.layer1 = Conv_Block_N(in_channels, out_channels, n = 2)
+            self.layer1 = Conv_Block_N(in_channels, out_channels, n=2)
         else:
-            self.layer1 = Conv_Block_N(in_channels, out_channels)
+            self.layer1 = Conv_Block_N(in_channels, out_channels, n=1)
 
         self.maxpool_conv = nn.MaxPool2d(kernel_maxpool)
 
-    def forward(self, x:Tensor)->Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         x = self.layer1(x)
         e = self.maxpool_conv(x)
         return x, e
 
 
 class Decode_Block(nn.Module):
-
     """Upscaling then double conv"""
+
     def __init__(self, in_channels: int = None, out_channels: int = None, kernel_size: int = 2,
                  stride_up: int = 2, padding: str = "same"):
         super().__init__()
 
-        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 0)
-        self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding=0)
+        self.conv = Conv_Block_N(in_channels, out_channels, n=2, kernel_size=(3, 3), padding=padding)
 
-    def forward(self, x1: Tensor, x2:Tensor)->Tensor:
-
+    def forward(self, x1: Tensor, x2: Tensor) -> Tensor:
         x1 = self.up(x1)
         x = torch.cat([x2, x1], dim=1)
         return self.conv(x)
 
 
-
 class UNet(nn.Module):
-    def __init__(self, n_channels=8, channels_start: int = 56):
-
+    def __init__(self, n_channels, channels_start: int = 56, dataset_type: str = 'precipitation'):
         super(UNet, self).__init__()
-
+        self.dataset_type = dataset_type
         self.upsampling = Upsampling(n_channels, channels_start)
 
         """encoder """
         self.down1 = Encoder_Block(n_channels, channels_start)
-        self.down2 = Encoder_Block(channels_start, channels_start*2)
-        self.down3 = Encoder_Block(channels_start*2, channels_start*4)
+        self.down2 = Encoder_Block(channels_start, channels_start * 2, l_large=False)
+        self.down3 = Encoder_Block(channels_start * 2, channels_start * 4, l_large=False)
 
         """ bridge encoder <-> decoder """
-        self.b1 = Conv_Block(channels_start*4, channels_start*8)
+        self.b1 = Conv_Block(channels_start * 4, channels_start * 8)
 
         """decoder """
-        self.up1 = Decode_Block(channels_start*8, channels_start*4)
-        self.up2 = Decode_Block(channels_start*4, channels_start*2)
-        self.up3 = Decode_Block(channels_start*2, channels_start)
+        self.up1 = Decode_Block(channels_start * 8, channels_start * 4)
+        self.up2 = Decode_Block(channels_start * 4, channels_start * 2)
+        self.up3 = Decode_Block(channels_start * 2, channels_start)
 
         self.output = nn.Conv2d(channels_start, 1, kernel_size=1, bias=True)
-        torch.nn.init.xavier_uniform(self.output .weight)
+        torch.nn.init.xavier_uniform(self.output.weight)
 
+    def forward(self, x: Tensor) -> Tensor:
+        # print("input shape",x.shape)
+        if self.dataset_type == 'precipitation':
+            x = self.upsampling(x)
 
-    def forward(self, x:Tensor)->Tensor:
-        x = self.upsampling(x)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
         s3, e3 = self.down3(e2)
@@ -178,9 +181,3 @@ class UNet(nn.Module):
         return output
 
 
-## declare Model object
-#my_model= UNet()
-
-# Use input size
-#flops, params = flopth(my_model, in_size=((16, 16, 8 ),))
-#print("flops, params", flops, params)
