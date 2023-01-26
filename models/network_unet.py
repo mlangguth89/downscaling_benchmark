@@ -13,7 +13,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from torch import Tensor
-
+from flopth import flopth
 
 class Upsampling(nn.Module):
 
@@ -130,8 +130,7 @@ class Decode_Block(nn.Module):
                  stride_up: int = 2, padding: str = "same"):
         super().__init__()
 
-
-        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 1)
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride_up, padding = 0)
         self.conv = Conv_Block_N(in_channels, out_channels, n = 2, kernel_size = kernel_size, padding = padding)
 
     def forward(self, x1: Tensor, x2:Tensor)->Tensor:
@@ -143,7 +142,7 @@ class Decode_Block(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, channels_start: int = 56):
+    def __init__(self, n_channels=8, channels_start: int = 56):
 
         super(UNet, self).__init__()
 
@@ -167,7 +166,6 @@ class UNet(nn.Module):
 
 
     def forward(self, x:Tensor)->Tensor:
-        print("input shape",x.shape)
         x = self.upsampling(x)
         s1, e1 = self.down1(x)
         s2, e2 = self.down2(e1)
@@ -178,3 +176,11 @@ class UNet(nn.Module):
         d3 = self.up3(d2, s1)
         output = self.output(d3)
         return output
+
+
+## declare Model object
+#my_model= UNet()
+
+# Use input size
+#flops, params = flopth(my_model, in_size=((16, 16, 8 ),))
+#print("flops, params", flops, params)

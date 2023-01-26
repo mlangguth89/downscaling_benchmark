@@ -9,8 +9,9 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        //"resume_state": null
-        "resume_state": "experiments/sr_ffhq_230104_174013/checkpoint/I430000_E7" //pretrain model or training state
+        "resume_state": null
+	//"resume_state":"experiments/sr_ffhq_230124_214011/checkpoint/I860000_E14"
+        //"resume_state": "experiments/sr_ffhq_230104_174013/checkpoint/I430000_E7" //pretrain model or training state
     },
     "datasets": {
         "train": {
@@ -59,14 +60,14 @@
             "train": {
                 "schedule": "linear",
                 "n_timestep": 2000,
-                "linear_start": 1e-6,
-                "linear_end": 1e-2
+                "linear_start": 1e-8,
+                "linear_end": 1e-4
             },
             "val": {
                 "schedule": "linear",
                 "n_timestep": 2000,
-                "linear_start": 1e-6,
-                "linear_end": 1e-2
+                "linear_start": 1e-8,
+                "linear_end": 1e-4
             }
         },
         "diffusion": {

@@ -15,11 +15,12 @@ module load Stages/2022 GCCcore/.11.2.0 dask/2021.9.1
 module load PyTorch/1.11-CUDA-11.5
 module load torchvision
 #ml SciPy-bundle/2021.10
-source ../venv_booster/bin/activate
+source ../env_setup/venv_booster/bin/activate
 
-train_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train
-test_dir=/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/test
-save_dir=../results/exp_20221030
+
+train_dir=/p/home/jusers/gong1/juwels/scratch_bing/datasets/precip_dataset/train
+val_dir=/p/home/jusers/gong1/juwels/scratch_bing/datasets/precip_dataset/val
+save_dir=../results/exp_20230123
 # save_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/results/swinUnet_exp1017_origin_booster_3years
 #train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
 #val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/val
@@ -27,7 +28,7 @@ save_dir=../results/exp_20221030
 
 epochs=4
 #model_type=vitSR
-model_type=swinSR
+model_type=swinIR
 #model_type=unet
 #model_type=swinUnet
 
