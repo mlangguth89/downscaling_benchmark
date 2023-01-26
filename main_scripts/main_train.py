@@ -20,7 +20,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_swinir import SwinIR as swinSR
+from models.network_swinir import SwinIR as swinIR
 #from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
@@ -28,12 +28,12 @@ from models.network_diffusion  import UNet_diff
 from models.network_unet import Upsampling
 from utils.data_loader import create_loader
 from models.diffusion_utils import GaussianDiffusion
+from flopth import flopth
 ###Weights and Bias
 import wandb
 os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-wandb.run.name = "diff_lr"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device",device)
@@ -146,7 +146,10 @@ class BuildModel:
             self.L = upsampling(self.L)
         self.H = data['H']
 
-
+    def count_flops(self,data):
+        # Count the number of FLOPs
+        c_ops = count_ops(self.netG,data)
+        print("The number of FLOPS is:",c_ops )
 
     # ----------------------------------------
     # feed L to netG
@@ -235,14 +238,21 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     conditional = None
     timesteps = None
 
-    train_loader = create_loader(train_dir)
-    val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir)
+    train_loader = create_loader(train_dir, patch_size=16)
+    val_loader = create_loader(file_path=val_dir, mode="test", stat_path=train_dir, patch_size=16)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
         netG = unet(n_channels = n_channels)
-    elif type_net == "swinSR":
-        netG = swinSR(img_size=16, patch_size=patch_size, in_chans=n_channels,window_size=window_size,
+        # Use input size
+        flops, params = flopth(netG, in_size=((n_channels, 16, 16 ),))
+        print("flops, params", flops, params)
+    elif type_net == "swinIR":
+        netG = swinIR(img_size=16, patch_size=patch_size, in_chans=n_channels,window_size=window_size,
                 upscale=upscale_swinIR, upsampler=upsampler_swinIR)
+           # Use input size
+        #flops = netG.flops()
+        flops, params = flopth(netG, in_size=((n_channels, 16, 16 ),))
+        print("flops, params", flops,params)
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
@@ -262,12 +272,11 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         netG = UNet_diff(img_size=160, n_channels=n_channels+1) #add one channel for the noise
         difussion = True
 
-
+   
     else:
         raise NotImplementedError
 
-
-
+    wandb.run.name = type_net
     netG_params = sum(p.numel() for p in netG.parameters() if p.requires_grad)
     print("Total trainable parameters:", netG_params)
 
@@ -304,6 +313,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
             # 2) feed patch pairs
             # -------------------------------
             model.feed_data(train_data)
+            #if i == 0:
+            #    model.count_flops(train_data["H"])
 
             # -------------------------------
             # 3) optimize parameters
