@@ -33,12 +33,16 @@ def tensor2img(tensor, out_type=np.uint8, min_max=(-1, 1)):
         # Important. Unlike matlab, numpy.unit8() WILL NOT round by default.
     return img_np.astype(out_type)
 
-def tensor2np(tensor, std, avg):
+def tensor2np(tensor, std, avg, k=0.01):
 
     n_dim = tensor.dim()
     img_np = tensor.cpu().numpy()
 
     img_np = img_np * std + avg
+
+    # log-transform -> log(x+k)-log(k)
+    img_np = np.exp(img_np+np.log(k))-k
+
     #img_np = np.transpose(img_np, (1, 2, 0))  # HWC, RGB
     print("After tensor2np the shape is", img_np.shape)
     return img_np

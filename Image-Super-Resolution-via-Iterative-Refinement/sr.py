@@ -66,10 +66,10 @@ if __name__ == "__main__":
                     val_set, dataset_opt, phase)
         else:
             if phase == 'train' and args.phase != 'val':
-                train_loader = Data.create_loader_prep(file_path = opt["datasets"][phase]["dataroot"])
+                train_loader = Data.create_loader_prep(file_path = opt["datasets"][phase]["dataroot"], batch_size=opt["datasets"][phase]["batch_size"], k=0.01, mode=phase)
             elif phase == 'val':
                 val_loader = Data.create_loader_prep(
-                    file_path = opt["datasets"][phase]["dataroot"])
+                    file_path = opt["datasets"][phase]["dataroot"], k=0.01, mode=phase, stat_path=args.stat_dir)
 
 
 
@@ -100,7 +100,7 @@ if __name__ == "__main__":
                 train_data["SR"] = train_data["SR"][0,...]
                 #print("train_data", train_data["HR"].shape)
                 #print("LR", train_data["LR"].shape)
-                print("SR", train_data["SR"].shape) #[4,8,160,160]
+                #print("SR", train_data["SR"].shape) #[4,8,160,160]
 
                 if current_step > n_iter:
                     break
@@ -225,17 +225,17 @@ if __name__ == "__main__":
             vars_out_patches_std = stat_data['yw_hourly_tar_std']
 
 
-            # grid img
-            print("visual SR",visuals['SR'].shape) #[44,1,160,160], [4,11,160,160]
-            print("visual LR", visuals["LR"].shape) #[4,8,16,16]
-            print("visual HR", visuals["HR"].shape) #[4, 1, 160, 160]
+            # griId img
+            #print("visual SR",visuals['SR'].shape) #[44,1,160,160], [4,11,160,160]
+            #print("visual LR", visuals["LR"].shape) #[4,8,16,16]
+            #print("visual HR", visuals["HR"].shape) #[4, 1, 160, 160]
             #sr_img = Metrics.tensor2img(visuals['SR'])
             sr_img = Metrics.tensor2np(visuals['SR'],vars_out_patches_std,vars_out_patches_mean)
             hr_img = Metrics.tensor2np(val_data["HR"][:,0,:,:],vars_out_patches_std,vars_out_patches_mean)
             lr_img = Metrics.tensor2np(val_data['LR'][0,:,-1,:,:],vars_out_patches_std,vars_out_patches_mean)
             #fake_img = Metrics.tensor2img(visuals['INF'])  # uint8
-            print("sr_img shape",sr_img.shape) #[160,160,44]
-            print("hr_image.shape",hr_img.shape) #[4,160,160]
+            #print("sr_img shape",sr_img.shape) #[160,160,44]
+            #print("hr_image.shape",hr_img.shape) #[4,160,160]
 
             Metrics.save_to_nc(
                 sr_img, hr_img, lr_img, '{}/{}_{}_sr_process.nc'.format(result_path, current_step, idx))

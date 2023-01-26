@@ -28,7 +28,8 @@ def parse(args):
     with open(opt_path, 'r') as f:
         for line in f:
             line = line.split('//')[0] + '\n'
-            json_str += line
+            json_str += line  
+    print('json_str: {}'.format(json_str))
     opt = json.loads(json_str, object_pairs_hook=OrderedDict)
 
     # set log directory
