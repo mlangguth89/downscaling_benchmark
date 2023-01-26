@@ -9,18 +9,19 @@
         "tb_logger": "tb_logger",
         "results": "results",
         "checkpoint": "checkpoint",
-        //"resume_state": null
-        "resume_state": "experiments/sr_ffhq_230104_174013/checkpoint/I430000_E7" //pretrain model or training state
+        "resume_state": null
+	//"resume_state":"experiments/sr_ffhq_230124_214011/checkpoint/I860000_E14"
+        //"resume_state": "experiments/sr_ffhq_230104_174013/checkpoint/I430000_E7" //pretrain model or training state
     },
     "datasets": {
         "train": {
             "name": "Precipitation",
             "mode": "HR", // whether need LR img
-            "dataroot": "/p/home/jusers/gong1/juwels/scratch_bing/datasets/precip_dataset/train",
+            "dataroot": "/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train",
             "datatype": "img", //lmdb or img, path of img files
             "l_resolution": 16, // low resolution need to super_resolution
             "r_resolution": 160, // high resolution
-            "batch_size": 4,
+            "batch_size": 32,
             "num_workers": 8,
             "use_shuffle": true,
             "data_len": -1 // -1 represents all data used in train
@@ -28,7 +29,7 @@
         "val": {
             "name": "Precipitation",
             "mode": "LRHR",
-            "dataroot": "/p/home/jusers/gong1/juwels/scratch_bing/datasets/precip_dataset/test",
+            "dataroot": "/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test",
             "datatype": "img", //lmdb or img, path of img files
             "l_resolution": 16,
             "r_resolution": 160,
@@ -39,7 +40,7 @@
         "which_model_G": "sr3", // use the ddpm or sr3 network structure
         "finetune_norm": false,
         "unet": {
-            "in_channel": 9,
+            "in_channel":11,
             "out_channel": 1,
             "inner_channel": 64,
             "channel_multiplier": [
@@ -59,14 +60,14 @@
             "train": {
                 "schedule": "linear",
                 "n_timestep": 2000,
-                "linear_start": 1e-6,
-                "linear_end": 1e-2
+                "linear_start": 1e-8,
+                "linear_end": 1e-4
             },
             "val": {
                 "schedule": "linear",
                 "n_timestep": 2000,
-                "linear_start": 1e-6,
-                "linear_end": 1e-2
+                "linear_start": 1e-8,
+                "linear_end": 1e-4
             }
         },
         "diffusion": {

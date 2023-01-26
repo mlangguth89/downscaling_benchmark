@@ -29,8 +29,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
 
     def __init__(self, file_path: str = None, batch_size: int = 4, patch_size: int = 16,
-                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
-                                  "yw_hourly_in"],
+                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
                  seed: int = 1234, k: float = 0.01, mode: str = "train", stat_path: str = None):
         """
@@ -87,7 +86,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         print('self.times_patches_list: {}'.format(self.times_patches_list))
 
         if self.mode == "train":
-            self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3))
+            self.vars_in_patches_mean = self.vars_in_patches_list.mean(dim=(0,2,3)) #[n_samples,n_vars,n_lon,n_lat]
             self.vars_in_patches_std = self.vars_in_patches_list.std(dim=(0,2,3))
             self.vars_out_patches_mean = self.vars_out_patches_list.mean()
             self.vars_out_patches_std = self.vars_out_patches_list.std()
@@ -102,6 +101,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
                 self.vars_in_patches_std.append(stat_data[self.vars_in[i]+'_std'])
             self.vars_out_patches_mean = stat_data[self.var_out[0]+'_mean']
             self.vars_out_patches_std = stat_data[self.var_out[0]+'_std']
+        
+        print("self.vars_in_patches_mean: {}".format(self.vars_in_patches_mean))
+        print("self.vars_out_patches_mean: {}".format(self.vars_out_patches_mean))
 
         print("The total number of samples after filtering NaN values:", len(self.vars_in_patches_list))
         
@@ -109,7 +111,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         #print("var_out size",self.vars_out_patches_list)
 
         self.idx_perm = self.shuffle()
-        self.save_stats()
+        if self.mode == "train":
+            self.save_stats()
 
     def process_netcdf(self, filenames: int = None):
         """
@@ -135,8 +138,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         outputs_nparray = output.to_array(dim = "variables").squeeze().values
 
         # log-transform -> log(x+k)-log(k)
-        #inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
-        #outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
+        inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
+        outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
         print('inputs_nparray shape: {}'.format(inputs_nparray.shape))
         print('inputs_nparray[self.prcp_indexes] shape: {}'.format(inputs_nparray[self.prcp_indexes].shape))
 
