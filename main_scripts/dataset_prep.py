@@ -194,7 +194,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         # Only get the patch that without NaN values
         vars_out_pathes_no_nan = torch.index_select(vars_out_patches, 0, no_nan_idx)
         vars_in_patches_no_nan = torch.index_select(vars_in_patches, 0, no_nan_idx)
-        times_no_nan = torch.index_select(times_patches,0, no_nan_idx) 
+        times_no_nan = torch.index_select(times_patches, 0, no_nan_idx)
         assert len(vars_out_pathes_no_nan) == len(vars_in_patches_no_nan)
 
         return vars_in_patches_no_nan, vars_out_pathes_no_nan, times_no_nan
@@ -238,7 +238,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)  # todo
         self.idx = 0
 
-        transform_x = torchvision.transforms.Normalize(self.vars_in_patches_mean,self.vars_in_patches_std)
+        transform_x = torchvision.transforms.Normalize(self.vars_in_patches_mean, self.vars_in_patches_std)
 
         for bidx in range(iter_start, iter_end):
 
