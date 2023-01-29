@@ -199,6 +199,9 @@ class HandleDataClass(object):
                         print("Read normalization parameters from file")
                         data_norm = ZScore(norm_dims)
                         data_norm.read_norm_from_file(os.path.join(tmp_dir, "norm.json"))
+                        mu, sigma = data_norm.norm_stats["mu"].copy(), data_norm.norm_stats["sigma"].copy()
+                        mu, sigma = mu.astype("float32"), sigma.astype("float32")
+                        data_norm.norm_stats["mu"], data_norm.norm_stats["sigma"] = mu, sigma
                     lnormalize = False
                     break
             else:
@@ -221,7 +224,7 @@ class HandleDataClass(object):
                 print(f"Read netCDF file '{fname_now}' for normalization.")
                 ds_now = xr.open_dataset(fname_now)
                 da_now = HandleDataClass.reshape_ds(ds_now)
-                da_now = ds_obj.data_norm.normalize(da_now).astype(dtype, copy=False)
+                da_now = ds_obj.data_norm.normalize(da_now).astype(dtype, copy=True)
 
                 ds_now = da_now.to_dataset("variables")
                 # overwrite existing netCDF
@@ -232,7 +235,7 @@ class HandleDataClass(object):
             # ensure single precision in data norm
             data_norm = ds_obj.data_norm
             for param, param_data in data_norm.norm_stats.items():
-                data_norm.norm_stats[param] = param_data.astype(dtype, copy=False)
+                data_norm.norm_stats[param] = param_data.astype(dtype, copy=True)
 
             data_norm.save_norm_to_file(os.path.join(tmp_dir, "norm.json"))
 
@@ -355,7 +358,7 @@ class HandleDataClass(object):
 
         tfds = tfds.map(tf_split).repeat()
         if lprefetch:
-            tfds = tfds.prefetch(int(ds_obj.samples_per_file/2))
+            tfds = tfds.prefetch(int(ds_obj.samples_per_file))
 
         return ds_obj, tfds
 
@@ -547,19 +550,13 @@ class StreamMonthlyNetCDF(object):
     def __len__(self):
         return self.nsamples
 
-    def __getitem__(self, i):
-        """
-        Converts index to sample data. Is mapped list of indices in getitems-method.
-        """
-        data = self.index_to_sample(i)
-        return data
-
     def getitems(self, indices):
         """
         Retrieves data corresponding to the provided list of indices using __getitem__
         :param indices: List of indices to sample along sample dimension
         """
-        return np.array(list(map(self.__getitem__, indices)))
+        data =self.data.isel({self.sample_dim: indices}).transpose(..., "variables")
+        return data.values
 
     def get_data_dim(self):
         """
@@ -679,12 +676,12 @@ class StreamMonthlyNetCDF(object):
         fname = tf.keras.backend.get_value(fname)
         fname = str(fname).lstrip("b'").rstrip("'")
         print(f"Load data from {fname}...")
-        ds_now = xr.open_dataset(str(fname), engine="netcdf4")
-        self.nsamples = len(ds_now[self.sample_dim])
+        ds_now = xr.open_dataset(str(fname), engine="netcdf4", cache=False)
         var_list = list(self.predictor_list) + list(self.predictand_list)
         ds_now = ds_now[var_list]
-        da_now = HandleDataClass.reshape_ds(ds_now)
-        da_now = dask.compute(da_now.astype("float32", copy=False))[0]
+        da_now = ds_now.to_array("variables").astype("float32", copy=True)
+        del ds_now
+        gc.collect()
 
         if self.var_tar2in is None:
             self.data = da_now
@@ -694,15 +691,6 @@ class StreamMonthlyNetCDF(object):
             self.data = xr.concat([da_now, da_now.sel({"variables": "hsurf_tar"})], dim="variables")
 
         return True
-
-    def index_to_sample(self, index):
-        """
-        Retrieves single sample from self.data
-        :param index: the index to retrieve from the sample dimension (self.sample_dim)
-        :return: the corresponding data sample as xr.DataArray
-        """
-
-        return self.data.isel({self.sample_dim: index})
 
 
 

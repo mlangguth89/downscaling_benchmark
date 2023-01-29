@@ -86,7 +86,7 @@ def main(parser_args):
     da_val = HandleDataClass.reshape_ds(ds_val)
     da_val = data_norm.normalize(da_val)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=False), ds_dict["batch_size"], lshuffle=False,
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
     print(f"Preparing validation data took {timer() - t0_val:.2f}s.")
 
