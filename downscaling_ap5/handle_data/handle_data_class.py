@@ -138,7 +138,7 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-            named_targets: bool = False, var_tar2in: str = None, lembed: bool = False) -> tf.data.Dataset:
+            named_targets: bool = False, z_branch: bool = False, var_tar2in: str = None, lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         Note that all data is loaded into memory.
@@ -155,6 +155,9 @@ class HandleDataClass(object):
         da_in, da_tar = HandleDataClass.split_in_tar(da)
         if var_tar2in is not None:
             da_in = xr.concat([da_in, da_tar.sel({"variables": var_tar2in})], "variables")
+
+        if not z_branch:
+            da_tar = da_tar.isel({"variables": [0]})
 
         varnames_tar = da_tar["variables"].values
 
