@@ -22,6 +22,9 @@ def create_loader(file_path: str = None,
                   sf: int = 10,
                  seed: int = 1234,
                   dataset_type: str = "precipitation",
+                  mode: str = "train",
+                  k: float = 0.01,
+                  stat_path: str = None,
                   verbose: int = 0):
 
     """
@@ -36,13 +39,16 @@ def create_loader(file_path: str = None,
     dataset_type    : specify which dataset type we want to load
     """
     if dataset_type == "precipitation":
-        dataset = PrecipDatasetInter(file_path,
-                                     batch_size,
-                                     patch_size,
-                                     vars_in,
-                                     var_out,
-                                     sf,
-                                     seed)
+        dataset = PrecipDatasetInter(file_path=file_path,
+                                     batch_size=batch_size,
+                                     patch_size=patch_size,
+                                     vars_in=vars_in,
+                                     var_out=var_out,
+                                     sf=sf,
+                                     seed=seed,
+                                     k=k,
+                                     mode=mode,
+                                     stat_path=stat_path)
         dataloader = DataLoader(dataset, batch_size=None)
     elif dataset_type == "temperature":
         dataset = CustomTemperatureDataset(file_path=file_path, verbose=verbose)

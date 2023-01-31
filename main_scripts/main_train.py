@@ -13,20 +13,25 @@ import sys
 import os
 import json
 import torch
+from collections import OrderedDict
+from torch.optim import lr_scheduler
+from torch.optim import Adam
+import torch.nn as nn
 
 sys.path.append('../')
 from models.network_unet import UNet as unet
+from models.network_vanilla_swin_transformer import SwinTransformerSR as swinSR
 from models.network_swinir import SwinIR as swinIR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from models.network_diffusion  import UNet_diff
 from models.network_unet import Upsampling
-from utils.data_loader import create_loader
 from models.diffusion_utils import GaussianDiffusion
 from models.network_critic import Discriminator as critic
-from utils.data_loader import create_loader
+
 from train_scripts.wgan_train import BuildWGANModel
 from train_scripts.train import BuildModel
+from utils.data_loader import create_loader
 from flopth import flopth
 ###Weights and Bias
 import wandb
@@ -39,16 +44,14 @@ print("device",device)
 
 available_models = ["unet", "wgan", "diffusion", "swinIR","swinUnet"]
 
-
-
-
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
-        val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
+        test_dir: str = None,
         n_channels: int = 8,
         save_dir: str = "../results",
         checkpoint_save: int = 200,
         epochs: int = 2,
         type_net: str = "unet",
+        batch_size: int = 4,
         patch_size: int = 2,
         window_size: int = 4,
         upscale_swinIR: int = 4,
@@ -73,14 +76,17 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     wandb.run.name = type_net
 
-    train_loader = create_loader(train_dir, patch_size=16)
-    val_loader = create_loader(file_path=val_dir,
+    train_loader = create_loader(file_path=train_dir, batch_size=batch_size, dataset_type=dataset_type, patch_size=16, k=0.01, mode="train")
+    test_loader = create_loader(file_path=test_dir,
                                mode="test",
+                               dataset_type=dataset_type,
+                               k=0.01,
                                stat_path=train_dir,
-                               patch_size=16)
+                               patch_size=16,
+                               verbose=1)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels = n_channels)
+        netG = unet(n_channels = n_channels,dataset_type=dataset_type)
     elif type_net == "swinIR":
         netG = swinIR(img_size=16,
                       patch_size=patch_size,
@@ -114,9 +120,9 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     else:
         raise NotImplementedError
 
-    #calculate the model size
-    flops, params = flopth(netG, in_size = ((n_channels, 16, 16),))
-    print("flops, params", flops, params)
+    ##calculate the model size
+    #flops, params = flopth(netG, in_size = ((n_channels, 16, 16),))
+    #print("flops, params", flops, params)
 
 
     #calculate the trainable parameters
@@ -130,24 +136,12 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         print("Total trainalbe parameters:", netG_params)
 
 
-
     if type_net == "wgan":
-        model = BuildWGANModel(generator=netG,
-                               save_dir=save_dir,
-                               critic=netC,
-                               train_dataloader=train_loader,
-                               val_dataloader=val_loader,
-                               hparams=args,
-                               dataset_type=dataset_type)
+        model = BuildWGANModel(generator=netG, save_dir=save_dir, critic=netC, train_dataloader=train_loader,
+                      val_dataloader=test_loader, checkpoint_save=checkpoint_save, hparams=args, dataset_type=dataset_type)
     else:
-        model = BuildModel(netG,
-                           save_dir = save_dir,
-                           difussion=difussion,
-                           conditional=conditional,
-                           timesteps=timesteps,
-                           train_dataloader = train_loader,
-                           val_dataloader = val_loader
-                           )
+        model = BuildModel(netG, save_dir=save_dir, difussion=difussion, conditional=conditional, timesteps=timesteps, train_loader=train_loader, val_loader=test_loader, epochs=epochs,
+                       checkpoint_save=checkpoint_save, dataset_type=dataset_type)
 
     wandb.config = {
         "lr": model.G_optimizer_lr,
@@ -158,7 +152,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         "patch_size": patch_size
     }
 
-
     model.fit()
                 
 
@@ -167,11 +160,21 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type = str, required = True,
                         help = "The directory where training data (.nc files) are stored")
-    parser.add_argument("--val_dir", type = str, required = True,
+    parser.add_argument("--test_dir", type = str, required = True,
                         help = "The directory where validation data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
+    parser.add_argument("--dataset_type", type = str, help = "The dataset_type: precipitation, temperature")
+    parser.add_argument("--batch_size", type=int, default=32, help="batch size")
+    parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
+    parser.add_argument("--lr_gn", type=float, default=1.e-05, help="The checkpoint directory")
+    parser.add_argument("--lr_gn_end", type=float, default=1.e-06, help="The checkpoint directory")
+    parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
+    parser.add_argument("--decay_start", type=int, default=25, help="The checkpoint directory")
+    parser.add_argument("--decay_end", type=int, default=50, help="The checkpoint directory")
+    parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
+    parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
     # PARAMETERS FOR SWIN-IR & SWIN-UNET
     parser.add_argument("--patch_size", type = int, default = 2)
@@ -193,11 +196,14 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
-        val_dir = args.val_dir,
+        test_dir=args.test_dir,
         n_channels = 8,
         save_dir = args.save_dir,
+        checkpoint_save=10000,
         epochs = args.epochs,
         type_net = args.model_type,
+        dataset_type = args.dataset_type,
+        batch_size=args.batch_size,
         patch_size = args.patch_size,
         window_size = args.window_size,
         upscale_swinIR = args.upscale_swinIR,
@@ -211,15 +217,5 @@ if __name__ == '__main__':
     if cuda:
         torch.set_default_tensor_type('torch.cuda.FloatTensor')
     main()
-    # run(train_dir = "../../data/",
-    #     val_dir = "../../data/",
-    #     n_channels = 8,
-    #     save_dir = '.',
-    #     checkpoint_save = 20,
-    #     epochs = 1,
-    #     type_net = "difussion",
-    #     conditional = True,
-    #     timesteps=200
-    #
-    #     )
-    #
+
+

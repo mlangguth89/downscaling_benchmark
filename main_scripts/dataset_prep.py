@@ -73,11 +73,13 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
         # Search for files
         p = pathlib.Path(self.file_path)
+        print("Going to open the following files:",self.file_path)
         #assert(p.is_dir())
         #self.files = glob.glob(os.path.join(file_path, 'preproc_ifs_radklim*.nc'))
         #for path in p.rglob('preproc_ifs_radklim*.nc'):
         #    print("pathname",path.name)
         files = sorted(p.rglob('preproc_ifs_radklim_*.nc'))
+        print("Going to open the following files:", files)
         if len(files) < 1:
             raise RuntimeError('No files found.')
         print("Going to open the following files:", files)
