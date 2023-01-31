@@ -82,8 +82,8 @@ def main(parser_args):
     t0_val = timer()
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     ds_val = xr.open_dataset(fdata_val)
+    ds_val = ds_obj.data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
-    da_val = ds_obj.data_norm.normalize(da_val)
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
