@@ -8,7 +8,7 @@ Abstract class to perform normalization on data
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2022-11-24"
+__update__ = "2023-01-31"
 
 from abc import ABC, abstractmethod
 from typing import Union, List
@@ -109,9 +109,9 @@ class Normalize(ABC):
 
         norm_serialized = {key: da.to_dict() for key, da in self.norm_stats.items()}
 
-        # serialization and (later) deserialization depends from data type.
+        # serialization and (later) deserialization depends on data type.
         # Thus, we have to save it to the dictionary
-        d0 = list(data_norm.norm_stats.values())[0]
+        d0 = list(self.norm_stats.values())[0]
         if isinstance(d0, xr.DataArray):
             norm_serialized["data_type"] = "data_array"
         elif isinstance(d0, xr.Dataset):
