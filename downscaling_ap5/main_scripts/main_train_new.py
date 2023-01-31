@@ -72,10 +72,9 @@ def main(parser_args):
     print("Start preparing training data...")
     t0_train = timer()
     file_patt = "downscaling_tier2_train_*.nc"
-    train_files = glob.glob(os.path.join(datadir, file_patt))
-    data_norm = HandleDataClass.gather_monthly_netcdf(train_files, nfiles_resampled=40, norm_dims=ds_dict["norm_dims"])
-    ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, "ds_resampled_*.nc", bs_train,
-                                                             var_tar2in=ds_dict["var_tar2in"], norm_obj=data_norm, lprefetch=True)
+    ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train, 30, lprefetch=True,
+                                                             var_tar2in=ds_dict["var_tar2in"],
+                                                             norm_dims=ds_dict["norm_dims"])
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data
@@ -84,7 +83,7 @@ def main(parser_args):
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     ds_val = xr.open_dataset(fdata_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
-    da_val = data_norm.normalize(da_val)
+    da_val = ds_obj.data_norm.normalize(da_val)
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
@@ -178,7 +177,7 @@ def main(parser_args):
         else:
             model_info = {}
         stat_info = {"static_model_info": model_info,
-                     "data_info": {"training data size": da_train.nbytes, "validation data size": da_val.nbytes,
+                     "data_info": {"training data size": -999., "validation data size": da_val.nbytes,
                                    "nsamples": ds_obj.nsamples, "shape_samples": shape_in,
                                    "batch_size": ds_dict["batch_size"]}}
 
