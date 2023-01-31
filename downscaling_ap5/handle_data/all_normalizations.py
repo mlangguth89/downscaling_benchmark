@@ -34,15 +34,14 @@ class ZScore(Normalize):
         if mu is None or std is None:
             print("Retrieve mu and sigma from data...")
             mu, std = data.mean(self.norm_dims), data.std(self.norm_dims)
+            # the following ensure that both parameters are computed in one graph!
+            # This significantly reduces memory footprint as we don't end up having data duplicates
+            # in memory due to multiple graphs (and also seem to enfore usage of data chunks as well)
+            mu, std = dask.compute(mu, std)
             self.norm_stats = {"mu": mu, "sigma": std}
         # else:
         #    print("Mu and sigma are parsed for (de-)normalization.")
 
-        # the following ensure that both parameters are computed in one graph! 
-        # This significantly reduces memory footprint as we don't end up having data duplicates 
-        # in memory due to multiple graphs (and also seem to enfore usage of data chunks as well)
-        mu, std = dask.compute(mu, std)
-        
         return mu, std
 
     @staticmethod

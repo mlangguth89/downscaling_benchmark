@@ -24,6 +24,7 @@ class Normalize(ABC):
     """
     Abstract class for normalizing data.
     """
+
     def __init__(self, method: str, norm_dims: List):
         self.method = method
         self.norm_dims = norm_dims
@@ -37,8 +38,8 @@ class Normalize(ABC):
         :return: DataArray with normalized data.
         """
         # sanity checks
-        if not isinstance(data, xr.DataArray):
-            raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
+        # if not isinstance(data, xr.DataArray):
+        #    raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
 
         _ = self._check_norm_dims(data)
         # do the computation
@@ -55,8 +56,8 @@ class Normalize(ABC):
         :return: DataArray with denormalized data.
         """
         # sanity checks
-        if not isinstance(data, xr.DataArray):
-            raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
+        # if not isinstance(data, xr.DataArray):
+        #    raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
 
         _ = self._check_norm_dims(data)
         # do the computation
@@ -108,6 +109,14 @@ class Normalize(ABC):
 
         norm_serialized = {key: da.to_dict() for key, da in self.norm_stats.items()}
 
+        # serialization and (later) deserialization depends from data type.
+        # Thus, we have to save it to the dictionary
+        d0 = list(data_norm.norm_stats.values())[0]
+        if isinstance(d0, xr.DataArray):
+            norm_serialized["data_type"] = "data_array"
+        elif isinstance(d0, xr.Dataset):
+            norm_serialized["data_type"] = "data_set"
+
         if missdir_ok: os.makedirs(os.path.dirname(js_file), exist_ok=True)
 
         with open(js_file, "w") as jsf:
@@ -122,7 +131,19 @@ class Normalize(ABC):
         with open(js_file, "r") as jsf:
             norm_data = js.load(jsf)
 
-        norm_dict_restored = {key: xr.DataArray.from_dict(da_dict) for key, da_dict in norm_data.items()}
+        data_type = norm_data.pop('data_type', None)
+
+        if data_type == "data_array":
+            xr_obj = xr.DataArray
+        elif data_type == "data_set":
+            xr_obj = xr.Dataset
+        else:
+            raise ValueError(
+                f"Unknown data_type {data_type} in {js_file}. Only 'data_array' or 'data_set' are allowed.")
+
+        norm_data.pop('data_type', None)
+
+        norm_dict_restored = {key: xr_obj.from_dict(da_dict) for key, da_dict in norm_data.items()}
 
         self.norm_stats = norm_dict_restored
 
