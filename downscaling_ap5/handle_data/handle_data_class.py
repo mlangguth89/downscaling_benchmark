@@ -184,7 +184,7 @@ class HandleDataClass(object):
                                      selected_predictands=predictands, var_tar2in=var_tar2in,
                                      norm_obj=norm_obj, norm_dims=norm_dims)
 
-        tf_read_nc = lambda fname: tf.py_function(ds_obj.read_netcdf, [fname], tf.bool)
+        tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.bool)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
         tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
@@ -193,7 +193,7 @@ class HandleDataClass(object):
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        tfds = tf.data.Dataset.from_tensor_slices(ds_obj.file_list).map(tf_read_nc)
+        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged)).map(tf_read_nc)
         tfds = tfds.flat_map(lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
                                                       .batch(batch_size, drop_remainder=True)
                                                       .map(tf_getdata))
