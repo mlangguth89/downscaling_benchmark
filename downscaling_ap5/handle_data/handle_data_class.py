@@ -510,53 +510,49 @@ class StreamMonthlyNetCDF(object):
     # TO-DO:
     # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
-    def __init__(self, datadir, patt, sample_dim: str = "time", selected_predictors: List = None,
+    def __init__(self, datadir, patt, nfiles_merge: int, sample_dim: str = "time", selected_predictors: List = None,
                  selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None):
+        # attributes related to file management
         self.data_dir = datadir
         self.file_list = patt
-        self.ds = xr.open_mfdataset(list(self.file_list), combine="nested", concat_dim=sample_dim)  # , parallel=True)
-        # check if norm_dims or norm_obj should be used
-        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
-        if norm_obj and norm_dims:
-            print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
-            norm_dims = None
-        if norm_obj:
-            assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
-            self.data_norm = norm_obj
-        else:
-            self.data_norm = ZScore(norm_dims)      # TO-DO: Allow for arbitrary normalization
-
-        self.sample_dim = sample_dim
-        self.data_dim = self.get_data_dim()
-        print(self.data_norm.norm_stats)
-        if any([val is None for val in self.data_norm.norm_stats.values()]):
-            print("Get normalization stats from data.")
-            self.norm_params = self.data_norm.get_required_stats(self.ds.to_array(dim="variables"))
-        else:
-            print("Normalization stats already available.")
-            self.norm_params = self.data_norm.norm_stats
-        self.nsamples = self.ds.dims[sample_dim]
-        self.variables = list(self.ds.variables)
-        self.samples_per_file = 28175                # TO-DO avoid hard-coding
+        self.nfiles = len(self.file_list)
+        self.file_list_random = random.sample(self.file_list, self.nfiles)
+        self.nfiles2merge = nfiles_merge
+        self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
+        self.samples_merged = self.get_samples_per_merged_file()
+        # attributes related to variables
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
-        self.n_predictands = len(self.predictand_list)
+        self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
+        self.all_vars = self.predictor_list + self.predictand_list
+        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False,
+                                        data_vars=self.all_vars)  # , parallel=True)
         self.var_tar2in = var_tar2in
-        self.n_predictors = len(self.predictor_list)
-        if self.var_tar2in:
-            self.n_predictors += 1
-        self.data = None
+        if self.var_tar2in is not None:
+            self.n_predictors += len(to_list(self.var_tar2in))
+        self.sample_dim = sample_dim
+        self.nsamples = self.ds_all.dims[sample_dim]
+        self.data_dim = self.get_data_dim()
+        # Get normalization parameters
+        self.normalization_time = -999.
+        if norm_obj is None:  # TO-DO: remove usgae of norm_obj
+            print("Start computing normalization parameters.")
+            t0 = timer()
+            self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
+            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            self.normalization_time = timer() - t0
+        else:
+            self.data_norm = norm_obj
+
 
     def __len__(self):
         return self.nsamples
 
     def getitems(self, indices):
-        """
-        Retrieves data corresponding to the provided list of indices using __getitem__
-        :param indices: List of indices to sample along sample dimension
-        """
-        data =self.data.isel({self.sample_dim: indices}).transpose(..., "variables")
-        return data.values
+        da_now = self.data.isel({self.sample_dim: indices}).to_array("variables")
+        if self.var_tar2in is not None:
+            da_now = xr.concat([da_now, da_now.sel({"variables": self.var_tar2in})], dim="variables")
+        return da_now.transpose(..., "variables")
 
     def get_data_dim(self):
         """
@@ -565,14 +561,24 @@ class StreamMonthlyNetCDF(object):
         :return: tuple of data dimensions
         """
         # get existing dimension names and remove sample_dim
-        dimnames = list(self.ds.coords)
+        dimnames = list(self.ds_all.coords)
         dimnames.remove(self.sample_dim)
 
         # get the dimensionality of the data of interest
-        all_dims = dict(self.ds.dims)
+        all_dims = dict(self.ds_all.dims)
         data_dim = itemgetter(*dimnames)(all_dims)
 
         return data_dim
+
+    def get_samples_per_merged_file(self):
+        nsamples_merged = []
+
+        for i in range(self.nfiles_merged):
+            file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
+            ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
+            nsamples_merged.append(ds_now.dims["time"])  # To-Do avoid hard-coding
+
+        return max(nsamples_merged)
 
     @property
     def data_dir(self):
@@ -580,10 +586,6 @@ class StreamMonthlyNetCDF(object):
 
     @data_dir.setter
     def data_dir(self, datadir):
-        """
-        Sets data directory.
-        :param datadir: Path to directory where netCDF-files are stored
-        """
         if not os.path.isdir(datadir):
             raise NotADirectoryError(f"Parsed data directory '{datadir}' does not exist.")
 
@@ -601,19 +603,28 @@ class StreamMonthlyNetCDF(object):
         if not files:
             raise FileNotFoundError(f"Could not find any files with pattern '{patt}' under '{self.data_dir}'.")
 
-        self._file_list = np.asarray(sorted(files, key=lambda s: int(re.search(r'\d+', os.path.basename(s)).group())))
+        self._file_list = list(
+            np.asarray(sorted(files, key=lambda s: int(re.search(r'\d+', os.path.basename(s)).group()))))
+
+    @property
+    def nfiles2merge(self):
+        return self._nfiles2merge
+
+    @nfiles2merge.setter
+    def nfiles2merge(self, n2merge):
+        n = find_closest_divisor(self.nfiles, n2merge)
+        if n != n2merge:
+            print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
+
+        self._nfiles2merge = n
 
     @property
     def sample_dim(self):
         return self._sample_dim
 
     @sample_dim.setter
-    def sample_dim(self, sample_dim: str):
-        """
-        Sets and checks chosen dimension for sampling.
-        :param: name of sample dimension
-        """
-        if not sample_dim in self.ds.dims:
+    def sample_dim(self, sample_dim):
+        if not sample_dim in self.ds_all.dims:
             raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
 
         self._sample_dim = sample_dim
@@ -625,9 +636,8 @@ class StreamMonthlyNetCDF(object):
     @predictor_list.setter
     def predictor_list(self, selected_predictors: List):
         """
-        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in`
-        in their names are selected. In case that a list of selected_predictors is parsed,
-        their availability is checked.
+        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in` in their names are selected.
+        In case that a list of selected_predictors is parsed, their availability is checked.
         :param selected_predictors: list of predictor variables or None
         """
         self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
@@ -638,25 +648,22 @@ class StreamMonthlyNetCDF(object):
 
     @predictand_list.setter
     def predictand_list(self, selected_predictands: List):
-        """
-        Initalizes predictand list. In case that selected_predictands is set to None, all variables with suffix `_tar`
-        in their names are selected. In case that a list of selected_predictands is parsed,
-        their availability is checked.
-        :param selected_predictands: list of predictand variables or None
-        """
         self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
 
-    def check_and_choose_vars(self, var_list, suffix: str = "*"):
+    def check_and_choose_vars(self, var_list: List, suffix: str = "*"):
         """
         Checks list of variables for availability or retrieves all variables named with a given suffix (for var_list = None)
         :param var_list: list of predictor variables or None
         :param suffix: optional suffix of variables to selected. Only effective if var_list is None.
         :return selected_vars: list of selected variables
         """
+        ds_test = xr.open_dataset(self.file_list[0])
+        all_vars = list(ds_test.variables)
+
         if var_list is None:
-            selected_vars = [var for var in self.variables if var.endswith(suffix)]
+            selected_vars = [var for var in all_vars if var.endswith(suffix)]
         else:
-            stat_list = [var in self.variables for var in var_list]
+            stat_list = [var in all_vars for var in var_list]
             if all(stat_list):
                 selected_vars = var_list
             else:
@@ -666,36 +673,33 @@ class StreamMonthlyNetCDF(object):
 
         return selected_vars
 
-    def read_netcdf(self, fname):
-        """
-        Open and reads netCDF-file, retrieves the required predictors and predictands and also converts the
-        xr.Dataset to xr.DataArray whose last dimension corresponds to the variables (= channel dimension)
-        :param fname: path to the netCDF-file
-        :return: Updates self.data and self.nsamples
-        """
-        fname = tf.keras.backend.get_value(fname)
-        fname = str(fname).lstrip("b'").rstrip("'")
-        print(f"Load data from {fname}...")
-        ds_now = xr.open_dataset(str(fname), engine="netcdf4", cache=False)
-        var_list = list(self.predictor_list) + list(self.predictand_list)
-        ds_now = ds_now[var_list]
-        da_now = ds_now.to_array("variables").astype("float32", copy=True)
-        del ds_now
-        gc.collect()
+    @staticmethod
+    def _preprocess_ds(ds, data_norm):
+        ds = data_norm.normalize(ds)
+        return ds.astype("float32")
 
-        if self.var_tar2in is None:
-            self.data = da_now
-        else:
-            # NOTE: The following operation order must be the same as in the  make_tf_dataset_allmem-method of
-            #       the HandleDataClass!
-            self.data = xr.concat([da_now, da_now.sel({"variables": "hsurf_tar"})], dim="variables")
+    def read_netcdf(self, ind):
+        ind = tf.keras.backend.get_value(ind)
+        ind = int(str(ind).lstrip("b'").rstrip("'"))
+        print(f"Load data from {ind}th set of files...")
+        file_list_now = self.file_list[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
+        # read the normalized data into memory
+        ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
+                                   preprocess=partial(StreamMonthlyNetCDF._preprocess_ds, data_norm=ds_obj.data_norm),
+                                   parallel=True).load()
+        print("Data loaded successfully from.")
+        # da_now = ds_now.to_array("variables").astype("float32", copy=False)
+        nsamples = ds_now.dims[self.sample_dim]
+        if nsamples < self.samples_merged:
+            t0 = timer()
+            add_samples = self.samples_merged - nsamples
+            print(f"Add {add_samples:d} samples to dataset.")
+            add_inds = random.sample(range(nsamples), add_samples)
+            ds_add = ds_now.isel({self.sample_dim: add_inds})
+            ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
+            ds_now = xr.concat([ds_now, ds_add], dim=self.sample_dim)
+            print(f"Appending data took {timer() - t0:.2f}s.")
+
+        self.data = ds_now  # xr.concat([da_now, da_now.sel({"variables": "hsurf_tar"})], dim="variables")
 
         return True
-
-
-
-
-
-
-
-
