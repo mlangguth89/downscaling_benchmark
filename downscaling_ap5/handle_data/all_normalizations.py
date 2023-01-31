@@ -9,11 +9,14 @@ All implemented classes to perform normalization on data
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
+__update__ = "2023-01-31"
 
-from typing import List
+from typing import List, Union
 from abstract_data_normalization import Normalize
 import dask
 import xarray as xr
+
+da_or_ds = Union[xr.DataArray, xr.Dataset]
 
 
 class ZScore(Normalize):
@@ -21,7 +24,7 @@ class ZScore(Normalize):
         super().__init__("z_score", norm_dims)
         self.norm_stats = {"mu": None, "sigma": None}
 
-    def get_required_stats(self, data: xr.DataArray, **stats):
+    def get_required_stats(self, data: da_or_ds, **stats):
         """
         Get required parameters for z-score normalization. They are either computed from the data
         or can be parsed as keyword arguments.
