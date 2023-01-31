@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -16,13 +16,14 @@ Some auxiliary functions for the project:
     * flatten
     * remove_files
     * check_str_in_list
+    * find_closest_divisor
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-09-11"
+__update__ = "2023-01-31"
 
 import os
 import inspect
@@ -236,3 +237,29 @@ def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True
         return stat, [list_in.index(str_curr) for str_curr in str2check]
     else:
         return stat, []
+
+
+def find_closest_divisor(n1, div):
+    """
+    Function to find closest divisor for a given number with respect to a target value.
+    :param n1: The number for which a divisor should be found.
+    :param div: The desired divisor value.
+    :return div_new: In case that div is a divisor n1, div remains unchanged. In any other case,
+                     the closest integer to div is returned.
+    """
+    def get_divisors(n):
+        res = []
+        i = 1
+        while i <= n:
+            if n % i == 0:
+                res.append(i),
+            i += 1
+        return res
+
+    all_divs = get_divisors(n1)
+
+    if div in all_divs:
+        return div
+    else:
+        i = np.argmin(np.abs(np.array(all_divs) - div))
+        return all_divs[i]
