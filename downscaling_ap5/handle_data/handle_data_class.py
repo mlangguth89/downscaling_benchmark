@@ -184,23 +184,25 @@ class HandleDataClass(object):
                                      selected_predictands=predictands, var_tar2in=var_tar2in,
                                      norm_obj=norm_obj, norm_dims=norm_dims)
 
-        tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.bool)
+        tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
         tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
         if lshuffle:
             nshuffle = ds_obj.samples_merged
+            print(nshuffle)
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged)).map(tf_read_nc)
-        tfds = tfds.flat_map(lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
-                                                      .batch(batch_size, drop_remainder=True)
-                                                      .map(tf_getdata))
-
-        tfds = tfds.map(tf_split).repeat()
+        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged)).map(tf_read_nc).prefetch(1)
+        tfds = tfds.flat_map(
+            lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
+            .batch(batch_size, drop_remainder=True).map(tf_getdata))
+        # tfds = tfds.interleave(lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(ds_obj.samples_merged)\
+        #                       .batch(bs_train, drop_remainder=True).map(tf_getdata), cycle_length=1, num_parallel_calls=tf.data.experimental.AUTOTUNE)#.map(tf_norm))
         if lprefetch:
-            tfds = tfds.prefetch(int(ds_obj.samples_merged + 1))    # plus 1 ensures that the next file has to be opened
+            tfds = tfds.prefetch(int(ds_obj.samples_merged + 1))
+        tfds = tfds.map(tf_split).repeat()
 
         return ds_obj, tfds
 
@@ -349,29 +351,11 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 
 class StreamMonthlyNetCDF(object):
-    """
-    Dataset object which providing all attributes and methods to stream from multiple netCDF-files,
-    see usage in HandleDataClass.make_tf_dataset_dyn.
-    """
+    # TO-DO:
+    # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, nfiles_merge: int, sample_dim: str = "time", selected_predictors: List = None,
                  selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None):
-        """
-        Initialize dataset-object for streaming.
-        :param datadir: Path to directory where netCDF-files are stored
-        :param patt: Search pattern to glob netCDF-files from datadir
-        :param nfiles_merge: number of netCDF-files which are loaded into memory (i.e. merged)
-        :param sample_dim: name of sampling dimension, e.g. 'time'
-        :param selected_predictors: List of predictor variables.
-                                    All variables with suffix '_in' are chosen if None is parsed
-        :param selected_predictands: As selected_predictors, but for predictands
-        :param var_tar2in: target variable that should also be used as input
-        :param norm_dims: list of dimensions over which normalization should be performed. Normalization object will be
-                          created based on data unless norm_obj is parsed
-        :param norm_obj: normalization object. Should be None when normalization parameters should be derived from the
-                         streamed data.
-        """
-        # attributes related to file management
         self.data_dir = datadir
         self.file_list = patt
         self.nfiles = len(self.file_list)
@@ -379,32 +363,29 @@ class StreamMonthlyNetCDF(object):
         self.nfiles2merge = nfiles_merge
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
         self.samples_merged = self.get_samples_per_merged_file()
-        # attributes related to variables
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
         self.all_vars = self.predictor_list + self.predictand_list
-        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False,
-                                        data_vars=self.all_vars)  # , parallel=True)
+        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
             self.n_predictors += len(to_list(self.var_tar2in))
         self.sample_dim = sample_dim
         self.nsamples = self.ds_all.dims[sample_dim]
         self.data_dim = self.get_data_dim()
-        # Get normalization parameters
+        t0 = timer()
         self.normalization_time = -999.
         if norm_obj is None:  # TO-DO: remove usgae of norm_obj
             print("Start computing normalization parameters.")
-            t0 = timer()
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
             self.norm_params = self.data_norm.get_required_stats(self.ds_all)
             self.normalization_time = timer() - t0
-            print(f"Retrieval of normalization parameters took {self.normalization_time:.1f}s.")
         else:
             self.data_norm = norm_obj
             self.norm_params = norm_obj.norm_stats
-        # placeholder for data
+
+        self.ds_all = None
         self.data = None
 
     def __len__(self):
@@ -498,9 +479,8 @@ class StreamMonthlyNetCDF(object):
     @predictor_list.setter
     def predictor_list(self, selected_predictors: List):
         """
-        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in` in
-        their names are selected.
-        In case that a list of selected_predictors is parsed, their availability is checked
+        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in` in their names are selected.
+        In case that a list of selected_predictors is parsed, their availability is checked.
         :param selected_predictors: list of predictor variables or None
         """
         self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
@@ -515,10 +495,9 @@ class StreamMonthlyNetCDF(object):
 
     def check_and_choose_vars(self, var_list: List, suffix: str = "*"):
         """
-        Checks list of variables for availability or retrieves all variables named with a given suffix
-        (for var_list = None)
+        Checks list of variables for availability or retrieves all variables named with a given suffix (for var_list = None)
         :param var_list: list of predictor variables or None
-        :param suffix: optional suffix of variables to selected. Only effective if var_list is None
+        :param suffix: optional suffix of variables to selected. Only effective if var_list is None.
         :return selected_vars: list of selected variables
         """
         ds_test = xr.open_dataset(self.file_list[0])
@@ -537,23 +516,23 @@ class StreamMonthlyNetCDF(object):
 
         return selected_vars
 
-    @staticmethod
-    def _preprocess_ds(ds, data_norm):
-        ds = data_norm.normalize(ds)
+    # @staticmethod
+    def _preprocess_ds(self, ds, data_norm):
+        ds = data_norm.normalize(ds[self.all_vars])
         return ds.astype("float32")
 
     def read_netcdf(self, ind):
         ind = tf.keras.backend.get_value(ind)
         ind = int(str(ind).lstrip("b'").rstrip("'"))
         print(f"Load data from {ind}th set of files...")
-        file_list_now = self.file_list[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
+        file_list_now = self.file_list_random[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
         ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
-                                   preprocess=partial(StreamMonthlyNetCDF._preprocess_ds, data_norm=self.data_norm),
+                                   preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
                                    parallel=True).load()
-        print("Data loaded successfully from.")
         # da_now = ds_now.to_array("variables").astype("float32", copy=False)
         nsamples = ds_now.dims[self.sample_dim]
+        print(f"Dataset with {nsamples:d} samples loaded.")
         if nsamples < self.samples_merged:
             t0 = timer()
             add_samples = self.samples_merged - nsamples
