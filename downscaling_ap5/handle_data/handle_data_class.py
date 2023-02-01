@@ -526,24 +526,23 @@ class StreamMonthlyNetCDF(object):
         ind = tf.keras.backend.get_value(ind)
         ind = int(str(ind).lstrip("b'").rstrip("'"))
         ind = int(ind%self.nfiles_merged)
-        print(f"Load data from {ind}th set of files...")
         file_list_now = self.file_list_random[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
+        t0 = timer()
         ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
                                    preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
                                    parallel=True).load()
         # da_now = ds_now.to_array("variables").astype("float32", copy=False)
+        print(f"Loading data from the subset #{ind:d} of files took {timer() - t0:.1f}s.")
         nsamples = ds_now.dims[self.sample_dim]
-        print(f"Dataset with {nsamples:d} samples loaded.")
         if nsamples < self.samples_merged:
             t0 = timer()
             add_samples = self.samples_merged - nsamples
-            print(f"Add {add_samples:d} samples to dataset.")
             add_inds = random.sample(range(nsamples), add_samples)
             ds_add = ds_now.isel({self.sample_dim: add_inds})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
             ds_now = xr.concat([ds_now, ds_add], dim=self.sample_dim)
-            print(f"Appending data took {timer() - t0:.2f}s.")
+            print(f"Appending data with {add_samples:d} samples took {timer() - t0:.2f}s.")
 
         self.data = ds_now
 
