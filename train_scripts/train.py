@@ -38,6 +38,7 @@ class BuildModel:
                  decay_end: int = 30,
                  dataset_type: str = 'precipitation',
                  diffusion=False,
+                 save_freq=1000,
                  **kwargs):
 
         """
@@ -72,6 +73,7 @@ class BuildModel:
         self.val_loader = val_loader
         self.decay_start = decay_start
         self.decay_end = decay_end
+        self.save_freq = save_freq
 
 
         if diffusion:
@@ -250,8 +252,8 @@ class BuildModel:
                 # -------------------------------
                 # 6) Save model
                 # -------------------------------
-
-            self.save(epoch)
+                if current_step % self.save_freq == 0:
+                    self.save(epoch)
             print("Model Loss {} after step {}".format(self.G_loss, epoch))
             print("Model Saved")
             print("Time per step:", time.time() - st)
