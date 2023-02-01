@@ -194,7 +194,8 @@ class HandleDataClass(object):
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged)).map(tf_read_nc).prefetch(1)
+        # enable flexibility in factor for range
+        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged*6*10)).map(tf_read_nc).prefetch(1)    # 6*10 corresponds to (d_steps + 1)*n_epochs with d_steps=5, n_epochs=10
         tfds = tfds.flat_map(
             lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
             .batch(batch_size, drop_remainder=True).map(tf_getdata))
@@ -385,7 +386,7 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = norm_obj
             self.norm_params = norm_obj.norm_stats
 
-        self.ds_all = None
+        # self.ds_all = None
         self.data = None
 
     def __len__(self):
@@ -524,6 +525,7 @@ class StreamMonthlyNetCDF(object):
     def read_netcdf(self, ind):
         ind = tf.keras.backend.get_value(ind)
         ind = int(str(ind).lstrip("b'").rstrip("'"))
+        ind = int(ind%self.nfiles_merged)
         print(f"Load data from {ind}th set of files...")
         file_list_now = self.file_list_random[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
