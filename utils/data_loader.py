@@ -10,12 +10,15 @@ from main_scripts.dataset_temp import CustomTemperatureDataset
 def create_loader(file_path: str = None,
                   batch_size: int = 4,
                   patch_size: int = 16,
-                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"] 
-                 var_out: list = ["yw_hourly_tar"],
-                 sf: int = 10,
-                 seed: int = 1234,
-                 dataset_type: str = "precipitation",
-                 verbose: int = 0):
+                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"],
+                  vars_out: list = ["yw_hourly_tar"],
+                  sf: int = 10,
+                  seed: int = 1234,
+                  k:float = 0.01,
+                  mode:str = "train",
+                  stat_path:str = None,
+                  dataset_type: str = "precipitation",
+                  verbose: int = 0):
 
     """
     file_path       : the path to the directory of .nc files
@@ -33,9 +36,12 @@ def create_loader(file_path: str = None,
                                      batch_size,
                                      patch_size,
                                      vars_in,
-                                     var_out,
+                                     vars_out,
                                      sf,
-                                     seed)
+                                     seed,
+                                     k,
+                                     mode,
+                                     stat_path)
         dataloader = DataLoader(dataset, batch_size=None)
     elif dataset_type == "temperature":
         dataset = CustomTemperatureDataset(file_path=file_path, verbose=verbose)

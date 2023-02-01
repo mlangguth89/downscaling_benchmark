@@ -7,7 +7,7 @@ import os
 import model.networks as networks
 from .base_model import BaseModel
 logger = logging.getLogger('base')
-
+from torchprofile import profile_macs
 
 class DDPM(BaseModel):
     def __init__(self, opt):
@@ -44,7 +44,8 @@ class DDPM(BaseModel):
 
     def feed_data(self, data):
         self.data = self.set_device(data)
-
+        macs=profile_macs(self.netG, data)
+        print("flops:", macs)
     def optimize_parameters(self):
         self.optG.zero_grad()
         l_pix = self.netG(self.data)
