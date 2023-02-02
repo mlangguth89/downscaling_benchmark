@@ -42,7 +42,7 @@ available_models = ["unet", "wgan", "diffusion", "swinIR","swinUnet"]
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
-        n_channels: int = 8,
+        n_channels: int = 10,
         save_dir: str = "../results",
         checkpoint_save: int = 200,
         epochs: int = 2,
@@ -120,8 +120,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         raise NotImplementedError
 
     #calculate the model size
-    flops, params = flopth(netG, in_size = ((n_channels, 16, 16),))
-    print("flops, params", flops, params)
+    #flops, params = flopth(netG, in_size = ((n_channels, 16, 16),))
+    #print("flops, params", flops, params)
 
 
     #calculate the trainable parameters
@@ -140,8 +140,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         model = BuildWGANModel(generator=netG,
                                save_dir=save_dir,
                                critic=netC,
-                               train_dataloader=train_loader,
-                               val_dataloader=val_loader,
+                               train_loader=train_loader,
+                               val_loader=val_loader,
                                hparams=args,
                                dataset_type=dataset_type)
     else:
@@ -150,8 +150,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                            difussion=difussion,
                            conditional=conditional,
                            timesteps=timesteps,
-                           train_dataloader = train_loader,
-                           val_dataloader = val_loader
+                           train_loader = train_loader,
+                           val_loader = val_loader
                            )
 
     wandb.config = {
@@ -211,7 +211,7 @@ def main():
 
     run(train_dir = args.train_dir,
         val_dir = args.val_dir,
-        n_channels = 8,
+        n_channels = 10,
         save_dir = args.save_dir,
         epochs = args.epochs,
         type_net = args.model_type,

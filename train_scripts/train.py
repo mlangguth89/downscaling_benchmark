@@ -247,7 +247,7 @@ class BuildModel:
                 # -------------------------------
                 # 3) optimize parameters
                 # -------------------------------
-                self.optimize_parameters(current_step)
+                self.optimize_parameters()
 
                 # -------------------------------
                 # 6) Save model
@@ -273,4 +273,7 @@ class BuildModel:
                 print("lr", lr)
 
             self.schedulers[0].step(val_loss.item())
+
+
+
 

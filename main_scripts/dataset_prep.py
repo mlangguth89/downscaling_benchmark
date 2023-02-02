@@ -133,9 +133,9 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         n_patches_y = int(np.floor(n_lat) / self.patch_size)
         num_patches_img = n_patches_x * n_patches_y
 
-        inputs_nparray = inputs.to_array(dim = "variables").squeeze().values
-        outputs_nparray = output.to_array(dim = "variables").squeeze().values
-
+        inputs_nparray = inputs.to_array(dim = "variables").squeeze().values.astype(np.float32)
+        outputs_nparray = output.to_array(dim = "variables").squeeze().values.astype(np.float32)
+        
         # log-transform -> log(x+k)-log(k)
         inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
         outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
