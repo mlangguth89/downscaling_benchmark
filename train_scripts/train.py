@@ -27,7 +27,7 @@ class BuildModel:
     def __init__(self, netG,
                  G_lossfn_type: str = "l1",
                  G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 5.e-05,
+                 G_optimizer_lr: float = 5.e-02,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0,
                  save_dir: str = "../results",

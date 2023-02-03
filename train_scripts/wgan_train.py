@@ -67,8 +67,8 @@ class BuildWGANModel:
 
     def __init__(self, generator: nn.Module = None,
                  critic: nn.Module = None,
-                 train_dataloader: DataLoader = None,
-                 val_dataloader: DataLoader = None,
+                 train_loader: DataLoader = None,
+                 val_loader: DataLoader = None,
                  hparams: dict = None,
                  checkpoint_save: int = None,
                  save_dir: str = None,
@@ -77,14 +77,14 @@ class BuildWGANModel:
 
         """
         self.dataset_type = dataset_type
-        self.train_dataloader = train_dataloader
-        self.val_dataloader = val_dataloader
+        self.train_dataloader = train_loader
+        self.val_dataloader = val_loader
         self.generator = generator.to(device)
         self.critic = critic.to(device)
         self.hparams = hparams
         self.checkpoint_save = checkpoint_save
         self.save_dir = save_dir
-
+        self.G_optimizer_lr = self.hparams.lr_gn
         self.opt_critic = optim.Adam(self.critic.parameters(), lr=self.hparams.lr_critic, betas=(0.5, 0.999))
         self.opt_gen = optim.Adam(self.generator.parameters(), lr=self.hparams.lr_gn, betas=(0.5, 0.999))
 
