@@ -22,6 +22,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 cuda = torch.cuda.is_available()
 if cuda:
     torch.set_default_tensor_type('torch.cuda.FloatTensor')
+
+
+
 class PrecipDatasetInter(torch.utils.data.IterableDataset):
     """
     This is the class used for generate dataset generator for precipitation downscaling
@@ -29,8 +32,8 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
     def __init__(self, file_path: str = None, batch_size: int = 4, patch_size: int = 16,
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
-                                  "yw_hourly_in"],
-                 var_out: list = ["yw_hourly_tar"], sf: int = 10,
+                                  "u700_in","v700_in","yw_hourly_in"],
+                 vars_out: list = ["yw_hourly_tar"], sf: int = 10,
                  seed: int = 1234, k: float = 0.01, mode: str = "train", stat_path: str = None):
         """
         file_path : the path to the directory of .nc files
@@ -50,7 +53,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         self.patch_size = patch_size
         self.sf = sf  # scaling factor
         self.vars_in = vars_in
-        self.var_out = var_out
+        self.var_out = vars_out
         self.batch_size = batch_size
         self.seed = seed
         self.k = k 
@@ -132,12 +135,12 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         n_patches_y = int(np.floor(n_lat) / self.patch_size)
         num_patches_img = n_patches_x * n_patches_y
 
-        inputs_nparray = inputs.to_array(dim = "variables").squeeze().values
-        outputs_nparray = output.to_array(dim = "variables").squeeze().values
-
+        inputs_nparray = inputs.to_array(dim = "variables").squeeze().values.astype(np.float32)
+        outputs_nparray = output.to_array(dim = "variables").squeeze().values.astype(np.float32)
+        
         # log-transform -> log(x+k)-log(k)
-        #inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
-        #outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
+        inputs_nparray[self.prcp_indexes] = np.log(inputs_nparray[self.prcp_indexes]+self.k)-np.log(self.k)
+        outputs_nparray = np.log(outputs_nparray+self.k)-np.log(self.k)
         print('inputs_nparray shape: {}'.format(inputs_nparray.shape))
         print('inputs_nparray[self.prcp_indexes] shape: {}'.format(inputs_nparray[self.prcp_indexes].shape))
 

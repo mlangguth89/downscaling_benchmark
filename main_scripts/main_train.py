@@ -75,6 +75,11 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     timesteps = None
 
     wandb.run.name = type_net
+    if dataset_type=="precipitation":
+        vars_in = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"]
+        vars_out = ["yw_hourly_tar"]
+    elif dataset_type == "temperature":
+        raise ("Not implement yet")
 
     train_loader = create_loader(file_path=train_dir, batch_size=batch_size, dataset_type=dataset_type, patch_size=16, k=0.01, mode="train")
     test_loader = create_loader(file_path=test_dir,
@@ -120,7 +125,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     else:
         raise NotImplementedError
 
-    ##calculate the model size
+    #calculate the model size
     #flops, params = flopth(netG, in_size = ((n_channels, 16, 16),))
     #print("flops, params", flops, params)
 
@@ -176,6 +181,18 @@ def main():
     parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
     parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
+    parser.add_argument("--dataset_type", type=str, default="precipitation",
+                        help="The dataset type: temperature, precipitation")
+
+    parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
+    parser.add_argument("--lr_gn", type=float, default=1.e-05, help="The checkpoint directory")
+    parser.add_argument("--lr_gn_end", type=float, default=1.e-06, help="The checkpoint directory")
+    parser.add_argument("--lr_critic", type=float, default=1.e-06, help="The checkpoint directory")
+    parser.add_argument("--decay_start", type=int, default=25, help="The checkpoint directory")
+    parser.add_argument("--decay_end", type=int, default=50, help="The checkpoint directory")
+    parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
+    parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
+
     # PARAMETERS FOR SWIN-IR & SWIN-UNET
     parser.add_argument("--patch_size", type = int, default = 2)
     parser.add_argument("--window_size", type = int, default = 4)
@@ -196,8 +213,13 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
+<<<<<<< HEAD
         test_dir=args.test_dir,
         n_channels = 8,
+=======
+        val_dir = args.val_dir,
+        n_channels = 10,
+>>>>>>> 562e70e0b49f695bb4502a5277b371a02acf17bf
         save_dir = args.save_dir,
         checkpoint_save=10000,
         epochs = args.epochs,
@@ -206,11 +228,8 @@ def main():
         batch_size=args.batch_size,
         patch_size = args.patch_size,
         window_size = args.window_size,
-        upscale_swinIR = args.upscale_swinIR,
-        upsampler_swinIR = args.upsampler_swinIR,
         conditional=args.conditional,
-        timesteps = args.timesteps)
-
+        dataset_type=args.dataset_type)
 
 if __name__ == '__main__':
     cuda = torch.cuda.is_available()
