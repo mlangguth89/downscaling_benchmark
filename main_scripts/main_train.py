@@ -146,7 +146,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     wandb.config = {
         "lr": model.G_optimizer_lr,
         "train_dir": train_dir,
-        "val_dir": val_dir,
+        "test_dir": test_dir,
         "epochs": epochs,
         "window_size": window_size,
         "patch_size": patch_size
