@@ -62,7 +62,7 @@ def main(parser_args):
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
     # are applied to train the critic, before the generator is trained once.
     # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
-    bs_train = ds_dict["batch_size"] * hparams_dict["d_steps"] + 1 if "d_steps" in hparams_dict else ds_dict["batch_size"]
+    bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
 
     # start handling training and validation data
     #   - training data is iterated
