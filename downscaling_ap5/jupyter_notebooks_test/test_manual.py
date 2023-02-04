@@ -2,7 +2,7 @@ import os, sys
 sys.path.append("../handle_data/")
 import glob
 import gc
-#import multiprocessing
+import psutil
 from multiprocessing import Pool as ThreadPool
 import xarray as xr
 from functools import partial
@@ -13,6 +13,7 @@ from timeit import default_timer as timer
 
 datadir = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files/"
 file_list = glob.glob(os.path.join(datadir, "downscaling_tier2_train*.nc"))
+
 
 class Test:
     def __init__(self, file_list, data_norm, lparallel):
@@ -37,11 +38,13 @@ class Test:
         with xr.open_dataset(fname, decode_cf=False) as ds_now:
             #ds_now = self._preprocess_ds(ds_now)
             ds_now = ds_now.load()    
-            nsamples = ds_now.dims["time"]
+        #    nsamples = ds_now.dims["time"]
             return ds_now
             
 
     def read_netcdf(self, ind_s, ind_e):
+        del self.data
+        gc.collect()
         file_list_now = self.file_list[ind_s:ind_e]
         t0 = timer()
         # read the normalized data into memory
@@ -70,6 +73,10 @@ data_norm.read_norm_from_file("./norm_test.json")
 
 test = Test(file_list, data_norm, lparallel=True)
 
+print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000)
 test.read_netcdf(0, 30)
+print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000)
 test.read_netcdf(30, 60)
+print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000)
 test.read_netcdf(60, 90)
+print('RAM Used (GB):', psutil.virtual_memory()[3]/1000000000)
