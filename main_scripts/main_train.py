@@ -183,7 +183,7 @@ def main():
 
     parser.add_argument("--dataset_type", type=str, default="precipitation",
                         help="The dataset type: temperature, precipitation")
-
+    parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
     parser.add_argument("--lr_gn", type=float, default=1.e-05, help="The checkpoint directory")
     parser.add_argument("--lr_gn_end", type=float, default=1.e-06, help="The checkpoint directory")
@@ -229,7 +229,9 @@ def main():
         patch_size = args.patch_size,
         window_size = args.window_size,
         conditional=args.conditional,
-        dataset_type=args.dataset_type)
+        batch_size=args.batch_size,
+        dataset_type=args.dataset_type,
+        args=args)
 
 if __name__ == '__main__':
     cuda = torch.cuda.is_available()
