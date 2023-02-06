@@ -93,8 +93,8 @@ def main():
     total_loss = 0.
     test_len = []
     test_loader = create_loader(file_path=args.test_dir, mode=args.mode, stat_path=args.stat_dir)
-
     stat_file = os.path.join(args.stat_dir, "statistics.json")
+    
     with open(stat_file,'r') as f:
         stat_data = json.load(f)
     vars_in_patches_mean = stat_data['yw_hourly_in_mean']
@@ -106,7 +106,6 @@ def main():
         model.netG.load_state_dict(torch.load(args.checkpoint_dir))
         idx = 0
         input_list = []
-        output_list = []
         pred_list = []
         ref_list = []
         cidx_list = []
@@ -114,8 +113,6 @@ def main():
         noise_pred_list = []
         all_sample_list = [] #this is ony for difussion model inference
         for i, test_data in enumerate(test_loader):
-            if i > 20:
-                break
             idx += 1
             batch_size = test_data["L"].shape[0]
             cidx_temp = test_data["idx"]
@@ -128,13 +125,12 @@ def main():
             image_size = model.L.shape[2]
             model.netG_forward()
 
-
             # log-transform -> log(x+k)-log(k)
             input_vars = test_data["L"]
             #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
-            #input_temp = np.exp(input_temp+np.log(args.k))-args.k
-            input_list.append(input_temp.cpu().numpy())
+            input_temp = np.exp(input_temp+np.log(args.k))-args.k
+            input_list.append(input_temp)
             if args.model_type == "diffusion":
                 #now, we only use the unconditional difussion model, meaning the inputs are only noise.
                 #This is the first test, later, we will figure out how to use conditioanl difussion model.
@@ -148,60 +144,36 @@ def main():
                 pred_temp = sample_last * vars_out_patches_std + vars_out_patches_mean
                 #pred_temp = np.exp(pred_temp.cpu().numpy()+np.log(args.k))-args.k
                 ref_temp = model.H #this is the true noise
-                noise_pred = model.E
-                print("Predicted noise:", model.E)
-                print("Reference noise", ref_temp)
+                noise_pred = model.E #predict the noise
                 noise_pred_list.append(noise_pred.cpu().numpy())
             else:
 
                 pred_temp = model.E.cpu().numpy() * vars_out_patches_std + vars_out_patches_mean
                 pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
-                ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
+                ref_temp = model.H.cpu().numpy()*vars_out_patches_std+vars_out_patches_mean
                 ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
 
-            ref_list.append(ref_temp.cpu().numpy())
-               
-            output_temp = np.exp(output_temp+np.log(args.k))-args.k
-            output_temp = test_data["H"]* vars_out_patches_std + vars_out_patches_mean
-            #output_temp = np.exp(output_temp.cpu().numpy()+np.log(args.k))-args.k
-            output_list.append(output_temp.cpu().numpy())
-
-            pred_list.append(pred_temp.cpu().numpy())
-            
-            #ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
-            #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
-            #ref_list.append(ref_temp.cpu().numpy())            
-            #print('model.E shape: {}'.format(model.E.shape))
-
-
-
+            ref_list.append(ref_temp)
+            pred_list.append(pred_temp)   
+        
         cidx = np.squeeze(np.concatenate(cidx_list,0))
         times = np.concatenate(times_list,0)
         pred = np.concatenate(pred_list,0)
         ref = np.concatenate(ref_list,0)
         intL = np.concatenate(input_list,0)
-        outH = np.concatenate(output_list,0)
         noiseP = np.concatenate(noise_pred_list,0)
 
         if len(pred.shape) ==4:
             pred = pred[:,0,:,:]
         if len(ref.shape) ==4:
-            ref = ref[:,0,:,:]
-        
+            ref = ref[:,0,:,:] 
         if len(noiseP.shape)==4:
             noiseP = noiseP[:,0,:,:]
-        print('pred shape: {}'.format(pred.shape))
-        print('ref shape: {}'.format(ref.shape))
-        print('intL shape: {}'.format(intL.shape))
-        print('outH shape: {}'.format(outH.shape))
-        print("noisep shape: {}".format(noiseP.shape))
         datetimes = []
         for i in range(times.shape[0]):
             times_str = str(times[i][0])+str(times[i][1]).zfill(2)+str(times[i][2]).zfill(2)+str(times[i][3]).zfill(2)
-            #print('times_str: {}'.format(times_str))
             datetimes.append(datetime.strptime(times_str,'%Y%m%d%H'))
 
-        #print('cidx shape:{}'.format(cidx.shape))
         ds = xr.Dataset(
             data_vars=dict(
                 inputs=(["time", "lat_in", "lon_in"], intL),
