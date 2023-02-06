@@ -41,17 +41,6 @@ def main():
                         help = "The directory where the statistics json file of training data is stored")    
     parser.add_argument("--checkpoint_dir", type = str, required = True, help = "Please provide the checkpoint directory")
 
-    # PARAMETERS FOR SWIN-IR & SWIN-UNET
-    parser.add_argument("--patch_size", type = int, default = 2)
-    parser.add_argument("--window_size", type = int, default = 4)
-
-    # PARAMETERS FOR SWIN-IR
-    parser.add_argument("--upscale_swinIR", type = int, default = 4)
-    parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
-    
-    #PARAMETERS FOR DIFFUSION
-    parser.add_argument("--conditional", type = bool, default=True)
-    parser.add_argument("--timesteps",type=int, default=200)
     args = parser.parse_args()
 
     n_channels = 10
@@ -59,26 +48,41 @@ def main():
     if args.model_type == "unet":
         netG = unet(n_channels = n_channels)
     elif args.model_type == "swinSR":
-        netG = swinSR(img_size=16,patch_size=args.patch_size,in_chans=n_channels,window_size=args.window_size,
-                upscale=args.upscale_swinIR,upsampler=args.upsampler_swinIR)
+        netG = swinSR(img_size=16,
+                      patch_size=2,
+                      in_chans=n_channels,
+                      window_size=args.window_size,
+                      upscale=4,
+                      upsampler="pixelshuffle")
         # netG = swinSR(img_size=16,patch_size=1,in_chans=8,window_size=8,upscale=4,upsampler='nearest+conv')
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     elif args.model_type == "swinUnet":
-        netG = swinUnet(img_size=160, patch_size=args.patch_size,
-                        in_chans=n_channels,num_classes=1,embed_dim=96,
+        netG = swinUnet(img_size=160, patch_size=2,
+                        in_chans=n_channels,
+                        num_classes=1,
+                        embed_dim=96,
                         depths=[2, 2, 2],
-                        depths_decoder=[2,2,2],num_heads=[6,6,6],
-                        window_size=args.window_size,mlp_ratio=4,qkv_bias=True,
+                        depths_decoder=[2,2,2],
+                        num_heads=[6,6,6],
+                        window_size=4,
+                        mlp_ratio=4,
+                        qkv_bias=True,
                         qk_scale=None,
-                        drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
-                        ape=False, final_upsample="expand_first")
+                        drop_rate=0.,
+                        attn_drop_rate=0.,
+                        drop_path_rate=0.1,
+                        ape=False,
+                        final_upsample="expand_first")
 
     elif args.model_type == "diffusion":
-        netG = UNet_diff(n_channels = n_channels+1, img_size=160)
+        netG = UNet_diff(n_channels = n_channels+1,
+                         img_size=160)
         difussion = True
-        gf = GaussianDiffusion(conditional=True, schedule_opt="linear",
-                timesteps=args.timesteps, model=netG)
+        gf = GaussianDiffusion(conditional=True,
+                               schedule_opt="linear",
+                               timesteps=200,
+                               model=netG)
     else:
         NotImplementedError()
 
@@ -89,18 +93,18 @@ def main():
     else:
         model = BuildModel(netG)
 
-    model.define_loss()
-    total_loss = 0.
-    test_len = []
-    test_loader = create_loader(file_path=args.test_dir, mode=args.mode, stat_path=args.stat_dir)
+
+    test_loader = create_loader(file_path=args.test_dir,
+                                mode=args.mode,
+                                stat_path=args.stat_dir)
     stat_file = os.path.join(args.stat_dir, "statistics.json")
     
     with open(stat_file,'r') as f:
         stat_data = json.load(f)
-    vars_in_patches_mean = stat_data['yw_hourly_in_mean']
-    vars_in_patches_std = stat_data['yw_hourly_in_std']
+    vars_in_patches_mean  = stat_data['yw_hourly_in_mean']
+    vars_in_patches_std   = stat_data['yw_hourly_in_std']
     vars_out_patches_mean = stat_data['yw_hourly_tar_mean']
-    vars_out_patches_std = stat_data['yw_hourly_tar_std']
+    vars_out_patches_std  = stat_data['yw_hourly_tar_std']
 
     with torch.no_grad():
         model.netG.load_state_dict(torch.load(args.checkpoint_dir))
@@ -125,9 +129,8 @@ def main():
             image_size = model.L.shape[2]
             model.netG_forward()
 
-            # log-transform -> log(x+k)-log(k)
+            #Get the low resolution inputs
             input_vars = test_data["L"]
-            #print('input_vars shape: {}'.format(input_vars.shape))
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
             input_temp = np.exp(input_temp+np.log(args.k))-args.k
             input_list.append(input_temp)
@@ -138,7 +141,6 @@ def main():
                 samples = gf.sample(image_size=image_size, batch_size=batch_size, channels=8, x_in=model.L)
                 #chose the last channle and last varialbe (precipitation)
                 sample_last = samples[-1] *vars_out_patches_std+vars_out_patches_mean
-
                 # we can make some plot here
                 #all_sample_list = all_sample_list.append(sample_last)
                 pred_temp = sample_last * vars_out_patches_std + vars_out_patches_mean
@@ -147,9 +149,10 @@ def main():
                 noise_pred = model.E #predict the noise
                 noise_pred_list.append(noise_pred.cpu().numpy())
             else:
-
+                #Get the prediction values
                 pred_temp = model.E.cpu().numpy() * vars_out_patches_std + vars_out_patches_mean
                 pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
+                #Get the groud truth values
                 ref_temp = model.H.cpu().numpy()*vars_out_patches_std+vars_out_patches_mean
                 ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
 
@@ -161,33 +164,51 @@ def main():
         pred = np.concatenate(pred_list,0)
         ref = np.concatenate(ref_list,0)
         intL = np.concatenate(input_list,0)
-        noiseP = np.concatenate(noise_pred_list,0)
-
-        if len(pred.shape) ==4:
-            pred = pred[:,0,:,:]
-        if len(ref.shape) ==4:
-            ref = ref[:,0,:,:] 
-        if len(noiseP.shape)==4:
-            noiseP = noiseP[:,0,:,:]
         datetimes = []
+
         for i in range(times.shape[0]):
             times_str = str(times[i][0])+str(times[i][1]).zfill(2)+str(times[i][2]).zfill(2)+str(times[i][3]).zfill(2)
             datetimes.append(datetime.strptime(times_str,'%Y%m%d%H'))
 
-        ds = xr.Dataset(
-            data_vars=dict(
-                inputs=(["time", "lat_in", "lon_in"], intL),
-                outputs=(["time", "lat", "lon"], outH),
-                fcst=(["time", "lat", "lon"], np.squeeze(pred)),
-                refe=(["time", "lat", "lon"], ref),
-                noiseP=(["time", "lat", "lon"],noiseP)
-            ),
-            coords=dict(
-                time=datetimes,
-                pitch_idx=cidx,
-            ),
-            attrs=dict(description="Precipitation downscaling data."),
-            )
+        if len(pred.shape) == 4:
+            pred = pred[:, 0 , : ,:]
+        if len(ref.shape) == 4:
+            ref = ref[:, 0,: ,:]
+        if len(intL.shape) == 4:
+            intL = intL[:, 0,: ,:]
+
+        if args.model_type == "diffusion":
+            noiseP = np.concatenate(noise_pred_list,0)
+            if len(noiseP.shape) == 4:
+                noiseP = noiseP[:, 0, :, :]
+            ds = xr.Dataset(
+                data_vars = dict(
+                    inputs = (["time", "lat_in", "lon_in"], intL),
+                    fcst = (["time", "lat", "lon"], np.squeeze(pred)),
+                    refe = (["time", "lat", "lon"], ref),
+                    noiseP = (["time", "lat", "lon"], noiseP)
+                ),
+                coords = dict(
+                    time = datetimes,
+                    pitch_idx = cidx,
+                    ),
+                attrs = dict(description = "Precipitation downscaling data."),
+                )
+        else:
+            ds = xr.Dataset(
+                data_vars = dict(
+                    inputs = (["time", "lat_in", "lon_in"], intL),
+                    fcst = (["time", "lat", "lon"], np.squeeze(pred)),
+                    refe = (["time", "lat", "lon"], ref),
+                ),
+                coords = dict(
+                    time = datetimes,
+                    pitch_idx = cidx,
+                    ),
+                attrs = dict(description = "Precipitation downscaling data."),
+                )
+
+
 
         os.makedirs(args.save_dir,exist_ok=True)
         ds.to_netcdf(os.path.join(args.save_dir,'prcp_downs_'+args.model_type+'.nc'))
