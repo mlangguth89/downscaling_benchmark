@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--timesteps",type=int, default=200)
     args = parser.parse_args()
 
-    n_channels = 8
+    n_channels = 10
     print("The model {} is selected for training".format(args.model_type))
     if args.model_type == "unet":
         netG = unet(n_channels = n_channels)
@@ -154,21 +154,18 @@ def main():
                 noise_pred_list.append(noise_pred.cpu().numpy())
             else:
 
-                pred_temp = model.E.numpy() * vars_out_patches_std + vars_out_patches_mean
-                #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
+                pred_temp = model.E.cpu().numpy() * vars_out_patches_std + vars_out_patches_mean
+                pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
                 ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
-                #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
+                ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
 
-            #ref_temp = np.exp(ref_temp+np.log(args.k))-args.k
             ref_list.append(ref_temp.cpu().numpy())
                
-            #output_temp = np.exp(output_temp+np.log(args.k))-args.k
+            output_temp = np.exp(output_temp+np.log(args.k))-args.k
             output_temp = test_data["H"]* vars_out_patches_std + vars_out_patches_mean
             #output_temp = np.exp(output_temp.cpu().numpy()+np.log(args.k))-args.k
             output_list.append(output_temp.cpu().numpy())
 
-
-            #pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
             pred_list.append(pred_temp.cpu().numpy())
             
             #ref_temp = model.H*vars_out_patches_std+vars_out_patches_mean
