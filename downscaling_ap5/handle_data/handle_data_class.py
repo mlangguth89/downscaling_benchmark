@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-01-11"
+__update__ = "2023-02-07"
 
 import os, glob
 from typing import List
@@ -388,6 +388,7 @@ class StreamMonthlyNetCDF(object):
 
         # self.ds_all = None
         self.data = None
+        self.pool = ThreadPool(nworkers)
 
     def __len__(self):
         return self.nsamples
@@ -517,10 +518,31 @@ class StreamMonthlyNetCDF(object):
 
         return selected_vars
 
-    # @staticmethod
-    def _preprocess_ds(self, ds, data_norm):
-        ds = data_norm.normalize(ds[self.all_vars])
+    @staticmethod
+    def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
+        with xr.open_dataset(fname, decode_cf=False, engine=engine, **kwargs) as ds_now:
+            if var_list: ds_now = ds_now[var_list]
+            ds_now = StreamMonthlyNetCDF._preprocess_ds(ds_now, data_norm)
+            ds_now = ds_now.load()
+            return ds_now
+
+    @staticmethod
+    def _preprocess_ds(ds, data_norm):
+        ds = data_norm.normalize(ds)
         return ds.astype("float32")
+
+    def read_mfdataset(self, files, **kwargs):
+        t0 = timer()
+        # parallel processing of files incl. normalization
+        datasets = self.pool.map(partial(self._process_one_netcdf, data_norm=self.data_norm, **kwargs), files)
+        ds_all = xr.concat(datasets, dim=self.sample_dim)
+        # clean-up
+        del datasets
+        gc.collect()
+        # timing
+        print(f"Reading dataset of {len(files)} files took {timer() - t0:.2f}s.")
+
+        return ds_all
 
     def read_netcdf(self, ind):
         ind = tf.keras.backend.get_value(ind)
@@ -528,12 +550,10 @@ class StreamMonthlyNetCDF(object):
         ind = int(ind%self.nfiles_merged)
         file_list_now = self.file_list_random[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
-        t0 = timer()
-        ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
-                                   preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
-                                   parallel=True).load()
-        # da_now = ds_now.to_array("variables").astype("float32", copy=False)
-        print(f"Loading data from the subset #{ind:d} of files took {timer() - t0:.1f}s.")
+        #ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
+        #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
+        #                           parallel=True).load()
+        ds_now = self.read_mfdataset(file_list_now, var_list=self.all_vars)
         nsamples = ds_now.dims[self.sample_dim]
         if nsamples < self.samples_merged:
             t0 = timer()
