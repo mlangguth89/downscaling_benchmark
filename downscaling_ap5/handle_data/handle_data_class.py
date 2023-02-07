@@ -21,6 +21,10 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from abstract_data_normalization import Normalize
+try:
+    from multiprocessing import Pool as ThreadPool
+except:
+    from multiprocessing.pool import ThreadPool
 from all_normalizations import ZScore
 from other_utils import to_list, find_closest_divisor
 
@@ -388,7 +392,7 @@ class StreamMonthlyNetCDF(object):
 
         # self.ds_all = None
         self.data = None
-        self.pool = ThreadPool(nworkers)
+        self.pool = ThreadPool(10)
 
     def __len__(self):
         return self.nsamples

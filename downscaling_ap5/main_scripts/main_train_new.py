@@ -22,6 +22,7 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
+from all_normalizations import ZScore
 from model_utils import ModelEngine, handle_opt_utils
 from handle_data_class import HandleDataClass, get_dataset_filename
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
@@ -57,6 +58,11 @@ def main(parser_args):
     
     named_targets = hparams_dict.get("named_targets", False)
 
+    # JSUT FOR TESTING - TO BE REMOVED
+    base_dir = "/p/home/jusers/langguth1/juwels/downscaling_maelstrom/downscaling_jsc_repo/downscaling_ap5/HPC_batch_scripts"
+    data_norm = ZScore(ds_dict["norm_dims"])
+    data_norm.read_norm_from_file(os.path.join(base_dir, "norm_test.json"))
+
     # get model instance and set-up batch size
     model_instance = ModelEngine(parser_args.model)
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
@@ -74,15 +80,16 @@ def main(parser_args):
     file_patt = "downscaling_tier2_train_*.nc"
     ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train, 30, lprefetch=True,
                                                              var_tar2in=ds_dict["var_tar2in"],
-                                                             norm_dims=ds_dict["norm_dims"])
+                                                             norm_obj=data_norm)
+                                                             #norm_dims=ds_dict["norm_dims"])
     print(f"Preparing training data took {timer() - t0_train:.2f}s.")
 
     # validation data
     print("Start preparing validation data...")
     t0_val = timer()
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
-    ds_val = xr.open_dataset(fdata_val)
-    ds_val = ds_obj.data_norm.normalize(ds_val)
+    with xr.open_dataset(fdata_val) as ds_val:
+        ds_val = ds_obj.data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
