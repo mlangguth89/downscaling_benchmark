@@ -145,11 +145,11 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data):
-        self.L = data['L']
+        self.L = data['L'].to(device)
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
-        self.H = data['H']
+        self.H = data['H'].to(device)
 
     def count_flops(self,data):
         # Count the number of FLOPs
