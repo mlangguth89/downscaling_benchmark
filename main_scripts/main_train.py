@@ -147,6 +147,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                            conditional=conditional,
                            timesteps=timesteps,
                            train_loader=train_loader,
+                           epochs=epochs,
                            val_loader=val_loader
                            )
 
