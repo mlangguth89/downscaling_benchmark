@@ -132,7 +132,7 @@ def main():
             #Get the low resolution inputs
             input_vars = test_data["L"]
             input_temp = np.squeeze(input_vars[:,-1,:,:])*vars_in_patches_std+vars_in_patches_mean
-            input_temp = np.exp(input_temp+np.log(args.k))-args.k
+            input_temp = np.exp(input_temp.cpu().numpy()+np.log(args.k))-args.k
             input_list.append(input_temp)
             if args.model_type == "diffusion":
                 #now, we only use the unconditional difussion model, meaning the inputs are only noise.
