@@ -255,7 +255,7 @@ class BuildModel:
                 # 6) Save model
                 # -------------------------------
                 if current_step % self.save_freq == 0 or current_step == 1:
-                    self.save(current_step)
+                    self.save(epoch)
             print("Model Loss {} after step {}".format(self.G_loss, current_step))
             print("Model Saved")
             print("Time per step:", time.time() - st)
