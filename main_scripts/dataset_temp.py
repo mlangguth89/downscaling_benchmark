@@ -123,7 +123,9 @@ class CustomTemperatureDataset(Dataset):
         return len(self.ds_in)
 
     def __getitem__(self, idx):
-        return self.ds_in[idx], self.ds_tar[idx]
+        output = {'L': self.ds_in[idx], 'H': self.ds_tar[idx]}
+        return output
+
 
 def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
     """

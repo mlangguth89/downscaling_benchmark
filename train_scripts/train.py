@@ -249,12 +249,14 @@ class BuildModel:
                 # -------------------------------
                 self.optimize_parameters()
 
+                self.schedulers[0].step(current_step)
+
                 # -------------------------------
                 # 6) Save model
                 # -------------------------------
-                if current_step % self.save_freq == 0:
-                    self.save(epoch)
-            print("Model Loss {} after step {}".format(self.G_loss, epoch))
+                if current_step % self.save_freq == 0 or current_step == 1:
+                    self.save(current_step)
+            print("Model Loss {} after step {}".format(self.G_loss, current_step))
             print("Model Saved")
             print("Time per step:", time.time() - st)
             wandb.log({"loss": self.G_loss, "lr": lr})
@@ -272,7 +274,7 @@ class BuildModel:
                 print("validation loss:", val_loss.item())
                 print("lr", lr)
 
-            self.schedulers[0].step(val_loss.item())
+
 
 
 
