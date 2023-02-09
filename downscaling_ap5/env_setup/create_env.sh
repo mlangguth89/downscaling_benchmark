@@ -74,8 +74,36 @@ else
   ENV_EXIST=0
 fi
 
+SUPPORTED_SYSTEMS=("HDFML" "JWB" "JRCMI200")
+declare -A SYSTEM_HUMAN_NAMES
+SYSTEM_HUMAN_NAMES["HDFML"]="HDF-ML"
+SYSTEM_HUMAN_NAMES["JWB"]="Juwels (Booster)"
+SYSTEM_HUMAN_NAMES["JRCMI200"]="Jureca (MI200 partition)"
+declare -A SYSTEM_HOSTNAME_PATTERNS
+SYSTEM_HOSTNAME_PATTERNS["HDFML"]="hdfml*"
+SYSTEM_HOSTNAME_PATTERNS["JWB"]="*jwlogin*"
+SYSTEM_HOSTNAME_PATTERNS["JRCMI200"]="*jrlogin*"
+declare -A SYSTEM_IS_JSC
+SYSTEM_IS_JSC["HDFML"]=1
+SYSTEM_IS_JSC["JWB"]=1
+SYSTEM_IS_JSC["JRCMI200"]=1
+
+IS_SUPPORTED_SYSTEM=0
+for SYSTEM in "${SUPPORTED_SYSTEMS[@]}"
+do
+  HNAME_PATTERN="${SYSTEM_HOSTNAME_PATTERNS[$SYSTEM]}"
+  echo "Checking if ${HOST_NAME} matches pattern ${HNAME_PATTERN}"
+  if [[ "${HOST_NAME}" == ${HNAME_PATTERN} ]]; then
+    echo "Match! System is supported"
+    IS_SUPPORTED_SYSTEM=1
+    SYSTEM_USED=$SYSTEM
+  else
+    echo "No match!"
+  fi
+done
+
 ## check integratability of operating system
-if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
+if [[ $IS_SUPPORTED_SYSTEM == 1 ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
   unset PYTHONPATH
 else
@@ -88,7 +116,14 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   # Install virtualenv-package and set-up virtual environment with required additional Python packages.
   echo "${SCR_SETUP}Configuring and activating virtual environment on ${HOST_NAME}"
 
-  source modules.sh
+  #MODULE_SCRIPT="modules-$SYSTEM_USED.sh"
+  #if [ -f "$MODULE_SCRIPT" ]; then
+  #  echo "${SCR_SETUP}Using ${MODULE_SCRIPT} to load required modules" 
+  #else
+  #  echo "${SCR_SETUP}${MODULE_SCRIPT} does not exist, exiting" 
+  #  return
+  #fi
+  #source $MODULE_SCRIPT
 
   python3 -m venv ${VENV_DIR}
 
@@ -108,7 +143,9 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   # append PYTHONPATH to a) avoid installation to local site-packages and b) ensure that wheel-package is found
   export PYTHONPATH=${VENV_DIR}/lib/python${PY_VERSION}/site-packages:${PYTHONPATH} >> ${activate_virt_env}       
-  export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages:${PYTHONPATH} >> ${activate_virt_env} 
+  if [[ $SYSTEM_IS_JSC[$SYSTEM_USED] == 1 ]]; then
+    export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages:${PYTHONPATH} >> ${activate_virt_env} 
+  fi
 
   req_file=${SETUP_DIR}/requirements.txt
 
@@ -130,7 +167,9 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "" >> ${activate_virt_env}
   echo "# Expand PYTHONPATH..." >> ${activate_virt_env}
   echo "export PYTHONPATH=${VENV_DIR}/lib/python${PY_VERSION}/site-packages:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages/:\$PYTHONPATH" >> ${activate_virt_env} 
+  if [[ $SYSTEM_IS_JSC[$SYSTEM_USED] == 1 ]]; then
+    echo "export PYTHONPATH=/p/software/${MACHINE}/stages/2022/software/Python/3.9.6-GCCcore-11.2.0/lib/python${PY_VERSION}/site-packages/:\$PYTHONPATH" >> ${activate_virt_env} 
+  fi
   echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
   echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> ${activate_virt_env}
