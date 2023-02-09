@@ -46,7 +46,7 @@ parameterset:
       - name: taskspernode
         _: $n_gpu
       - name: timelimit
-        _: 30
+        _: "00:30:00"
       - name: account
         _: jscbenchmark
       - name: queue
@@ -61,7 +61,7 @@ parameterset:
         _: python -u $jube_benchmark_home/../main_scripts/main_train_unet.py
       - name: nepochs
         type: int
-        _: 7
+        _: 70
       - name: lr
         type: float
         _: 5.e-05
