@@ -153,8 +153,8 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nfiles2merge: int, lshuffle: bool = True,
-                            lprefetch: bool = False, predictands: List = None, predictors: List = None,
-                            var_tar2in: str = None, norm_obj=None, norm_dims: List = None):
+                            predictands: List = None, predictors: List = None, var_tar2in: str = None, norm_obj=None,
+                            norm_dims: List = None):
         """
         Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
         To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
@@ -189,6 +189,7 @@ class HandleDataClass(object):
                                      norm_obj=norm_obj, norm_dims=norm_dims)
 
         tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
+        tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
         tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
@@ -200,13 +201,12 @@ class HandleDataClass(object):
 
         # enable flexibility in factor for range
         tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged*6*10)).map(tf_read_nc).prefetch(1)    # 6*10 corresponds to (d_steps + 1)*n_epochs with d_steps=5, n_epochs=10
+        tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
         tfds = tfds.flat_map(
             lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
             .batch(batch_size, drop_remainder=True).map(tf_getdata))
-        # tfds = tfds.interleave(lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(ds_obj.samples_merged)\
-        #                       .batch(bs_train, drop_remainder=True).map(tf_getdata), cycle_length=1, num_parallel_calls=tf.data.experimental.AUTOTUNE)#.map(tf_norm))
-        if lprefetch:
-            tfds = tfds.prefetch(int(ds_obj.samples_merged + 1))
+
+        tfds = tfds.prefetch(int(ds_obj.samples_merged))
         tfds = tfds.map(tf_split).repeat()
 
         return ds_obj, tfds
@@ -390,15 +390,16 @@ class StreamMonthlyNetCDF(object):
             self.data_norm = norm_obj
             self.norm_params = norm_obj.norm_stats
 
-        # self.ds_all = None
-        self.data = None
+        self.data_loaded = [xr.Dataset, xr.Dataset]
+        self.i_loaded = 0
+        self.data_now = None
         self.pool = ThreadPool(10)
 
     def __len__(self):
         return self.nsamples
 
     def getitems(self, indices):
-        da_now = self.data.isel({self.sample_dim: indices}).to_array("variables")
+        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables")
         if self.var_tar2in is not None:
             da_now = xr.concat([da_now, da_now.sel({"variables": self.var_tar2in})], dim="variables")
         return da_now.transpose(..., "variables")
@@ -499,7 +500,7 @@ class StreamMonthlyNetCDF(object):
     def predictand_list(self, selected_predictands: List):
         self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
 
-    def check_and_choose_vars(self, var_list: List, suffix: str = "*"):
+    def check_and_choose_vars(self, var_list: List[str], suffix: str = "*"):
         """
         Checks list of variables for availability or retrieves all variables named with a given suffix (for var_list = None)
         :param var_list: list of predictor variables or None
@@ -535,7 +536,7 @@ class StreamMonthlyNetCDF(object):
         ds = data_norm.normalize(ds)
         return ds.astype("float32")
 
-    def read_mfdataset(self, files, **kwargs):
+    def _read_mfdataset(self, files, **kwargs):
         t0 = timer()
         # parallel processing of files incl. normalization
         datasets = self.pool.map(partial(self._process_one_netcdf, data_norm=self.data_norm, **kwargs), files)
@@ -548,28 +549,32 @@ class StreamMonthlyNetCDF(object):
 
         return ds_all
 
-    def read_netcdf(self, ind):
-        ind = tf.keras.backend.get_value(ind)
-        ind = int(str(ind).lstrip("b'").rstrip("'"))
-        ind = int(ind%self.nfiles_merged)
-        file_list_now = self.file_list_random[ind * self.nfiles2merge:(ind + 1) * self.nfiles2merge]
+    def read_netcdf(self, set_ind):
+        set_ind = tf.keras.backend.get_value(set_ind)
+        set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
+        set_ind = int(set_ind%self.nfiles_merged)
+        il = int((self.i_loaded + 1)%2)
+        file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
-        #ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
+        # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
-        self.data = self.read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        nsamples = self.data.dims[self.sample_dim]
+        self.data_loaded[il] = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
+        nsamples = self.data_loaded[il].dims[self.sample_dim]
         if nsamples < self.samples_merged:
             t0 = timer()
             add_samples = self.samples_merged - nsamples
             add_inds = random.sample(range(nsamples), add_samples)
-            ds_add = self.data.isel({self.sample_dim: add_inds})
+            ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
-            self.data = xr.concat([self.data, ds_add], dim=self.sample_dim)
-            #del ds_add 
-            #gc.collect()
+            self.data_loaded[il] = xr.concat([self.data_loaded[il], ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t0:.2f}s.")
 
-        print(f"Currently loaded dataset has {self.data.dims[self.sample_dim]} samples.")
+        print(f"Currently loaded dataset has {self.data_loaded[il].dims[self.sample_dim]} samples.")
 
+        return il
+
+    def choose_data(self, il):
+        self.data_now = self.data_loaded[il]
+        self.i_loaded = il
         return True
