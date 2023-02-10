@@ -557,17 +557,19 @@ class StreamMonthlyNetCDF(object):
         #ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
-        ds_now = self.read_mfdataset(file_list_now, var_list=self.all_vars)
-        nsamples = ds_now.dims[self.sample_dim]
+        self.data = self.read_mfdataset(file_list_now, var_list=self.all_vars).copy()
+        nsamples = self.data.dims[self.sample_dim]
         if nsamples < self.samples_merged:
             t0 = timer()
             add_samples = self.samples_merged - nsamples
             add_inds = random.sample(range(nsamples), add_samples)
-            ds_add = ds_now.isel({self.sample_dim: add_inds})
+            ds_add = self.data.isel({self.sample_dim: add_inds})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
-            ds_now = xr.concat([ds_now, ds_add], dim=self.sample_dim)
+            self.data = xr.concat([self.data, ds_add], dim=self.sample_dim)
+            #del ds_add 
+            #gc.collect()
             print(f"Appending data with {add_samples:d} samples took {timer() - t0:.2f}s.")
 
-        self.data = ds_now
+        print(f"Currently loaded dataset has {self.data.dims[self.sample_dim]} samples.")
 
         return True
