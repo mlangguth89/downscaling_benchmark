@@ -29,7 +29,7 @@ class BuildModel:
                  G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 5.e-02,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
-                 G_optimizer_wd: int = 0,
+                 G_optimizer_wd: int = 5.e-03,
                  save_dir: str = "../results",
                  train_loader: object = None,
                  val_loader: object = None,
@@ -42,7 +42,6 @@ class BuildModel:
                  **kwargs):
 
         """
-
         :param netG:
         :param G_lossfn_type:
         :param G_optimizer_type:
@@ -253,12 +252,14 @@ class BuildModel:
                 # 6) Save model
                 # -------------------------------
                 if current_step % self.save_freq == 0:
-                    self.save(epoch)
-            print("Model Loss {} after step {}".format(self.G_loss, epoch))
-            print("Model Saved")
-            print("Time per step:", time.time() - st)
-            wandb.log({"loss": self.G_loss, "lr": lr})
-
+                    self.save(current_step)
+                    print("Model Loss {} after step {}".format(self.G_loss, current_step))
+                    print("Model Saved")
+                    print("learnign rate",lr)
+                    print("Time per step:", time.time() - st)
+                    wandb.log({"loss": self.G_loss, "lr": lr})
+            
+            self.save(current_step)
             with torch.no_grad():
                 val_loss = 0
                 counter = 0

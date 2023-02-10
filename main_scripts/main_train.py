@@ -81,8 +81,14 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif dataset_type == "temperature":
         raise ("Not implement yet")
 
-    train_loader = create_loader(file_path=train_dir, batch_size=batch_size, dataset_type=dataset_type, patch_size=16, k=0.01, mode="train")
-    test_loader = create_loader(file_path=test_dir,
+    train_loader = create_loader(train_dir, 
+                                 vars_in=vars_in,
+                                 vars_out=vars_out, 
+                                 patch_size=16, 
+                                 stat_path=None)
+    val_loader = create_loader(file_path=val_dir,
+                               vars_in = vars_in,
+                               vars_out = vars_out,
                                mode="test",
                                dataset_type=dataset_type,
                                k=0.01,
@@ -102,12 +108,21 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
-        netG = swinUnet(img_size=160, patch_size=patch_size, in_chans=n_channels,
-                        num_classes=1, embed_dim=96, depths=[2, 2, 2],
-                        depths_decoder=[2, 2, 2], num_heads=[6, 6, 6],
+        netG = swinUnet(img_size=160, 
+                        patch_size=patch_size, 
+                        in_chans=n_channels,
+                        num_classes=1, 
+                        embed_dim=96, 
+                        depths=[2, 2, 2],
+                        depths_decoder=[2, 2, 2], 
+                        num_heads=[6, 6, 6],
                         window_size=window_size,
-                        mlp_ratio=4, qkv_bias=True, qk_scale=None,
-                        drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                        mlp_ratio=4, 
+                        qkv_bias=True, 
+                        qk_scale=None,
+                        drop_rate=0., 
+                        attn_drop_rate=0., 
+                        drop_path_rate=0.1,
                         ape=False,
                         final_upsample="expand_first")
 
@@ -213,13 +228,8 @@ def main():
         f.write(json.dumps(vars(args), sort_keys = True, indent = 4))
 
     run(train_dir = args.train_dir,
-<<<<<<< HEAD
-        test_dir=args.test_dir,
-        n_channels = 8,
-=======
         val_dir = args.val_dir,
         n_channels = 10,
->>>>>>> 562e70e0b49f695bb4502a5277b371a02acf17bf
         save_dir = args.save_dir,
         checkpoint_save=10000,
         epochs = args.epochs,
