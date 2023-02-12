@@ -174,7 +174,7 @@ def main():
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_n\\saves",
                         help="The checkpoint directory")
-    parser.add_argument("--epochs", type=int, default=30, help="The checkpoint directory")
+    parser.add_argument("--epochs", type=int, default=5, help="The checkpoint directory")
     parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir")
 
     parser.add_argument("--dataset_type", type=str, default="temperature",

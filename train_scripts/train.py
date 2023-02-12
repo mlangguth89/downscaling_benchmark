@@ -27,7 +27,7 @@ class BuildModel:
     def __init__(self, netG,
                  G_lossfn_type: str = "l1",
                  G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 5.e-02,
+                 G_optimizer_lr: float = 5.e-05,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0,
                  save_dir: str = "../results",
@@ -226,8 +226,8 @@ class BuildModel:
         self.init_train()
         current_step = 0
         for epoch in range(self.epochs):
+            st = time.time()
             for i, train_data in enumerate(self.train_loader):
-                st = time.time()
 
                 current_step += 1
 
@@ -249,7 +249,7 @@ class BuildModel:
                 # -------------------------------
                 self.optimize_parameters()
 
-                self.schedulers[0].step(current_step)
+                # self.schedulers[0].step(current_step)
 
                 # -------------------------------
                 # 6) Save model
@@ -258,7 +258,7 @@ class BuildModel:
                     self.save(epoch)
             print("Model Loss {} after step {}".format(self.G_loss, current_step))
             print("Model Saved")
-            print("Time per step:", time.time() - st)
+            print("Time per epoch:", time.time() - st)
             wandb.log({"loss": self.G_loss, "lr": lr})
 
             with torch.no_grad():
