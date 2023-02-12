@@ -292,10 +292,10 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--test_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc", # C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc
                         help="The directory where testing data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\output\\unet",
@@ -324,7 +324,7 @@ def main():
 
     run(train_dir=args.train_dir,
         test_dir=args.test_dir,
-        n_channels=8,
+        n_channels=9,
         save_dir=args.save_dir,
         checkpoint_save=10000,
         epochs=args.epochs,
