@@ -190,8 +190,9 @@ class BuildModel:
         current_step = 0
 
         for epoch in range(self.epochs):
+            st = time.time()
             for i, train_data in enumerate(self.train_loader):
-                st = time.time()
+
 
                 current_step += 1
 
