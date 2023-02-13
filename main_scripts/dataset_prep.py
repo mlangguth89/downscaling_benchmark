@@ -219,7 +219,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         return idx_perm
 
     def save_stats(self):
-        output_file = os.path.join(self.file_path, "statistics.json")
+        output_file = os.path.join(self.stat_path, "statistics.json")
         stats = {}
         for i in range(len(self.vars_in)):
             key = self.vars_in[i]+'_mean'
