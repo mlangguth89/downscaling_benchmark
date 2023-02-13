@@ -26,10 +26,10 @@ module load matplotlib/3.4.3
 
 source ../venv_booster/bin/activate
 
-train_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc
-val_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_val.nc
+train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
+val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
 epochs=50
-save_dir=../saves/unet
+save_dir=../saves/unet_pre
 checkpoint_dir=../results/exp_test/wgan
 
 python ../main_scripts/main_train.py --train_dir ${train_dir} --val_dir ${val_dir} --epochs ${epochs} --save_dir ${save_dir}

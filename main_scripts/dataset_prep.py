@@ -119,6 +119,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
         """
         print("Loading data from the file:", filenames)
         dt = xr.open_mfdataset(filenames)
+        # dt = dt.sel(time=slice("2020-05-01", "2020-05-02"))
         # get input variables, and select the regions
         inputs = dt[self.vars_in].isel(lon = slice(2, 114)).sel(lat = slice(47.5, 60))
         output = dt[self.var_out].isel(lon_tar = slice(16, 113 * 10 + 6)).sel(lat_tar = slice(47.41, 60))
