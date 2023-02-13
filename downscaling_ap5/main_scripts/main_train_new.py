@@ -78,7 +78,7 @@ def main(parser_args):
     print("Start preparing training data...")
     t0_train = timer()
     file_patt = "downscaling_tier2_train_*.nc"
-    ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train, 30, lprefetch=True,
+    ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, file_patt, bs_train, 30,
                                                              var_tar2in=ds_dict["var_tar2in"],
                                                              norm_obj=data_norm)
                                                              #norm_dims=ds_dict["norm_dims"])
