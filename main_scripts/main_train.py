@@ -73,7 +73,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         # raise ("Not implement yet")
 
     train_loader = create_loader(train_dir, vars_in=vars_in, vars_out=vars_out, patch_size=16, stat_path=None,
-                                 dataset_type=dataset_type)
+                                 batch_size=args.batch_size, dataset_type=dataset_type)
 
     val_loader = create_loader(file_path=val_dir,
                                vars_in=vars_in,
@@ -81,6 +81,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                                mode="test",
                                stat_path=train_dir,
                                patch_size=16,
+                               batch_size=args.batch_size,
                                dataset_type=dataset_type)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":

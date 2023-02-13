@@ -238,7 +238,6 @@ class BuildModel:
                 # self.update_learning_rate(current_step)
 
                 lr = self.get_lr()  # get learning rate
-
                 # -------------------------------
                 # 2) feed patch pairs
                 # -------------------------------
