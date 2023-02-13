@@ -26,8 +26,8 @@ module load matplotlib/3.4.3
 
 source ../venv_booster/bin/activate
 
-train_dir= /p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
-val_dir= /p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
+train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
+val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
 epochs=5
 save_dir=../saves/unet_pre
 checkpoint_dir=../results/exp_test/wgan
