@@ -73,7 +73,7 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         # raise ("Not implement yet")
 
     train_loader = create_loader(train_dir, vars_in=vars_in, vars_out=vars_out, patch_size=16, stat_path=None,
-                                 batch_size=args.batch_size, dataset_type=dataset_type)
+                                 batch_size=args.batch_size, dataset_type=dataset_type, mode='test')
 
     val_loader = create_loader(file_path=val_dir,
                                vars_in=vars_in,
