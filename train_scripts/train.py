@@ -27,7 +27,7 @@ class BuildModel:
     def __init__(self, netG,
                  G_lossfn_type: str = "l1",
                  G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 5.e-05,
+                 G_optimizer_lr: float = 0.001,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 0,
                  save_dir: str = "../results",
@@ -120,9 +120,9 @@ class BuildModel:
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
-        self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        milestones = [4000, 20000, 50000],
-                                                        gamma = 0.01))
+        self.schedulers.append(lr_scheduler.ReduceLROnPlateau(self.G_optimizer))
+                                                        # milestones = [4000, 20000, 50000],
+                                                        # gamma = 0.01))
 
     # ----------------------------------------
     # save model / optimizer(optional)
@@ -274,6 +274,7 @@ class BuildModel:
                 print("validation loss:", val_loss.item())
                 print("lr", lr)
 
+            self.schedulers[0].step(val_loss.item())
 
 
 
