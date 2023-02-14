@@ -8,7 +8,7 @@ import numpy as np
 from torch import Tensor
 from functools import reduce
 from operator import __add__
-
+import pickle
 
 class Conv2dSamePadding(nn.Conv2d):
     def __init__(self,*args,**kwargs):
@@ -144,7 +144,7 @@ class Decode_Block(nn.Module):
 
 
 class UNet(nn.Module):
-    def __init__(self, n_channels, channels_start: int = 56, dataset_type: str = 'precipitation'):
+    def __init__(self, n_channels, channels_start: int = 124, dataset_type: str = 'precipitation'):
         super(UNet, self).__init__()
         self.dataset_type = dataset_type
         self.upsampling = Upsampling(n_channels, channels_start)

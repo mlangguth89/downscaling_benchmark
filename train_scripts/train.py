@@ -17,7 +17,7 @@ import torch.nn as nn
 import os
 from torch.optim import lr_scheduler
 import wandb
-
+import pickle
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cuda = True if torch.cuda.is_available() else False
 Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
@@ -25,7 +25,7 @@ Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
 
 class BuildModel:
     def __init__(self, netG,
-                 G_lossfn_type: str = "l1",
+                 G_lossfn_type: str = "l2",
                  G_optimizer_type: str = "adam",
                  G_optimizer_lr: float = 0.001,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
@@ -149,7 +149,8 @@ class BuildModel:
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
-        self.H = data['H'].to(device)
+
+        self.H = data['H'][:, None].to(device)
 
     def count_flops(self,data):
         # Count the number of FLOPs
