@@ -53,11 +53,11 @@ parameterset:
       - name: nodes
         _: 1
       - name: n_gpu
-        _: 4
+        _: 1
       - name: taskspernode
         _: $n_gpu
       - name: timelimit
-        _: "00:30:00"
+        _: "02:00:00"
       - name: account
         _: jscbenchmark
       - name: queue
@@ -96,12 +96,9 @@ parameterset:
 patternset:
    - name: perf_patterns
      pattern:
-      - {name: iter_pat, type: int, _: "iteration\\s+$jube_pat_int/\\s*$jube_pat_nint"}
-      # every 10th iteration is logged
-      - {name: iterations, type: int, mode: python, _: "$iter_pat_max"}
-      - {name: tflops_pat, type: float, _: "TFLOPs:\\s+$jube_pat_fp"}
-      - {name: elp_pat, type: float, _: "elapsed time per iteration \\(s\\):\\s+$jube_pat_fp"}
-      - {name: tokens_per_second, type: float, mode: python, _: "(1.0/$elp_pat_avg)*$global_batch_size*$sequence_length"}
+      - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
+      - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
+      - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
 
 analyser:
@@ -109,8 +106,10 @@ analyser:
     reduce: false
     use: perf_patterns
     analyse:
-        step: benchmark
-        file: job.out
+        step: submit
+        file:
+          - job.out
+          - stdout
 
 result:
     use: analyse
@@ -120,16 +119,17 @@ result:
       sort: iter_pat
       column: 
         - {title: "JobID", _: jobid}
-        - {title: "Job_Time", _: walltime}
-        - {title: "Model_Size [Billion Param]", _: nlp_model_size}
-        - {title: "Nodes", _: nodes}
-        - {title: "Batch_Size", _: global_batch_size}
-        - {title: "Pipline_Parallel", _: pp_size}
-        - {title: "Tensor_Parallel", _: tp_size}
-        - {title: "Iterations", _: iterations}
-        # - {title: "TFLOPs logged", _: tflops_pat_cnt}
-        - {title: "Max_TFLOPs/GPU", _: tflops_pat_max}
-        - {title: "Tokens/sec",format: ".2f", _: tokens_per_second}
+        - {title: "Job_Time", _: timelimit}
+        - {title: "# epochs", _: nepochs}
+        - {title: "learning rate", _: lr}
+        - {title: "# nodes", _: nodes}
+        - {title: "# gpu", _: n_gpu}
+        - {title: "last epoch ", _: epoch_last}
+        - {title: "first epoch time [s]", _: epoch_time_first}
+        - {title: "last epoch time [s]", _: epoch_time_last}
+        - {title: "last loss", _: loss_last}
+        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "min loss", _: loss_min}
 
 step:
   - name:   setup_venv
