@@ -14,6 +14,13 @@ parameterset:
       - name: model_name
         type: string
         _: "my_unet_model"
+      - name: indir
+        type: string
+        tag: jwb|jwc
+        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/"
+      - name: outdir
+        type: string
+        _: "$jube_wp_abspath/output_model"
   - name: globalParameter
     parameter:
       - name: modules
@@ -76,13 +83,6 @@ parameterset:
         _: gpu:$n_gpu
       - name: executable
         _: python -u $jube_benchmark_home/../main_scripts/main_train_unet.py
-      - name: indir
-        type: string
-        tag: jwb|jwc
-        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/"
-      - name: outdir
-        type: string
-        _: "$jube_wp_abspath/output_model"
       - name: args_exec
         mode: text
         _: > 
