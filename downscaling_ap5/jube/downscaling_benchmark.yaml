@@ -7,10 +7,10 @@ parameterset:
     parameter:
       - name: conf_md
         type: string
-        _: "config_wgan.json"
+        _: "$jube_benchmark_home/../HPC_batch_scripts/config_wgan.json"
       - name: conf_ds
         type: string
-        _: "config_tier2.json"
+        _: "$jube_benchmark_home/../HPC_batch_scripts/config_tier2.json"
       - name: exp_name
         type: string
         _: "wgan_benchmark"
