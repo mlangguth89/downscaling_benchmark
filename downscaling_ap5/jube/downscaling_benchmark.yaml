@@ -71,16 +71,16 @@ parameterset:
       - name: account
         _: deepacf
       - name: queue
-        tag: jwb+!test
+        tag: "jwb+!test"
         _: booster
       - name: queue
-        tag: jwb+test
+        tag: "jwb+test"
         _: develbooster
       - name: queue
-        tag: jwc+!test
+        tag: "jwc+!test"
         _: gpus
       - name: queue
-        tag: jwc+test
+        tag: "jwc+test"
         _: develgpus
       - name: queue
         tag: hdfml
