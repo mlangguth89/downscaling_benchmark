@@ -2,7 +2,7 @@
 # COSMO-REA6 grid for downscaling task
 #
 gridtype  = projection
-gridsize  = 11520
+gridsize  = 12000
 xsize     = 120
 ysize     = 100
 xname     = rlon
