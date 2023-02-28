@@ -29,8 +29,9 @@ parameterset:
         _: "$jube_wp_abspath/output_model"
   - name: globalParameter
     parameter:
-      - {name: modules, tag: "jwb|jwc|hdfml", separator: "|", _: unset PYTHONPATH && source modules_jsc.sh}
-      - {name: modules, tag: "e4", _: source modules_e4.sh}
+      - {name: modules, tag: "jwb|jwc|hdfml", separator: "|",
+         _: unset PYTHONPATH && source $jube_benchmark_home/../env_setup/modules_jsc.sh}
+      - {name: modules, tag: "e4", _: unset PYTHONPATH && source $jube_benchmark_home/../env_setup/modules_e4.sh}
       - name: systemname
         tag: jwc
         _: jwc
