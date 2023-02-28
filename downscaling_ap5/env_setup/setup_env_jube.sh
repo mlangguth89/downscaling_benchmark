@@ -112,6 +112,8 @@ if ! [[ $IS_SUPPORTED_SYSTEM == 1 ]]; then
   return
 fi
 
+activate_virt_env=${VENV_DIR}/bin/activate
+
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
@@ -119,8 +121,6 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "${SCR_SETUP}Configuring and activating virtual environment on ${HOST_NAME}"
 
   python3 -m venv --system-site-packages "${VENV_DIR}"
-
-  activate_virt_env=${VENV_DIR}/bin/activate
 
   echo "${SCR_SETUP}Entering virtual environment ${VENV_DIR} to install required Python modules..."
   source "${activate_virt_env}"
@@ -159,7 +159,8 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
 elif [[ "$ENV_EXIST" == 1 ]]; then
   # simply activate virtual environment
-  info_str="Virtual environment ${VENV_DIR} has already been set up before. Nothing to be done."
+  info_str="Virtual environment ${VENV_DIR} has already been set up before. Activate it now."
+  source "${activate_virt_env}"
 fi
 
 echo "${SCR_SETUP}${info_str}"
