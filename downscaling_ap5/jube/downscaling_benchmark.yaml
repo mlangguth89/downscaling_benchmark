@@ -1,0 +1,163 @@
+name:    ap5-all
+outpath: ap5_run
+comment: MAELSTROM AP5 benchmark jube script
+
+parameterset:
+  - name: appParameter
+    parameter:
+      - name: conf_md
+        type: string
+        _: "config_wgan.json"
+      - name: conf_ds
+        type: string
+        _: "config_tier2.json"
+      - name: exp_name
+        type: string
+        _: "wgan_benchmark"
+      - name: model
+        type: string
+        _: "wgan"
+      - name: dataset
+        type: string
+        _: "tier2"
+      - name: indir
+        type: string
+        tag: jwb|jwc
+        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/"
+      - name: outdir
+        type: string
+        _: "$jube_wp_abspath/output_model"
+  - name: globalParameter
+    parameter:
+      - {name: modules, tag: "jwb|jwc", separator: |, _: source modules_jsc.sh}
+      - {name: modules, tag: "e4", _: source modules_e4.sh}
+      - name: systemname
+        tag: jwc
+        _: jwc
+      - name: systemname
+        tag: jwb
+        _: jwb
+      - name: systemname
+        tag: e4
+        _: e4
+  - name: executeset
+    init_with: platform.xml
+  - name: systemParameter
+    init_with: platform.xml
+    parameter:
+      - name: preprocess
+        mode: text
+        separator: |
+        _:
+          $modules;
+      - name: threadspertask
+        _: 1
+      - name: nodes
+        _: 1
+      - name: n_gpu
+        _: 1
+      - name: taskspernode
+        _: $n_gpu
+      - name: timelimit
+        tag: test
+        _: "02:00:00"
+      - name: timelimit
+        tag: !test
+        _: "20:00:00"
+      - name: account
+        _: deepacf
+      - name: queue
+        tag: jwb+!test
+        _: booster
+      - name: queue
+        tag: jwb+test
+        _: develbooster
+      - name: queue
+        tag: jwc+!test
+        _: gpus
+      - name: queue
+        tag: jwc+test
+        _: develgpus
+      - name: gres
+        _: gpu:$n_gpu
+      - name: executable
+        _: python -u $jube_benchmark_home/../main_scripts/main_train_new.py
+      - name: args_exec
+        mode: text
+        _: > 
+          -in ${indir}
+          -out ${outdir}
+          -model ${model}
+          -dataset ${dataset}
+          -exp_name ${exp_name}
+          -model_name ${model_name}
+          -conf_md ${conf_md}
+          -conf_ds ${conf_ds}
+          -id $${SLURM_JOBID}
+
+patternset:
+   - name: perf_patterns
+     pattern:
+      - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
+      - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
+      - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
+      - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
+
+analyser:
+    name: analyse
+    reduce: false
+    use: perf_patterns
+    analyse:
+        step: submit
+        file:
+          - job.out
+          - stdout
+
+result:
+    use: analyse
+    table:
+      name: result
+      style: pretty
+      sort: iter_pat
+      column:
+        - {title: "JobID", _: jobid}
+        - {title: "Job_Time", _: timelimit}
+        - {title: "model configuration", _: conf_md}
+        - {title: "dataset configuration", _: conf_ds}
+        - {title: "# nodes", _: nodes}
+        - {title: "# gpu", _: n_gpu}
+        - {title: "last epoch ", _: epoch_last}
+        - {title: "first epoch time [s]", _: epoch_time_first}
+        - {title: "last epoch time [s]", _: epoch_time_last}
+        - {title: "last loss", _: loss_last}
+        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "min loss", _: loss_min}
+
+step:
+  - name:   setup_venv
+    use:
+      - globalParameter
+      - systemParameter
+    do:
+      _:
+        $modules;
+        cd $jube_benchmark_home/../env_setup/ &&
+        source ./create_env.sh venv_ap5_$systemname
+  - name:   submit
+    use:
+      - appParameter
+      - globalParameter
+      - systemParameter
+      - executeset
+      - from: platform.xml
+        _: jobfiles
+      - from: platform.xml
+        _: executesub
+    do:
+      done_file: $ready_file
+      error_file: $error_file
+      _:
+        $modules;
+        source $jube_benchmark_home/../virtual_envs/venv_ap5_$systemname/bin/activate;
+        $submit $submit_script
+
