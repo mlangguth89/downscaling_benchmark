@@ -84,10 +84,10 @@ SYSTEM_HUMAN_NAMES["JWB"]="Juwels (Booster)"
 SYSTEM_HUMAN_NAMES["JRCMI200"]="Jureca (MI200 partition)"
 SYSTEM_HUMAN_NAMES["E4"]="E4"
 declare -A SYSTEM_HOSTNAME_PATTERNS
-SYSTEM_HOSTNAME_PATTERNS["HDFML"]="hdfml*"
-SYSTEM_HOSTNAME_PATTERNS["JWB"]="*jwlogin*"
-SYSTEM_HOSTNAME_PATTERNS["JRCMI200"]="*jrlogin*"
-SYSTEM_HUMAN_PATTERNS["E4"]="*e4*"
+SYSTEM_HOSTNAME_PATTERNS["HDFML"]="hdfml"
+SYSTEM_HOSTNAME_PATTERNS["JWB"]="jwlogin"
+SYSTEM_HOSTNAME_PATTERNS["JRCMI200"]="jrlogin"
+SYSTEM_HUMAN_PATTERNS["E4"]="e4"
 declare -A SYSTEM_IS_JSC
 SYSTEM_IS_JSC["HDFML"]=1
 SYSTEM_IS_JSC["JWB"]=1
@@ -99,7 +99,7 @@ for SYSTEM in "${SUPPORTED_SYSTEMS[@]}"
 do
   HNAME_PATTERN="${SYSTEM_HOSTNAME_PATTERNS[$SYSTEM]}"
   echo "Checking if ${HOST_NAME} matches pattern ${HNAME_PATTERN}"
-  if [[ "${HOST_NAME}" == "${HNAME_PATTERN}" ]]; then
+  if [[ "${HOST_NAME}" == *"${HNAME_PATTERN}"* ]]; then
     echo "Match! System is supported"
     IS_SUPPORTED_SYSTEM=1
   else
@@ -109,7 +109,7 @@ done
 
 if ! [[ $IS_SUPPORTED_SYSTEM == 1 ]]; then
   echo "${SCR_SETUP}ERROR: Current operating system ${HOST_NAME} is not supported."
-  return
+  exit 1
 fi
 
 activate_virt_env=${VENV_DIR}/bin/activate
