@@ -38,6 +38,9 @@ parameterset:
         tag: jwb
         _: jwb
       - name: systemname
+        tag: hdfml
+        _: hdfml
+      - name: systemname
         tag: e4
         _: e4
   - name: executeset
@@ -78,6 +81,9 @@ parameterset:
       - name: queue
         tag: jwc+test
         _: develgpus
+      - name: queue
+        tag: hdfml
+        _: batch
       - name: gres
         _: gpu:$n_gpu
       - name: executable
