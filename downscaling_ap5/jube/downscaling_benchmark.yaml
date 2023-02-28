@@ -29,7 +29,7 @@ parameterset:
         _: "$jube_wp_abspath/output_model"
   - name: globalParameter
     parameter:
-      - {name: modules, tag: "jwb|jwc", separator: |, _: source modules_jsc.sh}
+      - {name: modules, tag: "jwb|jwc", separator: "|", _: unset PYTHONPATH && source modules_jsc.sh}
       - {name: modules, tag: "e4", _: source modules_e4.sh}
       - name: systemname
         tag: jwc
@@ -65,7 +65,7 @@ parameterset:
         tag: test
         _: "02:00:00"
       - name: timelimit
-        tag: !test
+        tag: "!test"
         _: "20:00:00"
       - name: account
         _: deepacf
