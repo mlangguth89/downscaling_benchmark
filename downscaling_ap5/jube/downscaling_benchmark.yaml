@@ -22,14 +22,14 @@ parameterset:
         _: "tier2"
       - name: indir
         type: string
-        tag: jwb|jwc
+        tag: jwb|jwc|hdfml
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/"
       - name: outdir
         type: string
         _: "$jube_wp_abspath/output_model"
   - name: globalParameter
     parameter:
-      - {name: modules, tag: "jwb|jwc", separator: "|", _: unset PYTHONPATH && source modules_jsc.sh}
+      - {name: modules, tag: "jwb|jwc|hdfml", separator: "|", _: unset PYTHONPATH && source modules_jsc.sh}
       - {name: modules, tag: "e4", _: source modules_e4.sh}
       - name: systemname
         tag: jwc
@@ -148,7 +148,7 @@ step:
       _:
         $modules;
         cd $jube_benchmark_home/../env_setup/ &&
-        source ./setup_env_jube.sh venv_ap5_$systemname
+        source ./setup_env_jube.sh venv_$systemname
   - name:   submit
     use:
       - appParameter
@@ -164,6 +164,6 @@ step:
       error_file: $error_file
       _:
         $modules;
-        source $jube_benchmark_home/../virtual_envs/venv_ap5_$systemname/bin/activate;
+        source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
         $submit $submit_script
 
