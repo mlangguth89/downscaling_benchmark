@@ -90,6 +90,9 @@ ENV/
 virtual_env*/
 virt_env*/
 
+# JUBE
+downscaling_ap5/jube/ap5_run/*
+
 # Spyder project settings
 .spyderproject
 .spyproject
