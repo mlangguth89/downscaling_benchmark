@@ -2,7 +2,7 @@
 #
 # __authors__ = Michael Langguth
 # __date__  = '2022-01-21'
-# __update__= '2022-01-21'
+# __update__= '2022-02-28'
 #
 # **************** Description ****************
 # This script can be used for setting up the virtual environment needed for downscaling with the U-net architecture
@@ -13,6 +13,7 @@
 check_argin() {
 # Handle input arguments and check if one is equal to -lcontainer (not needed currently)
 # Can also be used to check for non-positional arguments (such as -exp_id=*, see commented lines)
+# !!! NOT USED YET!!!
     for argin in "$@"; do
         # if [[ $argin == *"-exp_id="* ]]; then
         #  exp_id=${argin#"-exp_id="}
@@ -61,7 +62,7 @@ VENV_DIR="${BASE_DIR}/virtual_envs/${ENV_NAME}"
 # script is called from env_setup-directory?
 if [[ "${SETUP_DIR_NAME}" != "env_setup"  ]]; then
   echo "${SCR_SETUP}ERROR: Execute 'create_env.sh' from the env_setup-subdirectory only!"
-  echo ${SETUP_DIR_NAME}
+  echo "${SETUP_DIR_NAME}"
   return
 fi
 
@@ -76,7 +77,7 @@ fi
 
 ## check integratability of operating system
 if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
-  # unset PYTHONPATH to ensure that system-realted paths are not set (container-environment should be used only)
+  # unset PYTHONPATH to ensure that system-realted paths are not set
   unset PYTHONPATH
 else
   echo "${SCR_SETUP}ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
@@ -112,22 +113,22 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   pip3 install --no-cache-dir -r "${req_file}"
 
   # expand PYTHONPATH
-  export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> ${activate_virt_env} 
-  export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> ${activate_virt_env}
-  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH >> ${activate_virt_env}
+  export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH >> "${activate_virt_env}"
 
   # ...and ensure that this also done when the
-  echo "" >> ${activate_virt_env}
-  echo "# Expand PYTHONPATH..." >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> ${activate_virt_env}
-  echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> ${activate_virt_env}
+  echo "" >> "${activate_virt_env}"
+  echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
 
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
 elif [[ "$ENV_EXIST" == 1 ]]; then
