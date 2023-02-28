@@ -142,7 +142,7 @@ step:
       _:
         $modules;
         cd $jube_benchmark_home/../env_setup/ &&
-        source ./create_env.sh venv_ap5_$systemname
+        source ./setup_env_jube.sh venv_ap5_$systemname
   - name:   submit
     use:
       - appParameter
