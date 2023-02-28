@@ -56,9 +56,9 @@ class ZScore(Normalize):
         :param std: standard deviation of data for normalization
         :return data_norm: normalized data
         """
-        data_norm = (data - mu) / std
+        data = (data - mu) / std
 
-        return data_norm
+        return data
 
     @staticmethod
     def denormalize_data(data, mu, std):
@@ -69,6 +69,6 @@ class ZScore(Normalize):
         :param std: standard deviation of data for denormalization
         :return data_norm: denormalized data
         """
-        data_denorm = data * std + mu
+        data = data * std + mu
 
-        return data_denorm
+        return data
