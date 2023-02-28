@@ -10,7 +10,7 @@ parameterset:
         _: "$jube_benchmark_home/../HPC_batch_scripts/config_wgan.json"
       - name: conf_ds
         type: string
-        _: "$jube_benchmark_home/../HPC_batch_scripts/config_tier2.json"
+        _: "$jube_benchmark_home/../HPC_batch_scripts/config_ds_tier2.json"
       - name: exp_name
         type: string
         _: "wgan_benchmark"
@@ -97,7 +97,6 @@ parameterset:
           -model ${model}
           -dataset ${dataset}
           -exp_name ${exp_name}
-          -model_name ${model_name}
           -conf_md ${conf_md}
           -conf_ds ${conf_ds}
           -id $${SLURM_JOBID}
