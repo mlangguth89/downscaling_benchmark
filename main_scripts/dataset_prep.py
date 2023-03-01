@@ -30,7 +30,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
     This is the class used for generate dataset generator for precipitation downscaling
     """
 
-    def __init__(self, file_path: str = None, batch_size: int = 4, patch_size: int = 16,
+    def __init__(self, file_path: str = None, batch_size: int = 32, patch_size: int = 16,
                  vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in",
                                   "u700_in","v700_in","yw_hourly_in"],
                  vars_out: list = ["yw_hourly_tar"], sf: int = 10,

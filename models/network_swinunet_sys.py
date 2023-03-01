@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.utils.checkpoint as checkpoint
 from einops import rearrange
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-
+from einops.layers.torch import Rearrange, Reduce
 class Upsampling(nn.Module):
 
     def __init__(self, in_channels:int = None, out_channels: int = None,
@@ -559,8 +559,17 @@ class PatchEmbed(nn.Module):
 
         self.in_chans = in_chans
         self.embed_dim = embed_dim
+        
+        print("patch size", patch_size)
+        #Bing 20230214: the following command is from the original code of the paper, however, it is not consistent wiht the paper
+        #The paper mention using the lienar projector not convolutional layer
+        self.proj = nn.Sequential(
+                # break-down the image in s1 x s2 patches and flat them
+                 Rearrange('b c (h s1) (w s2) -> b (h w) (s1 s2 c)', s1=patch_size[0], s2=patch_size[0]),
+                 nn.Linear(patch_size[0]  * patch_size[0] * in_chans, self.embed_dim)
+            )
 
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        #self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -571,7 +580,10 @@ class PatchEmbed(nn.Module):
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        x = self.proj(x).flatten(2).transpose(1, 2)  # B Ph*Pw C
+        print("x before embedding",x.shape)
+        print("x after project", self.proj(x).shape)
+        x = self.proj(x)
+        #flatten(2).transpose(1, 2)  # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
         return x
@@ -609,8 +621,8 @@ class SwinTransformerSys(nn.Module):
         use_checkpoint (bool): Whether to use checkpointing to save memory. Default: False
     """
 
-    def __init__(self, img_size=224, patch_size=4, in_chans=3, num_classes=1000,
-                 embed_dim=96, depths=[2, 2, 2, 2], depths_decoder=[1, 2, 2, 2], num_heads=[3, 6, 12, 24],
+    def __init__(self, img_size=224, patch_size=4, in_chans=10, num_classes =1000,
+                 embed_dim=96, depths=[2, 2], depths_decoder=[1, 2], num_heads=[3, 6, 12, 24],
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
@@ -725,15 +737,18 @@ class SwinTransformerSys(nn.Module):
     #Encoder and Bottleneck
     def forward_features(self, x):
         x = self.patch_embed(x)
+        print("x after patch embd", x.shape)
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
         x_downsample = []
-
+        count = 0
         for layer in self.layers:
+            print("Layer:", count+1)
             x_downsample.append(x)
             x = layer(x)
-
+            print("layer shape:",x.shape)
+            count = count + 1
         x = self.norm(x)  # B L C
   
         return x, x_downsample
@@ -771,6 +786,7 @@ class SwinTransformerSys(nn.Module):
         print('x after upsampling_first: {}'.format(x.shape))
         x, x_downsample = self.forward_features(x)
         print('x after downsample: {}'.format(x.shape))
+        print("x_downsample", x_downsample[0].shape)
         x = self.forward_up_features(x,x_downsample)
         print('x after forward_up_features: {}'.format(x.shape))
         x = self.up_x4(x)
