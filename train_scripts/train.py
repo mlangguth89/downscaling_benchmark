@@ -33,7 +33,7 @@ class BuildModel:
                  save_dir: str = "../results",
                  train_loader: object = None,
                  val_loader: object = None,
-                 epochs: int = 70,
+                 epochs: int = 20,
                  decay_start: int = 5,
                  decay_end: int = 30,
                  dataset_type: str = 'precipitation',
@@ -144,11 +144,12 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data):
-        self.L = data['L']
+        self.L = data['L'].cuda().to(torch.half)
+        print("Self.L type",type(self.L))
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
-        self.H = data['H']
+        self.H = data['H'].cuda()
 
     def count_flops(self,data):
         # Count the number of FLOPs
