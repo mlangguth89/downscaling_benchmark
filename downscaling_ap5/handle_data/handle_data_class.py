@@ -341,28 +341,46 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
         if laugmented: fname_suffix = f"{fname_suffix}_aug"
     elif dataset_name == "tier2":
-        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
+        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}*"
         if laugmented: raise ValueError("No augmented dataset available for Tier-2.")
     else:
         raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
 
-    ds_filename = os.path.join(datadir, f"{fname_suffix}.nc")
+    if "*" in fname_suffix:
+        ds_filename = fname_suffix
+    else:
+        ds_filename = os.path.join(datadir, f"{fname_suffix}.nc")
 
-    if not os.path.isfile(ds_filename):
-        raise FileNotFoundError(f"Could not find requested dataset file '{ds_filename}'")
+        if not os.path.isfile(ds_filename):
+            raise FileNotFoundError(f"Could not find requested dataset file '{ds_filename}'")
 
     return ds_filename
 
 
 class StreamMonthlyNetCDF(object):
-    # TO-DO:
-    # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
-
     def __init__(self, datadir, patt, nfiles_merge: int, sample_dim: str = "time", selected_predictors: List = None,
-            selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None, nworkers: int = 10):
+                 selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
+                 nworkers: int = 10):
+        """
+        Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
+        rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
+        Furthermore, the class attributes provide key information on the handled dataset.
+        :param datadir: directory where set of netCDF-files are located
+        :param patt: filename pattern to allow globbing for netCDF-files
+        :param nfiles_merge: number of files that will be loaded into memory (corresponding to one dataset subset)
+        :param sample_dim: name of dimension in the data over which sampling should be performed
+        :param selected_predictors: list of predictor variable names to be obtained
+        :param selected_predictands: list of predictand variables names to be obtained
+        :param var_tar2in: predictand (target) variable that can be inputted as well
+                          (e.g. static variables known a priori such as the surface topography)
+        :param norm_dims: list of dimensions over which data will be normalized
+        :param norm_obj: normalization object providing parameters for (de-)normalization
+        :param nworkers: number of threads to read the netCDF-files
+        """
         self.data_dir = datadir
         self.file_list = patt
         self.nfiles = len(self.file_list)
+        self.dataset_size = self.get_dataset_size()
         self.file_list_random = random.sample(self.file_list, self.nfiles)
         self.nfiles2merge = nfiles_merge
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
@@ -405,6 +423,13 @@ class StreamMonthlyNetCDF(object):
         if self.var_tar2in is not None:
             da_now = xr.concat([da_now, da_now.sel({"variables": self.var_tar2in})], dim="variables")
         return da_now.transpose(..., "variables")
+
+    def get_dataset_size(self):
+        dataset_size = 0.
+        for datafile in self.file_list:
+            dataset_size += os.path.getsize(datafile)
+
+        return dataset_size
 
     def get_data_dim(self):
         """
@@ -583,7 +608,7 @@ class StreamMonthlyNetCDF(object):
         return il
 
     def choose_data(self, _):
-        ik = int(self.iuse_next%2)
+        ik = int(self.iuse_next % 2)
         self.data_now = self.data_loaded[ik]
         print(f"Use data subset {ik:d}...")
         self.iuse_next = ik + 1
