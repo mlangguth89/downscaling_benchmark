@@ -6,11 +6,16 @@ parameterset:
   - name: appParameter
     parameter:
       - name: conf_md
+        tag: "!test"
         type: string
-        _: "$jube_benchmark_home/../HPC_batch_scripts/config_wgan.json"
+        _: "$jube_benchmark_home/../config/config_wgan.json"
+      - name: conf_md
+        tag: "test"
+        type: string
+        _: "$jube_benchmark_home/../config/config_wgan_test.json"
       - name: conf_ds
         type: string
-        _: "$jube_benchmark_home/../HPC_batch_scripts/config_ds_tier2.json"
+        _: "$jube_benchmark_home/../config/config_ds_tier2.json"
       - name: exp_name
         type: string
         _: "wgan_benchmark"
@@ -55,7 +60,7 @@ parameterset:
         _:
           $modules;
       - name: threadspertask
-        _: 1
+        _: 40
       - name: nodes
         _: 1
       - name: n_gpu
@@ -166,5 +171,7 @@ step:
       _:
         $modules;
         source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
+        export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK};
+        echo $SRUN_CPUS_PER_TASK;
         $submit $submit_script
 
