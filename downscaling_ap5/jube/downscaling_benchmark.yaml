@@ -29,9 +29,13 @@ parameterset:
         type: string
         tag: jwb|jwc|hdfml
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
+      - name: js_norm
+        type: string
+        tag: jwb|jwc|hdfml
+        _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/zscore_norm.json"
       - name: outdir
         type: string
-        _: "$jube_wp_abspath/output_model"
+        _: "$jube_benchmark_home/../trained_models"
   - name: globalParameter
     parameter:
       - name: modules
@@ -97,8 +101,13 @@ parameterset:
       - name: gres
         _: gpu:$n_gpu
       - name: executable
-        _: python -u $jube_benchmark_home/../main_scripts/main_train_new.py
+        tag: "!data_loader"
+        _: python -u $jube_benchmark_home/../main_scripts/main_train.py
+      - name: executable
+        tag: data_loader
+        _: python -u $jube_benchmark_home/../tests/demo_tf_dataset.py
       - name: args_exec
+        tag: "!data_loader"
         mode: text
         _: > 
           -in ${indir}
@@ -108,6 +117,7 @@ parameterset:
           -exp_name ${exp_name}
           -conf_md ${conf_md}
           -conf_ds ${conf_ds}
+          -js_norm ${js_norm}
           -id $${SLURM_JOBID}
 
 patternset:
