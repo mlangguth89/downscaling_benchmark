@@ -554,7 +554,7 @@ class StreamMonthlyNetCDF(object):
         set_ind = tf.keras.backend.get_value(set_ind)
         set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
         set_ind = int(set_ind%self.nfiles_merged)
-        il = int((self.i_loaded + 1)%2)
+        il = int(self.i_loaded % 2)
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
         # read the normalized data into memory
         # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
@@ -585,5 +585,5 @@ class StreamMonthlyNetCDF(object):
 
     def choose_data(self, il):
         self.data_now = self.data_loaded[il]
-        self.i_loaded = il
+        self.i_loaded = il + 1
         return True
