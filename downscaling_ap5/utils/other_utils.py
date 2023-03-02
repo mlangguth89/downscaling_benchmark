@@ -17,14 +17,16 @@ Some auxiliary functions for the project:
     * remove_files
     * check_str_in_list
     * find_closest_divisor
+    * free_mem
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-01-31"
+__update__ = "2023-03-02"
 
+import gc
 import os
 import inspect
 import numpy as np
@@ -263,3 +265,15 @@ def find_closest_divisor(n1, div):
     else:
         i = np.argmin(np.abs(np.array(all_divs) - div))
         return all_divs[i]
+
+
+def free_mem(var_list: List):
+    """
+    Delete all variables in var_list and release memory
+    :param var_list: list of variables to be deleted
+    """
+    var_list = to_list(var_list)
+    for var in var_list:
+        del var
+
+    gc.collect()
