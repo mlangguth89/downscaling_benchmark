@@ -2,11 +2,12 @@
 #
 # __authors__ = Michael Langguth
 # __date__  = '2022-01-21'
-# __update__= '2023-02-28'
+# __update__= '2023-03-02'
 #
 # **************** Description ****************
-# This script can be used for setting up the virtual environment needed for downscaling with the U-net architecture
-# as being implemented for the Tier-1 dataset in MAELSTROM (see https://www.maelstrom-eurohpc.eu/content/docs/uploads/doc6.pdf) 
+# This script can be used for setting up the virtual environment together with JUBE.
+# The script either sets up a new virtual environment or activates an existing one
+# after checking if the virtual environment according to the parsed name exists.
 # **************** Description ****************
 #
 ### auxiliary-function S ###
@@ -30,7 +31,7 @@ check_argin() {
 ### MAIN S ###
 #set -eu              # enforce abortion if a command is not re
 
-SCR_SETUP="%create_env.sh: "
+SCR_SETUP="%setup_env_jube.sh: "
 
 ## some first sanity checks
 # script is sourced?
