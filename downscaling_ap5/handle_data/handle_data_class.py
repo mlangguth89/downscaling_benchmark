@@ -167,7 +167,6 @@ class HandleDataClass(object):
         :param batch_size: desired mini-batch size
         :param nfiles2merge: number if files to merge for streaming
         :param lshuffle: boolean to enable sample shuffling
-        :param lprefetch: boolean to enable prefetching
         :param predictors: List of selected predictor variables; parse None to use all data
         :param predictands: List of selected predictor variables; parse None to use all data
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
@@ -196,7 +195,6 @@ class HandleDataClass(object):
 
         if lshuffle:
             nshuffle = ds_obj.samples_merged
-            print(nshuffle)
         else:
             nshuffle = 1          # equivalent to no shuffling
 
@@ -207,7 +205,7 @@ class HandleDataClass(object):
             lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
             .batch(batch_size, drop_remainder=True).map(tf_getdata))
 
-        tfds = tfds.prefetch(int(ds_obj.samples_merged))
+        #tfds = tfds.prefetch(int(ds_obj.samples_merged+1))
         tfds = tfds.map(tf_split).repeat()
 
         return ds_obj, tfds
@@ -392,7 +390,7 @@ class StreamMonthlyNetCDF(object):
             self.norm_params = norm_obj.norm_stats
 
         self.data_loaded = [xr.Dataset, xr.Dataset]
-        self.i_loaded = 0
+        self.iload_next, self.iuse_next = 0, 0
         self.reading_times = []
         self.data_now = None
         if not nworkers:
@@ -554,8 +552,8 @@ class StreamMonthlyNetCDF(object):
         set_ind = tf.keras.backend.get_value(set_ind)
         set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
         set_ind = int(set_ind%self.nfiles_merged)
-        il = int(self.i_loaded % 2)
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
+        il = int(self.iload_next%2)
         # read the normalized data into memory
         # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
@@ -580,11 +578,13 @@ class StreamMonthlyNetCDF(object):
         t_read = timer() - t0
         self.reading_times.append(t_read)
         print(f"Reading dataset #{set_ind:d} ({il+1:d}/2) took {t_read:.2f}s.")
+        self.iload_next = il + 1
 
         return il
 
-    def choose_data(self, il):
-        self.data_now = self.data_loaded[il]
-        print(f"Use data subset {il:d}...")
-        self.i_loaded = il + 1
+    def choose_data(self, _):
+        ik = int(self.iuse_next%2)
+        self.data_now = self.data_loaded[ik]
+        print(f"Use data subset {ik:d}...")
+        self.iuse_next = ik + 1
         return True
