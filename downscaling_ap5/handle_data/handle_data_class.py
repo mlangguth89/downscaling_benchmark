@@ -564,13 +564,13 @@ class StreamMonthlyNetCDF(object):
         self.data_loaded[il] = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
         nsamples = self.data_loaded[il].dims[self.sample_dim]
         if nsamples < self.samples_merged:
-            t0 = timer()
+            t1 = timer()
             add_samples = self.samples_merged - nsamples
             add_inds = random.sample(range(nsamples), add_samples)
             ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
             self.data_loaded[il] = xr.concat([self.data_loaded[il], ds_add], dim=self.sample_dim)
-            print(f"Appending data with {add_samples:d} samples took {timer() - t0:.2f}s.")
+            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s.")
             # free memory
             free_mem([ds_add, add_samples, add_inds])
 
