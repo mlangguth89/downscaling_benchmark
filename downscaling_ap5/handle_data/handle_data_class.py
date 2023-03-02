@@ -27,7 +27,7 @@ try:
 except:
     from multiprocessing.pool import ThreadPool
 from all_normalizations import ZScore
-from other_utils import to_list, find_closest_divisor
+from other_utils import to_list, find_closest_divisor, free_mem
 
 
 class HandleDataClass(object):
@@ -393,9 +393,10 @@ class StreamMonthlyNetCDF(object):
 
         self.data_loaded = [xr.Dataset, xr.Dataset]
         self.i_loaded = 0
+        self.reading_times = []
         self.data_now = None
         if not nworkers:
-            nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge)
+            nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge))
         self.pool = ThreadPool(nworkers)
 
     def __len__(self):
@@ -429,7 +430,7 @@ class StreamMonthlyNetCDF(object):
         for i in range(self.nfiles_merged):
             file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
             ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
-            nsamples_merged.append(ds_now.dims["time"])  # To-Do avoid hard-coding
+            nsamples_merged.append(ds_now.dims["time"])  # To-Do: avoid hard-coding
 
         return max(nsamples_merged)
 
@@ -540,15 +541,12 @@ class StreamMonthlyNetCDF(object):
         return ds.astype("float32")
 
     def _read_mfdataset(self, files, **kwargs):
-        t0 = timer()
         # parallel processing of files incl. normalization
         datasets = self.pool.map(partial(self._process_one_netcdf, data_norm=self.data_norm, **kwargs), files)
         ds_all = xr.concat(datasets, dim=self.sample_dim)
         # clean-up
         del datasets
         gc.collect()
-        # timing
-        print(f"Reading dataset of {len(files)} files took {timer() - t0:.2f}s.")
 
         return ds_all
 
@@ -562,6 +560,7 @@ class StreamMonthlyNetCDF(object):
         # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
+        t0 = timer()
         self.data_loaded[il] = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
         nsamples = self.data_loaded[il].dims[self.sample_dim]
         if nsamples < self.samples_merged:
@@ -572,8 +571,15 @@ class StreamMonthlyNetCDF(object):
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
             self.data_loaded[il] = xr.concat([self.data_loaded[il], ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t0:.2f}s.")
+            # free memory
+            free_mem([ds_add, add_samples, add_inds])
 
-        print(f"Currently loaded dataset has {self.data_loaded[il].dims[self.sample_dim]} samples.")
+        # free memory
+        free_mem([nsamples])
+        # timing
+        t_read = timer() - t0
+        self.reading_times.append(t_read)
+        print(f"Reading dataset #{il:d} took {t_read:.2f}s.")
 
         return il
 
