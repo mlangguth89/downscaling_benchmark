@@ -21,6 +21,7 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from abstract_data_normalization import Normalize
+import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
 except:
@@ -360,7 +361,7 @@ class StreamMonthlyNetCDF(object):
     # - get samples_per_file from the data rather than predefining it (varying samples per file for monthly data files!)
 
     def __init__(self, datadir, patt, nfiles_merge: int, sample_dim: str = "time", selected_predictors: List = None,
-                 selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None):
+            selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None, nworkers: int = 10):
         self.data_dir = datadir
         self.file_list = patt
         self.nfiles = len(self.file_list)
@@ -393,7 +394,9 @@ class StreamMonthlyNetCDF(object):
         self.data_loaded = [xr.Dataset, xr.Dataset]
         self.i_loaded = 0
         self.data_now = None
-        self.pool = ThreadPool(10)
+        if not nworkers:
+            nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge)
+        self.pool = ThreadPool(nworkers)
 
     def __len__(self):
         return self.nsamples
