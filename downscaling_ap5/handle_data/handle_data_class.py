@@ -579,11 +579,12 @@ class StreamMonthlyNetCDF(object):
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
-        print(f"Reading dataset #{il:d} took {t_read:.2f}s.")
+        print(f"Reading dataset #{set_ind:d} ({il+1:d}/2) took {t_read:.2f}s.")
 
         return il
 
     def choose_data(self, il):
         self.data_now = self.data_loaded[il]
+        print(f"Use data subset {il:d}...")
         self.i_loaded = il + 1
         return True
