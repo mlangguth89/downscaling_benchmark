@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -153,9 +153,9 @@ class HandleDataClass(object):
         return da_in, da_tar
 
     @staticmethod
-    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nfiles2merge: int, lshuffle: bool = True,
-                            predictands: List = None, predictors: List = None, var_tar2in: str = None, norm_obj=None,
-                            norm_dims: List = None):
+    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nepochs: int, nfiles2merge: int,
+                            lshuffle: bool = True, predictands: List = None, predictors: List = None,
+                            var_tar2in: str = None, norm_obj=None, norm_dims: List = None):
         """
         Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
         To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
@@ -165,6 +165,7 @@ class HandleDataClass(object):
         :param datadir: directory where netCDF-files for TF dataset are strored
         :param file_patt: filename pattern to glob files from datadir
         :param batch_size: desired mini-batch size
+        :param nepochs: (effective) number of epochs for training
         :param nfiles2merge: number if files to merge for streaming
         :param lshuffle: boolean to enable sample shuffling
         :param predictors: List of selected predictor variables; parse None to use all data
@@ -199,13 +200,13 @@ class HandleDataClass(object):
             nshuffle = 1          # equivalent to no shuffling
 
         # enable flexibility in factor for range
-        tfds = tf.data.Dataset.range(int(ds_obj.nfiles_merged*6*10)).map(tf_read_nc).prefetch(1)    # 6*10 corresponds to (d_steps + 1)*n_epochs with d_steps=5, n_epochs=10
+        n_reads = int(ds_obj.nfiles_merged*nepochs)
+        tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
         tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
         tfds = tfds.flat_map(
             lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
             .batch(batch_size, drop_remainder=True).map(tf_getdata))
 
-        #tfds = tfds.prefetch(int(ds_obj.samples_merged+1))
         tfds = tfds.map(tf_split).repeat()
 
         return ds_obj, tfds
