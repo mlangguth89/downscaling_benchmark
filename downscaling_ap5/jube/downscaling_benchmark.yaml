@@ -36,6 +36,23 @@ parameterset:
       - name: outdir
         type: string
         _: "$jube_benchmark_home/../trained_models"
+      - name: file_pattern
+        tag: "data_loader"
+        type: string
+        _: "downscaling_tier2_train*"
+      - name: nfiles_load
+        tag: "data_loader"
+        type: int
+        _: 33
+      - name: nepochs
+        tag: "data_loader"
+        type: int
+        _: 10
+      - name: var_tar2in
+        tag: "data_loader"
+        type: string
+        _: "hsurf_tar"
+
   - name: globalParameter
     parameter:
       - name: modules
@@ -57,6 +74,7 @@ parameterset:
       - name: systemname
         tag: e4
         _: e4
+
   - name: executeset
     init_with: platform.xml
   - name: systemParameter
@@ -105,7 +123,7 @@ parameterset:
         _: python -u $jube_benchmark_home/../main_scripts/main_train.py
       - name: executable
         tag: data_loader
-        _: python -u $jube_benchmark_home/../tests/demo_tf_dataset.py
+        _: python -u $jube_benchmark_home/../tests/demo_tfdataset_ap5.py
       - name: args_exec
         tag: "!data_loader"
         mode: text
@@ -119,13 +137,26 @@ parameterset:
           -conf_ds ${conf_ds}
           -js_norm ${js_norm}
           -id $${SLURM_JOBID}
+      - name: args_exec
+        tag: "data_loader"
+        mode: text
+        _: > 
+          -d ${indir}
+          -f ${file_pattern}
+          -n ${nfiles_load}
+          -ne ${nepochs}
+          -js_norm ${js_norm}
+          -tar2in ${var_tar2in}
 
 patternset:
    - name: perf_patterns
      pattern:
       - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
       - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
-      - {name: loss, type: float, _: "loss:\\s+$jube_pat_fp"}
+      - {name: recon_loss_train, type: float, _: "recon_loss:\\s+$jube_pat_fp"}
+      - {name: recon_loss_val, type: float, _: "val_recon_loss:\\s+$jube_pat_fp"}
+      - {name: c_loss, type: float, _: "c_loss:\\s+$jube_pat_fp"}
+      - {name: g_loss, type: float, _: "g_loss:\\s+$jube_pat_fp"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
 
 analyser:
@@ -154,7 +185,10 @@ result:
         - {title: "last epoch ", _: epoch_last}
         - {title: "first epoch time [s]", _: epoch_time_first}
         - {title: "last epoch time [s]", _: epoch_time_last}
-        - {title: "last loss", _: loss_last}
+        - {title: "last reconstruction training loss ", _: recon_loss_train_last}
+        - {title: "last reconstruction validation loss ", _: recon_loss_val_last}
+        - {title: "last generator loss ", _: g_loss_last}
+        - {title: "last critic loss ", _: c_loss_last}
         - {title: "avg. epoch time [s]", _: epoch_time_avg}
         - {title: "min loss", _: loss_min}
 
