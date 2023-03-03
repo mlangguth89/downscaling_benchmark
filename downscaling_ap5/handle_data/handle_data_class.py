@@ -342,7 +342,9 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
         if laugmented: fname_suffix = f"{fname_suffix}_aug"
     elif dataset_name == "tier2":
-        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}*"
+        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
+        if subset == "train":
+            fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for Tier-2.")
     else:
         raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
