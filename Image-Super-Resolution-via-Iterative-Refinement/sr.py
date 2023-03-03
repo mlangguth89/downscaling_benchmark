@@ -195,7 +195,6 @@ if __name__ == "__main__":
 
                     if wandb_logger and opt['log_wandb_ckpt']:
                         wandb_logger.log_checkpoint(current_epoch, current_step)
-
             if wandb_logger:
                 wandb_logger.log_metrics({'epoch': current_epoch-1})
 
@@ -233,6 +232,9 @@ if __name__ == "__main__":
             sr_img = Metrics.tensor2np(visuals['SR'],vars_out_patches_std,vars_out_patches_mean)
             hr_img = Metrics.tensor2np(val_data["HR"][:,0,:,:],vars_out_patches_std,vars_out_patches_mean)
             lr_img = Metrics.tensor2np(val_data['LR'][0,:,-1,:,:],vars_out_patches_std,vars_out_patches_mean)
+            #sr_img = visuals['SR'].cpu().numpy()
+            #hr_img = val_data["HR"][:,0,:,:].cpu().numpy()
+            #lr_img = val_data['LR'][0,:,-1,:,:].cpu().numpy()
             #fake_img = Metrics.tensor2img(visuals['INF'])  # uint8
             #print("sr_img shape",sr_img.shape) #[160,160,44]
             #print("hr_image.shape",hr_img.shape) #[4,160,160]

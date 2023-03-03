@@ -13,7 +13,7 @@ import torch
 import numpy as np
 sys.path.append('../')
 from models.network_unet import UNet as unet
-from models.network_swinir import SwinIR as swinSR
+from models.network_swinir import SwinIR as swinIR
 from models.network_vit import TransformerSR as vitSR
 from models.network_swinunet_sys import SwinTransformerSys as swinUnet
 from models.network_diffusion import UNet_diff
@@ -47,14 +47,6 @@ def main():
     print("The model {} is selected for training".format(args.model_type))
     if args.model_type == "unet":
         netG = unet(n_channels = n_channels)
-    elif args.model_type == "swinSR":
-        netG = swinSR(img_size=16,
-                      patch_size=2,
-                      in_chans=n_channels,
-                      window_size=args.window_size,
-                      upscale=4,
-                      upsampler="pixelshuffle")
-        # netG = swinSR(img_size=16,patch_size=1,in_chans=8,window_size=8,upscale=4,upsampler='nearest+conv')
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     elif args.model_type == "swinUnet":
@@ -74,7 +66,13 @@ def main():
                         drop_path_rate=0.1,
                         ape=False,
                         final_upsample="expand_first")
-
+    elif args.model_type == "swinIR":
+        netG = swinIR(img_size=16,
+                      patch_size=4,
+                      in_chans=n_channels,
+                      window_size=2,
+                      upscale= 4,
+                      upsampler= "pixelshuffle") 
     elif args.model_type == "diffusion":
         netG = UNet_diff(n_channels = n_channels+1,
                          img_size=160)

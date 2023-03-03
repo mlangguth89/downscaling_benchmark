@@ -2,8 +2,5 @@ opencv-python
 requests
 timm==0.6.7
 wandb==0.13.2
-xarray
-matplotlib
 numpy
-torchvision
 einops

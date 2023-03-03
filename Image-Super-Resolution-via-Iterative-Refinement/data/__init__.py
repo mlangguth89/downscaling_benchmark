@@ -50,7 +50,8 @@ def create_dataset(dataset_opt, phase):
 
 
 def create_loader_prep(file_path: str = None, batch_size: int = 4, patch_size: int = 16,
-                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"],
+                 vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","yw_hourly_in"],
+                 #vars_in: list = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"],
                  var_out: list = ["yw_hourly_tar"], sf: int = 10,
                  seed: int = 1234, k: float = 0.01, mode: str = "train", stat_path: str = None):
 
