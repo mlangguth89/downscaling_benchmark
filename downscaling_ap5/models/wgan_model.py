@@ -253,9 +253,6 @@ class WGAN(keras.Model):
         """
         # get mixture of generated and ground truth data
         alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
-        #tf.print(tf.shape(alpha))
-        #tf.print(tf.shape(real_data))
-        #tf.print(tf.shape(gen_data))
         mix_data = real_data + alpha * (gen_data - real_data)
 
         with tf.GradientTape() as gp_tape:

@@ -76,11 +76,9 @@ def main(parser_args):
     # are applied to train the critic, before the generator is trained once.
     # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
     bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
+    nepochs = hparams_dict["nepochs"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else hparams_dict["nepochs"]
 
     # start handling training and validation data
-    #   - training data is iterated
-    #   - validation data is loaded into memory
-
     # training data
     print("Start preparing training data...")
     t0_train = timer()
@@ -90,9 +88,8 @@ def main(parser_args):
     # if fname_or_patt_train is a filename pattern (string with wildcard), the TF-dataset will iterate over subsets of
     # the dataset
     if "*" in fname_or_patt_train:
-        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, 30,
-                                                                 var_tar2in=ds_dict["var_tar2in"],
-                                                                 norm_obj=data_norm,
+        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs, 30,
+                                                                 var_tar2in=ds_dict["var_tar2in"], norm_obj=data_norm,
                                                                  norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
         nsamples, shape_in = ds_obj.nsamples, (*ds_obj.data_dim[::-1], ds_obj.n_predictors)
