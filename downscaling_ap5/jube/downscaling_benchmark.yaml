@@ -157,6 +157,7 @@ patternset:
       - {name: recon_loss_val, type: float, _: "val_recon_loss:\\s+$jube_pat_fp"}
       - {name: c_loss, type: float, _: "c_loss:\\s+$jube_pat_fp"}
       - {name: g_loss, type: float, _: "g_loss:\\s+$jube_pat_fp"}
+      - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
 
 analyser:
@@ -182,15 +183,17 @@ result:
         - {title: "dataset configuration", _: conf_ds}
         - {title: "# nodes", _: nodes}
         - {title: "# gpu", _: n_gpu}
+        - {title: "last recon. loss train", _: recon_loss_train_last}
+        - {title: "last recon. loss val", _: recon_loss_val_last}
+        - {title: "last generator loss ", _: g_loss_last}
+        - {title: "last critic loss ", _: c_loss_last}
         - {title: "last epoch ", _: epoch_last}
         - {title: "first epoch time [s]", _: epoch_time_first}
         - {title: "last epoch time [s]", _: epoch_time_last}
-        - {title: "last reconstruction training loss ", _: recon_loss_train_last}
-        - {title: "last reconstruction validation loss ", _: recon_loss_val_last}
-        - {title: "last generator loss ", _: g_loss_last}
-        - {title: "last critic loss ", _: c_loss_last}
         - {title: "avg. epoch time [s]", _: epoch_time_avg}
-        - {title: "min loss", _: loss_min}
+        - {title: "avg. ds load time [s]", _: data_loading_avg}
+        - {title: "min. ds load time [s]", _: data_loading_min}
+        - {title: "max. ds load time [s]", _: data_loading_max}
 
 step:
   - name:   setup_venv

@@ -592,20 +592,24 @@ class StreamMonthlyNetCDF(object):
         if nsamples < self.samples_merged:
             t1 = timer()
             add_samples = self.samples_merged - nsamples
-            add_inds = random.sample(range(nsamples), add_samples)
-            ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
+            istart = random.randint(0, self.samples_merged - add_samples - 1)
+            #
+            #add_inds = random.sample(range(nsamples), add_samples)
+            #ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
+            ds_add = self.data_loaded[il].isel({self.sample_dim: slice(istart, istart+add_samples)})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
             self.data_loaded[il] = xr.concat([self.data_loaded[il], ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s.")
             # free memory
-            free_mem([ds_add, add_samples, add_inds])
+            #free_mem([ds_add, add_samples, add_inds])
+            free_mem([ds_add, add_samples, istart])
 
         # free memory
         free_mem([nsamples])
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
-        print(f"Reading dataset #{set_ind:d} ({il+1:d}/2) took {t_read:.2f}s.")
+        print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
 
         return il
