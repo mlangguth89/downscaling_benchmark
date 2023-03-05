@@ -157,10 +157,10 @@ patternset:
      pattern:
       - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
       - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
-      - {name: recon_loss_train, type: float, _: "recon_loss:\\s+$jube_pat_fp"}
+      - {name: recon_loss_train, type: float, _: "- recon_loss:\\s+$jube_pat_fp"}
       - {name: recon_loss_val, type: float, _: "val_recon_loss:\\s+$jube_pat_fp"}
       - {name: c_loss, type: float, _: "c_loss:\\s+$jube_pat_fp"}
-      - {name: g_loss, type: float, _: "g_loss:\\s+$jube_pat_fp"}
+      - {name: g_loss, type: float, _: "cg_loss:\\s+$jube_pat_fp"}
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
 
