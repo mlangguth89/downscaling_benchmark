@@ -388,6 +388,7 @@ class StreamMonthlyNetCDF(object):
         self.nfiles2merge = nfiles_merge
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
         self.samples_merged = self.get_samples_per_merged_file()
+        print(f"Data subsets will compriese {self.samples_merged} samples.")
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
@@ -401,7 +402,7 @@ class StreamMonthlyNetCDF(object):
         self.data_dim = self.get_data_dim()
         t0 = timer()
         self.normalization_time = -999.
-        if norm_obj is None:  # TO-DO: remove usgae of norm_obj
+        if norm_obj is None:
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
             self.norm_params = self.data_norm.get_required_stats(self.ds_all)
@@ -587,8 +588,8 @@ class StreamMonthlyNetCDF(object):
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
         t0 = timer()
-        self.data_loaded[il] = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        nsamples = self.data_loaded[il].dims[self.sample_dim]
+        data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
+        nsamples = data_now.dims[self.sample_dim]
         if nsamples < self.samples_merged:
             t1 = timer()
             add_samples = self.samples_merged - nsamples
@@ -596,9 +597,9 @@ class StreamMonthlyNetCDF(object):
             #
             #add_inds = random.sample(range(nsamples), add_samples)
             #ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
-            ds_add = self.data_loaded[il].isel({self.sample_dim: slice(istart, istart+add_samples)})
+            ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
-            self.data_loaded[il] = xr.concat([self.data_loaded[il], ds_add], dim=self.sample_dim)
+            data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s.")
             # free memory
             #free_mem([ds_add, add_samples, add_inds])
@@ -606,6 +607,7 @@ class StreamMonthlyNetCDF(object):
 
         # free memory
         free_mem([nsamples])
+        self.data_loaded[il] = data_now
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
