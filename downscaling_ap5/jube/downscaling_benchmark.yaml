@@ -27,7 +27,7 @@ parameterset:
         _: "tier2"
       - name: indir
         type: string
-        tag: "(jwb|jwc|hdfml)+cscratch"
+        tag: "(jwb|jwc|hdfml)+!cscratch"
         _: "${SCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
       - name: indir
         type: string
@@ -64,7 +64,8 @@ parameterset:
         separator: "|"
         _: 
           source $jube_benchmark_home/../env_setup/modules_jsc.sh &&
-          export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
+          export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK} &&
+          export HDF5_USE_FILE_LOCKING=FALSE
       - {name: modules, tag: "e4", _: source $jube_benchmark_home/../env_setup/modules_e4.sh}
       - name: systemname
         tag: jwc
@@ -89,6 +90,7 @@ parameterset:
         separator: |
         _:
           $modules;
+          jutil env activate -p deepacf;
       - name: threadspertask
         _: 40
       - name: nodes
