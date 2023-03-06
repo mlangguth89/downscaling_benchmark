@@ -63,9 +63,7 @@ parameterset:
         tag: "jwb|jwc|hdfml"
         separator: "|"
         _: 
-          source $jube_benchmark_home/../env_setup/modules_jsc.sh &&
-          export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK} &&
-          export HDF5_USE_FILE_LOCKING=FALSE
+          source $jube_benchmark_home/../env_setup/modules_jsc.sh
       - {name: modules, tag: "e4", _: source $jube_benchmark_home/../env_setup/modules_e4.sh}
       - name: systemname
         tag: jwc
@@ -91,6 +89,13 @@ parameterset:
         _:
           $modules;
           jutil env activate -p deepacf;
+      - name: SRUN_CPUS_PER_TASK
+        export: true
+        _: ${SLURM_CPUS_PER_TASK}
+      - name: HDF5_USE_FILE_LOCKING
+        export: true
+        tag: cscratch
+        _: "FALSE"      
       - name: threadspertask
         _: 40
       - name: nodes
