@@ -94,27 +94,15 @@ class ModelEngine(object):
         return f"Known models are: {', '.join(list(self.known_models.keys()))}"
 
 
-def get_model(model_name: str):
-    """
-    Get a Keras model given the provided model_name. Parse "help" to get an overview of existing models.
-    :param model_name: name of known models.
-    :return: model object or tuple of model objects for composite models. In case of help, None is returned!
-    """
-    known_models = {"u-net": UNET,
-                    "wgan": (WGAN, unet_model, critic_model)}
+def get_loss_from_history(history: keras.callbacks.History, loss_name: str = "loss"):
 
-    help_str = f"Known models are: {', '.join(list(known_models.keys()))}"
-    model_name_local = model_name.lower()
+    try:
+        loss_req = history.history[loss_name]
+    except KeyError:
+        raise KeyError(f"Cannot find {loss_name} in Keras history callback." +
+                       f"The following keys are available: {*history.history.keys(), }")
 
-    if model_name_local in known_models.keys():
-        model = known_models[model_name_local]
-    elif model_name_local == "help":
-        print(help_str)
-        model = None
-    else:
-        raise ValueError(f"Model '{model_name}' is unknown. Please specify a known model. {help_str}")
-
-    return model
+    return loss_req
 
 
 def handle_opt_utils(model: keras.Model, opt_funcname: str):

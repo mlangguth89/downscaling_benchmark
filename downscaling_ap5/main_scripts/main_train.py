@@ -23,7 +23,7 @@ import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
 from all_normalizations import ZScore
-from model_utils import ModelEngine, handle_opt_utils
+from model_utils import ModelEngine, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
@@ -109,7 +109,7 @@ def main(parser_args):
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
 
-    print(f"Preparing TF training dataset took {timer() - t0_train:.2f}s.")
+    print(f"TF training dataset preparation time: {timer() - t0_train:.2f}s.")
 
     # validation data
     print("Start preparing validation data...")
@@ -126,7 +126,7 @@ def main(parser_args):
     gc.collect()
 
     tval_load = timer() - t0_val
-    print(f"Preparing validation data took {tval_load:.2f}s.")
+    print(f"Validation data preparation time: {tval_load:.2f}s.")
 
     # Read data from disk and preprocess (normalization and conversion to TF dataset)
     if "ds_obj" in locals():
@@ -183,18 +183,29 @@ def main(parser_args):
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir)
 
+    # final timing
     tend = timer()
-    benchmark_dict["saving model time"] = tend - t0_save
-
-    # finally, track total runtime...
+    saving_time = tend - t0_save
+    tot_run_time = tend - t0
+    print(f"Model saving time: {saving_time:.2f}s")
+    print(f"Total runtime: {tot_run_time:.1f}s")
+    benchmark_dict["saving model time"] = saving_time
     benchmark_dict["total runtime"] = tend - t0
+
+    # other tracking variables
     benchmark_dict["job id"] = job_id
     # currently untracked variables
-    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"] = None, None, None
-    benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = None, None, None
+    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"] = 1, len(os.sched_getaffinity(0)), 1
+    benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = 1, None, None
     benchmark_dict["gpu energy consumption"] = None
-    benchmark_dict["final training loss"] = -999.
-    benchmark_dict["final validation loss"] = -999.
+    try:
+        benchmark_dict["final training loss"] = get_loss_from_history(history, "loss")
+    except KeyError:
+        benchmark_dict["final training loss"] = get_loss_from_history(history, "recon_loss")
+    try:
+        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_loss")
+    except KeyError:
+        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_recon_loss")
     # ... and save CSV-file with tracked data on disk
     bm_obj.populate_csv_from_dict(benchmark_dict)
 
