@@ -134,7 +134,7 @@ def main(parser_args):
         ttrain_load = None
     else:
         ttrain_load = timer() - t0_train
-        print(f"Loading all the data into memory took {ttrain_load:.2f}s.")
+        print(f"Data loading time: {ttrain_load:.2f}s.")
 
     # get some key parameters from datasets
     varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
@@ -174,7 +174,8 @@ def main(parser_args):
                                             nsamples * model.hparams["nepochs"])
     if not ttrain_load:
         ttrain_load = sum(ds_obj.reading_times) + tval_load
-    benchmark_dict = {**{"loading time": ttrain_load}, **training_times}
+        print(f"Data loading time: {ttrain_load:.2f}s.")
+    benchmark_dict = {**{"data loading time": ttrain_load}, **training_times}
     print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
 
     # save trained model
