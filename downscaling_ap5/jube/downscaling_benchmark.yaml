@@ -1,6 +1,6 @@
-name:    ap5-all
-outpath: ap5_run
-comment: MAELSTROM AP5 benchmark jube script
+name:    ap5-model
+outpath: ap5_train
+comment: MAELSTROM AP5 model benchmark jube script
 
 parameterset:
   - name: appParameter
