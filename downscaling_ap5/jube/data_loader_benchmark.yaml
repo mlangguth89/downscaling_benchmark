@@ -1,30 +1,10 @@
 name:    ap5-all
-outpath: ap5_run
-comment: MAELSTROM AP5 benchmark jube script
+outpath: ap5_dataloader
+comment: MAELSTROM AP5 data loader benchmark jube script
 
 parameterset:
   - name: appParameter
     parameter:
-      - name: conf_md
-        tag: "!test"
-        type: string
-        _: "$jube_benchmark_home/../config/config_wgan.json"
-      - name: conf_md
-        tag: "test"
-        type: string
-        _: "$jube_benchmark_home/../config/config_wgan_test.json"
-      - name: conf_ds
-        type: string
-        _: "$jube_benchmark_home/../config/config_ds_tier2.json"
-      - name: exp_name
-        type: string
-        _: "wgan_benchmark_jube_$jube_benchmark_id"
-      - name: model
-        type: string
-        _: "wgan"
-      - name: dataset
-        type: string
-        _: "tier2"
       - name: indir
         type: string
         tag: "(jwb|jwc|hdfml)+!cscratch"
@@ -41,16 +21,33 @@ parameterset:
         type: string
         tag: jwb|jwc|hdfml
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/zscore_norm.json"
-      - name: outdir
+      - name: file_pattern
         type: string
-        _: "$jube_benchmark_home/../trained_models"
+        _: "downscaling_tier2_train*"
+      - name: nfiles_load
+        type: int
+        _: 33
+      - name: nepochs
+        type: int
+        _: 10
+      - name: var_tar2in
+        type: string
+        _: "hsurf_tar"
+      - name: nworkers
+        type: int
+        tag: "default"
+        _: 10
+      - name: nworkers
+        type: int
+        tag: "!default"
+        _: 33
 
   - name: globalParameter
     parameter:
       - name: modules
         tag: "jwb|jwc|hdfml"
         separator: "|"
-        _: 
+        _:
           source $jube_benchmark_home/../env_setup/modules_jsc.sh
       - {name: modules, tag: "e4", _: source $jube_benchmark_home/../env_setup/modules_e4.sh}
       - name: systemname
@@ -83,7 +80,7 @@ parameterset:
       - name: HDF5_USE_FILE_LOCKING
         export: true
         tag: cscratch
-        _: "FALSE"      
+        _: "FALSE"
       - name: threadspertask
         _: 40
       - name: nodes
@@ -93,11 +90,7 @@ parameterset:
       - name: taskspernode
         _: $n_gpu
       - name: timelimit
-        tag: test
         _: "02:00:00"
-      - name: timelimit
-        tag: "!test"
-        _: "20:00:00"
       - name: account
         _: deepacf
       - name: queue
@@ -118,31 +111,26 @@ parameterset:
       - name: gres
         _: gpu:$n_gpu
       - name: executable
-        _: python -u $jube_benchmark_home/../main_scripts/main_train.py
+        _: python -u $jube_benchmark_home/../test_scripts/demo_tfdataset_ap5.py
       - name: args_exec
         mode: text
         _: > 
-          -in ${indir}
-          -out ${outdir}
-          -model ${model}
-          -dataset ${dataset}
-          -exp_name ${exp_name}
-          -conf_md ${conf_md}
-          -conf_ds ${conf_ds}
+          -d ${indir}
+          -f ${file_pattern}
+          -n ${nfiles_load}
+          -ne ${nepochs}
           -js_norm ${js_norm}
-          -id $${SLURM_JOBID}
+          -tar2in ${var_tar2in}
+          -nw ${nworkers}
 
 patternset:
    - name: perf_patterns
      pattern:
-      - {name: epoch, type: int, _: "Epoch\\s+$jube_pat_int/\\s*$jube_pat_nint"}
-      - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
-      - {name: recon_loss_train, type: float, _: "- recon_loss:\\s+$jube_pat_fp"}
-      - {name: recon_loss_val, type: float, _: "val_recon_loss:\\s+$jube_pat_fp"}
-      - {name: c_loss, type: float, _: "c_loss:\\s+$jube_pat_fp"}
-      - {name: g_loss, type: float, _: "cg_loss:\\s+$jube_pat_fp"}
+      - {name: dataset_size, type: float, _: "dataset with size:\\s+$jube_pat_fp"}
+      - {name: data_proc_size, type: float, _: "Processed data size:\\s+$jube_pat_fp"}
+      - {name: elapsed_time, type: float, _: "Elapsed processing time:\\s+$jube_pat_fp"}
+      - {name: data_throughput, type: float, _: "Average throughput:\\s+$jube_pat_fp"}
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
-      - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
 
 analyser:
     name: analyse
@@ -163,18 +151,13 @@ result:
       column:
         - {title: "JobID", _: jobid}
         - {title: "Job_Time", _: timelimit}
-        - {title: "model configuration", _: conf_md}
-        - {title: "dataset configuration", _: conf_ds}
         - {title: "# nodes", _: nodes}
         - {title: "# gpu", _: n_gpu}
-        - {title: "last recon. loss train", _: recon_loss_train_last}
-        - {title: "last recon. loss val", _: recon_loss_val_last}
-        - {title: "last generator loss ", _: g_loss_last}
-        - {title: "last critic loss ", _: c_loss_last}
-        - {title: "last epoch ", _: epoch_last}
-        - {title: "first epoch time [s]", _: epoch_time_first}
-        - {title: "last epoch time [s]", _: epoch_time_last}
-        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "# epoch", _: nepochs}
+        - {title: "raw dataset size [GB]", _: dataset_size}
+        - {title: "processed data [GB]", _: data_proc_size}
+        - {title: "elapsed time [s]", _: elapsed_time}
+        - {title: "average throughput [MB/s]", _: data_throughput}
         - {title: "avg. ds load time [s]", _: data_loading_avg}
         - {title: "min. ds load time [s]", _: data_loading_min}
         - {title: "max. ds load time [s]", _: data_loading_max}
