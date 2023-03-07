@@ -11,9 +11,12 @@ import argparse
 from typing import List, Union
 from timeit import default_timer as timer
 import xarray as xr
-from handle_data_class.HandleDataClass import make_tf_dataset_dyn
+from handle_data_class import HandleDataClass
+from all_normalizations import ZScore
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
+
+make_tf_dataset_dyn = HandleDataClass.make_tf_dataset_dyn
 
 
 def main():
@@ -25,22 +28,33 @@ def main():
     parser.add_argument("--nfiles_load", "-n", default=30, type=int, dest="nfiles_load",
                         help="Number of netCDF-files to load into memory (2x with prefetching).")
     parser.add_argument("--lshuffle", "-lshuffle", dest="lshuffle", action="store_true", help="Enable shuffling.")
-    parser.add_argument("--nepochs", "-ne", dest="number of epochs", default=1, type=int,
+    parser.add_argument("--nepochs", "-ne", dest="nepochs", default=1, type=int,
                         help="Number of epochs to iterate over dataset.")
     parser.add_argument("--batch_size", "-b", dest="batch_size", default=192, type=int, 
                         help="Batch size for TF dataset.")
     parser.add_argument("--json_norm", "-js_norm", dest="js_norm", type=str, default=None,
                         help="Path to normalization file providing normalization parameters for given dataset.")
-    parser.add_argument("--norm_dims", "-nd", dest="norm_dims", type=List, default=None,
+    parser.add_argument("--norm_dims", "-nd", dest="norm_dims", type=List, default=["time", "rlat", "rlon"],
                         help="Dimension names over which dataset should be normalized (if json_norm is unset).")
-    parser.add_argument("--var_tar2in", "-tar2in", dest="tar2in", type=str, default=None,
+    parser.add_argument("--var_tar2in", "-tar2in", dest="var_tar2in", type=str, default=None,
                         help="Static target variable that can be used as input variable as well.")
 
     args = parser.parse_args()
-    
+  
+    norm_dims = args.norm_dims
+
+    if args.js_norm:
+        print(f"Read normalization data from '{args.js_norm}'")
+        data_norm = ZScore(args.norm_dims)
+        data_norm.read_norm_from_file(args.js_norm)
+        norm_dims = None
+    else:
+        data_norm = None
+
+
     # set-up dynamic TF dataset
     ds_obj, tfds = make_tf_dataset_dyn(args.datadir, args.file_patt, args.batch_size, args.nepochs, args.nfiles_load,
-                                       args.lshuffle, args.var_tar2in, args.norm_obj, args.norm_dims)
+                                       args.lshuffle, var_tar2in=args.var_tar2in, norm_obj=data_norm, norm_dims=norm_dims)
     
     niter = int(args.nepochs*(ds_obj.nsamples/args.batch_size) - 1)
     t0 = timer()
