@@ -91,7 +91,8 @@ virtual_env*/
 virt_env*/
 
 # JUBE
-downscaling_ap5/jube/ap5_run/*
+downscaling_ap5/jube/ap5_train/*
+downscaling_ap5/jube/ap5_dataloader/*
 
 # Spyder project settings
 .spyderproject
