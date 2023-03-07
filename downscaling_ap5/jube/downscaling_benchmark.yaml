@@ -134,7 +134,7 @@ parameterset:
         _: python -u $jube_benchmark_home/../main_scripts/main_train.py
       - name: executable
         tag: data_loader
-        _: python -u $jube_benchmark_home/../tests/demo_tfdataset_ap5.py
+        _: python -u $jube_benchmark_home/../test_scripts/demo_tfdataset_ap5.py
       - name: args_exec
         tag: "!data_loader"
         mode: text
