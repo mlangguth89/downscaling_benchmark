@@ -155,7 +155,7 @@ class HandleDataClass(object):
     @staticmethod
     def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nepochs: int, nfiles2merge: int,
                             lshuffle: bool = True, predictands: List = None, predictors: List = None,
-                            var_tar2in: str = None, norm_obj=None, norm_dims: List = None):
+                            var_tar2in: str = None, norm_obj=None, norm_dims: List = None, nworkers: int = 10):
         """
         Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
         To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
@@ -187,7 +187,7 @@ class HandleDataClass(object):
 
         ds_obj = StreamMonthlyNetCDF(datadir, file_patt, nfiles_merge=nfiles2merge, selected_predictors=predictors,
                                      selected_predictands=predictands, var_tar2in=var_tar2in,
-                                     norm_obj=norm_obj, norm_dims=norm_dims)
+                                     norm_obj=norm_obj, norm_dims=norm_dims, nworkers=nworkers)
 
         tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
         tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
@@ -609,6 +609,8 @@ class StreamMonthlyNetCDF(object):
         # free memory
         free_mem([nsamples])
         self.data_loaded[il] = data_now
+        print(f"DEBUG: Current dataset has {data_now.dims[self.sample_dim]} samples.")
+        print(f"DEBUG: New loaded dataset has {self.data_loaded[il].dims[self.sample_dim]} samples.")
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
