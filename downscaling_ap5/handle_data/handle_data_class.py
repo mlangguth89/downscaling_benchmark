@@ -414,6 +414,7 @@ class StreamMonthlyNetCDF(object):
         self.data_loaded = [xr.Dataset, xr.Dataset]
         self.iload_next, self.iuse_next = 0, 0
         self.reading_times = []
+        self.ds_proc_size = 0.
         self.data_now = None
         if not nworkers:
             nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge))
@@ -611,6 +612,7 @@ class StreamMonthlyNetCDF(object):
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
+        self.ds_proc_size += data_now.nbytes
         print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
 
