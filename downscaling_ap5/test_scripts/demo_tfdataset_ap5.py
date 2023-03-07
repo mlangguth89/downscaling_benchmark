@@ -38,6 +38,8 @@ def main():
                         help="Dimension names over which dataset should be normalized (if json_norm is unset).")
     parser.add_argument("--var_tar2in", "-tar2in", dest="var_tar2in", type=str, default=None,
                         help="Static target variable that can be used as input variable as well.")
+    parser.add_argument("--nworkers", "-nw", dest="nworkers", type=int, default=10,
+                        help="Number of workers to read netCDF-files.")
 
     args = parser.parse_args()
   
@@ -51,21 +53,22 @@ def main():
     else:
         data_norm = None
 
-
     # set-up dynamic TF dataset
     ds_obj, tfds = make_tf_dataset_dyn(args.datadir, args.file_patt, args.batch_size, args.nepochs, args.nfiles_load,
-                                       args.lshuffle, var_tar2in=args.var_tar2in, norm_obj=data_norm, norm_dims=norm_dims)
+                                       args.lshuffle, var_tar2in=args.var_tar2in, norm_obj=data_norm,
+                                       norm_dims=norm_dims, nworkers=args.nworkers)
     
     niter = int(args.nepochs*(ds_obj.nsamples/args.batch_size) - 1)
     t0 = timer()
-    print(f"Start processing dataset with size {ds_obj.dataset_size/1.e+09:.3f} GB")
+    print(f"Start processing dataset with size: {ds_obj.dataset_size/1.e+09:.3f} GB")
     for i, x in enumerate(tfds):
         if i == niter:
             break
     telapsed = timer() - t0
 
-    print(f"Processing {args.nepochs} epochs of data lasted {telapsed:.1f} seconds.")
-    print(f"Average throughput: {ds_obj.dataset_size*args.nepochs/1.e+06/telapsed:.3f} MB/s")
+    print(f"Processed data size: {ds_obj.ds_proc_size/1.e+09} GB (= {args.nepochs} epochs)")
+    print(f"Elapsed processing time: {telapsed:.1f} seconds.")
+    print(f"Average throughput: {ds_obj.ds_proc_size/1.e+06/telapsed:.3f} MB/s")
 
     
 if __name__ == "__main__":
