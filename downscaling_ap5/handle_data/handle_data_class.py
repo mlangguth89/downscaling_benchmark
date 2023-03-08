@@ -601,7 +601,7 @@ class StreamMonthlyNetCDF(object):
             #add_inds = random.sample(range(nsamples), add_samples)
             #ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
             ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
-            ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
+            ds_add[self.sample_dim] = ds_add[self.sample_dim][0] - np.arange(add_samples)
             print(f"Add {ds_add.dims[self.sample_dim]} samples.")
             print(ds_add[self.sample_dim])
             print(f"DEBUG: Dataset has {data_now.dims[self.sample_dim]} samples before concatenating.")
