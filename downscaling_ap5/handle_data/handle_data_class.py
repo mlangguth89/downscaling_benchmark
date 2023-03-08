@@ -88,7 +88,7 @@ class HandleDataClass(object):
         self.data.update(ds_app)
         self.timing["loading_times"].update(timing_app["loading_times"])
         self.data_info["memory_datasets"].update(data_info_app["memory_datasets"])
-        
+
     def set_download_flag(self, datafile):
         """
         Depending on the hosting system and on the availability of the dataset on the filesystem
@@ -98,7 +98,7 @@ class HandleDataClass(object):
         """
         method = HandleDataClass.set_download_flag.__name__
 
-        ldownload = True if "login" in self.host else False        
+        ldownload = True if "login" in self.host else False
         stat_file = os.path.isfile(datafile)
 
         if stat_file and ldownload:
@@ -590,6 +590,8 @@ class StreamMonthlyNetCDF(object):
         #                           parallel=True).load()
         t0 = timer()
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
+        print(f"DEBUG: Newly read dataset has {data_now.dims[self.sample_dim]} samples.")
+
         nsamples = data_now.dims[self.sample_dim]
         if nsamples < self.samples_merged:
             t1 = timer()
@@ -600,8 +602,11 @@ class StreamMonthlyNetCDF(object):
             #ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
             ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
             ds_add[self.sample_dim] = ds_add[self.sample_dim] + 1.
+            print(f"Add {ds_add.dims[self.sample_dim]} samples.")
+            print(ds_add[self.sample_dim])
+            print(f"DEBUG: Dataset has {data_now.dims[self.sample_dim]} samples before concatenating.")
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
-            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s.")
+            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s. New sample number: {data_now.dims[self.sample_dim]}")
             # free memory
             #free_mem([ds_add, add_samples, add_inds])
             free_mem([ds_add, add_samples, istart])
