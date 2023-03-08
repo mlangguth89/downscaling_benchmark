@@ -3,12 +3,16 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=40
 #SBATCH --output=train_wgan-model-out.%j
 #SBATCH --error=train_wgan-model-err.%j
 #SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
+##SBATCH --partition=batch
+##SBATCH --partition=gpus
 #SBATCH --partition=develgpus
+##SBATCH --partition=booster
+##SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=XXX@fz-juelich.de
 

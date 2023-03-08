@@ -8,7 +8,11 @@
 #SBATCH --error=train_unet-model-err.%j
 #SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
+##SBATCH --partition=batch
+##SBATCH --partition=gpus
 #SBATCH --partition=develgpus
+##SBATCH --partition=booster
+##SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=XXX@fz-juelich.de
 
