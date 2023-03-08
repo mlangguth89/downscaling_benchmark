@@ -24,13 +24,13 @@ def main():
     parser.add_argument("--datadir", "-d", dest="datadir", type=str,
                         default="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/",
                         help="Directory where monthly netCDF-files are stored")
-    parser.add_argument("--file_pattern", "-f", dest="file_patt", type=str, default="downscaling_tier2_train_*.nc", help="Filename pattern to glob netCDF-files")    
+    parser.add_argument("--file_pattern", "-f", dest="file_patt", type=str, default="downscaling_tier2_train_*.nc", help="Filename pattern to glob netCDF-files")
     parser.add_argument("--nfiles_load", "-n", default=30, type=int, dest="nfiles_load",
                         help="Number of netCDF-files to load into memory (2x with prefetching).")
     parser.add_argument("--lshuffle", "-lshuffle", dest="lshuffle", action="store_true", help="Enable shuffling.")
     parser.add_argument("--nepochs", "-ne", dest="nepochs", default=1, type=int,
                         help="Number of epochs to iterate over dataset.")
-    parser.add_argument("--batch_size", "-b", dest="batch_size", default=192, type=int, 
+    parser.add_argument("--batch_size", "-b", dest="batch_size", default=192, type=int,
                         help="Batch size for TF dataset.")
     parser.add_argument("--json_norm", "-js_norm", dest="js_norm", type=str, default=None,
                         help="Path to normalization file providing normalization parameters for given dataset.")
@@ -42,7 +42,7 @@ def main():
                         help="Number of workers to read netCDF-files.")
 
     args = parser.parse_args()
-  
+
     norm_dims = args.norm_dims
 
     if args.js_norm:
@@ -57,7 +57,7 @@ def main():
     ds_obj, tfds = make_tf_dataset_dyn(args.datadir, args.file_patt, args.batch_size, args.nepochs, args.nfiles_load,
                                        args.lshuffle, var_tar2in=args.var_tar2in, norm_obj=data_norm,
                                        norm_dims=norm_dims, nworkers=args.nworkers)
-    
+
     niter = int(args.nepochs*(ds_obj.nsamples/args.batch_size) - 1)
     t0 = timer()
     print(f"Start processing dataset with size: {ds_obj.dataset_size/1.e+09:.3f} GB")
@@ -66,10 +66,11 @@ def main():
             break
     telapsed = timer() - t0
 
-    print(f"Processed data size: {ds_obj.ds_proc_size/1.e+09} GB (= {args.nepochs} epochs)")
+    print(f"Processed data size: {ds_obj.ds_proc_size/1.e+09:.3f} GB (= {args.nepochs} epochs)")
     print(f"Elapsed processing time: {telapsed:.1f} seconds.")
     print(f"Average throughput: {ds_obj.ds_proc_size/1.e+06/telapsed:.3f} MB/s")
 
-    
+
 if __name__ == "__main__":
     main()
+

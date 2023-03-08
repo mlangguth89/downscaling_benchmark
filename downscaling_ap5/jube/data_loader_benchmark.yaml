@@ -114,7 +114,7 @@ parameterset:
         _: python -u $jube_benchmark_home/../test_scripts/demo_tfdataset_ap5.py
       - name: args_exec
         mode: text
-        _: > 
+        _: >q
           -d ${indir}
           -f ${file_pattern}
           -n ${nfiles_load}
@@ -127,9 +127,9 @@ patternset:
    - name: perf_patterns
      pattern:
       - {name: dataset_size, type: float, _: "dataset with size:\\s+$jube_pat_fp"}
-      - {name: data_proc_size, type: float, _: "Processed data size:\\s+$jube_pat_fp"}
-      - {name: elapsed_time, type: float, _: "Elapsed processing time:\\s+$jube_pat_fp"}
-      - {name: data_throughput, type: float, _: "Average throughput:\\s+$jube_pat_fp"}
+      - {name: data_proc_size, type: float, _: "data size:\\s+$jube_pat_fp"}
+      - {name: elapsed_time, type: float, _: "processing time:\\s+$jube_pat_fp"}
+      - {name: data_throughput, type: float, _: "throughput:\\s+$jube_pat_fp"}
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
 
 analyser:
