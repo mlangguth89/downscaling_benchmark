@@ -90,7 +90,8 @@ parameterset:
         tag: "e4nvidia|e4amd"
         separator: |
         _:
-          $modules
+          $modules;
+          source /opt/share/users/maelstrom/venv-rocm/bin/activate 
       - name: SRUN_CPUS_PER_TASK
         export: true
         _: ${SLURM_CPUS_PER_TASK}
@@ -229,7 +230,6 @@ step:
       error_file: $error_file
       _:
         $modules;
-        source ./setup_env_jube.sh venv_$systemname; 
-        #source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
+        source $jube_benchmark_home/../env_setup/setup_env_jube.sh venv_$systemname; 
         $submit $submit_script
 
