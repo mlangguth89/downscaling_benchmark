@@ -31,7 +31,7 @@ parameterset:
         _: "${SCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
       - name: indir
         type: string
-        tag: "e4_nvidia|e4amd"
+        tag: "e4nvidia|e4amd"
         _: "/data/maelstrom/langguth1/tier2/train/"
       - name: indir
         type: string
@@ -43,7 +43,7 @@ parameterset:
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/zscore_norm.json"
       - name: js_norm
         type: string
-        tag: "e4_nvidia|e4amd"
+        tag: "e4nvidia|e4amd"
         _: "/data/maelstrom/langguth1/tier2/train/zscore_norm.json"
       - name: outdir
         type: string
@@ -56,7 +56,7 @@ parameterset:
         separator: "|"
         _: 
           source $jube_benchmark_home/../env_setup/modules_jsc.sh
-      - {name: modules, separator: "|", tag: "e4_nvidia|e4amd", _: ml slurm}
+      - {name: modules, separator: "|", tag: "e4nvidia|e4amd", _: ml slurm}
       - name: systemname
         tag: jwc
         _: jwc
@@ -80,10 +80,17 @@ parameterset:
     parameter:
       - name: preprocess
         mode: text
+        tag: "jwb|jwc|hdfml"
         separator: |
         _:
           $modules;
           jutil env activate -p deepacf;
+      - name: preprocess
+        mode: text
+        tag: "e4nvidia|e4amd"
+        separator: |
+        _:
+          $modules
       - name: SRUN_CPUS_PER_TASK
         export: true
         _: ${SLURM_CPUS_PER_TASK}
