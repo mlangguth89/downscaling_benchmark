@@ -98,7 +98,12 @@ parameterset:
       - name: HDF5_USE_FILE_LOCKING
         export: true
         tag: cscratch
-        _: "FALSE"      
+        _: "FALSE"
+      - name: PYTHONPATH
+        export: true
+        tag: "e4nvidia|e4amd"
+        separator: |
+        _: "../:../utils/:../handle_data:../models:../postprocess:${PYTHONPATH}"
       - name: threadspertask
         _: 40
       - name: nodes
