@@ -92,6 +92,7 @@ parameterset:
         _:
           $modules;
           source /opt/share/users/maelstrom/venv-rocm/bin/activate 
+          echo $PYTHONPATH
       - name: SRUN_CPUS_PER_TASK
         export: true
         _: ${SLURM_CPUS_PER_TASK}
@@ -102,8 +103,7 @@ parameterset:
       - name: PYTHONPATH
         export: true
         tag: "e4nvidia|e4amd"
-        separator: |
-        _: "../:../utils/:../handle_data:../models:../postprocess:${PYTHONPATH}"
+        _: $jube_benchmark_home/../handle_data/:$jube_benchmark_home/../models:$jube_benchmark_home/../utils:$jube_benchmark_home/../postprocess:$${PYTHONPATH}
       - name: threadspertask
         _: 40
       - name: nodes
