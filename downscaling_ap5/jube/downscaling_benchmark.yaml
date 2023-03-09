@@ -147,6 +147,9 @@ parameterset:
         _: a-gpu-mi100
       - name: gres
         _: gpu:$n_gpu
+      - name: additional_job_config
+        tag: "e4nvidia|e4amd"
+        _: "#SBATCH --mem=128Gb"
       - name: executable
         _: python -u $jube_benchmark_home/../main_scripts/main_train.py
       - name: args_exec
