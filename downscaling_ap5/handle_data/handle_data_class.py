@@ -599,6 +599,9 @@ class StreamMonthlyNetCDF(object):
             istart = random.randint(0, self.samples_merged - add_samples - 1)
             # slice data from data_now...
             ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
+            if ds_add.dims[self.sample_dim] != add_samples:
+                istart = random.randint(0, self.samples_merged - add_samples - 1)
+                ds_add = data_now.isel({self.sample_dim: slice(istart, istart + add_samples)})
             # ... and modify underlying sample-dimension to allow clean concatenation
             ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
             ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
