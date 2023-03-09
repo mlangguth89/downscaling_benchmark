@@ -91,7 +91,8 @@ parameterset:
         tag: "e4nvidia|e4amd"
         separator: |
         _:
-          $modules
+          $modules;
+          source /opt/share/users/maelstrom/venv-rocm/bin/activate
       - name: SRUN_CPUS_PER_TASK
         export: true
         _: ${SLURM_CPUS_PER_TASK}
@@ -99,6 +100,10 @@ parameterset:
         export: true
         tag: cscratch
         _: "FALSE"
+      - name: PYTHONPATH
+        export: true
+        tag: "e4nvidia|e4amd"
+        _: $jube_benchmark_home/../handle_data/:$jube_benchmark_home/../models:$jube_benchmark_home/../utils:$jube_benchmark_home/../postprocess:$${PYTHONPATH}
       - name: threadspertask
         _: 40
       - name: nodes
@@ -110,7 +115,11 @@ parameterset:
       - name: timelimit
         _: "02:00:00"
       - name: account
+        tag: "jwb|jwc|hdfml"
         _: deepacf
+      - name: account
+        tag: "e4nvidia|e4amd"
+        _: maelstrom
       - name: queue
         tag: "jwb+!test"
         _: booster
@@ -126,13 +135,22 @@ parameterset:
       - name: queue
         tag: hdfml
         _: batch
+      - name: queue
+        tag: e4nvidia
+        _: i-gpu-a100
+      - name: queue
+        tag: e4amd
+        _: a-gpu-mi100
       - name: gres
         _: gpu:$n_gpu
+      - name: additional_job_config
+        tag: "e4nvidia|e4amd"
+        _: "#SBATCH --mem=128Gb"
       - name: executable
         _: python -u $jube_benchmark_home/../test_scripts/demo_tfdataset_ap5.py
       - name: args_exec
         mode: text
-        _: >q
+        _: >
           -d ${indir}
           -f ${file_pattern}
           -n ${nfiles_load}
