@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-01-11"
+__update__ = "2023-03-09"
 
 import os
 import glob
@@ -21,9 +21,8 @@ import json as js
 from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
-import tensorflow.keras as keras
 from all_normalizations import ZScore
-from model_utils import ModelEngine, handle_opt_utils, get_loss_from_history
+from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
@@ -34,6 +33,7 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 # * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
 # * ensure that dataset defaults are set
 # * customized choice on predictors and predictands missing
+# * replacement of manual benchmarking by JUBE-benchmarking to avoid duplications
 
 def main(parser_args):
     # start timing
@@ -62,9 +62,9 @@ def main(parser_args):
     if js_norm:
         data_norm = ZScore(ds_dict["norm_dims"])
         data_norm.read_norm_from_file(js_norm)
-        norm_dims = None
+        norm_dims, write_norm = None, False
     else:
-        data_norm = None
+        data_norm, write_norm = None, True
         norm_dims = ds_dict["norm_dims"]
 
     # initialize benchmarking object
@@ -101,13 +101,15 @@ def main(parser_args):
         if not data_norm:
             # data_norm must be freshly instantiated (triggering later parameter retrieval)
             data_norm = ZScore(ds_dict["norm_dims"])
-            data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
 
         da_train = data_norm.normalize(da_train)
         tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
+
+    if write_norm:
+        data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
 
     print(f"TF training dataset preparation time: {timer() - t0_train:.2f}s.")
 
@@ -148,17 +150,6 @@ def main(parser_args):
     model.compile(**compile_opts)
 
     # train model
-    # define class for creating timer callback
-    class TimeHistory(keras.callbacks.Callback):
-        def on_train_begin(self, logs={}):
-            self.epoch_times = []
-
-        def on_epoch_begin(self, epoch, logs={}):
-            self.epoch_time_start = timer()
-
-        def on_epoch_end(self, epoch, logs={}):
-            self.epoch_times.append(timer() - self.epoch_time_start)
-
     time_tracker = TimeHistory()
     steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
 

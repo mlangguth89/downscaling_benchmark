@@ -388,7 +388,7 @@ class StreamMonthlyNetCDF(object):
         self.nfiles2merge = nfiles_merge
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
         self.samples_merged = self.get_samples_per_merged_file()
-        print(f"Data subsets will compriese {self.samples_merged} samples.")
+        print(f"Data subsets will comprise {self.samples_merged} samples.")
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)

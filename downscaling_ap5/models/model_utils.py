@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,14 +9,15 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2022-05-31"
+__update__ = "2023-03-09"
 
 # import modules
-import numpy as np
+from timeit import default_timer as timer
 import tensorflow.keras as keras
 from unet_model import sha_unet, UNET
 from wgan_model import WGAN, critic_model
 from other_utils import to_list
+
 
 class ModelEngine(object):
     """
@@ -92,6 +93,18 @@ class ModelEngine(object):
         Create help-string listing all known models.
         """
         return f"Known models are: {', '.join(list(self.known_models.keys()))}"
+
+
+    # define class for creating timer callback
+class TimeHistory(keras.callbacks.Callback):
+    def on_train_begin(self, logs={}):
+        self.epoch_times = []
+
+    def on_epoch_begin(self, epoch, logs={}):
+        self.epoch_time_start = timer()
+
+    def on_epoch_end(self, epoch, logs={}):
+        self.epoch_times.append(timer() - self.epoch_time_start)
 
 
 def get_loss_from_history(history: keras.callbacks.History, loss_name: str = "loss"):
