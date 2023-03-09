@@ -31,8 +31,8 @@ parameterset:
         _: "${SCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
       - name: indir
         type: string
-        tag: e4
-        _: "<path>"
+        tag: "e4_nvidia|e4amd"
+        _: "/data/maelstrom/langguth1/tier2/train/"
       - name: indir
         type: string
         tag: "(jwb|jwc|hdfml)+cscratch"
@@ -41,6 +41,10 @@ parameterset:
         type: string
         tag: jwb|jwc|hdfml
         _: "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/zscore_norm.json"
+      - name: js_norm
+        type: string
+        tag: "e4_nvidia|e4amd"
+        _: "/data/maelstrom/langguth1/tier2/train/zscore_norm.json"
       - name: outdir
         type: string
         _: "$jube_benchmark_home/../trained_models"
@@ -52,7 +56,7 @@ parameterset:
         separator: "|"
         _: 
           source $jube_benchmark_home/../env_setup/modules_jsc.sh
-      - {name: modules, tag: "e4", _: source $jube_benchmark_home/../env_setup/modules_e4.sh}
+      - {name: modules, separator: "|", tag: "e4_nvidia|e4amd", _: ml slurm}
       - name: systemname
         tag: jwc
         _: jwc
@@ -63,8 +67,11 @@ parameterset:
         tag: hdfml
         _: hdfml
       - name: systemname
-        tag: e4
-        _: e4
+        tag: e4nvidia
+        _: e4nvidia
+      - name: systemname
+        tag: e4amd
+        _: e4amd
 
   - name: executeset
     init_with: platform.xml
@@ -99,7 +106,11 @@ parameterset:
         tag: "!test"
         _: "20:00:00"
       - name: account
+        tag: "jwb|jwc|hdfml"
         _: deepacf
+      - name: account
+        tag: "e4nvidia|e4amd"
+        _: maelstrom
       - name: queue
         tag: "jwb+!test"
         _: booster
@@ -115,6 +126,12 @@ parameterset:
       - name: queue
         tag: hdfml
         _: batch
+      - name: queue
+        tag: e4nvidia
+        _: i-gpu-a100
+      - name: queue
+        tag: e4amd
+        _: a-gpu-mi100
       - name: gres
         _: gpu:$n_gpu
       - name: executable
@@ -205,6 +222,7 @@ step:
       error_file: $error_file
       _:
         $modules;
-        source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
+        source ./setup_env_jube.sh venv_$systemname; 
+        #source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
         $submit $submit_script
 
