@@ -78,7 +78,7 @@ else
 fi
 
 ## check operating system is
-SUPPORTED_SYSTEMS=("HDFML" "JWB" "JRCMI200")
+SUPPORTED_SYSTEMS=("HDFML" "JWB" "JRCMI200" "E4")
 declare -A SYSTEM_HUMAN_NAMES
 SYSTEM_HUMAN_NAMES["HDFML"]="HDF-ML"
 SYSTEM_HUMAN_NAMES["JWB"]="Juwels (Booster)"
@@ -88,7 +88,7 @@ declare -A SYSTEM_HOSTNAME_PATTERNS
 SYSTEM_HOSTNAME_PATTERNS["HDFML"]="hdfml"
 SYSTEM_HOSTNAME_PATTERNS["JWB"]="jwlogin"
 SYSTEM_HOSTNAME_PATTERNS["JRCMI200"]="jrlogin"
-SYSTEM_HUMAN_PATTERNS["E4"]="e4"
+SYSTEM_HUMAN_PATTERNS["E4"]="ilnode"
 declare -A SYSTEM_IS_JSC
 SYSTEM_IS_JSC["HDFML"]=1
 SYSTEM_IS_JSC["JWB"]=1
@@ -103,6 +103,8 @@ do
   if [[ "${HOST_NAME}" == *"${HNAME_PATTERN}"* ]]; then
     echo "Match! System is supported"
     IS_SUPPORTED_SYSTEM=1
+    SYSTEM_NOW=$SYSTEM
+    break
   else
     echo "No match!"
   fi
@@ -113,8 +115,20 @@ if ! [[ $IS_SUPPORTED_SYSTEM == 1 ]]; then
   exit 1
 fi
 
-activate_virt_env=${VENV_DIR}/bin/activate
+# On e4, a virtual environment is already provided. Thus, we just need to activate it and expand PYTONPATH
+if [[ "${SYSTEM_NOW}" == "E4" ]]; then
+  VENV_DIR=/opt/share/users/maelstrom/venv-rocm
+  ENV_EXIST=1
+  # expand PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}:$PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH
+  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH
+fi
 
+activate_virt_env=${VENV_DIR}/bin/activate
 
 ## set up virtual environment
 if [[ "$ENV_EXIST" == 0 ]]; then
