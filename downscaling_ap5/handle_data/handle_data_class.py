@@ -597,18 +597,17 @@ class StreamMonthlyNetCDF(object):
             t1 = timer()
             add_samples = self.samples_merged - nsamples
             istart = random.randint(0, self.samples_merged - add_samples - 1)
-            #
-            #add_inds = random.sample(range(nsamples), add_samples)
-            #ds_add = self.data_loaded[il].isel({self.sample_dim: add_inds})
+            # slice data from data_now...
             ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
-            ds_add[self.sample_dim] = ds_add[self.sample_dim][0] - np.arange(add_samples)
+            # ... and modify underlying sample-dimension to allow clean concatenation
+            ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
+            ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
             print(f"Add {ds_add.dims[self.sample_dim]} samples.")
             print(ds_add[self.sample_dim])
             print(f"DEBUG: Dataset has {data_now.dims[self.sample_dim]} samples before concatenating.")
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s. New sample number: {data_now.dims[self.sample_dim]}")
             # free memory
-            #free_mem([ds_add, add_samples, add_inds])
             free_mem([ds_add, add_samples, istart])
 
         # free memory
