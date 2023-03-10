@@ -13,7 +13,7 @@ from timeit import default_timer as timer
 import xarray as xr
 from handle_data_class import HandleDataClass
 from all_normalizations import ZScore
-from model_utils import print_gpu_usage, print_cpu_usage
+from other_utils import print_gpu_usage, print_cpu_usage
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 
