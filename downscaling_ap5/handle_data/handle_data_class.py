@@ -590,9 +590,8 @@ class StreamMonthlyNetCDF(object):
         #                           parallel=True).load()
         t0 = timer()
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        print(f"DEBUG: Newly read dataset has {data_now.dims[self.sample_dim]} samples.")
-
         nsamples = data_now.dims[self.sample_dim]
+
         if nsamples < self.samples_merged:
             t1 = timer()
             add_samples = self.samples_merged - nsamples
@@ -607,17 +606,15 @@ class StreamMonthlyNetCDF(object):
             # ... and modify underlying sample-dimension to allow clean concatenation
             ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
             ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
-            print(f"DEBUG: Add {ds_add.dims[self.sample_dim]} samples.")
-            print(f"DEBUG: Dataset has {data_now.dims[self.sample_dim]} samples before concatenating.")
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
-            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s. New sample number: {data_now.dims[self.sample_dim]}")
+            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
+                  f"(total #samples: {data_now.dims[self.sample_dim]})")
             # free memory
             free_mem([ds_add, add_samples, istart])
 
         # free memory
         free_mem([nsamples])
         self.data_loaded[il] = data_now
-        print(f"DEBUG: Current dataset has {data_now.dims[self.sample_dim]} samples.")
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
