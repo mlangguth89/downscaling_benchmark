@@ -1,4 +1,4 @@
-name:    ap5-all
+name:    ap5-data
 outpath: ap5_dataloader
 comment: MAELSTROM AP5 data loader benchmark jube script
 
