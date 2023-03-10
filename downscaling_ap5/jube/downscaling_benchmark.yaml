@@ -83,8 +83,9 @@ parameterset:
         tag: "jwb|jwc|hdfml"
         separator: |
         _:
-          $modules;
-          source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate;
+          unset PYTHONPATH &&
+          $modules &&
+          source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate &&
           jutil env activate -p deepacf;
       - name: preprocess
         mode: text
