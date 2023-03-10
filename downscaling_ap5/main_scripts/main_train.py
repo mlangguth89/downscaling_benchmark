@@ -21,9 +21,9 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 from all_normalizations import ZScore
-from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history, print_gpu_usage,\
-                        print_cpu_usage
+from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
+from other_utils import print_gpu_usage, print_cpu_usage
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
@@ -188,8 +188,8 @@ def main(parser_args):
 
     # populate benchmark dictionary
     benchmark_dict.update({"saving model time": saving_time, "total runtime": tot_run_time})
-    benchmark_dict.update({"job id": job_id, "#nodes": 1, "#cpus": len(os.sched_getaffinity(0)), "gpus": 1,
-                           "mpi tasks": 1, "node id": None, "max. gpu power": None, "gpu energy consumption": None})
+    benchmark_dict.update({"job id": job_id, "#nodes": 1, "#cpus": len(os.sched_getaffinity(0)), "#gpus": 1,
+                           "#mpi tasks": 1, "node id": None, "max. gpu power": None, "gpu energy consumption": None})
     try:
         benchmark_dict["final training loss"] = get_loss_from_history(history, "loss")
     except KeyError:
