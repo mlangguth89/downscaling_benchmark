@@ -167,6 +167,8 @@ patternset:
       - {name: elapsed_time, type: float, _: "processing time:\\s+$jube_pat_fp"}
       - {name: data_throughput, type: float, _: "throughput:\\s+$jube_pat_fp"}
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
+      - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
+      - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
 
 analyser:
     name: analyse
@@ -197,6 +199,8 @@ result:
         - {title: "avg. ds load time [s]", _: data_loading_avg}
         - {title: "min. ds load time [s]", _: data_loading_min}
         - {title: "max. ds load time [s]", _: data_loading_max}
+        - {title: "max. CPU memory [GB]", _: cpu_mem}
+        - {title: "max. GPU memory [GB]", _: gpu_mem}
 
 step:
   - name:   setup_venv

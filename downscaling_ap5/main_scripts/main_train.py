@@ -166,6 +166,7 @@ def main(parser_args):
     if not ttrain_load:
         ttrain_load = sum(ds_obj.reading_times) + tval_load
         print(f"Data loading time: {ttrain_load:.2f}s.")
+        print(f"Average throughput: {ds_obj.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
     benchmark_dict = {**{"data loading time": ttrain_load}, **training_times}
     print(f"Training of model '{parser_args.exp_name}' training finished. Save model to '{model_savedir}'")
 
