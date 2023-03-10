@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,10 +9,9 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-03-09"
+__update__ = "2023-03-10"
 
 import os
-import glob
 import argparse
 from datetime import datetime as dt
 print("Start with importing packages at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
@@ -22,7 +21,8 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 from all_normalizations import ZScore
-from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
+from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history, print_gpu_usage,\
+                        print_cpu_usage
 from handle_data_class import HandleDataClass, get_dataset_filename
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
@@ -181,15 +181,14 @@ def main(parser_args):
     tot_run_time = tend - t0
     print(f"Model saving time: {saving_time:.2f}s")
     print(f"Total runtime: {tot_run_time:.1f}s")
-    benchmark_dict["saving model time"] = saving_time
-    benchmark_dict["total runtime"] = tend - t0
+    # some statistics on memory usage
+    print_gpu_usage("Final GPU memory: ")
+    print_cpu_usage("Final CPU memory: ")
 
-    # other tracking variables
-    benchmark_dict["job id"] = job_id
-    # currently untracked variables
-    benchmark_dict["#nodes"], benchmark_dict["#cpus"], benchmark_dict["#gpus"] = 1, len(os.sched_getaffinity(0)), 1
-    benchmark_dict["#mpi tasks"], benchmark_dict["node id"], benchmark_dict["max. gpu power"] = 1, None, None
-    benchmark_dict["gpu energy consumption"] = None
+    # populate benchmark dictionary
+    benchmark_dict.update({"saving model time": saving_time, "total runtime": tot_run_time})
+    benchmark_dict.update({"job id": job_id, "#nodes": 1, "#cpus": len(os.sched_getaffinity(0)), "gpus": 1,
+                           "mpi tasks": 1, "node id": None, "max. gpu power": None, "gpu energy consumption": None})
     try:
         benchmark_dict["final training loss"] = get_loss_from_history(history, "loss")
     except KeyError:

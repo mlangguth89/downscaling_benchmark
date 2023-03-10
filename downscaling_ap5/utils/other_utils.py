@@ -18,19 +18,26 @@ Some auxiliary functions for the project:
     * check_str_in_list
     * find_closest_divisor
     * free_mem
+    * print_gpu_usage
+    * print_cpu_usage
+    * get_memory_usage
+    * get_max_memory_usage
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-03-02"
+__update__ = "2023-03-10"
 
-import gc
 import os
+import gc
 import inspect
+import psutil
+import resource
 import numpy as np
 import pandas as pd
+import tensorflow as tf
 import datetime as dt
 from dateutil.parser import parse as date_parser
 from typing import Any, List, Union
@@ -45,7 +52,6 @@ str_or_List = Union[List, str]
 def provide_default(dict_in, keyname, default=None, required=False):
     """
     Returns values of key from input dictionary or alternatively its default
-
     :param dict_in: input dictionary
     :param keyname: name of key which should be added to dict_in if it is not already existing
     :param default: default value of key (returned if keyname is not present in dict_in)
@@ -67,7 +73,7 @@ def provide_default(dict_in, keyname, default=None, required=False):
 
 def remove_key_from_dict(dict_in: dict, key: str) -> dict:
     """
-    Remove single key from dictionary if it is present. Returns a new dict.
+    Remove single key from dictionary if it is present. Returns a new dict
     :param dict_in: input dictionary
     :param key: key to be removed
     """
@@ -77,7 +83,7 @@ def remove_key_from_dict(dict_in: dict, key: str) -> dict:
 def to_list(obj: Any) -> List:
     """
     Method from MLAIR!
-    Transform given object to list if obj is not already a list. Sets are also transformed to a list.
+    Transform given object to list if obj is not already a list. Sets are also transformed to a list
     :param obj: object to transform to list
     :return: list containing obj, or obj itself (if obj was already a list)
     """
@@ -103,7 +109,7 @@ def get_func_kwargs(func, kwargs):
 
 def subset_files_on_date(all_files_list: list, val: int, filter_basedir: bool = False, date_alias: str = "H"):
     """
-    Subsets a list of files based on a time-pattern that must be part of the filename.
+    Subsets a list of files based on a time-pattern that must be part of the filename
     :param all_files_list: list of all files
     :param val: time value (default meaning: hour of the day, see date_alias)
     :param filter_basedir: flag for removing base-directory when subsetting, e.g. when dates are present in basedir
@@ -174,7 +180,7 @@ def last_day_of_month(any_day):
 
 def flatten(nested_iterable):
     """
-    Yield items from any nested iterable.
+    Yield items from any nested iterable
     :return Any nested iterable.
     """
     for x in nested_iterable:
@@ -243,9 +249,9 @@ def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True
 
 def find_closest_divisor(n1, div):
     """
-    Function to find closest divisor for a given number with respect to a target value.
-    :param n1: The number for which a divisor should be found.
-    :param div: The desired divisor value.
+    Function to find closest divisor for a given number with respect to a target value
+    :param n1: The number for which a divisor should be found
+    :param div: The desired divisor value
     :return div_new: In case that div is a divisor n1, div remains unchanged. In any other case,
                      the closest integer to div is returned.
     """
@@ -277,3 +283,53 @@ def free_mem(var_list: List):
         del var
 
     gc.collect()
+
+# The following auxiliary methods have been adapted from MAELSTROM AP3,
+# see https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/browse/climetlab_maelstrom_radiation/benchmarks/
+#                           utils.py?at=jube
+
+
+def print_gpu_usage(message="", show_line=False):
+    try:
+        usage = tf.config.experimental.get_memory_info("GPU:0")
+        output = message + ' - '.join([f"{k}: {v / 1024**3:.2f} GB" for k, v in usage.items()])
+    except ValueError as _:
+        output = message + ' None'
+
+    if show_line:
+        frameinfo = inspect.getouterframes(inspect.currentframe())[1]
+        output += " (%s:%s)" % (frameinfo.filename, frameinfo.lineno)
+
+    print(output)
+
+
+def print_cpu_usage(message: str = "", show_line: bool = False):
+    """
+    Prints the current and maximum memory useage of this process
+    :param message: Prepend with this message
+    :param show_line: Add the file and line number making this call at the end of message
+    """
+
+    output = "current: %.2f GB - peak: %.2f GB" % (
+        get_memory_usage() / 1024 ** 3,
+        get_max_memory_usage() / 1024 ** 3,
+    )
+    output = message + output
+    if show_line:
+        frameinfo = inspect.getouterframes(inspect.currentframe())[1]
+        output += " (%s:%s)" % (frameinfo.filename, frameinfo.lineno)
+
+    print(output)
+
+
+def get_memory_usage():
+    p = psutil.Process(os.getpid())
+    mem = p.memory_info().rss
+    for child in p.children(recursive=True):
+        mem += child.memory_info().rss
+    return mem
+
+
+def get_max_memory_usage():
+    """In bytes"""
+    return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1000
