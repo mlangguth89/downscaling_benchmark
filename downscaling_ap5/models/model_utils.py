@@ -9,7 +9,7 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2023-03-09"
+__update__ = "2023-03-10"
 
 # import modules
 from timeit import default_timer as timer
@@ -95,7 +95,7 @@ class ModelEngine(object):
         return f"Known models are: {', '.join(list(self.known_models.keys()))}"
 
 
-    # define class for creating timer callback
+# define class for creating timer callback
 class TimeHistory(keras.callbacks.Callback):
     def on_train_begin(self, logs={}):
         self.epoch_times = []

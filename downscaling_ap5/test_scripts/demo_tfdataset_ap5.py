@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-02-15"
-__update__ = "2023-03-03"
+__update__ = "2023-03-10"
 
 import argparse
 from typing import List, Union
@@ -13,6 +13,7 @@ from timeit import default_timer as timer
 import xarray as xr
 from handle_data_class import HandleDataClass
 from all_normalizations import ZScore
+from model_utils import print_gpu_usage, print_cpu_usage
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 
@@ -69,6 +70,9 @@ def main():
     print(f"Processed data size: {ds_obj.ds_proc_size/1.e+09:.3f} GB (= {args.nepochs} epochs)")
     print(f"Elapsed processing time: {telapsed:.1f} seconds.")
     print(f"Average throughput: {ds_obj.ds_proc_size/1.e+06/telapsed:.3f} MB/s")
+    # some statistics on memory usage
+    print_gpu_usage("Final GPU memory: ")
+    print_cpu_usage("Final CPU memory: ")
 
 
 if __name__ == "__main__":
