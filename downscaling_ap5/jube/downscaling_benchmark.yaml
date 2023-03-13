@@ -180,9 +180,10 @@ patternset:
       - {name: epoch_time, type: int, _: "-\\s+${jube_pat_int}s\\s+-"}
       - {name: recon_loss_train, type: float, _: "- recon_loss:\\s+$jube_pat_fp"}
       - {name: recon_loss_val, type: float, _: "val_recon_loss:\\s+$jube_pat_fp"}
-      - {name: c_loss, type: float, _: "c_loss:\\s+$jube_pat_fp"}
-      - {name: g_loss, type: float, _: "cg_loss:\\s+$jube_pat_fp"}
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
+      - {name: data_throughput, type: float, _: "throughput:\\s+$jube_pat_fp"}
+      - {name: train_time, type: float, _: "training time:\\s+$jube_pat_fp"}
+      - {name: run_time, type: float, _: "Total runtime:\\s+$jube_pat_fp"}}
       - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
       - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
@@ -212,12 +213,13 @@ result:
         - {title: "# gpu", _: n_gpu}
         - {title: "last recon. loss train", _: recon_loss_train_last}
         - {title: "last recon. loss val", _: recon_loss_val_last}
-        - {title: "last generator loss ", _: g_loss_last}
-        - {title: "last critic loss ", _: c_loss_last}
         - {title: "last epoch ", _: epoch_last}
+        - {title: "total runtime [s]", _: run_time}
+        - {title: "total training time [s]", _: train_time}
         - {title: "first epoch time [s]", _: epoch_time_first}
-        - {title: "last epoch time [s]", _: epoch_time_last}
-        - {title: "avg. epoch time [s]", _: epoch_time_avg}
+        - {title: "min. epoch time [s]", _: epoch_time_min}
+        - {title: "max. epoch time [s]", _: epoch_time_max}
+        - {title: "average throughput [MB/s]", _: data_throughput}
         - {title: "avg. ds load time [s]", _: data_loading_avg}
         - {title: "min. ds load time [s]", _: data_loading_min}
         - {title: "max. ds load time [s]", _: data_loading_max}
