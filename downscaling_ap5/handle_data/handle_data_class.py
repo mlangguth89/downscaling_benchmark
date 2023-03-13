@@ -205,9 +205,9 @@ class HandleDataClass(object):
         tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
         tfds = tfds.flat_map(
             lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
-            .batch(batch_size, drop_remainder=True).map(tf_getdata))
+            .batch(batch_size, drop_remainder=True).map(tf_getdata, num_parallel_calls=tf.data.AUTOTUNE))
 
-        tfds = tfds.map(tf_split).repeat()
+        tfds = tfds.map(tf_split, num_parallel_calls=tf.data.AUTOTUNE).repeat()
 
         return ds_obj, tfds
 
