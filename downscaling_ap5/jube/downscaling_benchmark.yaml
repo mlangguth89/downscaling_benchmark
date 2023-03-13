@@ -8,7 +8,7 @@ parameterset:
       - name: conf_md
         tag: "!test"
         type: string
-        _: "$jube_benchmark_home/../config/config_wgan.json"
+        _: "$jube_benchmark_home/../config/config_wgan_benchmark.json"
       - name: conf_md
         tag: "test"
         type: string
@@ -125,7 +125,7 @@ parameterset:
         _: "02:00:00"
       - name: timelimit
         tag: "!test"
-        _: "20:00:00"
+        _: "10:00:00"
       - name: account
         tag: "jwb|jwc|hdfml"
         _: deepacf
