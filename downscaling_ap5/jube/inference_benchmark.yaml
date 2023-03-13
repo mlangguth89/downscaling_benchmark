@@ -1,0 +1,219 @@
+name:    ap5-infer
+outpath: ap5_inference
+comment: MAELSTROM AP5 inference benchmark jube script
+
+parameterset:
+  - name: appParameter
+    parameter:
+      - name: exp_name
+        type: string
+        _: "wgan_benchmark_jube_$jube_benchmark_id"
+      - name: model
+        type: string
+        _: "wgan"
+      - name: dataset
+        type: string
+        _: "tier2"
+      - name: datadir
+        type: string
+        tag: "(jwb|jwc|hdfml)+!cscratch"
+        _: "${SCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
+      - name: datadir
+        type: string
+        tag: "e4nvidia|e4amd"
+        _: "/data/maelstrom/langguth1/tier2/train/"
+      - name: datadir
+        type: string
+        tag: "(jwb|jwc|hdfml)+cscratch"
+        _: "${CSCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
+      - name: dataset
+        type: string
+        _: "tier2"
+      - name: model_basedir
+        type: string
+        _: $jube_benchmark_home/../trained_models
+
+  - name: globalParameter
+    parameter:
+      - name: modules
+        tag: "jwb|jwc|hdfml"
+        separator: "|"
+        _: 
+          source $jube_benchmark_home/../env_setup/modules_jsc.sh
+      - {name: modules, separator: "|", tag: "e4nvidia|e4amd", _: ml slurm}
+      - name: systemname
+        tag: jwc
+        _: jwc
+      - name: systemname
+        tag: jwb
+        _: jwb
+      - name: systemname
+        tag: hdfml
+        _: hdfml
+      - name: systemname
+        tag: e4nvidia
+        _: e4nvidia
+      - name: systemname
+        tag: e4amd
+        _: e4amd
+
+  - name: executeset
+    init_with: platform.xml
+  - name: systemParameter
+    init_with: platform.xml
+    parameter:
+      - name: preprocess
+        mode: text
+        tag: "jwb|jwc|hdfml"
+        separator: |
+        _:
+          unset PYTHONPATH &&
+          $modules &&
+          source $jube_benchmark_home/../virtual_envs/venv_$systemname/bin/activate &&
+          jutil env activate -p deepacf;
+      - name: preprocess
+        mode: text
+        tag: "e4nvidia"
+        separator: |
+        _:
+          $modules;
+          source /opt/share/users/maelstrom/venv-rocm/bin/activate
+      - name: preprocess
+        mode: text
+        tag: "e4amd"
+        separator: |
+        _:
+          $modules;
+          source /home/mchantry/my_venv_rocm/bin/activate
+      - name: SRUN_CPUS_PER_TASK
+        export: true
+        _: ${SLURM_CPUS_PER_TASK}
+      - name: HDF5_USE_FILE_LOCKING
+        export: true
+        tag: cscratch
+        _: "FALSE"
+      - name: PYTHONPATH
+        export: true
+        tag: "e4nvidia|e4amd"
+        _: $jube_benchmark_home/../handle_data/:$jube_benchmark_home/../models:$jube_benchmark_home/../utils:$jube_benchmark_home/../postprocess:$${PYTHONPATH}
+      - name: threadspertask
+        _: 40
+      - name: nodes
+        _: 1
+      - name: n_gpu
+        _: 1
+      - name: taskspernode
+        _: $n_gpu
+      - name: timelimit
+        _: "01:00:00"
+      - name: account
+        tag: "jwb|jwc|hdfml"
+        _: deepacf
+      - name: account
+        tag: "e4nvidia|e4amd"
+        _: maelstrom
+      - name: queue
+        tag: "jwb+!test"
+        _: booster
+      - name: queue
+        tag: "jwb+test"
+        _: develbooster
+      - name: queue
+        tag: "jwc+!test"
+        _: gpus
+      - name: queue
+        tag: "jwc+test"
+        _: develgpus
+      - name: queue
+        tag: hdfml
+        _: batch
+      - name: queue
+        tag: e4nvidia
+        _: i-gpu-a100
+      - name: queue
+        tag: e4amd
+        _: a-gpu-mi100
+      - name: gres
+        _: gpu:$n_gpu
+      - name: additional_job_config
+        tag: "e4nvidia|e4amd"
+        _: "#SBATCH --mem=32Gb"
+      - name: executable
+        _: python -u $jube_benchmark_home/../test_scripts/demo_inference_only.py
+      - name: args_exec
+        mode: text
+        _: > 
+          -data_dir ${data_dir}
+          -model_base_dir ${model_basedir}
+          -exp_name ${exp_name}
+          -dataset ${dataset}
+          -id $${SLURM_JOBID}
+
+
+patternset:
+   - name: perf_patterns
+     pattern:
+      - {name: model_loading, type: float, _: "Model loading time:\\s+$jube_pat_fp"}
+      - {name: data_loading, type: float, _: "preparation time:\\s+$jube_pat_fp"}
+      - {name: inference, type: float, _: "Inference time:\\s+$jube_pat_fp"}
+      - {name: runtime, type: float, _: "Total runtime:\\s+$jube_pat_fp"}
+      - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
+      - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
+      - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
+
+analyser:
+    name: analyse
+    reduce: false
+    use: perf_patterns
+    analyse:
+        step: submit
+        file:
+          - job.out
+          - stdout
+
+result:
+    use: analyse
+    table:
+      name: result
+      style: pretty
+      sort: iter_pat
+      column:
+        - {title: "JobID", _: jobid}
+        - {title: "Job_Time", _: timelimit}
+        - {title: "# nodes", _: nodes}
+        - {title: "# gpu", _: n_gpu}
+        - {title: "model loading time [s]", _: model_loading}
+        - {title: "data loading time [s]", _: data_loading}
+        - {title: "inference time [s]", _: inference}
+        - {title: "total runtime [s]", _: runtime}
+        - {title: "max. CPU memory [GB]", _: cpu_mem}
+        - {title: "max. GPU memory [GB]", _: gpu_mem}
+
+step:
+  - name:   setup_venv
+    use:
+      - globalParameter
+      - systemParameter
+    do:
+      _:
+        unset PYTHONPATH;
+        $modules;
+        cd $jube_benchmark_home/../env_setup/ &&
+        source ./setup_env_jube.sh venv_$systemname
+  - name:   submit
+    use:
+      - appParameter
+      - globalParameter
+      - systemParameter
+      - executeset
+      - from: platform.xml
+        _: jobfiles
+      - from: platform.xml
+        _: executesub
+    do:
+      done_file: $ready_file
+      error_file: $error_file
+      _:
+        $modules;
+        $submit $submit_script
+
