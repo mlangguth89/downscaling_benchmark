@@ -183,7 +183,8 @@ patternset:
       - {name: data_loading, type: float, _: "reading time:\\s+$jube_pat_fp"}
       - {name: data_throughput, type: float, _: "throughput:\\s+$jube_pat_fp"}
       - {name: train_time, type: float, _: "training time:\\s+$jube_pat_fp"}
-      - {name: run_time, type: float, _: "Total runtime:\\s+$jube_pat_fp"}}
+      - {name: run_time, type: float, _: "Total runtime:\\s+$jube_pat_fp"}
+      - {name: save_time, type: float, _: "saving time:\\s+$jube_pat_fp"}
       - {name: cpu_mem, type: float, _: "Final CPU memory:.*peak: $jube_pat_fp GB"}
       - {name: gpu_mem, type: float, _: "Final GPU memory:.*peak: $jube_pat_fp GB"}
       - {name: jobid, type: int, _: "Submitted batch job $jube_pat_int" }
@@ -211,15 +212,17 @@ result:
         - {title: "dataset configuration", _: conf_ds}
         - {title: "# nodes", _: nodes}
         - {title: "# gpu", _: n_gpu}
-        - {title: "last recon. loss train", _: recon_loss_train_last}
-        - {title: "last recon. loss val", _: recon_loss_val_last}
         - {title: "last epoch ", _: epoch_last}
         - {title: "total runtime [s]", _: run_time}
         - {title: "total training time [s]", _: train_time}
+        - {title: "avg. time per epoch [s]", _: epoch_time_avg}
+        - {title: "average throughput [MB/s]", _: data_throughput}
         - {title: "first epoch time [s]", _: epoch_time_first}
         - {title: "min. epoch time [s]", _: epoch_time_min}
         - {title: "max. epoch time [s]", _: epoch_time_max}
-        - {title: "average throughput [MB/s]", _: data_throughput}
+        - {title: "last recon. loss train", _: recon_loss_train_last}
+        - {title: "last recon. loss val", _: recon_loss_val_last}
+        - {title: "model saving time [s]", _: save_time}
         - {title: "avg. ds load time [s]", _: data_loading_avg}
         - {title: "min. ds load time [s]", _: data_loading_min}
         - {title: "max. ds load time [s]", _: data_loading_max}
