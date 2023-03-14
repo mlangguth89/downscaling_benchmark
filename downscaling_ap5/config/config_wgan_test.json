@@ -1,5 +1,5 @@
 {
-  "nepochs": 3,
+  "nepochs": 5,
   "d_steps": 5,
   "z_branch": true,
   "lr_gen": 5e-05,
