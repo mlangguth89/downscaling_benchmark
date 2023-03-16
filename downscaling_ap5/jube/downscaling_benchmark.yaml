@@ -93,14 +93,23 @@ parameterset:
         separator: |
         _:
           $modules;
-          source /opt/share/users/maelstrom/venv-rocm/bin/activate
+          source /opt/share/users/maelstrom/venv-rocm/bin/activate;
+          bash /opt/share/scripts/powerdiscovery/getpower_local.sh 21600 > $jube_wp_abspath/consumption.log 2>&1 &
+          GETPOWER_PID=$!;
       - name: preprocess
         mode: text
         tag: "e4amd"
         separator: |
         _:
           $modules;
-          source /home/mchantry/my_venv_rocm/bin/activate
+          source /home/mchantry/my_venv_rocm/bin/activate;
+          bash /opt/share/scripts/powerdiscovery/getpower_local.sh 21600 > $jube_wp_abspath/consumption.log 2>&1 &
+          GETPOWER_PID=$!;
+      - name: postprocess
+        _: ""
+      - name: postprocess
+        tag: "e4nvidia|e4amd"
+        _: kill $$GETPOWER_PID
       - name: SRUN_CPUS_PER_TASK
         export: true
         _: ${SLURM_CPUS_PER_TASK}
