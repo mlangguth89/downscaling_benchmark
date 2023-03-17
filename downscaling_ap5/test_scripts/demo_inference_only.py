@@ -71,7 +71,7 @@ def main(parser_args):
     print(f"Load model '{parser_args.exp_name}' from {model_dir}")
     t0_load = timer()
     trained_model = keras.models.load_model(model_dir, compile=False)
-    print(f"Model was loaded successfully. Model loading time: {t0_load - timer():.3f}s")
+    print(f"Model was loaded successfully. Model loading time: {timer() - t0_load:.3f}s")
 
     # get filename of test data and read netCDF
     fdata_test = get_dataset_filename(parser_args.data_dir, parser_args.dataset, "test",
