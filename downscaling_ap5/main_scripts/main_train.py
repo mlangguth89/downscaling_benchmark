@@ -23,7 +23,7 @@ import xarray as xr
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
-from other_utils import print_gpu_usage, print_cpu_usage
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
@@ -218,6 +218,11 @@ def main(parser_args):
             js.dump(stat_info, jsf)
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
+
+    # copy configuration and normalization JSON-file to output-directory
+    filelist = [parser_args.conf_ds.name, parser_args.conf_md.name]
+    if not write_norm: filelist.append(js_norm)
+    copy_filelist(filelist, model_savedir)
 
 
 if __name__ == "__main__":
