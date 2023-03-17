@@ -16,7 +16,10 @@ import os, glob
 import argparse
 from timeit import default_timer as timer
 import json as js
-from datetime import datetime as dt
+# WTF, the following does not work to whatever reasons in conjunction with dt.now() on Juwels (others as well?)
+# from datetime import datatime as dt
+# ... thus, we go for the dirty way
+import datetime as dt
 import xarray as xr
 import tensorflow.keras as keras
 from handle_data_unet import *
@@ -31,11 +34,12 @@ def main(parser_args):
     # construct model directory path and infer model type
     model_base = os.path.join(parser_args.model_base_dir, parser_args.exp_name)
 
-    model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, parser_args.output_base_dir,
+    model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, "./",
                                                               parser_args.exp_name, parser_args.last,
                                                               parser_args.model_type)
 
-    print(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Start postprocessingi with job-ID  {parser_args.id} at " +
+          f"{dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')}")
 
     # read configuration files
     md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
@@ -108,8 +112,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_directory", "-data_dir", dest="data_dir", type=str, required=True,
                         help="Directory where test dataset (netCDF-file) is stored.")
-    parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
-                        help="Directory where results in form of plots are stored.")
     parser.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
                         help="Base directory where trained models are saved.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
@@ -121,6 +123,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", "-model_type", dest="model_type", default=None,
                         help="Name of model architecture. Only required if custom model architecture is not" +
                              "implemented in get_model_info-function (see postprocess.py)")
+    parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
 
     args = parser.parse_args()
     main(args)
