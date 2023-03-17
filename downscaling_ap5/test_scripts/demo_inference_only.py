@@ -42,7 +42,7 @@ def main(parser_args):
           f"{dt.datetime.strftime(dt.datetime.now(), '%Y-%m-%d %H:%M:%S')}")
 
     # read configuration files
-    md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
+    md_config_pattern, ds_config_pattern = f"config_{model_type}*.json", f"config_ds_{parser_args.dataset}.json"
     md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
@@ -62,7 +62,7 @@ def main(parser_args):
             hparams_dict = js.load(mdf)
 
     # read normalization file
-    js_norm = os.path.join(norm_dir, "norm.json")
+    js_norm = os.path.join(norm_dir, "zscore_norm.json")
     print("Read normalization file for subsequent data transformation.")
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
