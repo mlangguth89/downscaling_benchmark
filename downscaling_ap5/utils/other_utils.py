@@ -22,13 +22,14 @@ Some auxiliary functions for the project:
     * print_cpu_usage
     * get_memory_usage
     * get_max_memory_usage
+    * copy_filelist
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-03-10"
+__update__ = "2023-03-17"
 
 import os
 import gc
@@ -40,6 +41,7 @@ import pandas as pd
 import tensorflow as tf
 import datetime as dt
 from dateutil.parser import parse as date_parser
+import shutil
 from typing import Any, List, Union
 try:
     from collections import Iterable
@@ -333,3 +335,26 @@ def get_memory_usage():
 def get_max_memory_usage():
     """In bytes"""
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1000
+
+
+def copy_filelist(file_list: List, dest: str, labort: bool = True):
+    """
+    Copy a list of files to another directory
+    :param file_list: list of files to copy
+    :param dest: target directory to which files will be copied
+    :param labort: flag to trigger raising of an error (if False, only Warning-messages will be printed)
+    """
+    file_list = to_list(file_list)
+    if not os.path.isdir(dest) and labort:
+        raise NotADirectoryError(f"Cannot copy to non-existing directory '{dest}'.")
+    elif not os.path.isdir(dest) and not labort:
+        print(f"WARNING: Target directory for copying '{dest}' does not exist. Skip copy process...")
+
+    for f in file_list:
+        if os.path.isfile(f):
+            shutil.copy(f, dest)
+        else:
+            if labort:
+                raise FileNotFoundError(f"Could not find file '{f}'. Error will be raised.")
+            else:
+                print(f"WARNING: Could not find file '{f}'.")
