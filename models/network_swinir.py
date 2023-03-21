@@ -680,8 +680,10 @@ class SwinIR(nn.Module):
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
                  use_checkpoint=False, upscale=4, img_range=1., upsampler='', resi_connection='1conv',
+                 dataset_type="precipitation",
                  **kwargs):
         super(SwinIR, self).__init__()
+        self.dataset_type = dataset_type
         num_in_ch = in_chans
         num_out_ch = 1 # in_chans
         num_feat = 96
@@ -842,8 +844,9 @@ class SwinIR(nn.Module):
 
     def forward(self, x):
         # remap for the first upsampling
-        x = self.upsampling_first(x)
-
+        if self.dataset_type == "precipitation":
+            x = self.upsampling_first(x)
+        
         H, W = x.shape[2:]
         x = self.check_image_size(x)
         self.mean = self.mean.type_as(x)
