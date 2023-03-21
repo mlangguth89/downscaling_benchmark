@@ -580,9 +580,9 @@ class PatchEmbed(nn.Module):
         # FIXME look at relaxing size constraints
         assert H == self.img_size[0] and W == self.img_size[1], \
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
-        print("x before embedding",x.shape)
-        print("x after project", self.proj(x).shape)
-        x = self.proj(x)
+        #print("x before embedding",x.shape)
+        #print("x after project", self.proj(x).shape)
+        x = self.proj(x) #[1600, 96
         #flatten(2).transpose(1, 2)  # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
@@ -622,7 +622,7 @@ class SwinTransformerSys(nn.Module):
     """
 
     def __init__(self, img_size=224, patch_size=4, in_chans=10, num_classes =1000,
-                 embed_dim=96, depths=[2, 2], depths_decoder=[1, 2], num_heads=[3, 6, 12, 24],
+                 embed_dim=96, depths=[2, 2,1], depths_decoder=[1, 2,2], num_heads=[3, 6, 12, 24],
                  window_size=7, mlp_ratio=4., qkv_bias=True, qk_scale=None,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
@@ -634,6 +634,7 @@ class SwinTransformerSys(nn.Module):
 
         self.num_classes = num_classes
         self.num_layers = len(depths)
+        #print("number layers is ", self.num_layers)
         self.embed_dim = embed_dim
         self.ape = ape
         self.patch_norm = patch_norm
@@ -737,17 +738,17 @@ class SwinTransformerSys(nn.Module):
     #Encoder and Bottleneck
     def forward_features(self, x):
         x = self.patch_embed(x)
-        print("x after patch embd", x.shape)
+        #print("x after patch embd", x.shape)
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
         x_downsample = []
         count = 0
         for layer in self.layers:
-            print("Layer:", count+1)
+            #print("Layer:", count+1)
             x_downsample.append(x)
             x = layer(x)
-            print("layer shape:",x.shape)
+            #print("layer shape:",x.shape)
             count = count + 1
         x = self.norm(x)  # B L C
   
@@ -783,14 +784,16 @@ class SwinTransformerSys(nn.Module):
     def forward(self, x):
         # remap for the first upsampling
         x = self.upsampling_first(x) # 16x16->160x160
-        print('x after upsampling_first: {}'.format(x.shape))
-        x, x_downsample = self.forward_features(x)
-        print('x after downsample: {}'.format(x.shape))
-        print("x_downsample", x_downsample[0].shape)
+        #print('x after upsampling_first: {}'.format(x.shape))
+        x, x_downsample = self.forward_features(x) # x: [400, 192], x_downscample: [1600, 96]
+        #print('x after downsample: {}'.format(x.shape))
+        #print("x_downsample, layer 0", x_downsample[0].shape)
+        #print("x_downsample, layer 1", x_downsample[1].shape)
+        #print("x_downsample, layer 2", x_downsample[2].shape)
         x = self.forward_up_features(x,x_downsample)
-        print('x after forward_up_features: {}'.format(x.shape))
+        #print('x after forward_up_features: {}'.format(x.shape))
         x = self.up_x4(x)
-        print('x after up_x4: {}'.format(x.shape))
+        #print('x after up_x4: {}'.format(x.shape))
 
         return x
 
