@@ -15,26 +15,27 @@ generator.
 """
 # doc-string
 
-import os, glob
-from typing import Union, List
-import subprocess as sp
-import logging
-import datetime as dt
-import numpy as np
-import pandas as pd
-import xarray as xr
 from collections import OrderedDict
-# from tfrecords_utils import IFS2TFRecords
-from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
-from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
-from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
-from other_utils import to_list, last_day_of_month, flatten, remove_files
+import datetime as dt
+import glob
+import logging
+import os
+import subprocess as sp
+from typing import Union, List
 
+import pandas as pd
+
+# from tfrecords_utils import IFS2TFRecords
+from abstract_preprocess import CDOGridDes
+from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
+from tools_utils import CDO
+from other_utils import to_list, last_day_of_month, remove_files
+
+from aux_funcs import add_varname_suffix, check_crea6_files, get_varnames_from_mlvars, manage_filemerge, organize_predictands, organize_predictors, preprocess_crea6_tar, preprocess_era5_in, remap_and_merge_data, run_preproc_func
 number = Union[float, int]
 num_or_List = Union[number, List[number]]
 list_or_tuple = Union[List, tuple]
 list_or_dict = Union[List, dict]
-
 
 class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
@@ -111,13 +112,13 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                                     .format(invar_file_crea6))
 
         # get lists of predictor and predictand variables
-        sfvars_era5, mlvars_era5, fc_sfvars_era5, fc_mlvars_era5 = PreprocessERA5toIFS.organize_predictors(predictors)
+        sfvars_era5, mlvars_era5, fc_sfvars_era5, fc_mlvars_era5 = organize_predictors(predictors)
         
-        all_predictors = to_list(sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
-                         to_list(fc_sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
+        all_predictors = to_list(sfvars_era5) + get_varnames_from_mlvars(mlvars_era5) + \
+                         to_list(fc_sfvars_era5) + get_varnames_from_mlvars(fc_mlvars_era5)
         all_predictors = [e for e in all_predictors if e]
 
-        sfvars_crea6, const_vars_crea6 = PreprocessERA5toCREA6.organize_predictands(predictands)
+        sfvars_crea6, const_vars_crea6 = organize_predictands(predictands)
         all_predictands = [e for e in sfvars_crea6 + const_vars_crea6 if e]
 
         # append list of surface variables in case that 2m temperature (2t) is involved for special remapping approach
@@ -141,7 +142,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             subdir = year_month.strftime("%Y-%m")
             dir_curr_era5 = os.path.join(dirin_era5, year_str, month_str)
-            _ = PreprocessERA5toCREA6.check_crea6_files(dirin_crea6, invar_file_crea6, subdir, sfvars_crea6, const_vars_crea6)
+            _ = check_crea6_files(dirin_crea6, invar_file_crea6, subdir, sfvars_crea6, const_vars_crea6)
             dest_dir = os.path.join(dirout, "netcdf_data", year_str, subdir)
             final_file_era5 = os.path.join(dest_dir, "preproc_era5_{0}.nc".format(subdir))
             final_file = final_file_era5.replace("preproc_era5_", "preproc_")
@@ -168,7 +169,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                     # Skip time step if file already exists
                     if os.path.isfile(hourly_file_era5): continue
 
-                    lfail, nwarn = PreprocessERA5toIFS.preprocess_era5_in(dirin_era5, invar_file_era5, hourly_file_era5,
+                    lfail, nwarn = preprocess_era5_in(dirin_era5, invar_file_era5, hourly_file_era5,
                                                                           date2op, sfvars_era5, mlvars_era5, fc_sfvars_era5,
                                                                           fc_mlvars_era5, logger, nwarn, max_warn)
 
@@ -188,76 +189,21 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             # process COSMO-REA6 doata which is already organized in monthly files
             final_file_crea6, nwarn = \
-                PreprocessERA5toCREA6.preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar, dest_dir,
+                preprocess_crea6_tar(dirin_crea6, invar_file_crea6, grid_des_tar, dest_dir,
                                                            year_month, sfvars_crea6, const_vars_crea6, logger, nwarn,
                                                            max_warn)
 
             # finally merge the ERA5- and the COSMO REA6-data
-            PreprocessERA5toIFS.remap_and_merge_data(final_file_era5, final_file_crea6, final_file, grid_des_coarse,
+            remap_and_merge_data(final_file_era5, final_file_crea6, final_file, grid_des_coarse,
                                                      grid_des_tar, all_predictors, all_predictands, nwarn, max_warn)
 
             # rename input-variables
-            PreprocessERA5toIFS.add_varname_suffix(final_file, all_predictors, "_in")
+            add_varname_suffix(final_file, all_predictors, "_in")
 
         return nwarn
-
-    @staticmethod
-    def organize_predictands(predictands: dict) -> (List, List):
-        """
-        Organizes predictands from COSMO-REA6 dataset. Currently, only 2D variables and invariant data are supported.
-        !!! To-Do !!!
-        3D variables incl. interpolation (on pressure-levels) has to be integrated
-        !!! To-Do !!
-        :param predictands: dictionary for predictands with the form {"2D", {"t_2m"}}
-        """
-        known_vartypes = ["2D", "const"]
-
-        pred_vartypes = list(predictands.keys())
-        lpred_vartypes = [pred_vartype in known_vartypes for pred_vartype in pred_vartypes]
-        if not all(lpred_vartypes):
-            unknown_vartypes = [pred_vartypes[i] for i, flag in enumerate(lpred_vartypes) if not flag]
-            raise ValueError("The following variables types in the predictands-dictionary are not supported: {0}"
-                             .format(", ".join(unknown_vartypes)))
-
-        vars_2d, vars_const = predictands.get("2D", None), predictands.get("const", None)
-        vars_2d = [var_2d.upper() for var_2d in vars_2d]
-        vars_const = [var_const.upper() for var_const in vars_const]
-
-        return vars_2d, vars_const
-
-    @staticmethod
-    def check_crea6_files(indir: str, const_file: str, yr_month: str, vars_2d: List, const_vars: List):
-        """
-        Checks if required predictands are available from the COSMO-REA6 dataset.
-        Data is expected to live in monthly netCDF-files within subdirectories named as the variable of interest.
-        For invariant data, the information is mandatory in the invariant file of the COSMO-REA6 dataset.
-        :param indir: Directory under which COSMO-REA6 data is stored
-        :param const_file: path to invariant datafile
-        :param yr_month: Date-string for which data is required; format YYYY-MM
-        :param vars_2d: list of 2D-variables serving as predictands
-        :param const_vars: list of invariant variables serving as predictands (must be part of const_file)
-        """
-        if vars_2d:
-            for var_2d in vars_2d:
-                var_2d = var_2d.capitalize()
-                dfile_2d = os.path.join(indir, "2D", var_2d, f"{var_2d}.2D.{yr_month}")
-                if not os.path.isfile(dfile_2d):
-                    FileNotFoundError(f"Could not find required file '{dfile_2d}' for predictand variable '{dfile_2d}'")
-
-        if const_vars:
-            fconsts = xr.open_dataset(const_file)
-            varlist = list(fconsts.keys())
-            stat = [cvar in varlist for cvar in const_vars]
-            if not all(stat):
-                miss_inds = np.where(not stat)
-                raise ValueError("The following variables cannot be found in the constant file '{0}': {1}"
-                                 .format(const_file, ",".join(list(np.array(const_vars)[miss_inds]))))
-
-        return True
-
-    @staticmethod
-    def preprocess_crea6_tar(dirin: str, invar_file: str, fgdes_tar: str, dest_dir: str, date2op: dt.datetime,
-                             vars_2d: List, const_vars: List, logger: logging.Logger, nwarn: int, max_warn):
+    
+    @classmethod
+    def preprocess_crea6_tar(cls, dirin: str, invar_file: str, fgdes_tar: str, dest_dir: str, date2op: dt.datetime, vars_2d: List, const_vars: List, logger: logging.Logger, nwarn: int, max_warn):
         """
         Process COSMO REA6-files based on requested 2D- and invariant variables.
         :param dirin: top-level directory where COSMO REA6-data are placed (under <year>/<year>-<month>/-subdirectories)
@@ -272,9 +218,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :param max_warn: maximum number of allowd warnings
         :return: path to processed netCDF-datafile and updated number of warnings
         """
-        cdo, ncrename = PreprocessERA5toCREA6.cdo, PreprocessERA5toCREA6.ncrename
-        ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
-
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         tmp_dir = os.path.join(dest_dir, "tmp_{0}".format(date_str))
         final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
@@ -292,43 +235,70 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if vars_2d:
             for var in vars_2d:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
                 dfile_in = os.path.join(dirin, "2D", var.upper(), f"{var.upper()}.2D.{date_str2}.grb")
-                nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_2d_file,
-                                                                           [dfile_in, dest_dir, date_str, gdes_tar],
-                                                                           {}, logger, nwarn, max_warn)
+                nwarn, file2merge = run_preproc_func(cls.process_2d_file, [dfile_in, dest_dir, date_str, gdes_tar], {}, logger, nwarn, max_warn)
 
                 if not file2merge:
                     lfail = True
                 else:
-                    filelist = PreprocessERA5toCREA6.manage_filemerge(filelist, file2merge, tmp_dir)
+                    filelist = manage_filemerge(filelist, file2merge, tmp_dir)
 
         if const_vars and not lfail:
-            nwarn, file2merge = PreprocessERA5toCREA6.run_preproc_func(PreprocessERA5toCREA6.process_const_file,
-                                                                       [invar_file, dest_dir, const_vars, date_str,
-                                                                        gdes_tar], {}, logger, nwarn, max_warn)
+            nwarn, file2merge = run_preproc_func(cls.process_const_file, [invar_file, dest_dir, const_vars, date_str, gdes_tar], {}, logger, nwarn, max_warn)
             if not file2merge:
                 lfail = True
             else:
-                filelist = PreprocessERA5toCREA6.manage_filemerge(filelist, file2merge, tmp_dir)
+                filelist = manage_filemerge(filelist, file2merge, tmp_dir)
 
         if lfail:
             nwarn = max_warn + 1
         else:
             # merge the data
-            cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
+            cls.cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
             # replicate constant data over all timesteps
             for const_var in const_vars:
-                ncap2.run([final_file, final_file], OrderedDict([("-A", ""),
-                                                                 ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
-                ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
-                ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
+                cls.ncap2.run([final_file, final_file], OrderedDict([("-A", ""),
+                                                                    ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
+                cls.ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
+                cls.ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
             # rename variables
-            PreprocessERA5toIFS.add_varname_suffix(final_file, vars_2d + const_vars, "_tar")
+            add_varname_suffix(final_file, vars_2d + const_vars, "_tar")
 
         return final_file, nwarn
+    
+    @classmethod
+    def process_const_file(cls, const_file: str, target_dir: str, const_vars: List, date_str: str, gdes_tar):
+        """
+        Process invariant variables of the COSMO-REA6 dataset, i.e. convert from grib to netCDF-format
+        and slice the data to the domain of interest.
+        :param const_file: input grib-file containing a 2D-variable of COSMO-REA6
+        :param target_dir: output-directory where processed file will be saved
+        :param const_vars: inariant variables of interest
+        :param date_str: date-string with format YYYY-MM indicating month of interest
+        :param gdes_tar: CDOGridDes-instance for the target domain
+        :return file_out: path to resulting ouput file
+        """
 
-    @staticmethod
-    def process_2d_file(file_2d: str, target_dir: str, date_str: str, gdes_tar):
+        const_vars = to_list(const_vars)
+
+        # retrieve grid information from CDOGridDes-instance
+        gdes_dict = gdes_tar.grid_des_dict
+
+        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]), *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
+        lonlatbox_str = ",".join("{:.3f}".format(coord) for coord in lonlatbox)
+
+        # sanity check
+        if not os.path.isfile(const_file):
+            FileNotFoundError(f"Could not find required COSMO-REA6 file '{const_file}'.")
+        # retrieve variable name back from path to file
+        dfile_out = os.path.join(target_dir, f"const_{date_str}.nc")
+
+        cls.cdo.run([const_file, dfile_out], OrderedDict([("selname", ",".join(const_vars)), ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
+
+        return dfile_out
+    
+    @classmethod
+    def process_2d_file(cls, file_2d: str, target_dir: str, date_str: str, gdes_tar):
         """
         Process 2D-variables of the COSMO-REA6 dataset, i.e. convert from grib to netCDF-format
         and slice the data to the domain of interest.
@@ -338,13 +308,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :param gdes_tar: CDOGridDes-instance for the target domain
         :return file_out: path to resulting ouput file
         """
-        cdo, ncrename = PreprocessERA5toCREA6.cdo, PreprocessERA5toCREA6.ncrename
-
         # retrieve grid information from CDOGridDes-instance
         gdes_dict = gdes_tar.grid_des_dict
 
-        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]),
-                     *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
+        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]), *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
         lonlatbox_str = ",".join("{:.3f}".format(coord) for coord in lonlatbox)
 
         # sanity check
@@ -359,47 +326,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         # A remapping step is applied to avoid spurious differences in the underlying coordinates compared to the
         # remapped ERA5-data due to precision issues. Clearly, the user has to ensure that the grid description file
         # actually fits to the data at hand to avoid undesired remapping effects.
-        cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""),
-                                                   ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
+        cls.cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""), ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
 
         # rename varibale in resulting file (must be done in hacky manner)
         varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
         varname = varname.lstrip("'b").split("\\n")[0].strip()
 
-        ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
-
-        return dfile_out
-
-    @staticmethod
-    def process_const_file(const_file: str, target_dir: str, const_vars: List, date_str: str, gdes_tar):
-        """
-        Process invariant variables of the COSMO-REA6 dataset, i.e. convert from grib to netCDF-format
-        and slice the data to the domain of interest.
-        :param const_file: input grib-file containing a 2D-variable of COSMO-REA6
-        :param target_dir: output-directory where processed file will be saved
-        :param const_vars: inariant variables of interest
-        :param date_str: date-string with format YYYY-MM indicating month of interest
-        :param gdes_tar: CDOGridDes-instance for the target domain
-        :return file_out: path to resulting ouput file
-        """
-        cdo = PreprocessERA5toCREA6.cdo
-
-        const_vars = to_list(const_vars)
-
-        # retrieve grid information from CDOGridDes-instance
-        gdes_dict = gdes_tar.grid_des_dict
-
-        lonlatbox = (*gdes_tar.get_slice_coords(gdes_dict["xfirst"], gdes_dict["xinc"], gdes_dict["xsize"]),
-                     *gdes_tar.get_slice_coords(gdes_dict["yfirst"], gdes_dict["yinc"], gdes_dict["ysize"]))
-        lonlatbox_str = ",".join("{:.3f}".format(coord) for coord in lonlatbox)
-
-        # sanity check
-        if not os.path.isfile(const_file):
-            FileNotFoundError(f"Could not find required COSMO-REA6 file '{const_file}'.")
-        # retrieve variable name back from path to file
-        dfile_out = os.path.join(target_dir, f"const_{date_str}.nc")
-
-        cdo.run([const_file, dfile_out], OrderedDict([("selname", ",".join(const_vars)),
-                                                      ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
+        cls.ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
 
         return dfile_out

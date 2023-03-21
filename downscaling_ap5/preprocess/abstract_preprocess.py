@@ -4,9 +4,10 @@ __date__ = "2022-03-16"
 __update__ = "2022-04-29"
 
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 import numpy as np
 import xarray as xr
+from aux_funcs import check_gdes_dict
 from other_utils import get_func_kwargs, remove_key_from_dict
 
 
@@ -65,20 +66,21 @@ class AbstractPreprocessing(ABC):
         run_kwargs = get_func_kwargs(self.preprocess_worker, kwargs)
         pystager_instance.run(*run_dict["args"], **run_dict["kwargs"], **run_kwargs)
 
+    @abstractmethod
     def prepare_worker(self, worker, *args, **kwargs):
         """
         Method to prepare worker, i.e. required work to run parallelized preprocessing (see also __call__-method).
         :return: Initialized PyStager-instance as well as arguments and keyword arguments to set-up PyStager
         """
-        raise NotImplementedError(self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__))
 
+    @abstractmethod
     def preprocess_worker(self):
         """
         Worker task to perform (parallelized) preprocessing.
         :return: -
         """
-        raise NotImplementedError(self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__))
 
+# => validation => implement somewhere else
     @staticmethod
     def check_target_dir(target_dir):
         method = AbstractPreprocessing.check_target_dir.__name__
@@ -95,47 +97,7 @@ class AbstractPreprocessing(ABC):
 
         return target_dir
 
-    @staticmethod
-    def merge_two_netcdf(nc1: str, nc2: str, nc_tar: str, merge_dim: str ="time"):
-        """
-        Merge datasets from two netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in both
-        datasets must not coincide, but can overlap. The data will then be merged for the intersection of both datums.
-        :param nc1: path to first netCDF-file to merge; dataset must include dimension merge_dim
-        :param nc2: path to second netCDF-file to merge; dataset must include dimension merge_dim
-        :param merge_dim: name of dimension along which datsets will be merged
-        :param nc_tar: path to netCDf-file of merged dataset
-        :return stat: status if merging was successful
-        """
-        ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
-
-        times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
-        joint_times = sorted(list(set(times1) & set(times2)))
-
-        stat = True
-        #try:
-        if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
-        ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
-        ds_merged.to_netcdf(nc_tar)
-        #except:
-        #    stat = False
-
-        return stat
-
-
-
-
-
-    @classmethod
-    def print_implement_err(cls, method):
-        """
-        Return error sring for required functions that are not implemented yet.
-        :param method: Name of method
-        :return: error-string
-        """
-        err_str = "%{0}: Method {1} not implemented yet. Cannot continue.".format(cls.__name__, method)
-
-        return err_str
-
+# ------------------------------------------------------------------------------------------------------ (grid des => implement in dataset_utils)
 
 class CDOGridDes(ABC):
     """
@@ -169,7 +131,7 @@ class CDOGridDes(ABC):
                              " or gdes_dict (grid description dictionary).")
         
         # use dictionary comprehension to remove 
-        CDOGridDes.check_gdes_dict(remove_key_from_dict(self.grid_des_dict, "file") , lbreak=True)
+        check_gdes_dict(remove_key_from_dict(self.grid_des_dict, "file") , lbreak=True)
 
     def write_grid_des_from_dict(self, filename: str, other_dict: dict = None):
         """
@@ -272,98 +234,5 @@ class CDOGridDes(ABC):
 
         return coarse_grid_des
 
-    @staticmethod
-    def check_gdes_dict(grid_des_dict, lbreak=False):
-        """
-        Check if grid description dictionary only contains valid keys.
-        :param grid_des_dict: the grid description dictionary to be checked.
-        :param lbreak: Flag if error should be raised. Alternatively, a warning is printed.
-        :return: -
-        """
 
-        method = CDOGridDes.check_gdes_dict.__name__
-
-        assert isinstance(grid_des_dict, dict), "%{0}: Grid description must be a dictionary.".format(method)
-
-        gdes_keys = list(grid_des_dict.keys())
-        gdes_keys_stat = [key_req in CDOGridDes.valid_keys for key_req in gdes_keys]
-
-        if not all(gdes_keys_stat):
-            invalid_keys = [gdes_keys[i] for i in range(len(gdes_keys)) if not gdes_keys_stat[i]]
-            err_str = "%{0}: The following keys are not valid: {1}".format(method, ", ".join(invalid_keys))
-            if lbreak:
-                raise ValueError(err_str)
-            else:
-                print("WARNING: " + err_str)
-
-    @staticmethod
-    def read_grid_des(grid_des_file):
-        """
-        Read CDO grid description file and put data into dictionary.
-        :param grid_des_file: the grid description file to be read
-        :return: dictionary with key-values from grid description parameters
-                 (e.g. gridtype = lonlat -> {"gridtype": "lonlat"}).
-        """
-        method = CDOGridDes.read_grid_des.__name__
-
-        if not os.path.isfile(grid_des_file):
-            raise FileNotFoundError("%{0}: Cannot find grid description file '{1}'.".format(method, grid_des_file))
-
-        # read the file ...
-        with open(grid_des_file, "r") as fgdes:
-            lines = fgdes.readlines()
-
-        # and put data into dictionary
-        grid_des_dict = CDOGridDes.griddes_lines_to_dict(lines)
-
-        if not grid_des_file:
-            raise ValueError("%{0}: Dictionary from grid description file '{1}' is empty. Please check input."
-                             .format(method, grid_des_file))
-        else:
-            grid_des_dict["file"] = grid_des_file
-
-        return grid_des_dict
-
-    @staticmethod
-    def merge_dicts(first_dict, other_dict, create_copy: bool = False):
-        """
-        Merges two dicts. Keys that reside in both dictionaries are taken from the first dictionary.
-        :param first_dict: first dictionary to be merged
-        :param other_dict: second dictionary to be merged
-        :param create_copy: Creates a new copy if True. If False, changes other_dict in-place!
-        :return: merged dictionary
-        """
-        if create_copy:
-            new_dict = other_dict.copy()
-        else:
-            new_dict = other_dict
-
-        for key in first_dict.keys():
-            new_dict[key] = first_dict[key]
-
-        return new_dict
-
-    @staticmethod
-    def griddes_lines_to_dict(lines):
-        """
-        Converts lines read from CDO grid description files into dictionary.
-        :param lines: the lines-list obtained from readlines-method on grid description file.
-        :return: dictionary with data from file
-        """
-        dict_out = {}
-        for line in lines:
-            splitted = line.replace("\n", "").split("=")
-            if len(splitted) == 2:
-                dict_out[splitted[0].strip()] = splitted[1].strip()
-
-        return dict_out
-
-    @staticmethod
-    def get_slice_coords(coord0, dx, n, d=4):
-        """
-        Small helper to get coords for slicing
-        """
-        coord0 = np.float(coord0)
-        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - .5) * np.float(dx), decimals=d))
-        return np.amin(coords), np.amax(coords)
 

@@ -12,19 +12,24 @@ https://www.maelstrom-eurohpc.eu/content/docs/upload/doc6.pdf
 """
 # doc-string
 
-import os, glob
-import shutil
+from collections import OrderedDict
+import datetime as dt
+import glob
 import logging
 import numbers
-import datetime as dt
+import os
+import shutil
+
 import numpy as np
-from collections import OrderedDict
 from typing import Union, List
+
 #from tfrecords_utils import IFS2TFRecords
+from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from other_utils import to_list
 from pystager_utils import PyStager
-from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
+
+from aux_funcs import process_one_file
 
 number = Union[float, int]
 num_or_List = Union[number, List[number]]
@@ -90,6 +95,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
         return preprocess_pystager, run_dict
 
+    # !!! doesnt match method signature
     @staticmethod
     def preprocess_worker(year_months: list, dir_in: str, dir_out: str, gdes_dict: dict, logger: logging.Logger,
                           nmax_warn: int = 3, hour: int = None):
@@ -149,7 +155,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
                 logger.info("%{0}: Start remapping of data from file '{1}' ({2:d}/{3:d})"
                             .format(method, nc_file, i+1, nfiles))
                 try:
-                    _ = Preprocess_Unet_Tier1.process_one_file(nc_file, grid_des_tar, grid_des_coarse, grid_des_base)
+                    _ = process_one_file(nc_file, grid_des_tar, grid_des_coarse, grid_des_base)
                     nc_file_new = os.path.basename(nc_file).replace(".nc", "_remapped.nc")
                     shutil.move(nc_file.replace(".nc", "_remapped.nc"), os.path.join(dest_nc_dir, nc_file_new))
                     logger.info("%{0} Data has been remapped successfully and moved to '{1}'-directory."
@@ -186,92 +192,7 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
 
         return nwarns
 
-    @staticmethod
-    def process_one_file(nc_file_in: str, grid_des_tar: dict, grid_des_coarse: dict, grid_des_base: dict):
-        """
-        Preprocess one netCDF-datafile.
-        :param nc_file_in: input netCDF-file to be preprocessed.
-        :param grid_des_tar: dictionary for grid description of target data
-        :param grid_des_coarse: dictionary for grid description of coarse data
-        :param grid_des_base: dictionary for grid description of auxiliary data
-        """
-        method = Preprocess_Unet_Tier1.process_one_file.__name__
-
-        # sanity check
-        if not os.path.isfile(nc_file_in): raise FileNotFoundError("%{0}: Could not find netCDF-file '{1}'."
-                                                                   .format(method, nc_file_in))
-        # hard-coded constants [IFS-specific parameters (from Chapter 12 in http://dx.doi.org/10.21957/efyk72kl)]
-        cpd, g = 1004.709, 9.80665
-        # get path to grid description files
-        kf = "file"
-        fgrid_des_base, fgrid_des_coarse, fgrid_des_tar = grid_des_base[kf], grid_des_coarse[kf], grid_des_tar[kf]
-        # get parameters
-        lon0_b, lon1_b = Preprocess_Unet_Tier1.get_slice_coords(grid_des_base["xfirst"], grid_des_base["xinc"],
-                                                                grid_des_base["xsize"])
-        lat0_b, lat1_b = Preprocess_Unet_Tier1.get_slice_coords(grid_des_base["yfirst"], grid_des_base["yinc"],
-                                                                grid_des_base["ysize"])
-        lon0_tar, lon1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["xfirst"], grid_des_tar["xinc"],
-                                                                    grid_des_tar["xsize"])
-        lat0_tar, lat1_tar = Preprocess_Unet_Tier1.get_slice_coords(grid_des_tar["yfirst"], grid_des_tar["yinc"],
-                                                                    grid_des_tar["ysize"])
-        # initialize tools
-        cdo, ncrename, ncap2, ncks, ncea = CDO(), NCRENAME(), NCAP2(), NCKS(), NCEA()
-
-        fname_base = nc_file_in.rstrip(".nc")
-
-        # start processing chain
-        # slice data to region of interest and relevant lead times
-        nc_file_sd = fname_base + "_subdomain.nc"
-        ncea.run([nc_file_in, nc_file_sd],
-                 OrderedDict([("-O", ""), ("-d", ["time,0,11", "latitude,{0},{1}".format(lat0_b, lat1_b),
-                                                  "longitude,{0},{1}".format(lon0_b, lon1_b)])]))
-
-        ncrename.run([nc_file_sd], OrderedDict([("-d", ["latitude,lat", "longitude,lon"]),
-                                                ("-v", ["latitude,lat", "longitude,lon"])]))
-        ncap2.run([nc_file_sd, nc_file_sd], OrderedDict([("-O", ""), ("-s", "\"lat=double(lat); lon=double(lon)\"")]))
-
-        # calculate dry static energy fir first-order conservative remapping
-        nc_file_dse = fname_base + "_dse.nc"
-        ncap2.run([nc_file_sd, nc_file_dse], OrderedDict([("-O", ""), ("-s", "\"s={0}*t2m+z+{1}*2\"".format(cpd, g)),
-                                                          ("-v", "")]))
-        # add surface geopotential to file
-        ncks.run([nc_file_sd, nc_file_dse], OrderedDict([("-A", ""), ("-v", "z")]))
-
-        # remap the data (first-order conservative approach)
-        nc_file_crs = fname_base + "_coarse.nc"
-        cdo.run([nc_file_dse, nc_file_crs], OrderedDict([("remapcon", fgrid_des_coarse), ("-setgrid", fgrid_des_base)]))
-
-        # remap with extrapolation on the target high-resolved grid with bilinear remapping
-        nc_file_remapped = fname_base + "_remapped.nc"
-        cdo.run([nc_file_crs, nc_file_remapped], OrderedDict([("remapbil", fgrid_des_tar),
-                                                              ("-setgrid", fgrid_des_coarse)]))
-        # retransform dry static energy to t2m
-        ncap2.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""),
-                                                                     ("-s", "\"t2m_in=(s-z-{0}*2)/{1}\"".format(g, cpd)),
-                                                                     ("-o", "")]))
-        # finally rename data to distinguish between input and target data
-        # (the later must be copied over from previous files)
-        ncrename.run([nc_file_remapped], OrderedDict([("-v", "z,z_in")]))
-        ncks.run([nc_file_remapped, nc_file_remapped], OrderedDict([("-O", ""), ("-x", ""), ("-v", "s")]))
-        # NCEA-bug with NCO/4.9.5: Add slide offset to lon1_tar to avoid corrupted data in appended file
-        # (does not affect slicing at all)
-        lon1_tar = lon1_tar + np.float(grid_des_tar["xinc"])/10.
-        ncea.run([nc_file_sd, nc_file_remapped], OrderedDict([("-A", ""),
-                                                              ("-d", ["lat,{0},{1}".format(lat0_tar, lat1_tar),
-                                                                      "lon,{0},{1}".format(lon0_tar, lon1_tar)]),
-                                                               ("-v", "t2m,z")]))
-        ncrename.run([nc_file_remapped], OrderedDict([("-v", ["t2m,t2m_tar", "z,z_tar"])]))
-
-        if os.path.isfile(nc_file_remapped):
-            print("%{0}: Processed data successfully from '{1}' to '{2}'. Cleaning-up..."
-                  .format(method, nc_file_in, nc_file_remapped))
-            for f in [nc_file_sd, nc_file_dse, nc_file_crs]:
-                os.remove(f)
-        else:
-            raise RuntimeError("%{0}: Something went wrong when processing '{1}'. Check intermediate files."
-                               .format(method, nc_file_in))
-
-        return True
+    
 
 
 
