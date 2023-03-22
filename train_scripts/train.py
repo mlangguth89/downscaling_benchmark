@@ -20,7 +20,9 @@ import wandb
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cuda = True if torch.cuda.is_available() else False
-Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+#Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
+
+pname = "./logs/profile"
 
 
 class BuildModel:
@@ -90,7 +92,6 @@ class BuildModel:
     # define loss
     # ----------------------------------------
     def define_loss(self):
-
         if self.G_lossfn_type == 'l1':
             self.G_lossfn = nn.L1Loss()
         elif self.G_lossfn_type == 'l2':
@@ -144,8 +145,7 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data):
-        self.L = data['L'].cuda()#.to(torch.half)
-        print("Self.L type",type(self.L))
+        self.L = data['L'].cuda()
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)
             self.L = upsampling(self.L)
@@ -248,9 +248,9 @@ class BuildModel:
                 # 3) optimize parameters
                 # -------------------------------
                 self.optimize_parameters()
-
+              
                 # -------------------------------
-                # 6) Save model
+                # 4) Save model
                 # -------------------------------
                 if current_step % self.save_freq == 0:
                     self.save(current_step)

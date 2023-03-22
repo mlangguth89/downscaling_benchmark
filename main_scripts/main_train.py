@@ -46,10 +46,8 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         checkpoint_save: int = 200,
         epochs: int = 2,
         type_net: str = "unet",
-        upscale_swinIR: int = 4,
-        upsampler_swinIR: str = "pixelshuffle",
         dataset_type: str = "temperature",
-        batch_size: int = 32,
+        batch_size: int = 2,
         args: dict = None,
         **kwargs):
 
@@ -69,9 +67,11 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 
     wandb.run.name = type_net
     if dataset_type=="precipitation":
-        n_channels = 10
+        n_channels = 8
+        upscale=4
     elif dataset_type == "temperature":
         n_channels = 9
+        upscale=1
     train_loader = create_loader(train_dir, 
                                  batch_size = batch_size,
                                  patch_size=16, 
@@ -85,14 +85,15 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                                dataset_type=dataset_type)
     print("The model {} is selected for training".format(type_net))
     if type_net == "unet":
-        netG = unet(n_channels = n_channels)
+        netG = unet(n_channels = n_channels,dataset_type=dataset_type)
     elif type_net == "swinIR":
-        netG = swinIR(img_size=16,
+        netG = swinIR( dataset_type=dataset_type,
+                     img_size=16,
                       patch_size=4,
                       in_chans=n_channels,
                       window_size=2,
-                      upscale=upscale_swinIR,
-                      upsampler=upsampler_swinIR)
+                      upscale=upscale,
+                      upsampler= "pixelshuffle")
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
@@ -101,10 +102,10 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
                         in_chans=n_channels,
                         num_classes=1, 
                         embed_dim=96, 
-                        depths=[2, 2],
-                        depths_decoder=[2, 2], 
+                        depths=[2, 2, 2],
+                        depths_decoder=[1,2, 2], 
                         num_heads=[6, 6, 6],
-                        window_size=4,
+                        window_size=5,
                         mlp_ratio=4, 
                         qkv_bias=True, 
                         qk_scale=None,
@@ -141,7 +142,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         print("Total trainalbe parameters of the critic:", netC_params)
     else:
         print("Total trainalbe parameters:", netG_params)
-
 
 
     if type_net == "wgan":
@@ -181,7 +181,7 @@ def main():
     parser.add_argument("--val_dir", type = str, required = True,
                         help = "The directory where validation data (.nc files) are stored")
     parser.add_argument("--save_dir", type = str, help = "The checkpoint directory")
-    parser.add_argument("--batch_size", type=int, default=8, help="batch size")
+    parser.add_argument("--batch_size", type=int, default=16, help="batch size")
     parser.add_argument("--epochs", type = int, default = 2, help = "The checkpoint directory")
     parser.add_argument("--model_type", type = str, default = "unet", help = "The model type: unet, swinir")
     parser.add_argument("--dataset_type", type=str, default="precipitation",
