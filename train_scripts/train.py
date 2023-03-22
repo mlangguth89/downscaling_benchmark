@@ -144,7 +144,7 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data):
-        self.L = data['L'].cuda().to(torch.half)
+        self.L = data['L'].cuda()#.to(torch.half)
         print("Self.L type",type(self.L))
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)

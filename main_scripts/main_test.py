@@ -206,11 +206,15 @@ def main():
                 attrs = dict(description = "Precipitation downscaling data."),
                 )
 
-
-
         os.makedirs(args.save_dir,exist_ok=True)
-        ds.to_netcdf(os.path.join(args.save_dir,'prcp_downs_'+args.model_type+'.nc'))
 
+        # ds.to_netcdf(os.path.join(args.save_dir,'prcp_downs_'+args.model_type+'.nc'))
+
+        months, datasets = zip(*ds.groupby("time.month"))
+        save_paths = [os.path.join(args.save_dir,'prcp_downs_'+args.model_type+f'_{y}.nc') for y in months]
+        print('save_paths: {}'.format(save_paths))
+        xr.save_mfdataset(datasets, save_paths)
+        
 if __name__ == '__main__':
     cuda = torch.cuda.is_available()
     if cuda:
