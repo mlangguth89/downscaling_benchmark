@@ -21,6 +21,10 @@ echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
+# environmental variables to support cpus_per_task with Slurm>22.05
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export SRUN_CPUS_PER_TASK="${SLURM_CPUS_PER_TASK}"
+
 # basic directories
 WORK_DIR=$(pwd)
 BASE_DIR=$(dirname "${WORK_DIR}")
@@ -30,7 +34,7 @@ VENV_DIR=${BASE_DIR}/virtual_envs/
 VIRT_ENV_NAME=<my_venv>
 
 # Loading mouldes
-source ../env_setup/modules.sh
+source ../env_setup/modules_jsc.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
    if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
@@ -44,11 +48,11 @@ fi
 
 
 # data-directories 
-# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
-outdir=<my_outdir>
-js_model_conf=${WORK_DIR}/config_unet.json
-js_ds_conf=${WORK_DIR}/config_ds_tier2.json
+# Adapt accordingly for your dataset
+indir=<my_input_dir>
+outdir=${BASE_DIR}/trained_models/
+js_model_conf=${BASE_DIR}/config/config_unet.json
+js_ds_conf=${BASE_DIR}/config_ds_tier2.json
 
 model=unet
 dataset=tier2
