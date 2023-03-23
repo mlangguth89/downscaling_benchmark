@@ -94,10 +94,10 @@ class WGAN(keras.Model):
         self.savedir = savedir
 
         # instantiate submodels
-        tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
+        tar_shape = (*self.shape_in[:-1], self.hparams["n_predictands"])   # critic only accounts for dynamic variables
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
-                                        z_branch=self.hparams["z_branch"])
+                                        n_predictands=self.hparams["n_predictands"], z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 
         # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
@@ -190,16 +190,19 @@ class WGAN(keras.Model):
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
                 ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
-                # critic only operates on first channel
-                predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
+                # critic only operates on predictand channels
+                if self.hparams["n_predictands"] > 1:
+                    predictands_critic = predictands[ist:ie, :, :, 0:self.hparams["n_predictands"]-1]
+                else:
+                    predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
                 # generate (downscaled) data
                 gen_data = self.generator(predictors[ist:ie, ...], training=True)
                 # calculate critics for both, the real and the generated data
-                critic_gen = self.critic(gen_data[..., 0], training=True)
+                critic_gen = self.critic(gen_data[..., 0:self.hparams["n_predictands"]], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = WGAN.critic_loss(critic_gt, critic_gen)
-                gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:1])
+                gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:self.hparams["n_predictands"]])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
@@ -212,7 +215,7 @@ class WGAN(keras.Model):
             # generate (downscaled) data
             gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
-            critic_gen = self.critic(gen_data[..., 0], training=True)
+            critic_gen = self.critic(gen_data[..., 0:self.hparams["n_predictands"]], training=True)
             cg_loss = WGAN.critic_gen_loss(critic_gen)
             rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
 
@@ -252,7 +255,7 @@ class WGAN(keras.Model):
         :return: gradient penalty
         """
         # get mixture of generated and ground truth data
-        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, self.hparams["n_predictands"]], 0., 1.)
         mix_data = real_data + alpha * (gen_data - real_data)
 
         with tf.GradientTape() as gp_tape:
@@ -270,12 +273,8 @@ class WGAN(keras.Model):
     def recon_loss(self, real_data, gen_data):
         # initialize reconstruction loss
         rloss = 0.
-        # get number of output heads (=2 if z_branch is activated)
-        n = 1
-        if self.hparams["z_branch"]:
-            n = 2
         # get MAE for all output heads
-        for i in range(n):
+        for i in range(self.hparams["n_predictands"]):
             rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[..., i]) - real_data[..., i]))
 
         return rloss
@@ -362,7 +361,7 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "var_tar2in": ""}
+                        "lscheduled_train": True, "var_tar2in": "", "n_predictands": 2}
 
         return hparams_dict
 
