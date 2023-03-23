@@ -33,12 +33,10 @@ import wandb
 os.environ["WANDB_MODE"]="offline"
 ##os.environ["WANDB_API_KEY"] = key
 wandb.init(project="Precip_downscaling",reinit=True)
-
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print("device",device)
 
 available_models = ["unet", "wgan", "diffusion", "swinIR","swinUnet"]
-
 
 def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/train",
         val_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom/val",
@@ -87,13 +85,13 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
     if type_net == "unet":
         netG = unet(n_channels = n_channels,dataset_type=dataset_type)
     elif type_net == "swinIR":
-        netG = swinIR( dataset_type=dataset_type,
-                     img_size=16,
+        netG = swinIR(img_size=16,
                       patch_size=4,
                       in_chans=n_channels,
                       window_size=2,
                       upscale=upscale,
-                      upsampler= "pixelshuffle")
+                      upsampler= "pixelshuffle",
+                      dataset_type=dataset_type)
     elif type_net == "vitSR":
         netG = vitSR(embed_dim =768)
     elif type_net == "swinUnet":
@@ -168,8 +166,6 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
         "val_dir": val_dir,
         "epochs": epochs
     }
-
-
     model.fit()
                 
 
@@ -195,16 +191,6 @@ def main():
     parser.add_argument("--lambada_gp", type=float, default=10, help="The checkpoint directory")
     parser.add_argument("--recon_weight", type=float, default=1000, help="The checkpoint directory")
 
-    # PARAMETERS FOR SWIN-IR & SWIN-UNET
-    parser.add_argument("--patch_size", type = int, default = 2)
-
-    # PARAMETERS FOR SWIN-IR
-    parser.add_argument("--upscale_swinIR", type = int, default = 4)
-    parser.add_argument("--upsampler_swinIR", type = str, default = "pixelshuffle")
-
-    #PARAMETERS FOR DIFFUSION
-    parser.add_argument("--conditional", type = bool, default=True)
-    parser.add_argument("--timesteps",type=int, default=200)
     args = parser.parse_args()
 
     if not os.path.exists(args.save_dir):
@@ -218,8 +204,6 @@ def main():
         save_dir = args.save_dir,
         epochs = args.epochs,
         type_net = args.model_type,
-        patch_size = args.patch_size,
-        conditional=args.conditional,
         batch_size=args.batch_size,
         dataset_type=args.dataset_type,
         args=args)

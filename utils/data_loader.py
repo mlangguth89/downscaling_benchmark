@@ -30,8 +30,8 @@ def create_loader(file_path: str = None,
     dataset_type    : specify which dataset type we want to load
     """
     if dataset_type == "precipitation":
-        vars_in = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"]
-        #vars_in = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","yw_hourly_in"]
+        #vars_in = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","u700_in","v700_in","yw_hourly_in"]
+        vars_in = ["cape_in", "tclw_in", "sp_in", "tcwv_in", "lsp_in", "cp_in", "tisr_in","yw_hourly_in"]
         vars_out =  ["yw_hourly_tar"]
         dataset = PrecipDatasetInter(file_path,
                                      batch_size,

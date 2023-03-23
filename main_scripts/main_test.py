@@ -43,26 +43,27 @@ def main():
 
     args = parser.parse_args()
 
-    n_channels = 10
+    n_channels = 8
     print("The model {} is selected for training".format(args.model_type))
     if args.model_type == "unet":
         netG = unet(n_channels = n_channels)
     elif args.model_type == "vitSR":
         netG = vitSR(embed_dim = 768)
     elif args.model_type == "swinUnet":
-        netG = swinUnet(img_size=160, patch_size=2,
+        netG = swinUnet(img_size=160, 
+                        patch_size=4, 
                         in_chans=n_channels,
-                        num_classes=1,
-                        embed_dim=96,
+                        num_classes=1, 
+                        embed_dim=96, 
                         depths=[2, 2, 2],
-                        depths_decoder=[2,2,2],
-                        num_heads=[6,6,6],
-                        window_size=4,
-                        mlp_ratio=4,
-                        qkv_bias=True,
+                        depths_decoder=[1,2, 2], 
+                        num_heads=[6, 6, 6],
+                        window_size=5,
+                        mlp_ratio=4, 
+                        qkv_bias=True, 
                         qk_scale=None,
-                        drop_rate=0.,
-                        attn_drop_rate=0.,
+                        drop_rate=0., 
+                        attn_drop_rate=0., 
                         drop_path_rate=0.1,
                         ape=False,
                         final_upsample="expand_first")
