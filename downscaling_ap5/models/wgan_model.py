@@ -193,13 +193,13 @@ class WGAN(keras.Model):
                 # critic only operates on first channel
                 predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
                 # generate (downscaled) data
-                gen_data = self.generator(predictors[ist:ie, :, :, :], training=True)
+                gen_data = self.generator(predictors[ist:ie, ...], training=True)
                 # calculate critics for both, the real and the generated data
-                critic_gen = self.critic(gen_data[0], training=True)
+                critic_gen = self.critic(gen_data[..., 0], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = WGAN.critic_loss(critic_gt, critic_gen)
-                gp = self.gradient_penalty(predictands_critic, gen_data[0])
+                gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:1])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
@@ -212,7 +212,7 @@ class WGAN(keras.Model):
             # generate (downscaled) data
             gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
-            critic_gen = self.critic(gen_data[0], training=True)
+            critic_gen = self.critic(gen_data[..., 0], training=True)
             cg_loss = WGAN.critic_gen_loss(critic_gen)
             rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
 
@@ -276,7 +276,7 @@ class WGAN(keras.Model):
             n = 2
         # get MAE for all output heads
         for i in range(n):
-            rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[i]) - real_data[:, :, :, i]))
+            rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[..., i]) - real_data[..., i]))
 
         return rloss
 

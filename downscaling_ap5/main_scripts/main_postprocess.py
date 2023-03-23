@@ -64,7 +64,7 @@ def main(parser_args):
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
-                                f"under '{model_dir}'")
+                                f"under '{model_base}'")
     else:
         with open(ds_config_file[0]) as dsf:
             logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
@@ -110,9 +110,13 @@ def main(parser_args):
     ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
-    if hparams_dict["z_branch"]:
+    if "var_tar2in" in ds_dict:
         logger.info(f"Add high-resolved target topography to input features.")
         da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
+
+    if not hparams_dict["z_branch"]:
+        logger.info(f"No z_branch has been used for training.")
+        da_test_tar = da_test_tar.isel({"variables": 0})
 
     data_in = da_test_in.squeeze().values
 
@@ -124,9 +128,15 @@ def main(parser_args):
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     # get coordinates and dimensions from target data
-    coords = da_test_tar.isel(variables=0).squeeze().coords
-    dims = da_test_tar.isel(variables=0).squeeze().dims
-    y_pred = xr.DataArray(y_pred_trans[0].squeeze(), coords=coords, dims=dims)
+    slice_dict = {"variables": 0} if hparams_dict["z_branch"] else {}
+    coords = da_test_tar.isel(slice_dict).squeeze().coords
+    dims = da_test_tar.isel(slice_dict).squeeze().dims
+    if hparams_dict["z_branch"]:
+        # slice data to get first channel only
+        y_pred = xr.DataArray(y_pred_trans[0].squeeze(), coords=coords, dims=dims)
+    else:
+        # no slicing required
+        y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
     # perform denormalization
     y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
                               sigma=norm.norm_stats["sigma"].sel({"variables": tar_varname}))

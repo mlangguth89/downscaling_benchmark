@@ -145,7 +145,7 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
         print("Use z_branch...")
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(inputs, tf.concat([output_temp, output_z], axis=-1), name="t2m_downscaling_unet_with_z")
     else:
         model = Model(inputs, output_temp, name="t2m_downscaling_unet")
 
