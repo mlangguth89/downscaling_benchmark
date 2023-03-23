@@ -133,7 +133,7 @@ def main(parser_args):
     dims = da_test_tar.isel(slice_dict).squeeze().dims
     if hparams_dict["z_branch"]:
         # slice data to get first channel only
-        y_pred = xr.DataArray(y_pred_trans[0].squeeze(), coords=coords, dims=dims)
+        y_pred = xr.DataArray(y_pred_trans[..., 0].squeeze(), coords=coords, dims=dims)
     else:
         # no slicing required
         y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
