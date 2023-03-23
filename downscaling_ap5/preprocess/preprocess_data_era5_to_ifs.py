@@ -297,7 +297,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # process surface variables of ERA5 (predictors)
         if sfvars:
-            sf_file = os.path.join(era5_dir, "{0}_sf.grb".format(date_str))
+            sf_file = os.path.join(era5_dir, date.strftime("%Y"), date.strftime("%m"), "{0}_sf.grb".format(date_str))
             logger.info("Preprocess predictor from surface file '{0}' of ERA5-dataset for time step {1}"
                         .format(sf_file, date_pr))
 
@@ -309,11 +309,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # process multi-level variables of ERA5 (predictors)
         if mlvars and not lfail:
-            ml_file = os.path.join(era5_dir, "{0}_ml.grb".format(date_str))
+            ml_file = os.path.join(era5_dir, date.strftime("%Y"), date.strftime("%m"), "{0}_ml.grb".format(date_str))
             logger.info("Preprocess predictor from multi-level file '{0}' of ERA5-dataset for time step {1}"
                         .format(ml_file, date_pr))
             nwarn, file2merge = PreprocessERA5toIFS.run_preproc_func(PreprocessERA5toIFS.process_ml_file,
-                                                                     [ml_file, dest_dir, date, sfvars],
+                                                                     [ml_file, dest_dir, date, mlvars],
                                                                      {"interp": True}, logger, nwarn, max_warn)
             filelist = PreprocessERA5toIFS.manage_filemerge(filelist, file2merge, tmp_dir)
             if not file2merge: lfail = True   # skip day if some data is missing
@@ -558,7 +558,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         if interp:
             cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                         ("-selname", ",".join(mlvars_list)),
-                                                        ("-ml2plx,{0}".format(plvl_strs)),
+                                                        ("-ml2plx", plvl_strs),
                                                         ("-selname", ",".join(mlvars_list_interp)),
                                                         ("-sellonlatbox", "0.,30.,30.,60.")]))
         else:

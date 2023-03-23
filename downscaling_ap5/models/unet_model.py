@@ -115,12 +115,13 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
 
 
 # The particular U-net
-def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False,
+def sha_unet(input_shape: tuple, channels_start: int = 56, n_predictands: int = 1, z_branch: bool = False,
              tar_channels=["output_temp", "output_z"]) -> Model:
     """
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
+    :param n_predictands: number of target variables (dynamic output variables)
     :param z_branch: flag if z-branch is used.
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :return:
@@ -140,14 +141,14 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     d2 = decoder_block(d1, s2, channels_start * 2)
     d3 = decoder_block(d2, s1, channels_start)
 
-    output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
+    output_dyn = Conv2D(n_predictands, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
         print("Use z_branch...")
         output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(inputs, tf.concat([output_dyn, output_z], axis=-1), name="downscaling_unet_with_z")
     else:
-        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model(inputs, output_dyn, name="downscaling_unet")
 
     return model
 
@@ -303,7 +304,7 @@ class UNET(keras.Model):
         hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
                         "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
                         "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
-                        "var_tar2in": ""}
+                        "var_tar2in": "", "n_predictands": 1}
 
         return hparams_dict
 
