@@ -847,6 +847,7 @@ class SwinIR(nn.Module):
         if self.dataset_type == "precipitation":
             x = self.upsampling_first(x)
         
+        print("data type is", self.dataset_type)
         H, W = x.shape[2:]
         x = self.check_image_size(x)
         self.mean = self.mean.type_as(x)
