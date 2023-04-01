@@ -123,6 +123,7 @@ def main(parser_args):
 
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
+    
     # clean up to save some memory
     del ds_val
     gc.collect()

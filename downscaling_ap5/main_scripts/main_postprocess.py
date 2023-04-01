@@ -64,7 +64,7 @@ def main(parser_args):
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
-                                f"under '{model_dir}'")
+                                f"under '{model_base}'")
     else:
         with open(ds_config_file[0]) as dsf:
             logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
@@ -90,7 +90,16 @@ def main(parser_args):
                                       ds_dict.get("laugmented", False))
 
     logger.info(f"Start opening datafile {fdata_test}...")
-    ds_test = xr.open_dataset(fdata_test)
+    # prepare normalization
+    js_norm = os.path.join(norm_dir, "norm.json")
+    logger.debug("Read normalization file for subsequent data transformation.")
+    norm = ZScore(ds_dict["norm_dims"])
+    norm.read_norm_from_file(js_norm)
+
+    with xr.open_dataset(fdata_test) as ds_test:
+        ds_test = norm.normalize(ds_test)
+
+    #ds_test = xr.open_dataset(fdata_test)
 
     # prepare training and validation data
     logger.info(f"Start preparing test dataset...")
@@ -99,20 +108,24 @@ def main(parser_args):
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
 
     # perform normalization
-    js_norm = os.path.join(norm_dir, "norm.json")
-    logger.debug("Read normalization file for subsequent data transformation.")
-    norm = ZScore(ds_dict["norm_dims"])
-    norm.read_norm_from_file(js_norm)
-    da_test = norm.normalize(da_test)
+    #js_norm = os.path.join(norm_dir, "norm.json")
+    #logger.debug("Read normalization file for subsequent data transformation.")
+    #norm = ZScore(ds_dict["norm_dims"])
+    #norm.read_norm_from_file(js_norm)
+    #da_test = norm.normalize(da_test)
 
     da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
     tar_varname = da_test_tar['variables'].values[0]
     ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
-    if hparams_dict["z_branch"]:
+    if "var_tar2in" in ds_dict:
         logger.info(f"Add high-resolved target topography to input features.")
         da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
+
+    if not hparams_dict["z_branch"]:
+        logger.info(f"No z_branch has been used for training.")
+        da_test_tar = da_test_tar.isel({"variables": 0})
 
     data_in = da_test_in.squeeze().values
 
@@ -124,12 +137,26 @@ def main(parser_args):
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     # get coordinates and dimensions from target data
-    coords = da_test_tar.isel(variables=0).squeeze().coords
-    dims = da_test_tar.isel(variables=0).squeeze().dims
-    y_pred = xr.DataArray(y_pred_trans[0].squeeze(), coords=coords, dims=dims)
+    slice_dict = {"variables": 0} if hparams_dict["z_branch"] else {}
+    coords = da_test_tar.isel(slice_dict).squeeze().coords
+    dims = da_test_tar.isel(slice_dict).squeeze().dims
+    if hparams_dict["z_branch"]:
+        # slice data to get first channel only
+        y_pred = xr.DataArray(y_pred_trans[..., 0].squeeze(), coords=coords, dims=dims)
+    else:
+        # no slicing required
+        y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
     # perform denormalization
-    y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
+    try:
+        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
                               sigma=norm.norm_stats["sigma"].sel({"variables": tar_varname}))
+    except:
+        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
+                              sigma=norm.norm_stats["sigma"][tar_varname])
+        ground_truth = norm.denormalize(ground_truth.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
+                              sigma=norm.norm_stats["sigma"][tar_varname])
+
+
     y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
 
     # start evaluation
