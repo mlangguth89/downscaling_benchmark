@@ -116,13 +116,14 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
 
 # The particular U-net
 def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False,
-             tar_channels=["output_temp", "output_z"]) -> Model:
+             concat_out: bool = False, tar_channels=["output_dyn", "output_z"]) -> Model:
     """
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
     :param z_branch: flag if z-branch is used.
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
+    :param concat_out: boolean if output layers will be concatenated (disables named target channels!)
     :return:
     """
     inputs = Input(input_shape)
@@ -145,7 +146,10 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
         print("Use z_branch...")
         output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_dyn, output_static], name="downscaling_unet_with_z")
+        if concat_out:
+            model = Model(inputs, tf.concat([output_dyn, output_static], axis=-1), name="downscaling_unet_with_z")
+        else:
+            model = Model(inputs, [output_dyn, output_static], name="downscaling_unet_with_z")
     else:
         model = Model(inputs, output_dyn, name="downscaling_unet")
 
@@ -157,14 +161,14 @@ class UNET(keras.Model):
     U-Net submodel class:
     This subclass takes a U-Net implemented using Keras functional API as input to the instanciation.
     """
-    def __init__(self, unet_model: keras.Model, shape_in: List, varnames_tar: List, hparams: dict, savedir: str,
+    def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
                  exp_name: str = "unet_model"):
 
         super(UNET, self).__init__()
 
         self.unet = unet_model
         self.shape_in = shape_in
-        self.varnames_tar = varnames_tar
+        self.varnames_tar = None                            # yet, dirty approach: to be set after instantiating from main_train.py
         self.hparams = UNET.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
@@ -184,7 +188,6 @@ class UNET(keras.Model):
     def get_compile_opts(self):
 
         custom_opt = self.hparams["optimizer"].lower()
-        varnames_tar = self.varnames_tar
 
         if custom_opt == "adam":
             opt = keras.optimizers.Adam
@@ -204,8 +207,11 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        tar_channels = [f"{var}" for var in self.varnames_tar]
-        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=tar_channels)
+        if self.varnames_tar:
+            tar_channels = [f"{var}" for var in self.varnames_tar]
+            self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=tar_channels)
+        else:
+            self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], concat_out=True)
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
