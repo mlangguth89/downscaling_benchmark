@@ -90,7 +90,16 @@ def main(parser_args):
                                       ds_dict.get("laugmented", False))
 
     logger.info(f"Start opening datafile {fdata_test}...")
-    ds_test = xr.open_dataset(fdata_test)
+    # prepare normalization
+    js_norm = os.path.join(norm_dir, "norm.json")
+    logger.debug("Read normalization file for subsequent data transformation.")
+    norm = ZScore(ds_dict["norm_dims"])
+    norm.read_norm_from_file(js_norm)
+
+    with xr.open_dataset(fdata_test) as ds_test:
+        ds_test = norm.normalize(ds_test)
+
+    #ds_test = xr.open_dataset(fdata_test)
 
     # prepare training and validation data
     logger.info(f"Start preparing test dataset...")
@@ -99,11 +108,11 @@ def main(parser_args):
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
 
     # perform normalization
-    js_norm = os.path.join(norm_dir, "norm.json")
-    logger.debug("Read normalization file for subsequent data transformation.")
-    norm = ZScore(ds_dict["norm_dims"])
-    norm.read_norm_from_file(js_norm)
-    da_test = norm.normalize(da_test)
+    #js_norm = os.path.join(norm_dir, "norm.json")
+    #logger.debug("Read normalization file for subsequent data transformation.")
+    #norm = ZScore(ds_dict["norm_dims"])
+    #norm.read_norm_from_file(js_norm)
+    #da_test = norm.normalize(da_test)
 
     da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
     tar_varname = da_test_tar['variables'].values[0]
@@ -128,8 +137,19 @@ def main(parser_args):
     dims = da_test_tar.isel(variables=0).squeeze().dims
     y_pred = xr.DataArray(y_pred_trans[0].squeeze(), coords=coords, dims=dims)
     # perform denormalization
-    y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
+    try:
+        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
                               sigma=norm.norm_stats["sigma"].sel({"variables": tar_varname}))
+    except:
+        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
+                              sigma=norm.norm_stats["sigma"][tar_varname])
+        print(norm.norm_stats["mu"][tar_varname])
+        ground_truth = norm.denormalize(ground_truth.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
+                              sigma=norm.norm_stats["sigma"][tar_varname])
+        print(norm.norm_stats["sigma"][tar_varname])
+
+
+    print(ground_truth)
     y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
 
     # start evaluation
