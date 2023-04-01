@@ -50,9 +50,9 @@ echo ${PYTHONPATH}
 # data-directories 
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
 indir=/data/maelstrom/langguth1/tier2/train
-outdir=<my_outdir>
-js_model_conf=${WORK_DIR}/config_wgan.json
-js_ds_conf=${WORK_DIR}/config_ds_tier2.json
+outdir=${BASE_DIR}/tranied_models/
+js_model_conf=${BASE_DIR}/config/config_wgan.json
+js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
 model=wgan
 dataset=tier2
