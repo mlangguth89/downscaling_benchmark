@@ -143,13 +143,10 @@ def main(parser_args):
     except:
         y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
                               sigma=norm.norm_stats["sigma"][tar_varname])
-        print(norm.norm_stats["mu"][tar_varname])
         ground_truth = norm.denormalize(ground_truth.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
                               sigma=norm.norm_stats["sigma"][tar_varname])
-        print(norm.norm_stats["sigma"][tar_varname])
 
 
-    print(ground_truth)
     y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
 
     # start evaluation
