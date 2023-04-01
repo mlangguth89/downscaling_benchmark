@@ -140,14 +140,14 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     d2 = decoder_block(d1, s2, channels_start * 2)
     d3 = decoder_block(d2, s1, channels_start)
 
-    output_temp = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
+    output_dyn = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
         print("Use z_branch...")
-        output_z = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
+        output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
 
-        model = Model(inputs, [output_temp, output_z], name="t2m_downscaling_unet_with_z")
+        model = Model(inputs, [output_dyn, output_static], name="downscaling_unet_with_z")
     else:
-        model = Model(inputs, output_temp, name="t2m_downscaling_unet")
+        model = Model(inputs, output_dyn, name="downscaling_unet")
 
     return model
 
@@ -157,13 +157,14 @@ class UNET(keras.Model):
     U-Net submodel class:
     This subclass takes a U-Net implemented using Keras functional API as input to the instanciation.
     """
-    def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
+    def __init__(self, unet_model: keras.Model, shape_in: List, varnames_tar: List, hparams: dict, savedir: str,
                  exp_name: str = "unet_model"):
 
         super(UNET, self).__init__()
 
         self.unet = unet_model
         self.shape_in = shape_in
+        self.varnames_tar = varnames_tar
         self.hparams = UNET.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
@@ -190,13 +191,12 @@ class UNET(keras.Model):
         elif custom_opt == "rmsprop":
             opt = keras.optimizers.RMSprop
 
-        opt_dict = {"optimizer": opt(lr=self.hparams["lr"])}
+        opt_dict = {"optimizer": opt(learning_rate=self.hparams["lr"])}
 
         if self.hparams["z_branch"]:
-            opt_dict["loss"] = {varnames_tar[0]: self.hparams["loss_func"],
-                                varnames_tar[1]: self.hparams["loss_func"]}
-            opt_dict["loss_weights"] = {varnames_tar[0]: self.hparams["loss_weights"][0],
-                                        varnames_tar[1]: self.hparams["loss_weights"][1]}
+            opt_dict["loss"] = {f"{var}": self.hparams["loss_func"] for var in self.varnames_tar}
+            opt_dict["loss_weights"] = {f"{var}": self.hparams["loss_weights"][i] for i, var in
+                                        enumerate(self.varnames_tar)}
         else:
             opt_dict["loss"] = self.hparams["loss_func"]
 
@@ -204,7 +204,8 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=to_list(self.varnames_tar))
+        tar_channels = [f"{var}" for var in self.varnames_tar]
+        self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=tar_channels)
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
