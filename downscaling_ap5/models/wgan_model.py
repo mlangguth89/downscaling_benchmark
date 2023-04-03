@@ -97,7 +97,7 @@ class WGAN(keras.Model):
         tar_shape = (*self.shape_in[:-1], 1)   # critic only accounts for 1st channel (should be the downscaling target)
         # instantiate models
         self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
-                                        z_branch=self.hparams["z_branch"])
+                                        z_branch=self.hparams["z_branch"], concat_out=True)
         self.critic = self.critic(tar_shape)
 
         # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
