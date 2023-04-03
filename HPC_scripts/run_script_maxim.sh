@@ -4,9 +4,9 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=05:59:00
+#SBATCH --time=00:30:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=booster
+#SBATCH --partition=dvelbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
@@ -28,7 +28,7 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/train
 val_dir=/p/scratch/deepacf/deeprain/ji4/Downsacling/preprocessing/preprocessed_ifs_radklim_full_disk/test
-epochs=20
+epochs=2
 save_dir=../saves/unet_pre_2
 checkpoint_dir=../results/exp_test/wgan
 
