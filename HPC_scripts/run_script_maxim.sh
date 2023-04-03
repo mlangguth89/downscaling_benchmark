@@ -4,9 +4,9 @@
 #SBATCH --ntasks=1
 #SBATCH --output=train-out.%j
 #SBATCH --error=train-err.%j
-#SBATCH --time=00:30:00
+#SBATCH --time=06:30:00
 #SBATCH --gres=gpu:1
-#SBATCH --partition=develbooster
+#SBATCH --partition=booster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=maximbr@post.bgu.ac.il
 
@@ -28,7 +28,7 @@ source ../venv_booster/bin/activate
 
 train_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/downscaling_tier2_train.nc
 val_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/downscaling_tier2_val.nc
-epochs=2
+epochs=20
 save_dir=../saves/unet_pre_2
 checkpoint_dir=../results/exp_test/wgan
 
