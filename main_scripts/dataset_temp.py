@@ -16,6 +16,7 @@ class CustomTemperatureDataset(Dataset):
         self.ds_tar = None
         self.ds_in = None
         self.file_path = file_path
+        print(file_path)
         self.verbose = verbose
         self.ds = xr.open_dataset(file_path)
         # self.ds.to_netcdf("saved_on_disk.nc")
