@@ -126,7 +126,6 @@ class CustomTemperatureDataset(Dataset):
         output = {'L': self.ds_in[idx], 'H': self.ds_tar[idx]}
         return output
 
-
 def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
     """
     Split data array with variables-dimension into input and target data for downscaling.
@@ -155,11 +154,27 @@ def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr
 
 def run():
     data_loader = CustomTemperatureDataset(
-        file_path="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc")
+        file_path="/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc")
     train_dataloader = DataLoader(data_loader, batch_size=32, shuffle=False, num_workers=8)
-    for i, train_data in enumerate(train_dataloader):
-        print(i, train_data[0].shape)
+  
+    def trace_handler(prof):
+        print(prof.key_averages().table(sort_by="self_cuda_time_total", row_limit=-1))
+    # prof.export_chrome_trace("/tmp/test_trace_" + str(prof.step_num) + ".json")
 
+    with torch.profiler.profile(
+            activities=[ torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,],
+            schedule=torch.profiler.schedule(
+                wait=1,
+                warmup=1,
+                active=2),
+            #on_trace_ready=trace_handler,
+            on_trace_ready=torch.profiler.tensorboard_trace_handler('./log1')
+            # used when outputting for tensorboard
+            ) as p:
+        for i, train_data in enumerate(train_dataloader):
+            print(i, train_data["L"].cuda())
+            p.step()
 
 if __name__ == "__main__":
     run()

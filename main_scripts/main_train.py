@@ -167,18 +167,18 @@ def run(train_dir: str = "/p/scratch/deepacf/deeprain/bing/downscaling_maelstrom
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--train_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where training data (.nc files) are stored")
     parser.add_argument("--val_dir", type=str, required=False,
-                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\perceptation",
+                        default="C:\\Users\\max_b\\PycharmProjects\\downscaling_maelstrom\\preproc_era5_crea6_small.nc",
                         help="The directory where validation data (.nc files) are stored")
     parser.add_argument("--save_dir", type=str,
                         default="C:\\Users\\max_b\\PycharmProjects\\downscaling_n\\saves",
                         help="The checkpoint directory")
     parser.add_argument("--epochs", type=int, default=5, help="The checkpoint directory")
-    parser.add_argument("--model_type", type=str, default="unet", help="The model type: unet, swinir")
+    parser.add_argument("--model_type", type=str, default="wgan", help="The model type: unet, swinir")
 
-    parser.add_argument("--dataset_type", type=str, default="precipitation",
+    parser.add_argument("--dataset_type", type=str, default="temperature",
                         help="The dataset type: temperature, precipitation")
     parser.add_argument("--batch_size", type=int, default=32, help="batch size")
     parser.add_argument("--critic_iterations", type=float, default=5, help="The checkpoint directory")
@@ -211,7 +211,7 @@ def main():
 
     run(train_dir=args.train_dir,
         val_dir=args.val_dir,
-        n_channels=10,
+        n_channels=9,
         save_dir=args.save_dir,
         epochs=args.epochs,
         type_net=args.model_type,

@@ -129,8 +129,8 @@ class BuildWGANModel:
                     input_data = train_data['L'].to(device)
                     target_data = train_data['H'][:, None].to(device)
                 else:
-                    input_data = train_data[0].to(device)
-                    target_data = train_data[1].to(device)
+                    input_data = train_data['L'].to(device)
+                    target_data = train_data['H'].to(device)
 
                 generator_output = self.generator(input_data)
                 critic_real = self.critic(target_data)
@@ -225,8 +225,8 @@ class BuildWGANModel:
                 input_data = train_data['L'].to(device)
                 target_data = train_data['H'][:, None].to(device)
             else:
-                input_data = train_data[0].to(device)
-                target_data = train_data[1].to(device)
+                input_data = train_data['L'].to(device)
+                target_data = train_data['H'].to(device)
 
             target_data = target_data.to(device)
 
