@@ -26,8 +26,8 @@ module load matplotlib/3.4.3
 
 source ../venv_booster/bin/activate
 
-train_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_train.nc
-val_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/downscaling_tier2_val.nc
+train_dir=p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/downscaling_tier2_train.nc
+val_dir=p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/downscaling_tier2_val.nc
 epochs=2
 save_dir=../saves/unet_pre_2
 checkpoint_dir=../results/exp_test/wgan
