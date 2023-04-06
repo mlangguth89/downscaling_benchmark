@@ -29,7 +29,7 @@ class BuildModel:
     def __init__(self, netG,
                  G_lossfn_type: str = "l1",
                  G_optimizer_type: str = "adam",
-                 G_optimizer_lr: float = 5.e-02,
+                 G_optimizer_lr: float = 5.e-03,
                  G_optimizer_betas: list = [0.9, 0.999],  #5.e-05
                  G_optimizer_wd: int = 5.e-03,
                  save_dir: str = "../results",
@@ -187,6 +187,15 @@ class BuildModel:
     def optimize_parameters(self):
         self.G_optimizer.zero_grad()
         self.netG_forward()
+        if len(self.E.shape) == 3:
+            self.E = torch.unsqueeze(self.E, axis=1)
+        if len(self.H.shape) ==3:
+            self.H = torch.unsqueeze(self.H, axis=1)
+        if not len(self.E.shape) == len(self.H.shape):
+            print("The shape of E:",self.E.shape)
+            print("The shape of H:",self.H.shape)
+            raise ("The shape of generated data and ground truth are not the same as above")
+
         self.G_loss = self.G_lossfn(self.E, self.H)
         self.G_loss.backward()
         self.G_optimizer.step()
@@ -243,22 +252,23 @@ class BuildModel:
                 # 2) feed patch pairs
                 # -------------------------------
                 self.feed_data(train_data)
-
+                #print("E data", self.E.shape)
+                #print("H data", self.H.shape)
                 # -------------------------------
                 # 3) optimize parameters
                 # -------------------------------
                 self.optimize_parameters()
-              
+                print("Model Loss {} after step {}".format(self.G_loss, current_step))
+                #print("E data",self.E.shape)
                 # -------------------------------
                 # 4) Save model
                 # -------------------------------
                 if current_step % self.save_freq == 0:
                     self.save(current_step)
-                    print("Model Loss {} after step {}".format(self.G_loss, current_step))
                     print("Model Saved")
                     print("learnign rate",lr)
                     print("Time per step:", time.time() - st)
-                    wandb.log({"loss": self.G_loss, "lr": lr})
+                wandb.log({"loss": self.G_loss, "lr": lr})
             
             self.save(current_step)
             with torch.no_grad():
@@ -274,7 +284,7 @@ class BuildModel:
                 print("validation loss:", val_loss.item())
                 print("lr", lr)
 
-            self.schedulers[0].step(val_loss.item())
+            #self.schedulers[0].step(val_loss.item())
 
 
 
