@@ -73,7 +73,7 @@ def main(parser_args):
 
     if not md_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
-                                f"under '{model_dir}'")
+                                f"under '{model_base}'")
     else:
         with open(md_config_file[0]) as mdf:
             logger.info(f"Read model configuration file '{md_config_file[0]}'.")
@@ -107,19 +107,30 @@ def main(parser_args):
 
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
     tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
-                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
-                                                       named_targets=named_targets)
+                                                       lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
+                                                       named_targets=named_targets, lrepeat=False, drop_remainder=False)
 
     # perform normalization
-    _, da_test_tar = HandleDataClass.split_in_tar(da_test)
+    da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
     tar_varname = da_test_tar['variables'].values[0]
     ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
+    
+    # only needed as long as make_tf_dataset_allmem is not used
+    #if "var_tar2in" in ds_dict:
+    #    logger.info(f"Add high-resolved target topography to input features.")
+    #    da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
+
+    #if not hparams_dict["z_branch"]:
+    #    logger.info(f"No z_branch has been used for training.")
+    #    da_test_tar = da_test_tar.isel({"variables": 0})
+
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
+    #y_pred_trans = trained_model.predict(da_test_in, batch_size=32, verbose=2)
     y_pred_trans = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
@@ -129,12 +140,13 @@ def main(parser_args):
     dims = da_test_tar.isel(slice_dict).squeeze().dims
     if hparams_dict["z_branch"]:
         # slice data to get first channel only
+        if isinstance(y_pred_trans, list): y_pred_trans = y_pred_trans[0]
         y_pred = xr.DataArray(y_pred_trans[..., 0].squeeze(), coords=coords, dims=dims)
     else:
         # no slicing required
         y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
     # perform denormalization
-    y_pred = norm.denormalize(y_pred.squeeze()), norm.denormalize(ground_truth.squeeze())
+    y_pred, ground_truth = norm.denormalize(y_pred.squeeze(), varname=tar_varname), norm.denormalize(ground_truth.squeeze(), varname=tar_varname)
 
     # start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
