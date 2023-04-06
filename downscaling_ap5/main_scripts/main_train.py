@@ -141,7 +141,6 @@ def main(parser_args):
         ttrain_load = timer() - t0_train
         print(f"Data loading time: {ttrain_load:.2f}s.")
 
-
     # instantiate model
     model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
     model.varnames_tar = varnames_tar

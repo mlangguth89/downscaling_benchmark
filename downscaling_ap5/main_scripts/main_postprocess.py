@@ -80,6 +80,8 @@ def main(parser_args):
             hparams_dict = js.load(mdf)
             logger.debug(hparams_dict)
 
+    named_targets = hparams_dict.get("named_targets", False)
+
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
     trained_model = keras.models.load_model(model_dir, compile=False)
@@ -99,41 +101,26 @@ def main(parser_args):
     with xr.open_dataset(fdata_test) as ds_test:
         ds_test = norm.normalize(ds_test)
 
-    #ds_test = xr.open_dataset(fdata_test)
-
     # prepare training and validation data
     logger.info(f"Start preparing test dataset...")
     t0_preproc = timer()
 
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
+    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
+                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
+                                                       named_targets=named_targets)
 
     # perform normalization
-    #js_norm = os.path.join(norm_dir, "norm.json")
-    #logger.debug("Read normalization file for subsequent data transformation.")
-    #norm = ZScore(ds_dict["norm_dims"])
-    #norm.read_norm_from_file(js_norm)
-    #da_test = norm.normalize(da_test)
-
-    da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test)
+    _, da_test_tar = HandleDataClass.split_in_tar(da_test)
     tar_varname = da_test_tar['variables'].values[0]
     ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
-
-    if "var_tar2in" in ds_dict:
-        logger.info(f"Add high-resolved target topography to input features.")
-        da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
-
-    if not hparams_dict["z_branch"]:
-        logger.info(f"No z_branch has been used for training.")
-        da_test_tar = da_test_tar.isel({"variables": 0})
-
-    data_in = da_test_in.squeeze().values
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
-    y_pred_trans = trained_model.predict(data_in, batch_size=32, verbose=2)
+    y_pred_trans = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     # get coordinates and dimensions from target data
@@ -147,17 +134,7 @@ def main(parser_args):
         # no slicing required
         y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
     # perform denormalization
-    try:
-        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"].sel({"variables": tar_varname}),
-                              sigma=norm.norm_stats["sigma"].sel({"variables": tar_varname}))
-    except:
-        y_pred = norm.denormalize(y_pred.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
-                              sigma=norm.norm_stats["sigma"][tar_varname])
-        ground_truth = norm.denormalize(ground_truth.squeeze(), mu=norm.norm_stats["mu"][tar_varname],
-                              sigma=norm.norm_stats["sigma"][tar_varname])
-
-
-    y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
+    y_pred = norm.denormalize(y_pred.squeeze()), norm.denormalize(ground_truth.squeeze())
 
     # start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
