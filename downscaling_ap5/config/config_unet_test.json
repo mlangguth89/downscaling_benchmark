@@ -1,0 +1,7 @@
+{
+  "nepochs": 3,
+  "named_targets": true,
+  "z_branch": true,
+  "lr_decay": true,
+  "lscheduled_train": true
+}

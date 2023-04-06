@@ -20,7 +20,7 @@ class BenchmarkCSV(object):
     """
 
     expected_cols = ["Experiment number", "Job ID", "#Nodes", "#GPUs", "#MPI tasks", "#CPUs",
-                     "Loading data time", "Total runtime", "Total training time",
+                     "Data loading time", "Total runtime", "Total training time",
                      "Avg. training time per epoch", "First epoch training time",
                      "Min. training time per epoch", "Max. training time per epoch",
                      "Avg. training time per iteration", "Final training loss", "Final validation loss",
