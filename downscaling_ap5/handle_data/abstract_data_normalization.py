@@ -186,7 +186,7 @@ class Normalize(ABC):
         self.norm_stats = norm_dict_restored
 
     @abstractmethod
-    def get_required_stats(self, data, *stats):
+    def get_required_stats(self, data, varname, *stats):
         """
         Function to retrieve either normalization parameters from data or from keyword arguments
         """

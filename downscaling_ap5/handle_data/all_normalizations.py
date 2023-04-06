@@ -24,11 +24,12 @@ class ZScore(Normalize):
         super().__init__("z_score", norm_dims)
         self.norm_stats = {"mu": None, "sigma": None}
 
-    def get_required_stats(self, data: da_or_ds, **stats):
+    def get_required_stats(self, data: da_or_ds, varname: str= None, **stats):
         """
         Get required parameters for z-score normalization. They are either computed from the data
         or can be parsed as keyword arguments.
         :param data: the data to be (de-)normalized
+        :param varname: retrieve parameters for specific varname only (without effect if parameters must be retrieved from data)
         :param stats: keyword arguments for mean (mu) and standard deviation (std) used for normalization
         :return (mu, sigma): Parameters for normalization
         """
@@ -42,7 +43,14 @@ class ZScore(Normalize):
             # in memory due to multiple graphs (and also seem to enfore usage of data chunks as well)
             mu, std = dask.compute(mu, std)
             self.norm_stats = {"mu": mu, "sigma": std}
-        # else:
+        else:
+            if varname:
+                if isinstance(mu, xr.DataArray):
+                    mu, std = mu.sel({"variables": varname}), std.sel({"variables": varname})
+                elif isinstance(mu, xr.Dataset):
+                    mu, std = mu[varname], std[varname]
+                else:
+                    raise ValueError(f"Unexpected data type for mu and std: {type(mu)}, {type(std)}")
         #    print("Mu and sigma are parsed for (de-)normalization.")
 
         return mu, std
