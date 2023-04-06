@@ -96,7 +96,7 @@ class WGAN(keras.Model):
         # instantiate submodels
         tar_shape = (*self.shape_in[:-1], self.hparams["n_predictands"])   # critic only accounts for dynamic variables
         # instantiate models
-        self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"],
+        self.generator = self.generator(self.shape_in, channels_start=self.hparams["ngf"], concat_out = True,
                                         n_predictands=self.hparams["n_predictands"], z_branch=self.hparams["z_branch"])
         self.critic = self.critic(tar_shape)
 

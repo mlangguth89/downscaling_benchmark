@@ -73,8 +73,6 @@ def main():
     # some statistics on memory usage
     print_gpu_usage("Final GPU memory: ")
     print_cpu_usage("Final CPU memory: ")
-
-
+    
 if __name__ == "__main__":
     main()
-

@@ -3,7 +3,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=1
+#SBATCH --cpus-per-task=48
 #SBATCH --output=train_unet-model-out.%j
 #SBATCH --error=train_unet-model-err.%j
 #SBATCH --time=02:00:00
@@ -47,12 +47,12 @@ if [ -z ${VIRTUAL_ENV} ]; then
 fi
 
 
-# data-directories 
-# Adapt accordingly for your dataset
-indir=<my_input_dir>
+# data-directories
+# Adapt accordingly to your dataset
+indir=<training_data_dir>
 outdir=${BASE_DIR}/trained_models/
 js_model_conf=${BASE_DIR}/config/config_unet.json
-js_ds_conf=${BASE_DIR}/config_ds_tier2.json
+js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
 model=unet
 dataset=tier2

@@ -154,20 +154,20 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nepochs: int, nfiles2merge: int,
-                            lshuffle: bool = True, predictands: List = None, predictors: List = None,
-                            var_tar2in: str = None, norm_obj=None, norm_dims: List = None, nworkers: int = 10):
+                            lshuffle: bool = True, named_targets: bool = False, predictands: List = None,
+                            predictors: List = None, var_tar2in: str = None, norm_obj=None, norm_dims: List = None,
+                            nworkers: int = 10):
         """
         Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
         To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
-        TO-DOs:
-            - allow for named targets (cf. make_tf_dataset_allmem-method)
-
+        TO-DO: Add flags for repeat and drop_remainder (cf. make_tf_dataset_allmem-method)
         :param datadir: directory where netCDF-files for TF dataset are strored
         :param file_patt: filename pattern to glob files from datadir
         :param batch_size: desired mini-batch size
         :param nepochs: (effective) number of epochs for training
         :param nfiles2merge: number if files to merge for streaming
         :param lshuffle: boolean to enable sample shuffling
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
         :param predictors: List of selected predictor variables; parse None to use all data
         :param predictands: List of selected predictor variables; parse None to use all data
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
@@ -175,6 +175,7 @@ class HandleDataClass(object):
         :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
         :param norm_obj: normalization instance used to normalize the data.
                          If not passed, the normalization instance is retrieved from the data
+        :param nworkers: numbers of workers to read in netCDF-files
         :return: tuple of (normalization object, TensorFlow dataset object)
         """
         assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
@@ -192,7 +193,12 @@ class HandleDataClass(object):
         tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
         tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
-        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+        if named_targets:
+            varnames = ds_obj.predictand_list
+            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands],
+                                    {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
+        else:
+            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
 
         if lshuffle:
             nshuffle = ds_obj.samples_merged
@@ -213,8 +219,8 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-                               named_targets: bool = False, var_tar2in: str = None, lembed: bool = False)\
-            -> tf.data.Dataset:
+            named_targets: bool = False, var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True, 
+            lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         NOTE: All data is loaded into memory
@@ -226,6 +232,8 @@ class HandleDataClass(object):
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
                                                                          to the input)
+        :param lrepeat: flag if dataset should be repeated
+        :param drop_remaineder: flag if samples will be dropped in case batch size is not a divisor of # data samples 
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
@@ -279,9 +287,12 @@ class HandleDataClass(object):
         # * repeat must be applied after shuffle to get varying mini-batches per epoch
         # * batch-size is increased to allow substepping in train_step
         if lshuffle is True:
-            data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=True).repeat()
+            data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=drop_remainder)
         else:
-            data_iter = data_iter.cache().batch(batch_size, drop_remainder=True).repeat()
+            data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
+
+        if lrepeat:
+            data_iter = data_iter.repeat()
 
         # clean-up to free some memory
         del da

@@ -93,6 +93,7 @@ def main(parser_args):
                                                                  norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
         nsamples, shape_in = ds_obj.nsamples, (*ds_obj.data_dim[::-1], ds_obj.n_predictors)
+        varnames_tar = list(ds_obj.predictand_list) if named_targets else None
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
@@ -106,6 +107,7 @@ def main(parser_args):
         tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
+        varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
         tfds_train_size = da_train.nbytes
 
     if write_norm:
@@ -121,8 +123,9 @@ def main(parser_args):
         ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=False,
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=True,
                                                       var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
+    
     # clean up to save some memory
     del ds_val
     gc.collect()
@@ -137,9 +140,6 @@ def main(parser_args):
     else:
         ttrain_load = timer() - t0_train
         print(f"Data loading time: {ttrain_load:.2f}s.")
-
-    # get some key parameters from datasets
-    varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
 
     # instantiate model
     model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)

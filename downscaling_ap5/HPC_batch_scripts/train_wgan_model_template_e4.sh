@@ -47,8 +47,8 @@ export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH
 echo ${PYTHONPATH}
 
-# data-directories 
-# Adapt accordingly for your dataset
+# data-directories
+# Adapt accordingly to your dataset
 indir=<my_input_dir>
 outdir=${BASE_DIR}/trained_models/
 js_model_conf=${BASE_DIR}/config/config_wgan.json
