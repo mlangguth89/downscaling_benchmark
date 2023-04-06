@@ -90,6 +90,10 @@ ENV/
 virtual_env*/
 virt_env*/
 
+# JUBE
+downscaling_ap5/jube/ap5_train/*
+downscaling_ap5/jube/ap5_dataloader/*
+
 # Spyder project settings
 .spyderproject
 .spyproject
@@ -103,7 +107,6 @@ virt_env*/
 # mypy
 .mypy_cache/
 
-
 .idea/*
 */.idea
 
@@ -114,24 +117,33 @@ virt_env*/
 *-out*.[0-9]*
 
 
-#Ignore the results files
+# Ignore results files
 **/trained_models
 **/results_test_samples
 **/logs
 **/vp
-**/models
 *.h5
 
-# ignore file for diagnosis
+# Ignore Jupyter Notebooks for testing
+**/jupyter_notebooks_test
+
+# Ignore results
+**/results
+
+# Ignore file for diagnosis
 *.json
 *.csv
 *.png
 
 # Ignore (Batch) runscripts
-**/batch_scripts/*.sh
+**/HPC_batch_scripts/*.sh
 !*_template.sh
 
 !*wrapper_container.sh
 
 # Ignore singularity containers (typically existing as symbolic link)
 *.sif
+
+# Ignore netCDF-files
+*.nc
+

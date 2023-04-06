@@ -1,4 +1,0 @@
-numpy==1.21.3
-xarray==0.20.1
-climetlab==0.8.14
-climetlab-maelstrom-downscaling==0.1.0
