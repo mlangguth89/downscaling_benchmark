@@ -115,22 +115,11 @@ def main(parser_args):
     tar_varname = da_test_tar['variables'].values[0]
     ground_truth = ds_test[tar_varname].astype("float32", copy=False)
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
-    
-    # only needed as long as make_tf_dataset_allmem is not used
-    #if "var_tar2in" in ds_dict:
-    #    logger.info(f"Add high-resolved target topography to input features.")
-    #    da_test_in = xr.concat([da_test_in, da_test_tar.isel({"variables": -1})], dim="variables")
-
-    #if not hparams_dict["z_branch"]:
-    #    logger.info(f"No z_branch has been used for training.")
-    #    da_test_tar = da_test_tar.isel({"variables": 0})
-
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
-    #y_pred_trans = trained_model.predict(da_test_in, batch_size=32, verbose=2)
     y_pred_trans = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
