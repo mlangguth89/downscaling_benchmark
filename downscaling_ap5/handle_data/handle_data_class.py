@@ -239,9 +239,11 @@ class HandleDataClass(object):
         da = da.load()
         da_in, da_tar = HandleDataClass.split_in_tar(da)
         if var_tar2in is not None:
-            # NOTE: The following operation order must be the same as in the  read_netcdf-method of
-            #       the StreamMonthlyNetCDF-class!
-            da_in = xr.concat([da_in, da_tar.sel({"variables": var_tar2in})], "variables")
+            # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
+            #       * The following operation order must concatenate var_tar2in by da_in to ensure
+            #         that the variable appears at first place. This is required to avoid
+            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
 
         varnames_tar = da_tar["variables"].values
 
@@ -437,7 +439,12 @@ class StreamMonthlyNetCDF(object):
     def getitems(self, indices):
         da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables")
         if self.var_tar2in is not None:
-            da_now = xr.concat([da_now, da_now.sel({"variables": self.var_tar2in})], dim="variables")
+            # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
+            #       * The following operation order must concatenate var_tar2in by da_in to ensure
+            #         that the variable appears at first place. This is required to avoid
+            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            da_now = xr.concat([da_now.sel({"variables": self.var_tar2in}), da_now], dim="variables")
+
         return da_now.transpose(..., "variables")
 
     def get_dataset_size(self):
