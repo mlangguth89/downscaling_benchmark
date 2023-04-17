@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-02-07"
+__update__ = "2023-04-17"
 
 import os, glob
 from typing import List
@@ -219,8 +219,8 @@ class HandleDataClass(object):
 
     @staticmethod
     def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-            named_targets: bool = False, var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True, 
-            lembed: bool = False) -> tf.data.Dataset:
+                               named_targets: bool = False, var_tar2in: str = None, lrepeat: bool = True,
+                               drop_remainder: bool = True, lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         NOTE: All data is loaded into memory
@@ -380,7 +380,7 @@ class StreamMonthlyNetCDF(object):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
         rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
-        Furthermore, the class attributes provide key information on the handled dataset.
+        Furthermore, the class attributes provide key information on the handled dataset
         :param datadir: directory where set of netCDF-files are located
         :param patt: filename pattern to allow globbing for netCDF-files
         :param nfiles_merge: number of files that will be loaded into memory (corresponding to one dataset subset)
@@ -536,8 +536,9 @@ class StreamMonthlyNetCDF(object):
     @predictor_list.setter
     def predictor_list(self, selected_predictors: List):
         """
-        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in` in their names are selected.
-        In case that a list of selected_predictors is parsed, their availability is checked.
+        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in`
+        in their names are selected.
+        In case that a list of selected_predictors is parsed, their availability is checked
         :param selected_predictors: list of predictor variables or None
         """
         self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
@@ -552,9 +553,10 @@ class StreamMonthlyNetCDF(object):
 
     def check_and_choose_vars(self, var_list: List[str], suffix: str = "*"):
         """
-        Checks list of variables for availability or retrieves all variables named with a given suffix (for var_list = None)
+        Checks list of variables for availability or retrieves all variables named with a given suffix
+        (for var_list = None)
         :param var_list: list of predictor variables or None
-        :param suffix: optional suffix of variables to selected. Only effective if var_list is None.
+        :param suffix: optional suffix of variables to selected. Only effective if var_list is None
         :return selected_vars: list of selected variables
         """
         ds_test = xr.open_dataset(self.file_list[0])
@@ -599,9 +601,9 @@ class StreamMonthlyNetCDF(object):
     def read_netcdf(self, set_ind):
         set_ind = tf.keras.backend.get_value(set_ind)
         set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
-        set_ind = int(set_ind%self.nfiles_merged)
+        set_ind = int(set_ind % self.nfiles_merged)
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
-        il = int(self.iload_next%2)
+        il = int(self.iload_next % 2)
         # read the normalized data into memory
         # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
