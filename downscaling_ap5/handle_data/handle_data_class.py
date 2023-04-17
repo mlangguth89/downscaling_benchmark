@@ -233,7 +233,7 @@ class HandleDataClass(object):
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
                                                                          to the input)
         :param lrepeat: flag if dataset should be repeated
-        :param drop_remaineder: flag if samples will be dropped in case batch size is not a divisor of # data samples 
+        :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
