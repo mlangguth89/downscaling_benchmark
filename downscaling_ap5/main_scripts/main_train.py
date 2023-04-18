@@ -20,6 +20,7 @@ import json as js
 from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
+from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
@@ -178,6 +179,12 @@ def main(parser_args):
 
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir)
+
+    if callable(getattr(model, "plot_model")):
+        model.plot_model(model_savedir, show_shapes=True, show_layer_activations=True)
+    else:
+        plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
+                   show_shapes=True, show_layer_activations=True)
 
     # final timing
     tend = timer()
