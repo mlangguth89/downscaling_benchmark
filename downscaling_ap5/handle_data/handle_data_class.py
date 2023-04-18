@@ -128,8 +128,7 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(da: xr.DataArray, target_var="t_2m_tar", predictands: List = None,
-                     predictors: List = None) -> (xr.DataArray, xr.DataArray):
+    def split_in_tar(da: xr.DataArray, predictands: List = None, predictors: List = None) -> (xr.DataArray, xr.DataArray):
         """
         Split data array with variables-dimension into input and target data for downscaling
         :param da: The unsplitted data array
