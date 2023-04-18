@@ -128,34 +128,56 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(da: xr.DataArray, target_var: str = "t2m") -> (xr.DataArray, xr.DataArray):
+    def split_in_tar(da: xr.DataArray, target_var="t_2m_tar", predictands: List = None,
+                     predictors: List = None) -> (xr.DataArray, xr.DataArray):
         """
         Split data array with variables-dimension into input and target data for downscaling
         :param da: The unsplitted data array
         :param target_var: Name of target variable which should consttute the first channel
+        :param predictands: List of selected predictand variables; parse None to use
+                            all predictands (vars with suffix _tar)
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
         :return: The split data array.
         """
-        invars = [var for var in da["variables"].values if var.endswith("_in")]
-        tarvars = [var for var in da["variables"].values if var.endswith("_tar")]
+        da_vars = list(da["variables"].values)
 
-        # ensure that ds_tar has a channel coordinate even in case of single target variable
-        roll = False
-        if len(tarvars) == 1:
-            sl_tarvars = tarvars
+        if predictors is None:
+            invars = [var for var in da_vars if var.endswith("_in")]
         else:
-            sl_tarvars = slice(*tarvars)
-            if tarvars[0] != target_var:     # ensure that target variable appears as first channel
-                roll = True
+            assert all([predictor in da_vars for predictor in
+                        predictors]), f"At least one predictor is not a data variable. Available variables are {*da_vars,}"
+            invars = list(predictors)
+        if predictands is None:
+            tarvars = [var for var in da_vars if var.endswith("_tar")]
+        else:
+            assert all([predictand in da_vars for predictand in
+                        predictands]), f"At least one predictor is not a data variable. Available variables are {*da_vars,}"
+            tarvars = list(predictands)
 
-        da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=sl_tarvars)
-        if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
+        # DEPRECATED CODE #
+        # Unnecessary as predictands-list must be parsed to all data stream-methods
+        # (make_tf_dataset_dyn and make_tf_dataset_allmem)
+        # # ensure that ds_tar has a channel coordinate even in case of single target variable
+        # roll = False
+        # if len(tarvars) == 1:
+        #     sl_tarvars = tarvars
+        # else:
+        #     # sl_tarvars = slice(*tarvars)
+        #     sl_tarvars = tarvars
+        #     if tarvars[0] != target_var and predictands is None:  # ensure that target variable appears as first channel
+        #         roll = True
+        #
+        # da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=list(sl_tarvars))
+        # if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
+        # DEPRECATED CODE #
+        da_in, da_tar = da.sel({"variables": invars}), da.sel({"variables": tarvars})
 
         return da_in, da_tar
 
     @staticmethod
     def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nepochs: int, nfiles2merge: int,
-                            lshuffle: bool = True, named_targets: bool = False, predictands: List = None,
-                            predictors: List = None, var_tar2in: str = None, norm_obj=None, norm_dims: List = None,
+                            predictands: List, predictors: List = None, lshuffle: bool = True,
+                            named_targets: bool = False, var_tar2in: str = None, norm_obj=None, norm_dims: List = None,
                             nworkers: int = 10):
         """
         Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
@@ -166,10 +188,10 @@ class HandleDataClass(object):
         :param batch_size: desired mini-batch size
         :param nepochs: (effective) number of epochs for training
         :param nfiles2merge: number if files to merge for streaming
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
         :param lshuffle: boolean to enable sample shuffling
         :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
-        :param predictors: List of selected predictor variables; parse None to use all data
-        :param predictands: List of selected predictor variables; parse None to use all data
         :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
                                                                          to the input)
         :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
@@ -186,9 +208,9 @@ class HandleDataClass(object):
 
         if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
 
-        ds_obj = StreamMonthlyNetCDF(datadir, file_patt, nfiles_merge=nfiles2merge, selected_predictors=predictors,
-                                     selected_predictands=predictands, var_tar2in=var_tar2in,
-                                     norm_obj=norm_obj, norm_dims=norm_dims, nworkers=nworkers)
+        ds_obj = StreamMonthlyNetCDF(datadir, file_patt, nfiles_merge=nfiles2merge, selected_predictands=predictands,
+                                     selected_predictors=predictors, var_tar2in=var_tar2in, norm_obj=norm_obj,
+                                     norm_dims=norm_dims, nworkers=nworkers)
 
         tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
         tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
@@ -218,15 +240,18 @@ class HandleDataClass(object):
         return ds_obj, tfds
 
     @staticmethod
-    def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, lshuffle: bool = True, shuffle_samples: int = 20000,
-                               named_targets: bool = False, var_tar2in: str = None, lrepeat: bool = True,
-                               drop_remainder: bool = True, lembed: bool = False) -> tf.data.Dataset:
+    def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, predictands: List, predictors: List = None,
+                               lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
+                               var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
+                               lembed: bool = False) -> tf.data.Dataset:
         """
         Build-up TensorFlow dataset from a generator based on the xarray-data array.
         NOTE: All data is loaded into memory
         :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
                    Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
         :param batch_size: number of samples per mini-batch
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
         :param lshuffle: flag if shuffling should be applied to dataset
         :param shuffle_samples: number of samples to load before applying shuffling
         :param named_targets: flag if target of TF dataset should be dictionary with named target variables
@@ -237,7 +262,7 @@ class HandleDataClass(object):
         :param lembed: flag to trigger temporal embedding (not implemented yet!)
         """
         da = da.load()
-        da_in, da_tar = HandleDataClass.split_in_tar(da)
+        da_in, da_tar = HandleDataClass.split_in_tar(da, predictands=predictands, predictors=predictors)
         if var_tar2in is not None:
             # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
             #       * The following operation order must concatenate var_tar2in by da_in to ensure
@@ -374,8 +399,8 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 
 class StreamMonthlyNetCDF(object):
-    def __init__(self, datadir, patt, nfiles_merge: int, sample_dim: str = "time", selected_predictors: List = None,
-                 selected_predictands: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
+    def __init__(self, datadir, patt, nfiles_merge: int, selected_predictands: List, sample_dim: str = "time",
+                 selected_predictors: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
                  nworkers: int = 10):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
@@ -384,9 +409,10 @@ class StreamMonthlyNetCDF(object):
         :param datadir: directory where set of netCDF-files are located
         :param patt: filename pattern to allow globbing for netCDF-files
         :param nfiles_merge: number of files that will be loaded into memory (corresponding to one dataset subset)
-        :param sample_dim: name of dimension in the data over which sampling should be performed
-        :param selected_predictors: list of predictor variable names to be obtained
         :param selected_predictands: list of predictand variables names to be obtained
+        :param sample_dim: name of dimension in the data over which sampling should be performed
+        :param selected_predictors: list of predictor variable names to be obtained, pass None
+                                    if all vars with suffix _in should be chosen
         :param var_tar2in: predictand (target) variable that can be inputted as well
                           (e.g. static variables known a priori such as the surface topography)
         :param norm_dims: list of dimensions over which data will be normalized
@@ -401,6 +427,7 @@ class StreamMonthlyNetCDF(object):
         self.nfiles2merge = nfiles_merge
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
         self.samples_merged = self.get_samples_per_merged_file()
+        self.varnames_list = self.get_all_varnames()
         print(f"Data subsets will comprise {self.samples_merged} samples.")
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
@@ -549,7 +576,15 @@ class StreamMonthlyNetCDF(object):
 
     @predictand_list.setter
     def predictand_list(self, selected_predictands: List):
+        """
+        Similar to predictor_list-setter, but does not allow for parsing None.
+        """
+        assert isinstance(selected_predictands, list), "Selected predictands must be a list of variable names"
         self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
+
+    def get_all_varnames(self):
+        ds_test = xr.open_dataset(self.file_list[0])
+        return list(ds_test.variables)
 
     def check_and_choose_vars(self, var_list: List[str], suffix: str = "*"):
         """
@@ -559,13 +594,10 @@ class StreamMonthlyNetCDF(object):
         :param suffix: optional suffix of variables to selected. Only effective if var_list is None
         :return selected_vars: list of selected variables
         """
-        ds_test = xr.open_dataset(self.file_list[0])
-        all_vars = list(ds_test.variables)
-
         if var_list is None:
-            selected_vars = [var for var in all_vars if var.endswith(suffix)]
+            selected_vars = [var for var in self.varnames_list if var.endswith(suffix)]
         else:
-            stat_list = [var in all_vars for var in var_list]
+            stat_list = [var in self.varnames_list for var in var_list]
             if all(stat_list):
                 selected_vars = var_list
             else:
