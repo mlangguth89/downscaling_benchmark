@@ -82,18 +82,20 @@ def main(parser_args):
     # training data
     print("Start preparing training data...")
     t0_train = timer()
+    varnames_tar = list(ds_dict["predictands"])
     fname_or_patt_train = get_dataset_filename(datadir, dataset, "train", ds_dict.get("laugmented", False))
 
     # if fname_or_patt_train is a filename (string without wildcard), all data will be loaded into memory
     # if fname_or_patt_train is a filename pattern (string with wildcard), the TF-dataset will iterate over subsets of
     # the dataset
     if "*" in fname_or_patt_train:
-        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs, 30,
-                                                                 var_tar2in=ds_dict["var_tar2in"], norm_obj=data_norm,
-                                                                 predictands=ds_dict["predictands"], norm_dims=norm_dims)
+        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
+                                                                 nfiles2merge=30, var_tar2in=ds_dict["var_tar2in"],
+                                                                 predictands=ds_dict["predictands"],
+                                                                 named_targets=named_targets,
+                                                                 norm_obj=data_norm, norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
         nsamples, shape_in = ds_obj.nsamples, (*ds_obj.data_dim[::-1], ds_obj.n_predictors)
-        varnames_tar = list(ds_obj.predictand_list) if named_targets else None
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
@@ -107,7 +109,6 @@ def main(parser_args):
         tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
-        varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
         tfds_train_size = da_train.nbytes
 
     if write_norm:
@@ -123,8 +124,9 @@ def main(parser_args):
         ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=True,
-                                                      var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"],
+                                                      lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
+                                                      named_targets=named_targets)
     
     # clean up to save some memory
     del ds_val
@@ -142,7 +144,7 @@ def main(parser_args):
         print(f"Data loading time: {ttrain_load:.2f}s.")
 
     # instantiate model
-    model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
+    model = model_instance(shape_in, varnames_tar, hparams_dict, model_savedir, parser_args.exp_name)
     model.varnames_tar = varnames_tar
 
     # get optional compile options and compile
