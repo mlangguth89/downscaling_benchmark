@@ -360,8 +360,8 @@ class Scores:
         a_l2 = np.sqrt(self.data_ref.dot(self.data_ref, dims=self.data_ref.dims[-1]))
         b_l2 = np.sqrt(self.data_fcst.dot(self.data_fcst, dims=self.data_fcst.dims[-1]))
         # Calculation of the cosine dissimilarity
-        cosdis = (0.5*(1 -(a_dot_b / (a_l2 * b_l2))).mean(dim=self.avg_dims))
-        #cosdis = 0.5*(1 -(a_dot_b / (a_l2 * b_l2)))
+        #cosdis = (0.5*(1 -(a_dot_b / (a_l2 * b_l2))).mean(dim=self.avg_dims))
+        cosdis = 0.5*(1 -(a_dot_b / (a_l2 * b_l2)))
         return cosdis
     
     def calc_md(self):
@@ -373,7 +373,7 @@ class Scores:
         a_l2 = np.sqrt(self.data_ref.dot(self.data_ref, dims=self.data_ref.dims[-1]))
         b_l2 = np.sqrt(self.data_fcst.dot(self.data_fcst, dims=self.data_fcst.dims[-1]))
         #md = (a_l2 - b_l2).mean(dim=self.avg_dims)
-        md = (a_l2 - b_l2).mean(dim=self.avg_dims)
+        md = a_l2 - b_l2
         return md
     
     
