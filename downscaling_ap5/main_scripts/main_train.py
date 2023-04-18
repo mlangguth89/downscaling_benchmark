@@ -33,7 +33,6 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 #   are available
 # * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
 # * ensure that dataset defaults are set (such as predictands for WGAN)
-# * customized choice on predictors missing
 # * replacement of manual benchmarking by JUBE-benchmarking to avoid duplications
 
 def main(parser_args):
@@ -91,8 +90,9 @@ def main(parser_args):
     # the dataset
     if "*" in fname_or_patt_train:
         ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
-                                                                 nfiles2merge=30, var_tar2in=ds_dict["var_tar2in"],
-                                                                 predictands=ds_dict["predictands"],
+                                                                 30, ds_dict["predictands"],
+                                                                 predictors=ds_dict.get("predictors", None),
+                                                                 var_tar2in=ds_dict["var_tar2in"],
                                                                  named_targets=named_targets,
                                                                  norm_obj=data_norm, norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
@@ -107,7 +107,9 @@ def main(parser_args):
             data_norm = ZScore(ds_dict["norm_dims"])
 
         da_train = data_norm.normalize(da_train)
-        tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
+        tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, ds_dict["predictands"],
+                                                            predictors=ds_dict.get("predictors", None),
+                                                            var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
