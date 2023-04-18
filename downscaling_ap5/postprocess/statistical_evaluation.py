@@ -20,7 +20,8 @@ try:
     l_tqdm = True
 except:
     l_tqdm = False
-from other_utils import provide_default, check_str_in_list
+#from other_utils import provide_default, check_str_in_list
+import pdb
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -347,3 +348,65 @@ class Scores:
             raise ValueError(f"Second-order differentation is not implemenetd in {method} yet.")
 
         return var_diff_amplitude
+    
+    def calc_cosdis(self):
+        '''
+        Calculate the cosine dissimilarity as in Hoehlein et al. 2020.
+        Requires the target and the prediction as inputs. It compares the angles and averages the differences over the area.
+        avg_dims has to be over the validation or test set.
+        '''
+        # Calculation of cosine components
+        a_dot_b = self.data_ref.dot(self.data_fcst, dims=self.data_ref.dims[-1])
+        a_l2 = np.sqrt(self.data_ref.dot(self.data_ref, dims=self.data_ref.dims[-1]))
+        b_l2 = np.sqrt(self.data_fcst.dot(self.data_fcst, dims=self.data_fcst.dims[-1]))
+        # Calculation of the cosine dissimilarity
+        cosdis = (0.5*(1 -(a_dot_b / (a_l2 * b_l2))).mean(dim=self.avg_dims))
+        #cosdis = 0.5*(1 -(a_dot_b / (a_l2 * b_l2)))
+        return cosdis
+    
+    def calc_md(self):
+        '''
+        Calculate the magnitude difference as in Hoehlein et al. 2020.
+        Requires the target and the prediction as inputs.It compares the wind magnitudes. 
+        avg_dims has to be over the validation or test set.
+        ''' 
+        a_l2 = np.sqrt(self.data_ref.dot(self.data_ref, dims=self.data_ref.dims[-1]))
+        b_l2 = np.sqrt(self.data_fcst.dot(self.data_fcst, dims=self.data_fcst.dims[-1]))
+        #md = (a_l2 - b_l2).mean(dim=self.avg_dims)
+        md = (a_l2 - b_l2).mean(dim=self.avg_dims)
+        return md
+    
+    
+if __name__ == '__main__':
+    #data_fcst: xr.DataArray, data_ref: xr.DataArray, dims: List[str]
+
+    # Mock data 
+    time = pd.date_range('2022-01-01', periods=10, freq='D')
+    lat = np.linspace(40, 55, 16)
+    lon = np.linspace(0, 15, 16)
+    channel = ['u', 'v']
+
+    # Create the data arrays
+    #data_fcst = xr.DataArray(np.random.rand(len(time), len(lat), len(lon), len(channel)),
+    #                         coords={'time': time, 'lat': lat, 'lon': lon, 'channel': channel},
+    #                         dims=['time', 'lat', 'lon', 'channel'],
+    #                         name='data_fcst')
+    #data_ref = xr.DataArray(np.random.rand(len(time), len(lat), len(lon), len(channel)),
+    #                        coords={'time': time, 'lat': lat, 'lon': lon, 'channel': channel},
+    #                        dims =['time', 'lat', 'lon', 'channel'],
+    #                        name='data_ref')
+    data_fcst = xr.DataArray(np.ones((len(time), len(lat), len(lon), len(channel))),
+                             coords={'time': time, 'lat': lat, 'lon': lon, 'channel': channel},
+                             dims=['time', 'lat', 'lon', 'channel'],
+                             name='data_fcst')
+    data_ref = xr.DataArray(np.ones((len(time), len(lat), len(lon), len(channel))),
+                            coords={'time': time, 'lat': lat, 'lon': lon, 'channel': channel},
+                            dims =['time', 'lat', 'lon', 'channel'],
+                            name='data_ref')    
+    
+    
+    unicorn = Scores(data_fcst, data_ref, dims=['lat', 'lon'])
+    cosdis = unicorn.calc_cosdis()
+    md = unicorn.calc_md()
+    pdb.set_trace()
+    print('DONE')
