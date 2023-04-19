@@ -555,6 +555,17 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
 
         # the following CDO-command performs the following: i) slice data spatially, ii) select model levels of interest
         # iii) select variables of interest, iv) convert to netCDF-format
+        l_add_lnsp = False
+        if "lnsp" in mlvars_list:
+            mlvars_list.remove("lnsp")
+            l_add_lnsp = True
+            ftmp_lnsp = ftmp_mlvl1.replace("mlvl.nc", "lnsp.nc")
+            cdo.run([ml_file, ftmp_lnsp],
+                    OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""), ("-selname", "lnsp"),
+                                 ("-sellevel", 1), ("-sellonlatbox", "0.,30.,30.,60.")]))
+            ncwa.run([ftmp_lnsp, ftmp_lnsp], OrderedDict([("-O", ""), ("-a", "lev")]))
+            ncks.run([ftmp_lnsp, ftmp_lnsp], OrderedDict([("-O", ""), ("-x", ""), ("-v", "lev")]))
+
         cdo.run([ml_file, ftmp_mlvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
                                                     ("-selname", ",".join(mlvars_list)),
                                                     ("-sellevel", mlvl_strs),
@@ -577,6 +588,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
         cdo.run([ftmp_mlvl1.replace(".nc", "??????.nc"), ftmp_mlvl2], OrderedDict([("-O", ""), ("merge", "")]))
         cdo.run([ftmp_mlvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
+        if l_add_lnsp:
+            cdo.run([ftmp_hres, ftmp_lnsp], OrderedDict([("-O", ""), ("merge", "")]))
+            remove_files([ftmp_lnsp])
 
         # clean-up temporary files and rename variables
         mlvl_files = list(glob.glob(ftmp_mlvl1.replace(".nc", "??????.nc")))
