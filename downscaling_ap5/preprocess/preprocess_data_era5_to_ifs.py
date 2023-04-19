@@ -3,6 +3,8 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-04-22"
 __update__ = "2022-08-22"
 
+import shutil
+
 # doc-string
 """
 Main script to preprocess ERA5 data (provided on a 0.3°-grid) for first real downscaling application. 
@@ -589,8 +591,12 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_mlvl1.replace(".nc", "??????.nc"), ftmp_mlvl2], OrderedDict([("-O", ""), ("merge", "")]))
         cdo.run([ftmp_mlvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
         if l_add_lnsp:
-            cdo.run([ftmp_hres, ftmp_lnsp], OrderedDict([("-O", ""), ("merge", "")]))
-            remove_files([ftmp_lnsp], lbreak=False)
+            ftmp_hres_tmp = ftmp_hres.replace("hres.nc", "hres_tmp.nc")
+            cdo.run([ftmp_hres, ftmp_lnsp, ftmp_hres_tmp], OrderedDict([("-O", ""), ("merge", "")]))
+            # overwrite pre-existing file
+            shutil.move(ftmp_hres_tmp, ftmp_hres)
+            # clean-up
+            remove_files([ftmp_lnsp, ftmp_hres_tmp], lbreak=False)
 
         # clean-up temporary files and rename variables
         mlvl_files = list(glob.glob(ftmp_mlvl1.replace(".nc", "??????.nc")))
