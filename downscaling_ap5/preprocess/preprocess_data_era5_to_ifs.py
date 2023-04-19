@@ -575,7 +575,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_mlvl1, ftmp_mlvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
         for mlvl in mlvars["mlvls"]:
-            curr_file = ftmp_mlvl1.replace(".nc", "{0:d}.nc".format(int(mlvl)))
+            curr_file = ftmp_mlvl1.replace(".nc", "{0:06d}.nc".format(int(mlvl)))
             # trick to remove singleton plev- while keeping time-dimension
             ncwa.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-a", "lev")]))
             ncks.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", "lev")]))
@@ -590,7 +590,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         cdo.run([ftmp_mlvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
         if l_add_lnsp:
             cdo.run([ftmp_hres, ftmp_lnsp], OrderedDict([("-O", ""), ("merge", "")]))
-            remove_files([ftmp_lnsp])
+            remove_files([ftmp_lnsp], lbreak=False)
 
         # clean-up temporary files and rename variables
         mlvl_files = list(glob.glob(ftmp_mlvl1.replace(".nc", "??????.nc")))
@@ -790,9 +790,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         lvls = set(list(flatten(mlvars_dict.values())))
         mlvls = [int(float(lvl.lstrip("m"))) for lvl in lvls if lvl.startswith("m")]
         # Currently only pressure-level interpolation is supported. Thus, we stop here if other level identifier is used
-        if len(lvls) != len(mlvls):
-            raise ValueError("Could not retrieve all parsed level imformation. Check the folllowing: {0}"
-                             .format(", ".join(lvls)))
+        #if len(lvls) != len(mlvls):
+        #    raise ValueError("Could not retrieve all parsed level imformation. Check the folllowing: {0}"
+        #                     .format(", ".join(lvls)))
 
         return mlvls
 
