@@ -270,10 +270,10 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             fc_sfvars = list(fc_sfvars)
 
         if mlvars:
-            mlvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(mlvars)
+            mlvars["mlvls"] = PreprocessERA5toIFS.retrieve_mlvls(mlvars)
 
         if fc_plvars:
-            fc_plvars["plvls"] = PreprocessERA5toIFS.retrieve_plvls(fc_plvars)
+            fc_plvars["mlvls"] = PreprocessERA5toIFS.retrieve_mlvls(fc_plvars)
 
         return sfvars, mlvars, fc_sfvars, fc_plvars
 
@@ -543,51 +543,44 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             raise FileNotFoundError("%{0}: Could not find required multi level-file '{1}'".format(method, ml_file))
 
         # construct filenames for all temporary files
-        ftmp_plvl1 = os.path.join(tmp_dir, "{0}_plvl.nc".format(date_str))
-        ftmp_plvl2 = ftmp_plvl1.replace("plvl.nc", "plvl_all.nc")
+        ftmp_mlvl1 = os.path.join(tmp_dir, "{0}_mlvl.nc".format(date_str))
+        ftmp_mlvl2 = ftmp_mlvl1.replace("mlvl.nc", "mlvl_all.nc")
         ftmp_hres = os.path.join(tmp_dir, f"{date_str}_ml_hres.nc")
 
         # Create lists of variables as well as pressure strings required for pressure interpolation
         mlvars_list = list(mlvars.keys())
-        mlvars_list.remove("plvls")
-        mlvars_list_interp = mlvars_list + ["t", "lnsp", "z"]
-        plvl_strs = ",".join(["{0:d}".format(int(plvl)) for plvl in mlvars["plvls"]])
+        mlvars_list.remove("mlvls")
+        mlvl_strs = ",".join(["{0:d}".format(int(mlvl)) for mlvl in mlvars["mlvls"]])
         var_new_req = PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars)
 
-        # interpolate variables of interest onto pressure levels
-        if interp:
-            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                        ("-selname", ",".join(mlvars_list)),
-                                                        ("-ml2plx", plvl_strs),
-                                                        ("-selname", ",".join(mlvars_list_interp)),
-                                                        ("-sellonlatbox", "0.,30.,30.,60.")]))
-        else:
-            cdo.run([ml_file, ftmp_plvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
-                                                        ("-selname", ",".join(mlvars_list)),
-                                                        ("-sellevel", plvl_strs),
-                                                        ("-sellonlatbox", "0.,30.,30.,60.")]))
+        # the following CDO-command performs the following: i) slice data spatially, ii) select model levels of interest
+        # iii) select variables of interest, iv) convert to netCDF-format
+        cdo.run([ml_file, ftmp_mlvl1], OrderedDict([("--eccodes", ""), ("-f nc", ""), ("copy", ""),
+                                                    ("-selname", ",".join(mlvars_list)),
+                                                    ("-sellevel", mlvl_strs),
+                                                    ("-sellonlatbox", "0.,30.,30.,60.")]))
 
         # Split pressure-levels into seperate files and ...
-        cdo.run([ftmp_plvl1, ftmp_plvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
+        cdo.run([ftmp_mlvl1, ftmp_mlvl1.rstrip(".nc")], OrderedDict([("splitlevel", "")]))
         # ... rename variables accordingly in each resulting file
-        for plvl in mlvars["plvls"]:
-            curr_file = ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))
+        for mlvl in mlvars["mlvls"]:
+            curr_file = ftmp_mlvl1.replace(".nc", "{0:d}.nc".format(int(mlvl)))
             # trick to remove singleton plev- while keeping time-dimension
-            ncwa.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-a", "plev")]))
-            ncks.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", "plev")]))
+            ncwa.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-a", "lev")]))
+            ncks.run([curr_file, curr_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", "lev")]))
 
             for var in mlvars_list:
-                var_new = "{0}{1:d}".format(var, int(plvl/100.))
-                ncrename.run([ftmp_plvl1.replace(".nc", "{0:06d}.nc".format(int(plvl)))],
+                var_new = "{0}{1:d}".format(var, int(mlvl))
+                ncrename.run([ftmp_mlvl1.replace(".nc", "{0:06d}.nc".format(int(mlvl)))],
                              OrderedDict([("-v", "{0},{1}".format(var, var_new))]))
 
         # concatenate pressure-level files, reduce to final variables of interest and do the remapping steps
-        cdo.run([ftmp_plvl1.replace(".nc", "??????.nc"), ftmp_plvl2], OrderedDict([("-O", ""), ("merge", "")]))
-        cdo.run([ftmp_plvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
+        cdo.run([ftmp_mlvl1.replace(".nc", "??????.nc"), ftmp_mlvl2], OrderedDict([("-O", ""), ("merge", "")]))
+        cdo.run([ftmp_mlvl2, ftmp_hres], OrderedDict([("-selname", ",".join(var_new_req))]))
 
         # clean-up temporary files and rename variables
-        plvl_files = list(glob.glob(ftmp_plvl1.replace(".nc", "??????.nc")))
-        remove_files(plvl_files + [ftmp_plvl1, ftmp_plvl2], lbreak=False)
+        mlvl_files = list(glob.glob(ftmp_mlvl1.replace(".nc", "??????.nc")))
+        remove_files(mlvl_files + [ftmp_mlvl1, ftmp_mlvl2], lbreak=False)
 
         return ftmp_hres
 
@@ -761,9 +754,9 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         """
         try:
             mlvars_list = list(mlvars.keys())
-            if "plvls" in mlvars_list: mlvars_list.remove("plvls")
-            mlvarnames = ["{0}{1}".format(var, int(int(plvl.lstrip("p")) / 100))
-                          for var in mlvars_list for plvl in mlvars[var]]
+            if "mlvls" in mlvars_list: mlvars_list.remove("mlvls")
+            mlvarnames = ["{0}{1}".format(var, int(int(mlvl.lstrip("m"))))
+                          for var in mlvars_list for mlvl in mlvars[var]]
         except AttributeError as err:
             if mlvars:
                 raise err
@@ -774,20 +767,20 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         return mlvarnames
 
     @staticmethod
-    def retrieve_plvls(mlvars_dict):
+    def retrieve_mlvls(mlvars_dict):
         """
         Returns list of unique pressure levels from nested variable dictionary of form
         :param mlvars_dict: nested variable dictionary, e.g. {<var1>: ["p85000", "p92500"], <var2>: ["p85000"]}
         :return: list of uniues pressure levels, e.g [85000, 925000] in this example
         """
         lvls = set(list(flatten(mlvars_dict.values())))
-        plvls = [int(float(lvl.lstrip("p"))) for lvl in lvls if lvl.startswith("p")]
+        mlvls = [int(float(lvl.lstrip("m"))) for lvl in lvls if lvl.startswith("m")]
         # Currently only pressure-level interpolation is supported. Thus, we stop here if other level identifier is used
-        if len(lvls) != len(plvls):
+        if len(lvls) != len(mlvls):
             raise ValueError("Could not retrieve all parsed level imformation. Check the folllowing: {0}"
                              .format(", ".join(lvls)))
 
-        return plvls
+        return mlvls
 
     @staticmethod
     def check_season(season: str) -> List:
