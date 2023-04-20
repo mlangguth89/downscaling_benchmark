@@ -212,7 +212,7 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
 
 # The DeepRU U-Net
 def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64, dchannels: int = 64,
-           z_branch: bool = True, concat_out: bool = True) -> Model:
+           z_branch: bool = False, concat_out: bool = False) -> Model:
     """
     Builds up the DeepRu architecture from Hoehlein., 2020 (see https://doi.org/10.1175/AIES-D-21-0002.1).
     There are (required) modifications compared to Hoehlein et al., 2020 (cf. Fig. 7 in Hoehlein et al., 2020):
@@ -320,7 +320,7 @@ class UNET(keras.Model):
                                   tar_channels=tar_channels)
         else:
             self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=self.hparams["z_branch"],
-                                  concat_out=True)
+                                  concat_out=True & self.hparams["z_branch"])
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)

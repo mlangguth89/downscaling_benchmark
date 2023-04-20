@@ -2,6 +2,7 @@
   "nepochs": 70,
   "named_targets": false,
   "z_branch": false,
+  "predictands": ["t_2m_tar"],
   "n_predictands": 1,
   "lr": 1e-03,
   "lr_end": 1e-06,
