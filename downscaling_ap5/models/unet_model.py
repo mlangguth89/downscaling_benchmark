@@ -9,7 +9,7 @@ Methods to set-up U-net models incl. its building blocks.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2022-11-25"
+__update__ = "2023-04-20"
 
 # import modules
 import os
@@ -81,14 +81,12 @@ def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), s
 
     return x
 
-def residual_block(inputs, channels ,kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
+
+def residual_block(inputs, channels, kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
                    activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
 
-    # save the input for the residual connection
-    x = inputs
-
     # process the input with convolutional layers (incl. non-linear activation and optional batch normalization)
-    x = conv_block_n(x, channels, nconv_res, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
+    x = conv_block_n(inputs, channels, nconv_res, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
                      l_batch_normalization=l_batch_normalization)
 
     # the actual residual connection: adding inpput and processed data
@@ -107,6 +105,7 @@ def residual_block(inputs, channels ,kernel: tuple = (3,3), nconv_res: int = 3, 
         x = BatchNormalization()(x)
 
     return x
+
 
 def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: bool = True):
     """
@@ -140,22 +139,23 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
     return x
 
 
-def encoder_block_deepru(inputs, channels, strides, kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
+def encoder_block_deepru(inputs, channels, strides, kernel: tuple = (3, 3), nconv_res: int = 3, padding: str = "same",
                          activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
+    # save the input for the residual connection
+    skip_features = inputs
 
-    x = conv_block(inputs, channels, strides, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
+    x = conv_block(inputs, channels, kernel, strides, padding=padding, activation=activation, kernel_init=kernel_init,
                    l_batch_normalization=l_batch_normalization)
 
     x = residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization)
 
-    return x
+    return skip_features, x
 
 
-def decoder_block_deepru(inputs, skip_features, channels, size, interpolation: str  ="bilinear", nconv_res: int = 3,
+def decoder_block_deepru(inputs, skip_features, channels, size, interpolation: str = "bilinear", nconv_res: int = 3,
                          kernel: tuple = (3, 3), padding: str = "same", activation="LeakyReLU", kernel_init="he_normal",
                          l_batch_normalization: bool = True):
-
-    x = UpSampling2D(size, interpolation)(inputs)
+    x = UpSampling2D(size, interpolation=interpolation)(inputs)
 
     x = Concatenate()([x, skip_features])
     x = conv_block(x, channels, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
@@ -165,7 +165,9 @@ def decoder_block_deepru(inputs, skip_features, channels, size, interpolation: s
     return x
 
 
-# The particular U-net
+
+
+# The Sha U-net
 def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 56, z_branch: bool = False,
              concat_out: bool = False, tar_channels=["output_dyn", "output_z"]) -> Model:
     """
@@ -208,6 +210,7 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     return model
 
 
+# The DeepRU U-Net
 def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64, dchannels: int = 64) -> Model:
     """
     Builds up the DeepRu architecture from Hoehlein., 2020 (see https://doi.org/10.1175/AIES-D-21-0002.1).
@@ -223,6 +226,7 @@ def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64,
     inputs = Input(input_shape)
 
     channels = np.arange(channels_start, channels_start*7 + 1, dchannels)
+    print(channels)
 
     latent_in = conv_block(inputs, channels[0], (5, 5), activation="LeakyReLU")
 
@@ -244,7 +248,7 @@ def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64,
     d2 = decoder_block_deepru(d3, s2, channels[1], size=(1, 3))
     d1 = decoder_block_deepru(d2, s1, channels[0], size=(2, 1))
 
-    output_dyn = Conv2D(n_predictands_dyn, (3, 3), kernel_initializer="he_normal", name="output_dyn")(d1)
+    output_dyn = Conv2D(n_predictands_dyn, (3, 3), kernel_initializer="he_normal", padding="same", name="output_dyn")(d1)
 
     model = Model(inputs, output_dyn, name="downscaling_deepru")
 
