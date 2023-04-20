@@ -19,7 +19,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
-                                     Activation)
+                                     Activation, UpSampling2D, Add)
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
 
@@ -81,6 +81,32 @@ def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), s
 
     return x
 
+def residual_block(inputs, channels ,kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
+                   activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
+
+    # save the input for the residual connection
+    x = inputs
+
+    # process the input with convolutional layers (incl. non-linear activation and optional batch normalization)
+    x = conv_block_n(x, channels, nconv_res, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
+                     l_batch_normalization=l_batch_normalization)
+
+    # the actual residual connection: adding inpput and processed data
+    x = Add()([x, inputs])
+    # finally apply non-linear activation and optional batch normalization
+    # (following He et al., 2016: https://doi.org/10.1109/CVPR.2016.90, but not shown in Fig.6 of Hoehlein et al., 2020)
+    try:
+        x = Activation(activation)(x)
+    except ValueError:
+        ac_layer = advanced_activations(activation)
+        x = ac_layer(x)
+
+    # batch normalization is considered to be beneficial, see
+    # https://stackoverflow.com/questions/64792460/how-to-code-a-residual-block-using-two-layers-of-a-basic-cnn-algorithm-built-wit
+    if l_batch_normalization:
+        x = BatchNormalization()(x)
+
+    return x
 
 def encoder_block(inputs, num_filters, kernel_maxpool: tuple = (2, 2), l_large: bool = True):
     """
@@ -114,6 +140,31 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
     return x
 
 
+def encoder_block_deepru(inputs, channels, strides, kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
+                         activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
+
+    x = conv_block(inputs, channels, strides, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
+                   l_batch_normalization=l_batch_normalization)
+
+    x = residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization)
+
+    return x
+
+
+def decoder_block_deepru(inputs, skip_features, channels, size, interpolation: str  ="bilinear", nconv_res: int = 3,
+                         kernel: tuple = (3, 3), padding: str = "same", activation="LeakyReLU", kernel_init="he_normal",
+                         l_batch_normalization: bool = True):
+
+    x = UpSampling2D(size, interpolation)(inputs)
+
+    x = Concatenate()([x, skip_features])
+    x = conv_block(x, channels, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
+                   l_batch_normalization=l_batch_normalization)
+    x = residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization)
+
+    return x
+
+
 # The particular U-net
 def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 56, z_branch: bool = False,
              concat_out: bool = False, tar_channels=["output_dyn", "output_z"]) -> Model:
@@ -121,7 +172,7 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
-    :param n_predictands: number of target variables (dynamic output variables)
+    :param n_predictands_dyn: number of target variables (dynamic output variables)
     :param z_branch: flag if z-branch is used.
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :param concat_out: boolean if output layers will be concatenated (disables named target channels!)
@@ -135,17 +186,17 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     s3, e3 = encoder_block(e2, channels_start * 4, l_large=False)
 
     """ bridge encoder <-> decoder """
-    b1 = conv_block(e3, channels_start * 8)
+    b = conv_block(e3, channels_start * 8)
 
     """ decoder """
-    d1 = decoder_block(b1, s3, channels_start * 4)
-    d2 = decoder_block(d1, s2, channels_start * 2)
-    d3 = decoder_block(d2, s1, channels_start)
+    d3 = decoder_block(b, s3, channels_start * 4)
+    d2 = decoder_block(d3, s2, channels_start * 2)
+    d1 = decoder_block(d2, s1, channels_start)
 
-    output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
+    output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d1)
     if z_branch:
         print("Use z_branch...")
-        output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
+        output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d1)
 
         if concat_out:
             model = Model(inputs, tf.concat([output_dyn, output_static], axis=-1), name="downscaling_unet_with_z")
@@ -153,6 +204,49 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
             model = Model(inputs, [output_dyn, output_static], name="downscaling_unet_with_z")
     else:
         model = Model(inputs, output_dyn, name="downscaling_unet")
+
+    return model
+
+
+def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64, dchannels: int = 64) -> Model:
+    """
+    Builds up the DeepRu architecture from Hoehlein., 2020 (see https://doi.org/10.1175/AIES-D-21-0002.1).
+    There are (required) modifications compared to Hoehlein et al., 2020 (cf. Fig. 7 in Hoehlein et al., 2020):
+        - no input block is used (as the data is already bilinearly upsampled beforehand)
+        - fourth strided convolution uses a stride of (2,2) instead of (3,3),
+    :param input_shape: shape of input-data
+    :param channels_start: number of channels to use as start in encoder blocks
+    :param dchannels: increase in number of channels per U-Net stage
+    :param n_predictands_dyn: number of target variables (dynamic output variables)
+    :return: model instance
+    """
+    inputs = Input(input_shape)
+
+    channels = np.arange(channels_start, channels_start*7 + 1, dchannels)
+
+    latent_in = conv_block(inputs, channels[0], (5, 5), activation="LeakyReLU")
+
+    """encoder"""
+    s1, e1 = encoder_block_deepru(latent_in, channels[1], strides=(2, 1))
+    s2, e2 = encoder_block_deepru(e1, channels[2], strides=(1, 3))
+    s3, e3 = encoder_block_deepru(e2, channels[3], strides=(2, 1))
+    s4, e4 = encoder_block_deepru(e3, channels[4], strides=(2, 2))
+    s5, e5 = encoder_block_deepru(e4, channels[5], strides=(2, 2))
+
+    """ bridge encoder <-> decoder """
+    s6, b = encoder_block_deepru(e5, channels[6], strides=(2, 2))
+
+    """decoder"""
+    d6 = decoder_block_deepru(b, s6, channels[5], size=(2, 2))
+    d5 = decoder_block_deepru(d6, s5, channels[4], size=(2, 2))
+    d4 = decoder_block_deepru(d5, s4, channels[3], size=(2, 2))
+    d3 = decoder_block_deepru(d4, s3, channels[2], size=(2, 1))
+    d2 = decoder_block_deepru(d3, s2, channels[1], size=(1, 3))
+    d1 = decoder_block_deepru(d2, s1, channels[0], size=(2, 1))
+
+    output_dyn = Conv2D(n_predictands_dyn, (3, 3), kernel_initializer="he_normal", name="output_dyn")(d1)
+
+    model = Model(inputs, output_dyn, name="downscaling_deepru")
 
     return model
 
