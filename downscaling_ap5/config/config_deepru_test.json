@@ -1,0 +1,11 @@
+{
+  "nepochs": 3,
+  "named_targets": false,
+  "z_branch": false,
+  "n_predictands": 1,
+  "lr": 1e-03,
+  "lr_end": 1e-06,
+  "lr_decay": true,
+  "loss_func": "mse",
+  "lscheduled_train": true
+}
