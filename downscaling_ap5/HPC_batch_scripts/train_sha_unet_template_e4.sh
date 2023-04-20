@@ -51,10 +51,10 @@ echo ${PYTHONPATH}
 # Adapt accordingly to your dataset
 indir=<my_input_dir>
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_unet.json
+js_model_conf=${BASE_DIR}/config/config_sha_unet.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
-model=unet
+model=sha_unet
 dataset=tier2
 
 exp_name=<my_exp>

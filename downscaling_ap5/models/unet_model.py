@@ -211,7 +211,8 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
 
 
 # The DeepRU U-Net
-def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64, dchannels: int = 64) -> Model:
+def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64, dchannels: int = 64,
+           z_branch: bool = True, concat_out: bool = True) -> Model:
     """
     Builds up the DeepRu architecture from Hoehlein., 2020 (see https://doi.org/10.1175/AIES-D-21-0002.1).
     There are (required) modifications compared to Hoehlein et al., 2020 (cf. Fig. 7 in Hoehlein et al., 2020):
@@ -223,10 +224,14 @@ def deepru(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 64,
     :param n_predictands_dyn: number of target variables (dynamic output variables)
     :return: model instance
     """
+    if z_branch:
+        raise ValueError(f"z_branch is currently not supported for DeepRu.")
+    if concat_out:
+        raise ValueError(f"concat_out is currently not supported (as z_branch) for DeepRu.")
+
     inputs = Input(input_shape)
 
     channels = np.arange(channels_start, channels_start*7 + 1, dchannels)
-    print(channels)
 
     latent_in = conv_block(inputs, channels[0], (5, 5), activation="LeakyReLU")
 
@@ -414,7 +419,7 @@ class UNET(keras.Model):
         hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
                         "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
                         "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
-                        "var_tar2in": "", "n_predictands": 1}
+                        "var_tar2in": "", "n_predictands": 2}
 
         return hparams_dict
 

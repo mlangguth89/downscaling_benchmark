@@ -51,10 +51,10 @@ fi
 # Adapt accordingly to your dataset
 indir=<training_data_dir>
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_unet.json
+js_model_conf=${BASE_DIR}/config/config_deepru.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
-model=unet
+model=deepru
 dataset=tier2
 
 exp_name=<my_exp>

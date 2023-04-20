@@ -14,7 +14,7 @@ __update__ = "2023-03-10"
 # import modules
 from timeit import default_timer as timer
 import tensorflow.keras as keras
-from unet_model import sha_unet, UNET
+from unet_model import sha_unet, deepru, UNET
 from wgan_model import WGAN, critic_model
 from other_utils import to_list
 
@@ -35,8 +35,9 @@ class ModelEngine(object):
              third element of the tuple, i.e. {"wgan": (WGAN, unet_model, critic_model).
     """
 
-    known_models = {"unet": (UNET, sha_unet),
-                    "wgan": (WGAN, sha_unet, critic_model)}
+    known_models = {"sha_unet": (UNET, sha_unet),
+                    "wgan": (WGAN, sha_unet, critic_model),
+                    "deepru": (UNET, deepru)}
 
     def __init__(self, model_name: str):
         """
