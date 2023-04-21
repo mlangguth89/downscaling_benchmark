@@ -5,7 +5,7 @@
 
 from torch.utils.data import DataLoader
 from dataset_prep import PrecipDatasetInter
-#from main_scripts.dataset_temp import CustomTemperatureDataset
+from main_scripts.dataset_temp import CustomTemperatureDataset
 
 def create_loader(file_path: str = None,
                   batch_size: int = 32,
@@ -46,7 +46,7 @@ def create_loader(file_path: str = None,
         dataloader = DataLoader(dataset, batch_size=None)
     elif dataset_type == "temperature":
         dataset = CustomTemperatureDataset(file_path=file_path, verbose=verbose)
-        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, drop_last=True)
     else:
         NotImplementedError
 
