@@ -68,12 +68,15 @@ def main():
                         ape=False,
                         final_upsample="expand_first")
     elif args.model_type == "swinIR":
-        netG = swinIR(img_size=16,
+        netG = swinIR(img_size=160,
                       patch_size=4,
                       in_chans=n_channels,
                       window_size=2,
                       upscale= 4,
                       upsampler= "pixelshuffle") 
+    elif args.model_type == "wgan":
+        netG = unet(n_channels=n_channels, 
+                dataset_type="precipitation") 
     elif args.model_type == "diffusion":
         netG = UNet_diff(n_channels = n_channels+1,
                          img_size=160)
@@ -82,8 +85,9 @@ def main():
                                schedule_opt="linear",
                                timesteps=200,
                                model=netG)
+    
     else:
-        NotImplementedError()
+        raise NotImplementedError()
 
     if args.model_type == "diffusion":
         model = BuildModel(netG,  difussion=difussion,
@@ -149,7 +153,12 @@ def main():
                 noise_pred_list.append(noise_pred.cpu().numpy())
             else:
                 #Get the prediction values
+                print("before nomalise:")
+                print("the shape of the output",model.E.cpu().numpy().shape)
+                print("max values", np.max(model.E.cpu().numpy()))
+                print("min values", np.min(model.E.cpu().numpy()))
                 pred_temp = model.E.cpu().numpy() * vars_out_patches_std + vars_out_patches_mean
+                
                 pred_temp = np.exp(pred_temp+np.log(args.k))-args.k
                 #Get the groud truth values
                 ref_temp = model.H.cpu().numpy()*vars_out_patches_std+vars_out_patches_mean
