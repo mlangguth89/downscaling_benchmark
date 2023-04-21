@@ -240,7 +240,7 @@ class PrecipDatasetInter(torch.utils.data.IterableDataset):
 
     def __iter__(self):
 
-        iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)  # todo
+        iter_start, iter_end = 0, int(len(self.idx_perm)/self.batch_size)-1  # todo
         self.idx = 0
 
         transform_x = torchvision.transforms.Normalize(self.vars_in_patches_mean, self.vars_in_patches_std)
