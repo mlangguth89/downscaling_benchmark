@@ -138,6 +138,11 @@ def main(parser_args):
     # perform denormalization
     y_pred = norm.denormalize(y_pred.squeeze(), varname=tar_varname)
 
+    # write inference data to netCDf
+    ground_truth.name, y_pred.name = f"{tar_varname}_ref", f"{tar_varname}_fcst"
+    ds = xr.Dataset(xr.Dataset.merge(y_pred.to_dataset(), ground_truth.to_dataset()))
+    ds.to_netcdf(os.path.join(parser_args.model_base_dir, "postprocessed_ds_test.nc"))
+
     # start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
 
