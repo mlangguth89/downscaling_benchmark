@@ -1,5 +1,6 @@
 {
   "norm_dims": ["time", "rlat", "rlon"],
   "batch_size": 32,
-  "var_tar2in": "hsurf_tar"
+  "var_tar2in": "hsurf_tar",
+  "predictands": ["t_2m_tar", "hsurf_tar"]
 }

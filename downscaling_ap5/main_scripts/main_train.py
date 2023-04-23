@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-03-10"
+__update__ = "2023-04-17"
 
 import os
 import argparse
@@ -20,10 +20,11 @@ import json as js
 from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
+from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
-from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
+from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import BenchmarkCSV, get_training_time_dict
 
 
@@ -31,8 +32,7 @@ from benchmark_utils import BenchmarkCSV, get_training_time_dict
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
 # * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
-# * ensure that dataset defaults are set
-# * customized choice on predictors and predictands missing
+# * ensure that dataset defaults are set (such as predictands for WGAN)
 # * replacement of manual benchmarking by JUBE-benchmarking to avoid duplications
 
 def main(parser_args):
@@ -88,9 +88,12 @@ def main(parser_args):
     # if fname_or_patt_train is a filename pattern (string with wildcard), the TF-dataset will iterate over subsets of
     # the dataset
     if "*" in fname_or_patt_train:
-        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs, 30,
-                                                                 var_tar2in=ds_dict["var_tar2in"], norm_obj=data_norm,
-                                                                 norm_dims=norm_dims)
+        ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
+                                                                 30, ds_dict["predictands"],
+                                                                 predictors=ds_dict.get("predictors", None),
+                                                                 var_tar2in=ds_dict["var_tar2in"],
+                                                                 named_targets=named_targets,
+                                                                 norm_obj=data_norm, norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
         nsamples, shape_in = ds_obj.nsamples, (*ds_obj.data_dim[::-1], ds_obj.n_predictors)
         varnames_tar = list(ds_obj.predictand_list) if named_targets else None
@@ -104,7 +107,9 @@ def main(parser_args):
             data_norm = ZScore(ds_dict["norm_dims"])
 
         da_train = data_norm.normalize(da_train)
-        tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, var_tar2in=ds_dict["var_tar2in"],
+        tfds_train = HandleDataClass.make_tf_dataset_allmem(da_train, bs_train, ds_dict["predictands"],
+                                                            predictors=ds_dict.get("predictors", None),
+                                                            var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
@@ -123,12 +128,13 @@ def main(parser_args):
         ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"], lshuffle=True,
-                                                      var_tar2in=ds_dict["var_tar2in"], named_targets=named_targets)
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"],
+                                                      ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
+                                                      lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
+                                                      named_targets=named_targets)
     
     # clean up to save some memory
-    del ds_val
-    gc.collect()
+    free_mem([ds_val, da_val])
 
     tval_load = timer() - t0_val
     print(f"Validation data preparation time: {tval_load:.2f}s.")
@@ -142,8 +148,7 @@ def main(parser_args):
         print(f"Data loading time: {ttrain_load:.2f}s.")
 
     # instantiate model
-    model = model_instance(shape_in, hparams_dict, model_savedir, parser_args.exp_name)
-    model.varnames_tar = varnames_tar
+    model = model_instance(shape_in, varnames_tar, hparams_dict, model_savedir, parser_args.exp_name)
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_opts")
@@ -176,6 +181,12 @@ def main(parser_args):
 
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir)
+
+    if callable(getattr(model, "plot_model", False)):
+        model.plot_model(model_savedir, show_shapes=True, show_layer_activations=True)
+    else:
+        plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
+                   show_shapes=True, show_layer_activations=True)
 
     # final timing
     tend = timer()

@@ -15,6 +15,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
+from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.platform import tf_logging as logging
 
@@ -69,7 +70,7 @@ class WGAN(keras.Model):
     Class for Wassterstein GAN models
     """
 
-    def __init__(self, generator: keras.Model, critic: keras.Model, shape_in: List, hparams: dict, savedir: str,
+    def __init__(self, generator: keras.Model, critic: keras.Model, shape_in: List, varnames_tar: List, hparams: dict, savedir: str,
                  exp_name: str = "wgan_model"):
         """
         Initiate Wasserstein GAN model
@@ -279,6 +280,15 @@ class WGAN(keras.Model):
             rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[..., i]) - real_data[..., i]))
 
         return rloss
+
+    def plot_model(self, save_dir, **kwargs):
+        """
+        Plot generator and critic model separately.
+        :param save_dir: directory under which plots will be saved
+        :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
+        """
+        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self.modelname}_generator.png"), **kwargs)
+        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self.modelname}_critic.png"), **kwargs)
 
     def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
              signatures=None, options=None, save_traces: bool = True):
