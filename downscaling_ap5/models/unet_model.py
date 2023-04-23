@@ -161,14 +161,14 @@ class UNET(keras.Model):
     U-Net submodel class:
     This subclass takes a U-Net implemented using Keras functional API as input to the instanciation.
     """
-    def __init__(self, unet_model: keras.Model, shape_in: List, hparams: dict, savedir: str,
+    def __init__(self, unet_model: keras.Model, shape_in: List, varnames_tar, hparams: dict, savedir: str,
                  exp_name: str = "unet_model"):
 
         super(UNET, self).__init__()
 
         self.unet = unet_model
         self.shape_in = shape_in
-        self.varnames_tar = None                            # yet, dirty approach: to be set after instantiating from main_train.py
+        self.varnames_tar = varnames_tar
         self.hparams = UNET.get_hparams_dict(hparams)
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
@@ -183,6 +183,7 @@ class UNET(keras.Model):
         See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-train_unet-model-err.6387845within-a-subclassed-mo
         for a reference how a model based on Keras functional API has to be integrated into a subclass.
         """
+        print(**kwargs)
         return self.unet(inputs, **kwargs)
 
     def get_compile_opts(self):
