@@ -116,6 +116,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         all_predictors = to_list(sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(mlvars_era5) + \
                          to_list(fc_sfvars_era5) + PreprocessERA5toIFS.get_varnames_from_mlvars(fc_mlvars_era5)
         all_predictors = [e for e in all_predictors if e]
+        all_predictors.append("lnsp")
 
         sfvars_crea6, const_vars_crea6 = PreprocessERA5toCREA6.organize_predictands(predictands)
         all_predictands = [e for e in sfvars_crea6 + const_vars_crea6 if e]
