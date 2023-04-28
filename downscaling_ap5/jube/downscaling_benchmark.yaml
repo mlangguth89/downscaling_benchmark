@@ -35,6 +35,10 @@ parameterset:
         _: "/data/maelstrom/langguth1/tier2/train/"
       - name: indir
         type: string
+        tag: "e4nvidia+cscratch"
+        _: "/scratch_local/maelstrom_ap5/tier2/train/"
+      - name: indir
+        type: string
         tag: "(jwb|jwc|hdfml)+cscratch"
         _: "${CSCRATCH}/maelstrom/maelstrom_data/ap5_michael/preprocessed_tier2/monthly_files_copy/"
       - name: js_norm
