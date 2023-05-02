@@ -75,8 +75,7 @@ def main():
                       upscale= 4,
                       upsampler= "pixelshuffle") 
     elif args.model_type == "wgan":
-        netG = unet(n_channels=n_channels, 
-                dataset_type="precipitation") 
+        netG = unet(n_channels=n_channels) 
     elif args.model_type == "diffusion":
         netG = UNet_diff(n_channels = n_channels+1,
                          img_size=160)
@@ -104,13 +103,14 @@ def main():
     
     with open(stat_file,'r') as f:
         stat_data = json.load(f)
+
     vars_in_patches_mean  = stat_data['yw_hourly_in_mean']
     vars_in_patches_std   = stat_data['yw_hourly_in_std']
     vars_out_patches_mean = stat_data['yw_hourly_tar_mean']
     vars_out_patches_std  = stat_data['yw_hourly_tar_std']
 
     with torch.no_grad():
-        model.netG.load_state_dict(torch.load(args.checkpoint_dir))
+        model.netG.load_state_dict(torch.load(args.checkpoint_dir))#['model_state_dict']
         idx = 0
         input_list = []
         pred_list = []

@@ -17,7 +17,9 @@ import torch.nn as nn
 import os
 from torch.optim import lr_scheduler
 import wandb
+import numpy as np
 
+#SBATCH --mail-ty
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 cuda = True if torch.cuda.is_available() else False
 #Tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
@@ -145,6 +147,9 @@ class BuildModel:
     # feed L/H data
     # ----------------------------------------
     def feed_data(self, data):
+        print("The shape of input:", data['L'].shape)
+        print("The min of input", np.min(data['H'].cpu().numpy()))
+        print("The max of input", np.max(data['H'].cpu().numpy()))
         self.L = data['L'].cuda()
         if self.diffusion:
             upsampling = Upsampling(in_channels = 8)
@@ -163,6 +168,9 @@ class BuildModel:
 
         if not self.diffusion:
             self.E = self.netG(self.L) #[:,0,:,:]
+            #print("The prediction shape (E):", self.E.cpu().numpy().shape)
+            print("The min of prediction", np.min(self.E.detach().cpu().numpy()))
+            print("The max of prediction", np.max(self.E.detach().cpu().numpy()))
         else:
             if len(self.H.shape) == 3:
                 self.H = torch.unsqueeze(self.H, dim = 1)
@@ -187,6 +195,8 @@ class BuildModel:
     def optimize_parameters(self):
         self.G_optimizer.zero_grad()
         self.netG_forward()
+        #print("The shape of E:",self.E.shape)
+        #print("The shape of H:",self.H.shape)
         if len(self.E.shape) == 3:
             self.E = torch.unsqueeze(self.E, axis=1)
         if len(self.H.shape) ==3:
@@ -195,7 +205,8 @@ class BuildModel:
             print("The shape of E:",self.E.shape)
             print("The shape of H:",self.H.shape)
             raise ("The shape of generated data and ground truth are not the same as above")
-
+        print("The shape of E:",self.E.shape)
+        print("The shape of H:",self.H.shape)
         self.G_loss = self.G_lossfn(self.E, self.H)
         self.G_loss.backward()
         self.G_optimizer.step()

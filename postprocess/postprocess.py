@@ -40,6 +40,11 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
         model_dir, plt_dir = model_base, os.path.join(output_base, model_name)
         norm_dir = model_dir
         model_type = "unet"
+    elif "swinIR" in exp_name:
+        func_logger.debug(f"swinIR-modeltype detected.")
+        model_dir, plt_dir = model_base, os.path.join(output_base, model_name)
+        norm_dir = model_base
+        model_type="swinIR"
     else:
         func_logger.debug(f"Model type could not be inferred from experiment name. Try my best by defaulting...")
         if not model_type:

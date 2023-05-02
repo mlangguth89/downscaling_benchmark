@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.checkpoint as checkpoint
 from timm.models.layers import DropPath, to_2tuple, trunc_normal_
-
+import numpy as np
 class Upsampling(nn.Module):
 
     def __init__(self, in_channels:int = None, out_channels: int = None,
@@ -217,7 +217,7 @@ class SwinTransformerBlock(nn.Module):
                  act_layer=nn.GELU, norm_layer=nn.LayerNorm):
         super().__init__()
         self.dim = dim
-        self.input_resolution = input_resolution
+        self.input_resolution = input_resolution #(24, 30)
         self.num_heads = num_heads
         self.window_size = window_size
         self.shift_size = shift_size
@@ -272,7 +272,7 @@ class SwinTransformerBlock(nn.Module):
     def forward(self, x, x_size):
         H, W = x_size
         B, L, C = x.shape
-        # assert L == H * W, "input feature has wrong size"
+        assert L == H * W, "input feature has wrong size"
 
         shortcut = x
         x = self.norm1(x)
@@ -510,6 +510,7 @@ class RSTB(nn.Module):
             norm_layer=None)
 
     def forward(self, x, x_size):
+
         return self.patch_embed(self.conv(self.patch_unembed(self.residual_group(x, x_size), x_size))) + x
 
     def flops(self):
@@ -537,13 +538,14 @@ class PatchEmbed(nn.Module):
     def __init__(self, img_size=224, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
         img_size = to_2tuple(img_size)
+        print("image size in embeddinng:", img_size)
         patch_size = to_2tuple(patch_size)
         patches_resolution = [img_size[0] // patch_size[0], img_size[1] // patch_size[1]]
+        print("patch resolution in embeddibng",patches_resolution)
         self.img_size = img_size
         self.patch_size = patch_size
         self.patches_resolution = patches_resolution
         self.num_patches = patches_resolution[0] * patches_resolution[1]
-
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
@@ -553,6 +555,10 @@ class PatchEmbed(nn.Module):
             self.norm = None
 
     def forward(self, x):
+        B, C, H, W = x.shape
+        #assert H == self.img_size[0] and W == self.img_size[1], \
+        #    f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
+
         x = x.flatten(2).transpose(1, 2)  # B Ph*Pw C
         if self.norm is not None:
             x = self.norm(x)
@@ -685,7 +691,7 @@ class SwinIR(nn.Module):
         super(SwinIR, self).__init__()
         self.dataset_type = dataset_type
         num_in_ch = in_chans
-        num_out_ch = 1 # in_chans
+        num_out_ch = 1 
         num_feat = 96
         #num_feat = 100
         self.img_range = img_range
@@ -738,7 +744,8 @@ class SwinIR(nn.Module):
 
         # stochastic depth
         dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
-
+        #print("patch resolution [0]", patches_resolution[0])
+        #print("patch resolution [1]", patches_resolution[1])
         # build Residual Swin Transformer blocks (RSTB)
         self.layers = nn.ModuleList()
         for i_layer in range(self.num_layers):
@@ -781,8 +788,8 @@ class SwinIR(nn.Module):
             self.conv_before_upsample = nn.Sequential(nn.Conv2d(embed_dim, num_feat, 3, 1, 1),
                                                       nn.LeakyReLU(inplace=True))
             self.upsample = Upsample(upscale, num_feat)
-            self.conv_last = nn.Conv2d(num_feat, num_out_ch, 3, 1, 1)
-            ##print('self.conv_last: {}'.format(self.conv_last))
+            self.conv_last = nn.Conv2d(num_feat, 1, 3, 1, 1)
+            print('self.conv_last: {}'.format(self.conv_last))
         elif self.upsampler == 'pixelshuffledirect':
             # for lightweight SR (to save parameters)
             self.upsample = UpsampleOneStep(upscale, embed_dim, num_out_ch,
@@ -830,13 +837,14 @@ class SwinIR(nn.Module):
     def forward_features(self, x):
         x_size = (x.shape[2], x.shape[3])
         x = self.patch_embed(x)
+        #print("x after patch_embed",x.shape) #[16, 11520, 96]
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
 
         for layer in self.layers:
             x = layer(x, x_size)
-
+        #print("x afrter layer", x.shape) #[16, 11520, 96]
         x = self.norm(x)  # B L C
         x = self.patch_unembed(x, x_size)
 
@@ -846,16 +854,20 @@ class SwinIR(nn.Module):
         # remap for the first upsampling
         if self.dataset_type == "precipitation":
             x = self.upsampling_first(x)
-        
-        print("data type is", self.dataset_type)
+        #print("the raw data shape is", x.shape)
+        #print("data type is", self.dataset_type)
         H, W = x.shape[2:]
+        #print("H:", H)
+        #print("W:", W)
         x = self.check_image_size(x)
         self.mean = self.mean.type_as(x)
         x = (x - self.mean) * self.img_range
-
+        #print("x max:", torch.max(x))
+        #print("x min", torch.min(x))
         if self.upsampler == 'pixelshuffle':
             # for classical SR
             x = self.conv_first(x)
+            #print("after conv_first",x.shape)
             x = self.conv_after_body(self.forward_features(x)) + x
             x = self.conv_before_upsample(x)
             x = self.upsample(x)

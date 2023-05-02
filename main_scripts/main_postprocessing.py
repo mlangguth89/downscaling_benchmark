@@ -28,6 +28,7 @@ sys.path.append('../')
 from postprocess.statistical_evaluation import Scores
 from postprocess.postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial
 from postprocess.test_dataset import test_dataset
+from models.network_swinir import SwinIR as swinIR
 from models.network_unet import UNet as unet
 from datetime import datetime as dt
 from torch.utils.data import DataLoader
@@ -89,12 +90,20 @@ def main(parser_args):
 
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
-    model = unet(n_channels=9)
+    #model = unet(n_channels=9)
+    model = swinIR(img_size=[96,120],
+                      patch_size=4,
+                      in_chans=9,
+                      window_size=2,
+                      upscale= 1,
+                      dataset_type="temperature",
+                      upsampler= "pixelshuffle")
+    
     model.to(torch.float64)
     model_path = glob.glob(os.path.join(model_dir, parser_args.model_name))[0]
     # model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu'))) ######## cpu ['model_state_dict']
     print(model_path)
-    model.load_state_dict(torch.load(model_path)['model_state_dict'])#['model_state_dict'])
+    model.load_state_dict(torch.load(model_path))#['model_state_dict'])
     model.eval()
     model.to(device)
     logger.info(f"Model was loaded successfully.")
@@ -119,14 +128,19 @@ def main(parser_args):
                 "Start inference on trained model...")
     t0_train = timer()
     output = []
-    train_dataloader = DataLoader(test, batch_size=32, shuffle=False)
+    train_dataloader = DataLoader(test, batch_size=1, shuffle=False)
+    
     for i, train_data in enumerate(train_dataloader):
         batch_output = model(train_data[0].to(device)).detach()
         for tens in batch_output:
+            if len(tens.shape) == 2:
+                tens =  torch.unsqueeze(tens,dim=0)
             output.append(tens)
 
 
     y_pred_trans = torch.stack(output)
+    
+    print("y_pred_trans shape",y_pred_trans.shape)
     y_pred_trans = torch.permute(y_pred_trans, (0, 2, 3, 1))
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
@@ -136,10 +150,12 @@ def main(parser_args):
     check = y_pred_trans.cpu().detach().numpy().squeeze()
 
     y_pred = xr.DataArray(check, coords=coords, dims=dims)
+    
     # perform denormalization
     y_pred = test.norm.denormalize(y_pred.squeeze(), mu=test.norm.norm_stats["mu"].sel({"variables": test.tar_varname}),
                               sigma=test.norm.norm_stats["sigma"].sel({"variables": test.tar_varname}))
     y_pred = xr.DataArray(y_pred, coords=coords, dims=dims)
+    
 
     # start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer() - t0_train:.2f}s. Start evaluation...")
@@ -147,13 +163,15 @@ def main(parser_args):
     # create plot directory if required
     os.makedirs(plt_dir, exist_ok=True)
 
+    #save prediction and test
+    y_pred.to_netcdf(os.path.join(plt_dir,"prediction.nc"))
     # instantiate score engine for time evaluation (i.e. hourly time series of evalutaion metrics)
     score_engine = Scores(y_pred, test.ground_truth, ds_dict["norm_dims"][1:])
 
     logger.info("Start temporal evaluation...")
     t0_tplot = timer()
-    _ = run_evaluation_time(score_engine, "rmse", "K", plt_dir, value_range=(0., 3.), model_type=model_type)
-    _ = run_evaluation_time(score_engine, "bias", "K", plt_dir, value_range=(-1., 1.), ref_line=0.,
+    _ = run_evaluation_time(score_engine, "rmse", "K", plt_dir, value_range=(0., 5.), model_type=model_type)#0, 3
+    _ = run_evaluation_time(score_engine, "bias", "K", plt_dir, value_range=(-2., 2.), ref_line=0., #-1, 1
                             model_type=model_type)
     _ = run_evaluation_time(score_engine, "grad_amplitude", "1", plt_dir, value_range=(0.7, 1.1),
                             ref_line=1., model_type=model_type)
@@ -164,12 +182,14 @@ def main(parser_args):
     score_engine = Scores(y_pred, test.ground_truth, [])
 
     logger.info("Start spatial evaluation...")
-    lvl_rmse = np.arange(0., 3.1, 0.2)
+    #lvl_rmse = np.arange(0., 3.1, 0.2)
+    lvl_rmse = np.arange(0., 5.1, 0.2)
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
     _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), cmap=cmap_rmse,
                                levels=lvl_rmse)
 
-    lvl_bias = np.arange(-2., 2.1, 0.1)
+    #lvl_bias = np.arange(-2., 2.1, 0.1)
+    lvl_bias = np.arange(-4., 4.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
                                levels=lvl_bias)
