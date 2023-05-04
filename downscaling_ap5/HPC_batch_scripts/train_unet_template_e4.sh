@@ -9,8 +9,8 @@
 #SBATCH --gres=gpu:1
 ##SBATCH --mem=40G
 #SBATCH --time=01:00:00
-#SBATCH --output=train_wgan-model-out.%j
-#SBATCH --error=train_wgan-model-err.%j
+#SBATCH --output=train_wgan-out.%j
+#SBATCH --error=train_wgan-err.%j
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"

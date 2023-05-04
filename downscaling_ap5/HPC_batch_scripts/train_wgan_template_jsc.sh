@@ -4,9 +4,10 @@
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=48
-#SBATCH --output=train_unet-model-out.%j
-#SBATCH --error=train_unet-model-err.%j
+#SBATCH --output=train_wgan-out.%j
+#SBATCH --error=train_wgan-err.%j
 #SBATCH --time=02:00:00
+##SBATCH --time=20:00:00
 #SBATCH --gres=gpu:1
 ##SBATCH --partition=batch
 ##SBATCH --partition=gpus
@@ -51,10 +52,10 @@ fi
 # Adapt accordingly to your dataset
 indir=<training_data_dir>
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_unet.json
+js_model_conf=${BASE_DIR}/config/config_wgan.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
-model=unet
+model=wgan
 dataset=tier2
 
 exp_name=<my_exp>
