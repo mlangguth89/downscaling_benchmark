@@ -186,6 +186,7 @@ class UNET(keras.Model):
         See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-train_unet-model-err.6387845within-a-subclassed-mo
         for a reference how a model based on Keras functional API has to be integrated into a subclass.
         """
+        print(**kwargs)
         return self.unet(inputs, **kwargs)
 
     def get_compile_opts(self):

@@ -148,7 +148,6 @@ def main(parser_args):
 
     # instantiate model
     model = model_instance(shape_in, varnames_tar, hparams_dict, model_savedir, parser_args.exp_name)
-    model.varnames_tar = varnames_tar
 
     # get optional compile options and compile
     compile_opts = handle_opt_utils(model, "get_compile_opts")
@@ -182,7 +181,7 @@ def main(parser_args):
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir)
 
-    if callable(getattr(model, "plot_model")):
+    if callable(getattr(model, "plot_model", False)):
         model.plot_model(model_savedir, show_shapes=True, show_layer_activations=True)
     else:
         plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),

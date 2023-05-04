@@ -15,7 +15,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.keras import backend as K
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
-from tensorflow.keras.utils import plot_model
+from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.platform import tf_logging as logging
 
@@ -289,8 +289,8 @@ class WGAN(keras.Model):
         :param save_dir: directory under which plots will be saved
         :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
         """
-        plot_model(self.generator, os.path.join(save_dir, f"plot_{self.modelname}_generator.png"), **kwargs)
-        plot_model(self.critic, os.path.join(save_dir, f"plot_{self.modelname}_critic.png"), **kwargs)
+        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self.modelname}_generator.png"), **kwargs)
+        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self.modelname}_critic.png"), **kwargs)
 
     def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
              signatures=None, options=None, save_traces: bool = True):
