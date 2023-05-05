@@ -360,7 +360,6 @@ def copy_filelist(file_list: List, dest_dir: str, file_list_dest: List = None ,l
 
     for i, f in enumerate(file_list):
         if os.path.isfile(f):
-            print("Copy {f} to {dest[i]}.")
             shutil.copy(f, dest[i])
         else:
             if labort:
