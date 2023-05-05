@@ -92,6 +92,7 @@ class WGAN(keras.Model):
             raise ValueError("Embedding is not implemented yet.")
         self.n_predictands = len(varnames_tar)                      # number of predictands
         self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["z_branch"] else self.n_predictands
+        print(f"Dynamic predictands: {self.n_predictands_dyn}, Predictands: {self.n_predictands}")
         self.modelname = exp_name
         if not os.path.isdir(savedir):
             os.makedirs(savedir, exist_ok=True)
@@ -259,7 +260,7 @@ class WGAN(keras.Model):
         :return: gradient penalty
         """
         # get mixture of generated and ground truth data
-        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, self.hparams["n_predictands"]], 0., 1.)
+        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, self.n_predictands_dyn], 0., 1.)
         mix_data = real_data + alpha * (gen_data - real_data)
 
         with tf.GradientTape() as gp_tape:
