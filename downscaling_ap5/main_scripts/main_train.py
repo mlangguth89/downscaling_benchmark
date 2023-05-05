@@ -153,6 +153,12 @@ def main(parser_args):
     compile_opts = handle_opt_utils(model, "get_compile_opts")
     model.compile(**compile_opts)
 
+    # copy configuration and normalization JSON-file to model-directory (incl. renaming)
+    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_{dataset}.json", f"config_{parser_args.model}"]
+    if not write_norm:
+        filelist.append(js_norm), filelist_new.append(js_norm)
+    copy_filelist(filelist, model_savedir, filelist_new)
+
     # train model
     time_tracker = TimeHistory()
     steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
@@ -228,11 +234,6 @@ def main(parser_args):
             js.dump(stat_info, jsf)
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
-
-    # copy configuration and normalization JSON-file to output-directory
-    filelist = [parser_args.conf_ds.name, parser_args.conf_md.name]
-    if not write_norm: filelist.append(js_norm)
-    copy_filelist(filelist, model_savedir)
 
 
 if __name__ == "__main__":
