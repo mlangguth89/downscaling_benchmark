@@ -9,7 +9,7 @@ Methods to set-up U-net models incl. its building blocks.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2022-11-25"
+__update__ = "2023-05-06"
 
 # import modules
 import os
@@ -210,15 +210,13 @@ class UNET(keras.Model):
         return opt_dict
 
     def compile(self, **kwargs):
-        named_targets = kwargs.get("named_targets", False)
         # instantiate model
-        if named_targets:
+        if self.hparams["z_branch"]:     # model has named branches (see also opt_dict in get_compile_opts)
             tar_channels = [f"{var}" for var in self.varnames_tar]
-            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=self.hparams["z_branch"],
-                                  tar_channels=tar_channels)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=True,
+                                  concat_out= False, tar_channels=tar_channels)
         else:
-            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=self.hparams["z_branch"],
-                                  concat_out=True)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=False)
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
