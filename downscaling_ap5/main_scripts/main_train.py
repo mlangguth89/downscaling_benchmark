@@ -154,7 +154,7 @@ def main(parser_args):
     model.compile(**compile_opts)
 
     # copy configuration and normalization JSON-file to model-directory (incl. renaming)
-    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_{dataset}.json", f"config_{parser_args.model}.json"]
+    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
     if not write_norm:
         filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
     copy_filelist(filelist, model_savedir, filelist_new)
