@@ -1,34 +1,41 @@
 #!/bin/bash -x
-#SBATCH --account=maelstrom
-#SBATCH --partition=i-gpu-a100
-##SBATCH --partition=a-gpu-mi100
+#SBATCH --account=deepacf
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=32
-#SBATCH --mem=128Gb
+##SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=48
+#SBATCH --output=train_wgan-out.%j
+#SBATCH --error=train_wgan-err.%j
+#SBATCH --time=02:00:00
+##SBATCH --time=20:00:00
 #SBATCH --gres=gpu:1
-##SBATCH --mem=40G
-#SBATCH --time=01:00:00
-#SBATCH --output=train_wgan-model-out.%j
-#SBATCH --error=train_wgan-model-err.%j
+##SBATCH --partition=batch
+##SBATCH --partition=gpus
+#SBATCH --partition=develgpus
+##SBATCH --partition=booster
+##SBATCH --partition=develbooster
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=XXX@fz-juelich.de
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
+# environmental variables to support cpus_per_task with Slurm>22.05
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export SRUN_CPUS_PER_TASK="${SLURM_CPUS_PER_TASK}"
+
 # basic directories
 WORK_DIR=$(pwd)
 BASE_DIR=$(dirname "${WORK_DIR}")
 
 # Name of virtual environment
-VENV_DIR=/opt/share/users/maelstrom/
-VIRT_ENV_NAME=venv-rocm
+VENV_DIR=${BASE_DIR}/virtual_envs/
+VIRT_ENV_NAME=<my_venv>
 
 # Loading mouldes
-module purge
-ml slurm 
-
+source ../env_setup/modules_jsc.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
    if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
@@ -40,17 +47,11 @@ if [ -z ${VIRTUAL_ENV} ]; then
    fi
 fi
 
-export PYTHONPATH=${BASE_DIR}:$PYTHONPATH
-export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH
-export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH
-export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH
-export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH
-echo ${PYTHONPATH}
 
-# data-directories 
-# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-indir=/data/maelstrom/langguth1/tier2/train
-outdir=${BASE_DIR}/tranied_models/
+# data-directories
+# Adapt accordingly to your dataset
+indir=<training_data_dir>
+outdir=${BASE_DIR}/trained_models/
 js_model_conf=${BASE_DIR}/config/config_wgan.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 

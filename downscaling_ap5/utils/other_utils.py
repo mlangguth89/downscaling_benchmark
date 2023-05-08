@@ -337,22 +337,30 @@ def get_max_memory_usage():
     return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1000
 
 
-def copy_filelist(file_list: List, dest: str, labort: bool = True):
+def copy_filelist(file_list: List, dest_dir: str, file_list_dest: List = None ,labort: bool = True):
     """
     Copy a list of files to another directory
     :param file_list: list of files to copy
-    :param dest: target directory to which files will be copied
+    :param dest_dir: target directory to which files will be copied
     :param labort: flag to trigger raising of an error (if False, only Warning-messages will be printed)
     """
     file_list = to_list(file_list)
-    if not os.path.isdir(dest) and labort:
+    if not os.path.isdir(dest_dir) and labort:
         raise NotADirectoryError(f"Cannot copy to non-existing directory '{dest}'.")
-    elif not os.path.isdir(dest) and not labort:
+    elif not os.path.isdir(dest_dir) and not labort:
         print(f"WARNING: Target directory for copying '{dest}' does not exist. Skip copy process...")
+        return
 
-    for f in file_list:
+    if file_list_dest is None:
+        dest = dest_dir
+    else:
+        assert len(file_list) == len(file_list_dest), f"Length of filelist to copy ({len(file_list)})" + \
+                                                      f" and of filelist at destination ({len(file_list_dest)}) differ."
+        dest = [os.path.join(dest_dir, f_dest) for f_dest in file_list_dest]
+
+    for i, f in enumerate(file_list):
         if os.path.isfile(f):
-            shutil.copy(f, dest)
+            shutil.copy(f, dest[i])
         else:
             if labort:
                 raise FileNotFoundError(f"Could not find file '{f}'. Error will be raised.")
