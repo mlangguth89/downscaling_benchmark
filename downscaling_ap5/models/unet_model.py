@@ -9,7 +9,7 @@ Methods to set-up U-net models incl. its building blocks.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2022-11-25"
+__update__ = "2023-05-06"
 
 # import modules
 import os
@@ -115,12 +115,13 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
 
 
 # The particular U-net
-def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = False,
+def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 56, z_branch: bool = False,
              concat_out: bool = False, tar_channels=["output_dyn", "output_z"]) -> Model:
     """
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
     :param channels_start: number of channels to use as start in encoder blocks
+    :param n_predictands: number of target variables (dynamic output variables)
     :param z_branch: flag if z-branch is used.
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :param concat_out: boolean if output layers will be concatenated (disables named target channels!)
@@ -141,7 +142,7 @@ def sha_unet(input_shape: tuple, channels_start: int = 56, z_branch: bool = Fals
     d2 = decoder_block(d1, s2, channels_start * 2)
     d3 = decoder_block(d2, s1, channels_start)
 
-    output_dyn = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
+    output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
     if z_branch:
         print("Use z_branch...")
         output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
@@ -161,7 +162,7 @@ class UNET(keras.Model):
     U-Net submodel class:
     This subclass takes a U-Net implemented using Keras functional API as input to the instanciation.
     """
-    def __init__(self, unet_model: keras.Model, shape_in: List, varnames_tar, hparams: dict, savedir: str,
+    def __init__(self, unet_model: keras.Model, shape_in: List, varnames_tar: List, hparams: dict, savedir: str,
                  exp_name: str = "unet_model"):
 
         super(UNET, self).__init__()
@@ -170,6 +171,8 @@ class UNET(keras.Model):
         self.shape_in = shape_in
         self.varnames_tar = varnames_tar
         self.hparams = UNET.get_hparams_dict(hparams)
+        self.n_predictands = len(varnames_tar)                      # number of predictands
+        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["z_branch"] else self.n_predictands
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.modelname = exp_name
@@ -208,11 +211,12 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
         # instantiate model
-        if self.varnames_tar:
+        if self.hparams["z_branch"]:     # model has named branches (see also opt_dict in get_compile_opts)
             tar_channels = [f"{var}" for var in self.varnames_tar]
-            self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], tar_channels=tar_channels)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=True,
+                                  concat_out= False, tar_channels=tar_channels)
         else:
-            self.unet = self.unet(self.shape_in, z_branch=self.hparams["z_branch"], concat_out=True)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=False)
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
@@ -311,7 +315,7 @@ class UNET(keras.Model):
         hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
                         "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
                         "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
-                        "var_tar2in": ""}
+                        "var_tar2in": "", "n_predictands": 1}
 
         return hparams_dict
 

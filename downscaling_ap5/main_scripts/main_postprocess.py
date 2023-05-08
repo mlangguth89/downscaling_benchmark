@@ -42,8 +42,11 @@ def main(parser_args):
     model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, parser_args.output_base_dir,
                                                               parser_args.exp_name, parser_args.last,
                                                               parser_args.model_type)
-    # create logger handlers
+
+    # create output-directory and set name of netCDF-file to store inference data
     os.makedirs(plt_dir, exist_ok=True)
+    ncfile_out = os.path.join(plt_dir, "postprocessed_ds_test.nc")
+    # create logger handlers
     logfile = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
     if os.path.isfile(logfile): os.remove(logfile)
     fh = logging.FileHandler(logfile)
@@ -138,11 +141,14 @@ def main(parser_args):
     # perform denormalization
     y_pred = norm.denormalize(y_pred.squeeze(), varname=tar_varname)
 
+    # write inference data to netCDf
+    logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
+    ground_truth.name, y_pred.name = f"{tar_varname}_ref", f"{tar_varname}_fcst"
+    ds = xr.Dataset(xr.Dataset.merge(y_pred.to_dataset(), ground_truth.to_dataset()))
+    ds.to_netcdf(ncfile_out)
+
     # start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
-
-    # create plot directory if required
-    os.makedirs(plt_dir, exist_ok=True)
 
     # instantiate score engine for time evaluation (i.e. hourly time series of evalutaion metrics)
     score_engine = Scores(y_pred, ground_truth, ds_dict["norm_dims"][1:])

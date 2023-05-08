@@ -9,8 +9,8 @@
 #SBATCH --gres=gpu:1
 ##SBATCH --mem=40G
 #SBATCH --time=01:00:00
-#SBATCH --output=train_wgan-model-out.%j
-#SBATCH --error=train_wgan-model-err.%j
+#SBATCH --output=train_wgan-out.%j
+#SBATCH --error=train_wgan-err.%j
 
 ######### Template identifier (don't remove) #########
 echo "Do not run the template scripts"
@@ -47,9 +47,9 @@ export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH
 export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH
 echo ${PYTHONPATH}
 
-# data-directories 
-# Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-indir=/data/maelstrom/langguth1/tier2/train
+# data-directories
+# Adapt accordingly to your dataset
+indir=<my_input_dir>
 outdir=${BASE_DIR}/trained_models/
 js_model_conf=${BASE_DIR}/config/config_unet.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json

@@ -663,8 +663,6 @@ class StreamMonthlyNetCDF(object):
             # free memory
             free_mem([ds_add, add_samples, istart])
 
-        # free memory
-        free_mem([nsamples])
         self.data_loaded[il] = data_now
         # timing
         t_read = timer() - t0
@@ -672,6 +670,8 @@ class StreamMonthlyNetCDF(object):
         self.ds_proc_size += data_now.nbytes
         print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
+        # free memory
+        free_mem([nsamples, t_read, data_now])
 
         return il
 

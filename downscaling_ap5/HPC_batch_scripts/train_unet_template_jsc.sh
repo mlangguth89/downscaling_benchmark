@@ -4,9 +4,10 @@
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=48
-#SBATCH --output=train_wgan-model-out.%j
-#SBATCH --error=train_wgan-model-err.%j
+#SBATCH --output=train_unet-out.%j
+#SBATCH --error=train_unet-err.%j
 #SBATCH --time=02:00:00
+##SBATCH --time=20:00:00
 #SBATCH --gres=gpu:1
 ##SBATCH --partition=batch
 ##SBATCH --partition=gpus
@@ -21,8 +22,9 @@ echo "Do not run the template scripts"
 exit 99
 ######### Template identifier (don't remove) #########
 
-# pin CPUs (needed for Slurm>22.05)
-export SRUN_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK}
+# environmental variables to support cpus_per_task with Slurm>22.05
+export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
+export SRUN_CPUS_PER_TASK="${SLURM_CPUS_PER_TASK}"
 
 # basic directories
 WORK_DIR=$(pwd)
@@ -46,13 +48,14 @@ if [ -z ${VIRTUAL_ENV} ]; then
 fi
 
 
-# data-directories 
+# data-directories
+# Adapt accordingly to your dataset
 indir=<training_data_dir>
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_wgan.json
+js_model_conf=${BASE_DIR}/config/config_unet.json
 js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
 
-model=wgan
+model=unet
 dataset=tier2
 
 exp_name=<my_exp>

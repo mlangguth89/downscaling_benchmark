@@ -82,6 +82,7 @@ def main(parser_args):
     # training data
     print("Start preparing training data...")
     t0_train = timer()
+    varnames_tar = list(ds_dict["predictands"])
     fname_or_patt_train = get_dataset_filename(datadir, dataset, "train", ds_dict.get("laugmented", False))
 
     # if fname_or_patt_train is a filename (string without wildcard), all data will be loaded into memory
@@ -96,7 +97,6 @@ def main(parser_args):
                                                                  norm_obj=data_norm, norm_dims=norm_dims)
         data_norm = ds_obj.data_norm
         nsamples, shape_in = ds_obj.nsamples, (*ds_obj.data_dim[::-1], ds_obj.n_predictors)
-        varnames_tar = list(ds_obj.predictand_list) if named_targets else None
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
@@ -112,7 +112,6 @@ def main(parser_args):
                                                             var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
-        varnames_tar = list(tfds_train.element_spec[1].keys()) if named_targets else None
         tfds_train_size = da_train.nbytes
 
     if write_norm:
@@ -154,6 +153,12 @@ def main(parser_args):
     compile_opts = handle_opt_utils(model, "get_compile_opts")
     model.compile(**compile_opts)
 
+    # copy configuration and normalization JSON-file to model-directory (incl. renaming)
+    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
+    if not write_norm:
+        filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
+    copy_filelist(filelist, model_savedir, filelist_new)
+
     # train model
     time_tracker = TimeHistory()
     steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
@@ -183,10 +188,10 @@ def main(parser_args):
     model.save(filepath=model_savedir)
 
     if callable(getattr(model, "plot_model", False)):
-        model.plot_model(model_savedir, show_shapes=True, show_layer_activations=True)
+        model.plot_model(model_savedir, show_shapes=True)
     else:
         plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
-                   show_shapes=True, show_layer_activations=True)
+                   show_shapes=True)
 
     # final timing
     tend = timer()
@@ -229,11 +234,6 @@ def main(parser_args):
             js.dump(stat_info, jsf)
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
-
-    # copy configuration and normalization JSON-file to output-directory
-    filelist = [parser_args.conf_ds.name, parser_args.conf_md.name]
-    if not write_norm: filelist.append(js_norm)
-    copy_filelist(filelist, model_savedir)
 
 
 if __name__ == "__main__":

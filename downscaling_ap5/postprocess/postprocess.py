@@ -36,11 +36,11 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
                              os.path.join(output_base, model_name)
         norm_dir = model_base
         model_type = "wgan"
-    elif "unet" in exp_name:
+    elif "unet" in exp_name or "deepru" in exp_name:
         func_logger.debug(f"U-Net-modeltype detected.")
         model_dir, plt_dir = model_base, os.path.join(output_base, model_name)
         norm_dir = model_dir
-        model_type = "unet"
+        model_type = "unet" if "unet" in exp_name else "deepru"
     else:
         func_logger.debug(f"Model type could not be inferred from experiment name. Try my best by defaulting...")
         if not model_type:
