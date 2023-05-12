@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-04-17"
+__update__ = "2023-05-12"
 
 import os
 import argparse
@@ -25,15 +25,12 @@ from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
 from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
-from benchmark_utils import BenchmarkCSV, get_training_time_dict
+from benchmark_utils import get_training_time_dict
 
 
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
-# * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
-# * ensure that dataset defaults are set (such as predictands for WGAN)
-# * replacement of manual benchmarking by JUBE-benchmarking to avoid duplications
 
 def main(parser_args):
     # start timing
@@ -66,9 +63,6 @@ def main(parser_args):
     else:
         data_norm, write_norm = None, True
         norm_dims = ds_dict["norm_dims"]
-
-    # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), f"benchmark_training_{parser_args.model}.csv"))
 
     # get model instance and set-up batch size
     model_instance = ModelEngine(parser_args.model)
@@ -177,9 +171,6 @@ def main(parser_args):
         ttrain_load = sum(ds_obj.reading_times) + tval_load
         print(f"Data loading time: {ttrain_load:.2f}s.")
         print(f"Average throughput: {ds_obj.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
-    benchmark_dict = {**{"data loading time": ttrain_load}, **training_times}
-    print(f"Model '{parser_args.exp_name}' training time: {training_times['Total training time']:.2f} s. " +
-          f"Save model to '{model_savedir}'")
 
     # save trained model
     t0_save = timer()
@@ -202,36 +193,6 @@ def main(parser_args):
     # some statistics on memory usage
     print_gpu_usage("Final GPU memory: ")
     print_cpu_usage("Final CPU memory: ")
-
-    # populate benchmark dictionary
-    benchmark_dict.update({"saving model time": saving_time, "total runtime": tot_run_time})
-    benchmark_dict.update({"job id": job_id, "#nodes": 1, "#cpus": len(os.sched_getaffinity(0)), "#gpus": 1,
-                           "#mpi tasks": 1, "node id": None, "max. gpu power": None, "gpu energy consumption": None})
-    try:
-        benchmark_dict["final training loss"] = get_loss_from_history(history, "loss")
-    except KeyError:
-        benchmark_dict["final training loss"] = get_loss_from_history(history, "recon_loss")
-    try:
-        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_loss")
-    except KeyError:
-        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_recon_loss")
-    # ... and save CSV-file with tracked data on disk
-    bm_obj.populate_csv_from_dict(benchmark_dict)
-
-    js_file = os.path.join(model_savedir, "benchmark_training_static.json")
-    if not os.path.isfile(js_file):
-        func_model_info = getattr(model, "get_model_info", None)
-        if callable(func_model_info):
-            model_info = func_model_info()
-        else:
-            model_info = {}
-        stat_info = {"static_model_info": model_info,
-                     "data_info": {"training data size": tfds_train_size, "validation data size": da_val.nbytes,
-                                   "nsamples": nsamples, "shape_samples": shape_in,
-                                   "batch_size": ds_dict["batch_size"]}}
-
-        with open(js_file, "w") as jsf:
-            js.dump(stat_info, jsf)
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 
