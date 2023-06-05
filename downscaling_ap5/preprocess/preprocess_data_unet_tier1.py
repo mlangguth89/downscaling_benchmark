@@ -28,6 +28,7 @@ from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from other_utils import to_list
 from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA
+from dataset_utils import CDOGrid, Variable, Files
 
 from aux_funcs import process_one_file
 
@@ -126,6 +127,29 @@ class Preprocess_Unet_Tier1(AbstractPreprocessing):
         }
 
         return preprocess_pystager, run_dict
+    
+    def worker(
+        self,
+        time: List[dt.datetime],
+        grid: CDOGrid,
+        pathes: Files,
+        predictors: List[Variable],
+        predictands: List[Variable],
+        max_warn = 3
+    ):
+        "implement new interface, but imitate old one."
+        
+        kwargs = {
+            "year_months": time, # List[datetime]
+            "source_dir_input": pathes.input_dir_source,
+            "dirout": pathes.output_dir,
+            "gdes_dict": {"tar_grid_des","coa_grid_des"}, # all
+            "logger": logging.Logger, # all => implement differently
+            "hour": None, # only unet_tier1
+            "max_warn": 3 # all
+        }
+        
+        return self.__class__.preprocess_worker(kwargs)
 
     # !!! doesnt match method signature
     @staticmethod

@@ -29,6 +29,7 @@ from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from other_utils import to_list, last_day_of_month, remove_files
 from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA, NCWA
+from dataset_utils import CDOGrid, Variable, Files
 
 from aux_funcs import (
     check_season,
@@ -156,6 +157,32 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         }
 
         return preprocess_pystager, run_dict
+    
+    def worker(
+        self,
+        time: List[dt.datetime],
+        grid: CDOGrid,
+        pathes: Files,
+        predictors: List[Variable],
+        predictands: List[Variable],
+        max_warn = 3
+    ):
+        "implement new interface, but imitate old one."
+        
+        kwargs = {
+            "year_months": time, # List[datetime]
+            "source_dir_input": pathes.input_dir_source,
+            "source_dir_target": pathes.input_dir_target, # only for era5 to ifs/crea6
+            "invar_file_input": pathes.invars_source, # only for era5 to ifs/crea6
+            "dirout": pathes.output_dir, # all
+            "gdes_dict": {"tar_grid_des","coa_grid_des"}, # all
+            "predictors": predictors.to_old_format,
+            "predictands": predictands.to_old_format,
+            "logger": logging.Logger, # all => implement differently
+            "max_warn": 3 # all
+        }
+        
+        return self.__class__.preprocess_worker(kwargs)
 
     @staticmethod
     def preprocess_worker(
