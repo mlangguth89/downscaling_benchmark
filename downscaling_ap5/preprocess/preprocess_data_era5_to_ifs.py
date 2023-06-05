@@ -31,6 +31,7 @@ from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA, NCWA
 
 from aux_funcs import (
+    check_season,
     get_fc_file,
     get_varnames_from_mlvars,
     manage_filemerge,
@@ -116,7 +117,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
         ), "All elements of years must be numbers"
 
         years = [int(year) for year in years]
-        months = PreprocessERA5toIFS.check_season(season)
+        months = check_season(season)
 
         # initialize and set-up Pystager
         preprocess_pystager = PyStager(
