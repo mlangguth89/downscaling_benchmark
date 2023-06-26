@@ -122,12 +122,12 @@ class WGAN(keras.Model):
     def get_recon_loss(self):
 
         kwargs_loss = {}
-        if "vec" in self.hparams("recon_loss"):
+        if "vec" in self.hparams["recon_loss"]:
             kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self.n_predictands}
-        elif "channels" in self.hparams("recon_loss"):
+        elif "channels" in self.hparams["recon_loss"]:
             kwargs_loss = {"n_channels": self.n_predictands}
         
-        loss_fn = get_custom_loss(self.hparams("recon_loss"), **kwargs_loss)
+        loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
 
         return loss_fn
 

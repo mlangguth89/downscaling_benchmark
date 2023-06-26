@@ -40,16 +40,16 @@ def get_custom_loss(loss_name, **kwargs):
 
     if loss_name == "mse_channels":
         assert n_channels > 0, f"n_channels must be a number larger than zero, but is {n_channels}."
-        loss_fn = fix_channels(n_channels)(mse_channels(**kwargs))
+        loss_fn = fix_channels(**kwargs)(mse_channels)
     elif loss_name == "mae_channels":
         assert n_channels > 0, f"n_channels must be a number larger than zero, but is {n_channels}."
-        loss_fn = fix_channels(n_channels)(mae_channels(**kwargs))
+        loss_fn = fix_channels(**kwargs)(mae_channels)
     elif loss_name == "mae_vec":
         assert n_channels > 0, f"n_channels must be a number larger than zero, but is {n_channels}."
-        loss_fn = fix_channels(n_channels)(mae_vec(**kwargs))
+        loss_fn = fix_channels(**kwargs)(mae_vec)
     elif loss_name == "mse_vec":
         assert n_channels > 0, f"n_channels must be a number larger than zero, but is {n_channels}."
-        loss_fn = fix_channels(n_channels)(mse_vec(**kwargs))
+        loss_fn = fix_channels(**kwargs)(mse_vec)
     elif loss_name == "critic":
         loss_fn = critic_loss
     elif loss_name == "critic_generator":
