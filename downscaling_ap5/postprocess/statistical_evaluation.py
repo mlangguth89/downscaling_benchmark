@@ -98,18 +98,19 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
     return quantile_panel, data_cond
 
 def get_cdf_of_x(sample_in, prob_in):
-    '''
+    """
     Wrappper for interpolating CDF-value for given data
     :param sample_in : input values to derive discrete CDF
     :param prob_in   : corresponding CDF
-    :return : lambda function converting arbitrary input values to corresponding CDF value
-    '''
+    :return: lambda function converting arbitrary input values to corresponding CDF value
+    """
     return lambda xin: np.interp(xin, sample_in, prob_in)
 
 def get_seeps_matrix(seeps_param):
     """
     Converts SEEPS paramter array to SEEPS matrix.
     :param seeps_param: Array providing p1 and p3 parameters of SEEPS weighting matrix.
+    :return seeps_matrix: 3x3 weighting matrix for the SEEPS-score
     """
     # initialize matrix
     seeps_weights = xr.full_like(seeps_param["p1"], np.nan)
@@ -267,6 +268,8 @@ class Scores:
     def get_2x2_event_counts(self, thresh):
         """
         Get counts of 2x2 contingency tables
+        :param thres: threshold to define events
+        :return: (a, b, c, d)-tuple of 2x2 contingency table
         """
         a = ((self.data_fcst >= thresh) & (self.data_ref >= thresh)).sum(dim=self.avg_dims)
         b = ((self.data_fcst >= thresh) & (self.data_ref < thresh)).sum(dim=self.avg_dims)
@@ -276,6 +279,11 @@ class Scores:
         return a, b, c, d
 
     def calc_ets(self, thresh=0.1):
+        """
+        Calculates Equitable Threat Score (ETS) on data.
+        :param thres: threshold to define events
+        :return: ets-values
+        """
         a, b, c, d = self.get_2x2_event_counts(thresh)
         n = a + b + c + d
         ar = (a + b)*(a + c)/n      # random reference forecast
@@ -288,6 +296,11 @@ class Scores:
         return ets
     
     def calc_fbi(self, thresh=0.1):
+        """
+        Calculates Frequency bias (FBI) on data.
+        :param thres: threshold to define events
+        :return: fbi-values
+        """
         a, b, c, d = self.get_2x2_event_counts(thresh)
 
         denom = a+c
@@ -298,14 +311,19 @@ class Scores:
         return fbi
     
     def calc_pss(self, thresh=0.1):
-      a, b, c, d = self.get_2x2_event_counts(thresh)      
+        """
+        Calculates Peirce Skill Score (PSS) on data.
+        :param thres: threshold to define events
+        :return: pss-values
+        """
+        a, b, c, d = self.get_2x2_event_counts(thresh)      
 
-      denom = (a + c)*(b + d)
-      pss = (a*d - b*c)/denom
+        denom = (a + c)*(b + d)
+        pss = (a*d - b*c)/denom
 
-      pss = pss.where(denom > 0, np.nan)
+        pss = pss.where(denom > 0, np.nan)
 
-      return pss   
+        return pss   
 
     def calc_l1(self, **kwargs):
         """
