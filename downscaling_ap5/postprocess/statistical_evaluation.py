@@ -224,15 +224,16 @@ class Scores:
     def avg_dims(self, dims):
         if dims is None:
             self.avg_dims = self.data_dims
-            print("Scores will be averaged across all data dimensions.")
+            # print("Scores will be averaged across all data dimensions.")
         else:
             dim_stat = [avg_dim in self.data_dims for avg_dim in dims]
             if not all(dim_stat):
-                ind_bad = [i for i, x in enumerate(dim_stat) if x]
-                raise ValueError("The following dimensions for score-averaging are not" +
-                                 "part of the data: {0}".format(", ".join(dims[ind_bad])))
+                ind_bad = [i for i, x in enumerate(dim_stat) if not x]
+                raise ValueError("The following dimensions for score-averaging are not " +
+                                 "part of the data: {0}".format(", ".join(np.array(dims)[ind_bad])))
 
             self._avg_dims = dims
+
 
     def calc_mse(self, **kwargs):
         """
