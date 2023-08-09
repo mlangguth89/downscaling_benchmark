@@ -101,7 +101,7 @@ class WGAN(keras.Model):
 
         # instantiate submodels
         # instantiate model components (generator and critci)
-        self.generator = self.generator(self.shape_in, self.n_predictands, channels_start=self.hparams["ngf"],
+        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, channels_start=self.hparams["ngf"],
                                         concat_out=True, z_branch=self.hparams["z_branch"])
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
         self.critic = self.critic(tar_shape)
@@ -386,7 +386,7 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "var_tar2in": "", "n_predictands": 2, "recon_loss": "mae_channels"}
+                        "lscheduled_train": True, "recon_loss": "mae_channels"}
 
         return hparams_dict
 
