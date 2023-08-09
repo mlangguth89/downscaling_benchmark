@@ -23,6 +23,7 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
+from custom_losses import get_custom_loss
 from unet_model import conv_block
 from other_utils import to_list
 
@@ -105,6 +106,11 @@ class WGAN(keras.Model):
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
         self.critic = self.critic(tar_shape)
 
+        # losses
+        self.critic_loss = get_custom_loss("critic")
+        self.critic_gen_loss = get_custom_loss("critic_generator")
+        self.recon_loss = self.get_recon_loss()
+
         # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
         self.varnames_tar = None
 
@@ -112,6 +118,19 @@ class WGAN(keras.Model):
         self.c_optimizer, self.g_optimizer = None, None
         self.lr_scheduler = None
         self.checkpoint, self.earlystopping = None, None
+
+    def get_recon_loss(self):
+
+        kwargs_loss = {}
+        if "vec" in self.hparams["recon_loss"]:
+            kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self.n_predictands}
+        elif "channels" in self.hparams["recon_loss"]:
+            kwargs_loss = {"n_channels": self.n_predictands}
+        
+        loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
+
+        return loss_fn
+
 
     def compile(self, **kwargs):
         """
@@ -206,7 +225,7 @@ class WGAN(keras.Model):
                 critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
                 # calculate the loss (incl. gradient penalty)
-                c_loss = WGAN.critic_loss(critic_gt, critic_gen)
+                c_loss = self.critic_loss(critic_gt, critic_gen)
                 gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:self.n_predictands_dyn])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
@@ -221,7 +240,7 @@ class WGAN(keras.Model):
             gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
             critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
-            cg_loss = WGAN.critic_gen_loss(critic_gen)
+            cg_loss = self.critic_gen_loss(critic_gen)
             rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
 
             g_loss = cg_loss + self.hparams["recon_weight"] * rloss
@@ -275,14 +294,6 @@ class WGAN(keras.Model):
 
         return gp
 
-    def recon_loss(self, real_data, gen_data):
-        # initialize reconstruction loss
-        rloss = 0.
-        # get MAE for all output heads
-        for i in range(self.hparams["n_predictands"]):
-            rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[..., i]) - real_data[..., i]))
-
-        return rloss
 
     def plot_model(self, save_dir, **kwargs):
         """
@@ -375,28 +386,9 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
                         "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
                         "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "var_tar2in": "", "n_predictands": 2}
+                        "lscheduled_train": True, "var_tar2in": "", "n_predictands": 2, "recon_loss": "mae_channels"}
 
         return hparams_dict
-
-    @staticmethod
-    def critic_loss(critic_real, critic_gen):
-        """
-        The critic is optimized to maximize the difference between the generated and the real data max(real - gen).
-        This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
-        :param critic_real: critic on the real data
-        :param critic_gen: critic on the generated data
-        :return c_loss: loss to optize the critic
-        """
-        c_loss = tf.reduce_mean(critic_gen - critic_real)
-
-        return c_loss
-
-    @staticmethod
-    def critic_gen_loss(critic_gen):
-        cg_loss = -tf.reduce_mean(critic_gen)
-
-        return cg_loss
 
 
 class LearningRateSchedulerWGAN(LearningRateScheduler):
