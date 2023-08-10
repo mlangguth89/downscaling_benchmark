@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-05-12"
+__update__ = "2023-08-10"
 
 import os
 import argparse
@@ -21,12 +21,14 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 from tensorflow.keras.utils import plot_model
+import wandb
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
 from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import get_training_time_dict
 
+os.environ["WANDB_MODE"]="offline"
 
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
@@ -46,6 +48,10 @@ def main(parser_args):
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
 
+    # initialize wandb
+    wandb.init(project="benchmark_datasets", name=parser_args.exp_name, id=job_id, dir=model_savedir, 
+               config={"dataset": dataset, "data_inputdir": datadir, "model": parser_args.model, "normalization": js_norm}) 
+    
     # read configuration files for model and dataset
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
@@ -147,6 +153,9 @@ def main(parser_args):
     compile_opts = handle_opt_utils(model, "get_compile_opts")
     model.compile(**compile_opts)
 
+    # hyperparameters and dataset configuration to wandb
+    wandb.config.update({"hyperparameters": hparams_dict, "dataset_config": ds_dict})
+
     # copy configuration and normalization JSON-file to model-directory (incl. renaming)
     filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
     if not write_norm:
@@ -163,6 +172,9 @@ def main(parser_args):
     history = model.fit(x=tfds_train, callbacks=[time_tracker], epochs=model.hparams["nepochs"],
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
                         verbose=2, **fit_opts)
+
+    # log training history to wandb
+    wandb.log(**history.history)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
