@@ -174,7 +174,7 @@ def main(parser_args):
                         verbose=2, **fit_opts)
 
     # log training history to wandb
-    wandb.log(**history.history)
+    wandb.log(history.history)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
