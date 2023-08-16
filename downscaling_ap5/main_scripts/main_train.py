@@ -47,9 +47,14 @@ def main(parser_args):
 
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
+    wandb_dir = os.path.join(model_savedir, "wandb")
 
     # initialize wandb
-    wandb.init(project="benchmark_datasets", name=parser_args.exp_name, id=job_id, dir=model_savedir, 
+    if not os.path.isdir(wandb_dir):
+        print(f"Create output-directory for W&B '{wandb_dir'...")
+        os.makedirs(wandbdir)
+        
+    wandb.init(project="benchmark_datasets", name=parser_args.exp_name, id=str(job_id), dir=model_savedir, 
                config={"dataset": dataset, "data_inputdir": datadir, "model": parser_args.model, "normalization": js_norm}) 
     
     # read configuration files for model and dataset
