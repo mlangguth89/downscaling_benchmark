@@ -15,12 +15,13 @@
 # parameters
 
 era5_basedir=/p/scratch/atmo-rep/data/era5/ml_levels/
-crea6_basedir=/p/scratch/atmo-rep/data/crea6/ml_levels/
+crea6_basedir=/p/scratch/atmo-rep/data/cosmo_rea6/ml_levels/
 output_dir=/p/scratch/atmo-rep/data/era5/ml_levels/
+crea6_gdes=../grid_des/crea6_reg_grid
 
 era5_vars=("t")
 era5_vars_full=("temperature")
-crea6_vars=("t_2m")
+crea6_vars=("t2m")
 
 ml_lvl_era5=( 96 105 114 123 135 )
 ml_lvl_crea6=( 0 )
@@ -46,7 +47,7 @@ if [ ! -d $tmp_dir ]; then
 fi
 
 # loop over years and months
-for yr in {${year_start}..${year_end}}; do 
+for yr in $(eval echo "{$year_start..$year_end}"); do 
     for mm in {01..12}; do
         echo "Processing ERA5 data for ${yr}-${mm}..."
         for ivar in "${!era5_vars[@]}"; do 
