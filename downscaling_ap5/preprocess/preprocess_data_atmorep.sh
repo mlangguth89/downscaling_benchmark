@@ -91,7 +91,6 @@ for yr in $(eval echo "{$year_start..$year_end}"); do
 	
 	# clean-up
 	rm ${tmp_dir}/*.nc
-	exit
     done
 done
 
