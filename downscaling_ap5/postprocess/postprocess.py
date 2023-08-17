@@ -90,6 +90,8 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      {score_name.upper(): score_unit},
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
 
+    scores_to_csv(score_hourly_mean, score_hourly_std, score_name, fname=os.path.join(plot_dir, f"eval_{score_name}_year.csv"))
+
     for sea in score_hourly_mean_sea["season"]:
         func_logger.debug(f"Evaluation for season '{sea}'...")
         create_line_plot(score_hourly_mean_sea.sel({"season": sea}),
@@ -97,6 +99,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                          model_type.upper(), {score_name.upper(): score_unit},
                          os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea.values}.png"),
                          **plt_kwargs)
+        
+        scores_to_csv(score_hourly_mean_sea.sel({"season": sea}), score_hourly_std_sea.sel({"season": sea}), score_name, 
+                      fname=os.path.join(plot_dir, f"eval_{score_name}_{sea}.csv"))
     return True
 
 
@@ -140,3 +145,19 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, **plt_k
                              title=f"{score_name} {sea.values} {hh:02d} UTC", projection=cosmo_prj, **plt_kwargs)
 
     return True
+
+
+def scores_to_csv(score_mean, score_std, score_name, fname="scores.csv"):
+    """
+    Save scores to csv file
+    :param score_mean: Hourly mean of score
+    :param score_std: Hourly standard deviation of score
+    :param score_name: Name of score
+    :param fname: Filename of csv file
+    """
+    df_mean = score_mean.to_dataframe(name=f"{score_name}_mean")
+    df_std = score_std.to_dataframe(name=f"{score_name}_std")
+    df = df_mean.join(df_std)
+
+    print(f"Save values of {score_name} to {fname}...")
+    df.to_csv(fname)
