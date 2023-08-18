@@ -12,10 +12,12 @@ Some auxiliary functions for the project:
     * subset_files_on_date
     * extract_date
     * ensure_datetime
+    * doy_to_mo
     * last_day_of_month
     * flatten
     * remove_files
     * check_str_in_list
+    * shape_from_str
     * find_closest_divisor
     * free_mem
     * print_gpu_usage
@@ -29,7 +31,7 @@ Some auxiliary functions for the project:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-03-17"
+__update__ = "2023-08-17"
 
 import os
 import gc
@@ -170,6 +172,18 @@ def ensure_datetime(date):
     return date_dt
 
 
+def doy_to_mo(day_of_year: int, year: int):
+    """
+    Converts day of year to year-month datetime object (e.g. in_day = 2, year = 2017 yields January 2017).
+    From AtmoRep-project: https://isggit.cs.uni-magdeburg.de/atmorep/atmorep/
+    :param day_of_year: day of year
+    :param year: corresponding year (to reflect leap years)
+    :return year-month datetime object
+    """
+    date_month = pd.to_datetime(year * 1000 + day_of_year, format='%Y%j')
+    return date_month
+
+
 def last_day_of_month(any_day):
     """
     Returns the last day of a month
@@ -249,6 +263,19 @@ def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True
         return stat, []
 
 
+def shape_from_str(fname):
+    """
+    Retrieves shapes from AtmoRep output-filenames.
+    From AtmoRep-project: https://isggit.cs.uni-magdeburg.de/atmorep/atmorep/
+    :param fname: filename of AtmoRep output-file
+    :return shapes inferred from AtmoRep output-file
+    """
+    shapes_str = fname.replace("_phys.dat", ".dat").split(".")[-2].split("_s_")[-1].split("_") #remove .ext and split
+    shapes = [int(i) for i in shapes_str]
+    return shapes
+
+    
+    
 def find_closest_divisor(n1, div):
     """
     Function to find closest divisor for a given number with respect to a target value
