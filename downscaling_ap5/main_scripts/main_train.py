@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-05-12"
+__update__ = "2023-08-18"
 
 import os
 import argparse
@@ -84,7 +84,7 @@ def main(parser_args):
     # the dataset
     if "*" in fname_or_patt_train:
         ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
-                                                                 30, ds_dict["predictands"],
+                                                                 ds_dict["num_files"], ds_dict["predictands"],
                                                                  predictors=ds_dict.get("predictors", None),
                                                                  var_tar2in=ds_dict["var_tar2in"],
                                                                  named_targets=named_targets,
