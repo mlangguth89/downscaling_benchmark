@@ -245,6 +245,7 @@ def detrend_data(da: xr.DataArray, xy_dims: list =["lon", "lat"]):
     
     return da
 
+
 def angular_integration(da_fft, grid_dict: dict, lcutoff: bool = True):
     """
     Get power spectrum as a function of the total wavenumber.
@@ -279,6 +280,7 @@ def angular_integration(da_fft, grid_dict: dict, lcutoff: bool = True):
 
     return np.squeeze(spec_radial)
 
+
 def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool = True, re: float = 6378*1e+03):
     """
     Compute power spectrum in terms of total wavenumber from numpy-array.
@@ -290,8 +292,8 @@ def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool =
     """
     # sanity check on # dimensions
     grid_dict = get_domain_info(da, lonlat_dims, re=re)
-    nx, ny = grid_dict("nx"), grid_dict("ny")
-    lx, ly = grid_dict("Lx"), grid_dict("Ly")
+    nx, ny = grid_dict["nx"], grid_dict["ny"]
+    lx, ly = grid_dict["Lx"], grid_dict["Ly"]
 
     da = da.transpose(..., *lonlat_dims)
     # detrend data to get periodic boundary values (cf. Errico, 1985)
