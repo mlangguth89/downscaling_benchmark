@@ -14,6 +14,7 @@ import glob
 import json
 from typing import List, Tuple
 from time import time as timer
+from tqdm import tqdm
 
 import pandas as pd
 import xarray as xr
@@ -389,7 +390,7 @@ class HandleAtmoRepData(object):
         
         print(f"Start reading {len(filelist)} files for {token_type} data...")
         lwarn = True
-        for i, f in enumerate(filelist):
+        for i, f in enumerate(tqdm(filelist)):
             rank, epoch, batch = self.get_rank_epoch_batch(f)
             try:
                 token_info = self._get_token_info(token_type, rank=rank, epoch=epoch, batch=batch, varname=varname, lmasked=lmasked)
@@ -402,18 +403,23 @@ class HandleAtmoRepData(object):
             da_f = self.read_one_file(f, token_type, varname, token_config, token_info, dx, lmasked, ldenormalize, no_mean_denorm)
             
             if i == 0:
-                da = da_f.copy()
+                da_list = []
+                denorm_time = 0.
+                da_list.append(da_f.copy())
+                dim_concat = da_f.dims[0]
             else:
-                dim_concat = da.dims[0]
-                ilast = da[dim_concat][-1] + 1
+                ilast = da_list[i-1][dim_concat][-1] + 1
                 inew = np.arange(ilast, ilast + len(da_f[dim_concat]))
                 da_f = da_f.assign_coords({dim_concat: inew})
                 if ldenormalize:
-                    da.attrs["denormalization time [s]"] += da_f.attrs["denormalization time [s]"]
-                                   
-                da = xr.concat([da, da_f], dim=da.dims[0])
+                    denorm_time += da_f.attrs["denormalization time [s]"]
+                     
+                da_list.append(da_f.copy())
+                #da = xr.concat([da, da_f], dim=da.dims[0])
 
+        da = xr.concat(da_list, dim=da_list[0].dims[0])
         if ldenormalize:
+            da.attrs['denormalization time [s]'] = denorm_time
             print(f"Denormalization of {len(filelist)} files for {token_type} data took {da.attrs['denormalization time [s]']:.2f}s")
                 
         return da
@@ -466,10 +472,6 @@ class HandleAtmoRepData(object):
                 da_concat = xr.concat([da_concat, da_mm], dim="time_aux")
 
         da_concat["time_aux"] = time_save
-<<<<<<< HEAD:analysis/utils/read_atmorep_data.py
-
-=======
->>>>>>> c187c1ec (Update of read_atmorep_data.py to supoort downscaling data.):analysis/read_atmorep_data.py
         if not xr.__version__ == "0.20.1":
             da_concat = da_concat.reset_index("time_aux")
         da_concat = da_concat.unstack("time_aux")
