@@ -73,6 +73,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     func_logger.info(f"Start evaluation in terms of {score_name}")
     score_all = score_engine(score_name)
+    score_all = score_all.drop_vars("variables")
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
                      f"standard deviation: {score_all.std().values:.4f}")  
@@ -118,6 +119,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     model_type = plt_kwargs.get("model_type", "wgan")
     score_all = score_engine(score_name)
+    score_all = score_all.drop_vars("variables")
 
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
@@ -126,7 +128,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
-        print(f"Evaluation for {hh:02d} UTC")
+        func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
         create_map_score(score_hourly_mean.sel({"hour": hh}), fname,
                          dims=dims, title=f"{score_name.upper()} {hh:02d} UTC",
@@ -135,7 +137,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     for hh in range(24):
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
-            print(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
+            func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
             create_map_score(score_now.sel({"season": sea}), fname, dims=dims,
@@ -152,9 +154,12 @@ def scores_to_csv(score_mean, score_std, score_name, fname="scores.csv"):
     :param score_name: Name of score
     :param fname: Filename of csv file
     """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{scores_to_csv.__name__}")
+    
     df_mean = score_mean.to_dataframe(name=f"{score_name}_mean")
     df_std = score_std.to_dataframe(name=f"{score_name}_std")
     df = df_mean.join(df_std)
 
-    print(f"Save values of {score_name} to {fname}...")
+    func_logger.info(f"Save values of {score_name} to {fname}...")
     df.to_csv(fname)
