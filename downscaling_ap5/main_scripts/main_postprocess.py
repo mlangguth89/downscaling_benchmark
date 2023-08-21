@@ -167,18 +167,24 @@ def main(parser_args):
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
 
+    # ad-hoc adaption to projection basaed on norm_dims
+    if "rlat" in ds_dict["norm_dims"]:
+        proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25)
+    else:
+        proj=ccrs.PlateCarree()
+
     logger.info("Start spatial evaluation...")
     lvl_rmse = np.arange(0., 3.1, 0.2)
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
     _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
-                               dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse
-                               projection=ccrs.PlateCarree())
+                               dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
+                               projection=proj)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
                                dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
-                               projection=ccrs.PlateCarree())
+                               projection=proj)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
