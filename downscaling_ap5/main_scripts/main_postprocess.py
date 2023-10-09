@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2022-12-08"
+__update__ = "2023-08-21"
 
 import os, sys, glob
 import logging
@@ -20,6 +20,7 @@ import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
+import cartopy.crs as ccrs
 from handle_data_unet import *
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
@@ -114,7 +115,7 @@ def main(parser_args):
 
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
     tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
-                                                       ds_dict["predictands"], lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
+                                                       ds_dict["predictands"], ds_dict.get("predictors", None), lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
                                                        named_targets=named_targets, lrepeat=False, drop_remainder=False)
 
     # perform normalization
@@ -166,16 +167,24 @@ def main(parser_args):
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
 
+    # ad-hoc adaption to projection basaed on norm_dims
+    if "rlat" in ds_dict["norm_dims"]:
+        proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25)
+    else:
+        proj=ccrs.PlateCarree()
+
     logger.info("Start spatial evaluation...")
     lvl_rmse = np.arange(0., 3.1, 0.2)
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
-    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), cmap=cmap_rmse,
-                               levels=lvl_rmse)
+    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
+                               dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
+                               projection=proj)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
-    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
-                               levels=lvl_bias)
+    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
+                               dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
+                               projection=proj)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 

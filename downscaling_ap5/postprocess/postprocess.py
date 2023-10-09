@@ -64,79 +64,102 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
+    # create output-directories if necessary 
+    metric_dir = os.path.join(plot_dir, "metric_files")
     os.makedirs(plot_dir, exist_ok=True)
+    os.makedirs(metric_dir, exist_ok=True)
+    
     model_type = plt_kwargs.get("model_type", "wgan")
 
     func_logger.info(f"Start evaluation in terms of {score_name}")
     score_all = score_engine(score_name)
+    score_all = score_all.drop_vars("variables")
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
-                     f"standard deviation: {score_all.std().values:.4f}")
-
+                     f"standard deviation: {score_all.std().values:.4f}")  
+    
     score_hourly_all = score_all.groupby("time.hour")
     score_hourly_mean, score_hourly_std = score_hourly_all.mean(), score_hourly_all.std()
-    for hh in range(24):
-        func_logger.debug(f"Evaluation for {hh:02d} UTC")
-        if hh == 0:
-            tmp = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season")
-            score_hourly_mean_sea, score_hourly_std_sea = tmp.mean().copy(), tmp.std().copy()
-        else:
-            tmp = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season")
-            score_hourly_mean_sea, score_hourly_std_sea = xr.concat([score_hourly_mean_sea, tmp.mean()], dim="hour"), \
-                                                          xr.concat([score_hourly_std_sea, tmp.std()], dim="hour")
 
     # create plots
     create_line_plot(score_hourly_mean, score_hourly_std, model_type.upper(),
                      {score_name.upper(): score_unit},
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
 
-    for sea in score_hourly_mean_sea["season"]:
+    scores_to_csv(score_hourly_mean, score_hourly_std, score_name, fname=os.path.join(metric_dir, f"eval_{score_name}_year.csv"))
+
+    score_seas = score_all.groupby("time.season")
+    for sea, score_sea in score_seas:
+        score_sea_hh = score_sea.groupby("time.hour")
+        score_sea_hh_mean, score_sea_hh_std = score_sea_hh.mean(), score_sea_hh.std()
         func_logger.debug(f"Evaluation for season '{sea}'...")
-        create_line_plot(score_hourly_mean_sea.sel({"season": sea}),
-                         score_hourly_std_sea.sel({"season": sea}),
+        create_line_plot(score_sea_hh_mean,
+                         score_sea_hh.std(),
                          model_type.upper(), {score_name.upper(): score_unit},
-                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea.values}.png"),
+                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"),
                          **plt_kwargs)
+        
+        scores_to_csv(score_sea_hh_mean, score_sea_hh_std, score_name, 
+                      fname=os.path.join(metric_dir, f"eval_{score_name}_{sea}.csv"))
     return True
 
 
-def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, **plt_kwargs):
+def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, 
+                           dims = ["rlat", "rlon"], **plt_kwargs):
     """
     Create map plots of desired evaluation metric. Evaluation metric must be given in rotated coordinates.
-    To-Do: Add flexibility regarding underlying coordinate data (i.e. projection).
     :param score_engine: Score engine object to comput evaluation metric
-    :param score_name: Name of evaluation metric (must be implemented into score_engine)
     :param plot_dir: Directory to save plot files
+    :param dims: Spatial dimension names
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
-
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
+    
     os.makedirs(plot_dir, exist_ok=True)
 
     model_type = plt_kwargs.get("model_type", "wgan")
     score_all = score_engine(score_name)
-    cosmo_prj = crs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25)
+    score_all = score_all.drop_vars("variables")
 
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
-    create_map_score(score_mean, fname, score_dims=["rlat", "rlon"],
-                     title=f"{score_name.upper()} (avg.)", projection=cosmo_prj, **plt_kwargs)
+    create_map_score(score_mean, fname, dims=dims,
+                     title=f"{score_name.upper()} (avg.)", **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
         create_map_score(score_hourly_mean.sel({"hour": hh}), fname,
-                         score_dims=["rlat", "rlon"], title=f"{score_name.upper()} {hh:02d} UTC",
-                         projection=cosmo_prj, **plt_kwargs)
+                         dims=dims, title=f"{score_name.upper()} {hh:02d} UTC",
+                         **plt_kwargs)
 
     for hh in range(24):
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
-            func_logger.debug(f"Evaluation for season '{str(sea)}' at {hh:02d} UTC")
+            func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
-            create_map_score(score_now.sel({"season": sea}), fname, score_dims=["rlat", "rlon"],
-                             title=f"{score_name} {sea.values} {hh:02d} UTC", projection=cosmo_prj, **plt_kwargs)
+            create_map_score(score_now.sel({"season": sea}), fname, dims=dims,
+                             title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
     return True
+
+
+def scores_to_csv(score_mean, score_std, score_name, fname="scores.csv"):
+    """
+    Save scores to csv file
+    :param score_mean: Hourly mean of score
+    :param score_std: Hourly standard deviation of score
+    :param score_name: Name of score
+    :param fname: Filename of csv file
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{scores_to_csv.__name__}")
+    
+    df_mean = score_mean.to_dataframe(name=f"{score_name}_mean")
+    df_std = score_std.to_dataframe(name=f"{score_name}_std")
+    df = df_mean.join(df_std)
+
+    func_logger.info(f"Save values of {score_name} to {fname}...")
+    df.to_csv(fname)
