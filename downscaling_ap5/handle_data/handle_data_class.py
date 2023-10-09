@@ -431,7 +431,7 @@ class StreamMonthlyNetCDF(object):
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
-        self.all_vars = self.predictor_list + self.predictand_list
+        self.all_vars = self.predictor_list + self.predictand_list       # ordering important to ensure that predictors come first!
         self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
@@ -463,7 +463,7 @@ class StreamMonthlyNetCDF(object):
         return self.nsamples
 
     def getitems(self, indices):
-        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables")
+        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables").sel({"variables": self.all_vars})
         if self.var_tar2in is not None:
             # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
             #       * The following operation order must concatenate var_tar2in by da_in to ensure

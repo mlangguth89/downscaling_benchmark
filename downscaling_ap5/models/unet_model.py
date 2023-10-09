@@ -23,14 +23,14 @@ from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
 
-import advanced_activations
+from advanced_activations import advanced_activation
 from other_utils import to_list
 
 # building blocks for Unet
 
 
 def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1, 1), padding: str = "same",
-               activation: str = "relu", activation_args=None, kernel_init: str = "he_normal",
+               activation: str = "relu", activation_args={}, kernel_init: str = "he_normal",
                l_batch_normalization: bool = True):
     """
     A convolutional layer with optional batch normalization
@@ -51,14 +51,14 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple 
     try:
         x = Activation(activation)(x)
     except ValueError:
-        ac_layer = advanced_activations(activation, *activation_args)
+        ac_layer = advanced_activation(activation, *activation_args)
         x = ac_layer(x)
 
     return x
 
 
 def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), strides: tuple = (1, 1),
-                 padding: str = "same", activation: str = "relu", activation_args=None,
+                 padding: str = "same", activation: str = "relu", activation_args={},
                  kernel_init: str = "he_normal", l_batch_normalization: bool = True):
     """
     Sequential application of two convolutional layers (using conv_block).
