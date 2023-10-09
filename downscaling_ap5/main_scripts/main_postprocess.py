@@ -115,7 +115,7 @@ def main(parser_args):
 
     da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
     tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
-                                                       ds_dict["predictands"], ds_dict["predictors"], lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
+                                                       ds_dict["predictands"], ds_dict.get("predictors", None), lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
                                                        named_targets=named_targets, lrepeat=False, drop_remainder=False)
 
     # perform normalization
