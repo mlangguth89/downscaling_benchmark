@@ -8,19 +8,24 @@ Collection of auxiliary functions for statistical evaluation and class for Score
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2023-08-18"
+__date__ = "2023-10-10"
 
 import numpy as np
 import xarray as xr
 from typing import Union, List
 import datetime
+from skimage.util.shape import view_as_blocks
 import pandas as pd
 try:
     from tqdm import tqdm
     l_tqdm = True
 except:
     l_tqdm = False
+
+from handle_data import HandleDataClass
+from postprocess import convert_to_xarray
 from other_utils import provide_default, check_str_in_list
+
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -304,6 +309,126 @@ def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool =
     var_rad = angular_integration(fft_var, {"nx": nx, "ny": ny, "Lx": lx, "Ly": ly}, lcutoff)
 
     return var_rad
+
+def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (6, 6)):
+    """
+    Permutes sample in a spatio-temporal way following the method of Breiman (2001). 
+    The concrete implementation follows Höhlein et al., 2020 with spatial permutation based on patching.
+    Note that the latter allows to handle time-invariant data.
+    :param da_orig: original sample. Must be 3D with a 'time'-dimension 
+    :param patch_size: tuple for patch size
+    :return: spatio-temporally permuted sample 
+    """
+
+    assert da_orig.ndim == 3, f"da_orig must be a 3D-array, but has {da_orig.ndim} dimensions."
+
+    coords_orig = da_orig.coords
+    dims_orig = da_orig.dims
+    sh_orig = da_orig.shape
+
+    # temporal permutation
+    ntimes = len(da_orig["time"])
+    if dims_orig != "time":
+        da_orig = da_orig.transpose("time", ...)
+        coords_now, dims_now, sh_now = da_orig.coords, da_orig.dims, da_orig.shape
+    else:
+        coords_now, dims_now, sh_now = coords_orig, dims_orig, sh_orig
+
+    da_permute = np.random.permutation(da_orig).copy()
+    da_permute = xr.DataArray(da_permute, coords=coords_now, dims=dims_now)
+
+    # spatial permutation with patching
+    # time must be last dimension (=channel dimension)
+    sh_aux = da_permute.transpose(..., "time").shape
+
+    # Note that the order of x- and y-coordinates does not matter here
+    da_patched = view_as_blocks(da_permute.transpose(..., "time").values, block_shape=(*patch_size, ntimes))
+
+    # convert to DataArray
+    sh = da_patched.shape
+    dims = ["pat_x", "pat_y", "dummy", "ix", "iy", "time"]
+
+    da_patched = xr.DataArray(da_patched, coords={dims[0]: np.arange(sh[0]), dims[1]: np.arange(sh[1]), "dummy": range(1),
+                                                  dims[3]: np.arange(sh[3]), dims[4]: np.arange(sh[4]), "time": da_permute["time"]}, 
+                              dims=dims)
+    
+    # stack xy-patches and permute
+    da_patched = da_patched.stack({"pat_xy": ["pat_x", "pat_y"]})
+    da_patched[...] = np.random.permutation(da_patched.transpose()).transpose()
+    
+    # unstack
+    da_patched = da_patched.unstack().transpose(*dims)
+
+    # revert view_as_blocks-opertaion
+    da_patched = da_patched.values.transpose([0, 3, 1, 4, 2, 5]).reshape(sh_aux)
+    
+    # write data back on da_permute
+    da_permute[...] = np.moveaxis(da_patched, 2, 0)
+
+    # transpose to original dimension ordering if required
+    da_permute = da_permute.transpose(*dims_orig)
+
+    return da_permute
+
+def run_feature_importance(da: xr.DataArray, predictors: List, varname_tar: str, model, norm, score_name: str,
+                           data_loader_opt: dict, patch_size = (6, 6), variable_dim = "variable"):
+    """
+    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
+    :param da: The (test-)data provided in DataArray with variable-dimension
+    :param predictors: List of predictor variables
+    :param varname_tar: Name of target variable
+    :param model: Trained model for inference
+    :param norm: Normalization object
+    :param score_name: Name of metric-score to be calculated
+    :param data_loader_opt: Dictionary providing options for the TensorFlow data pipeline
+    :param patch_size: Tuple for patch size during spatio-temporal permutation
+    :param variable_dim: Name of variable dimension
+    :return score_all: DataArray with scores for all predictor variables
+    """
+
+    # sanity checks
+    _ = check_str_in_list(list(da[variable_dim]), predictors)
+    assert da.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {da.dims[0]}."
+
+    ntimes = len(da["time"])
+
+    # get ground truth data and underlying metadata
+    ground_truth = da.sel({variable_dim: varname_tar})
+
+    # initialize score-array
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={variable_dim: predictors, "time": da["time"]},
+                             dims=[variable_dim, "time"])
+
+    for var in predictors:
+        # get copy of sample array
+        da_copy = da.copy(deep=True)
+        # permute sample
+        da_permut = sample_permut_xyt(da.sel({variable_dim: var}).copy(), patch_size=patch_size)
+        da_copy[var] = da_permut
+        
+        # get TF dataset
+        tfds_test = HandleDataClass.make_tf_dataset_allmem(da_copy, **data_loader_opt)
+
+        # predict
+        y_pred = model.predict(tfds_test, verbose=2)
+
+        # convert to xarray
+        y_pred = convert_to_xarray(y_pred, norm, f"{varname_tar}_pred", ground_truth.coords, ground_truth.dims, data_loader_opt["z_branch"])
+
+        # calculate score
+        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
+        score_all.loc[variable_dim: var, :] = score_engine(score_name)
+
+    return score_all
+
+
+
+
+                                    
+
+
+
+
 
 
 class Scores:
