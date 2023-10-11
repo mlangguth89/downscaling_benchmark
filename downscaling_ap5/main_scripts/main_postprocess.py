@@ -25,7 +25,7 @@ from handle_data_unet import *
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial
+from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, convert_to_xarray
 from datetime import datetime as dt
 
 # get logger
@@ -128,6 +128,16 @@ def main(parser_args):
     y_pred_trans = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
+
+    # convert to xarray
+    y_pred = convert_to_xarray(y_pred_trans, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
+                               da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
+
+
+
+
+
+
     # get coordinates and dimensions from target data
     slice_dict = {"variables": 0} if hparams_dict["z_branch"] else {}
     coords = da_test_tar.isel(slice_dict).squeeze().coords
