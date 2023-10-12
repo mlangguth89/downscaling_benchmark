@@ -9,13 +9,19 @@ Auxiliary methods for postprocessing.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2022-12-08"
+__update__ = "2023-10-12"
 
 import os
+from typing import Union, List
 import logging
 import xarray as xr
 from cartopy import crs
-from plotting import create_line_plot, create_map_score
+from statistical_evaluation import feature_importance
+from plotting import create_line_plot, create_map_score, create_box_plot
+
+# basic data types
+da_or_ds = Union[xr.DataArray, xr.Dataset]
+list_or_str = Union[List[str], str]
 
 # auxiliary variable for logger
 logger_module_name = f"main_postprocess.{__name__}"
@@ -75,6 +81,28 @@ def convert_to_xarray(model_output, norm, varname, coords, dims, z_branch=False)
     y_pred = norm.denormalize(y_pred, varname=varname)
 
     return y_pred
+
+
+def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6), variable_dim = "variable"):
+
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
+    
+    # get feature importance scores
+    feature_scores = feature_importance(da, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
+                                        patch_size=patch_size, variable_dim=variable_dim)
+    
+    rel_changes = feature_scores / ref_score
+
+    # plot feature importance scores in a box-plot with whiskers where each variable is a box
+    plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
+
+    create_box_plot(rel_changes.T, plt_fname, {"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
+                                               "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper}", "labels": predictors, 
+                                               "yticks": range(1, 9), "colors": "b"})
+
+    return feature_scores
 
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **plt_kwargs):
