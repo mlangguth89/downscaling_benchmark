@@ -74,9 +74,9 @@ def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_ta
     # plot feature importance scores in a box-plot with whiskers where each variable is a box
     plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
 
-    create_box_plot(rel_changes.T, plt_fname, {"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
-                                               "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper}", "labels": predictors, 
-                                               "yticks": range(1, 9), "colors": "b"})
+    create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
+                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper}", "labels": predictors, 
+                                                 "yticks": range(1, 9), "colors": "b"})
 
     return feature_scores
 

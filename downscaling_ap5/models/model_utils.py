@@ -13,7 +13,7 @@ __update__ = "2023-10-12"
 
 # import modules
 from timeit import default_timer as timer
-import xrarry as xr
+import xarray as xr
 import tensorflow.keras as keras
 from unet_model import sha_unet, UNET
 from wgan_model import WGAN, critic_model

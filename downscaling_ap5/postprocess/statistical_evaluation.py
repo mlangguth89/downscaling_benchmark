@@ -461,7 +461,7 @@ def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: s
         da_copy = da.copy(deep=True)
         # permute sample
         da_permut = sample_permut_xyt(da.sel({variable_dim: var}).copy(), patch_size=patch_size)
-        da_copy.loc[{"predictor": var}] = da_permut
+        da_copy.loc[{variable_dim: var}] = da_permut
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")

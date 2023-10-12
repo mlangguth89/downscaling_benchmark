@@ -26,7 +26,8 @@ from handle_data_unet import *
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance, convert_to_xarray
+from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
+from model_utils import convert_to_xarray
 from other_utils import free_mem
 
 # get logger
@@ -61,7 +62,8 @@ def main(parser_args):
 
     logger.addHandler(fh), logger.addHandler(ch)
     
-    logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Start postprocessing at...")
 
     # read configuration files
     md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
@@ -115,18 +117,21 @@ def main(parser_args):
     t0_preproc = timer()
 
     da_test = HandleDataClass.reshape_ds(ds_test)
-    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
-                                                       ds_dict["predictands"], ds_dict.get("predictors", None), lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
-                                                       named_targets=named_targets, lrepeat=False, drop_remainder=False)
+    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
+                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
 
-    # perform normalization
-    #da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test, predictands=ds_dict["predictands"])
+    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test, **tfds_opts)
+    
+    predictors = ds_dict.get("predictors", None)
+    if predictors is None:
+        predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
+        if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
-    y_pred_ = trained_model.predict(tfds_test, verbose=2)
+    y_pred = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     free_mem([tfds_test])
@@ -162,11 +167,9 @@ def main(parser_args):
     t0_fi = timer()
 
     rmse_ref = rmse_all.mean().values
-    predictors = ds_dict["predictors"]
-    if ds_dict.get("var_tar2in", False): predictors.append(tar_varname)
 
     _ = run_feature_importance(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
-                               ds_dict["data_loader_opt"], plt_dir, patch_size=(6, 6), variable_dim="variables")
+                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
     
     logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
 
