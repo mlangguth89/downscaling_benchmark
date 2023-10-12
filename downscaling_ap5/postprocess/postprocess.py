@@ -58,30 +58,6 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
 
     return model_dir, plt_dir, norm_dir, model_type
 
-def convert_to_xarray(model_output, norm, varname, coords, dims, z_branch=False):
-    """
-    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
-    :param model_output: numpy-array of model output
-    :param norm: normalization object
-    :param varname: name of variable
-    :param coords: coordinates of target data
-    :param dims: dimensions of target data
-    :param z_branch: flag for z-branch
-    :return: xarray.DataArray of model output with denormalized data
-    """
-    if z_branch:
-        # slice data to get first channel only
-        if isinstance(model_output, list): model_output = model_output[0]
-        y_pred = xr.DataArray(model_output[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
-    else:
-        # no slicing required
-        y_pred = xr.DataArray(model_output.squeeze(), coords=coords, dims=dims, name=varname)
-
-    # perform denormalization
-    y_pred = norm.denormalize(y_pred, varname=varname)
-
-    return y_pred
-
 
 def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
                            ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6), variable_dim = "variable"):
@@ -153,7 +129,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         
         scores_to_csv(score_sea_hh_mean, score_sea_hh_std, score_name, 
                       fname=os.path.join(metric_dir, f"eval_{score_name}_{sea}.csv"))
-    return True
+    return score_all
 
 
 def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, 
