@@ -23,7 +23,7 @@ import xarray as xr
 from skimage.util.shape import view_as_blocks
 from handle_data_class import HandleDataClass
 from postprocess import convert_to_xarray
-from other_utils import provide_default, check_str_in_list
+from other_utils import provide_default, check_str_in_list, free_mem
 
 
 # basic data types
@@ -478,6 +478,8 @@ def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: s
         func_logger.info(f"Calculate score for permuted samples of {var}...")
         score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
         score_all.loc[{"predictor": var}] = score_engine(score_name)
+
+        free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine]])
 
     return score_all
 
