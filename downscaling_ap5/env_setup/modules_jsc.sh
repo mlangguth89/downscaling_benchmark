@@ -24,7 +24,7 @@ if [[ 0 == 0 ]]; then  # Restoring from model collection currently throws MPI-se
   ml CDO/2.0.2
   ml NCO/5.0.3
   ml netcdf4-python/1.5.7-serial
-  ml ml scikit-image/0.18.3
+  ml scikit-image/0.18.3
   ml SciPy-bundle/2021.10
   ml xarray/0.20.1
   ml dask/2021.9.1
