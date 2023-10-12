@@ -16,6 +16,7 @@ import logging
 import argparse
 from timeit import default_timer as timer
 import json as js
+from datetime import datetime as dt
 import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
@@ -26,7 +27,7 @@ from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance, convert_to_xarray
-from datetime import datetime as dt
+from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
