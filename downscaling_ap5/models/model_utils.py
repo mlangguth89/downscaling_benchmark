@@ -9,10 +9,11 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2023-03-10"
+__update__ = "2023-10-12"
 
 # import modules
 from timeit import default_timer as timer
+import xarray as xr
 import tensorflow.keras as keras
 from unet_model import sha_unet, UNET
 from wgan_model import WGAN, critic_model
@@ -135,5 +136,30 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
         raise TypeError(f"Model method '{opt_funcname}' must be a callable providing dictionary of options.")
 
     return opt_dict
+
+
+def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
+    """
+    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
+    :param mout_np: numpy-array of model output
+    :param norm: normalization object
+    :param varname: name of variable
+    :param coords: coordinates of target data
+    :param dims: dimensions of target data
+    :param z_branch: flag for z-branch
+    :return: xarray.DataArray of model output with denormalized data
+    """
+    if z_branch:
+        # slice data to get first channel only
+        if isinstance(mout_np, list): mout_np = mout_np[0]
+        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
+    else:
+        # no slicing required
+        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
+
+    # perform denormalization
+    mout_xr = norm.denormalize(mout_xr, varname=varname)
+
+    return mout_xr
 
 

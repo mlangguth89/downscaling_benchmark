@@ -321,8 +321,9 @@ class HandleDataClass(object):
             data_iter = data_iter.repeat()
 
         # clean-up to free some memory
-        del da
-        gc.collect()
+        free_mem([da, da_in, da_tar, varnames_tar])
+        #del da
+        #gc.collect()
 
         return data_iter
 
