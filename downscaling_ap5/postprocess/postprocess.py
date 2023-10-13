@@ -14,6 +14,7 @@ __update__ = "2023-10-12"
 import os
 from typing import Union, List
 import logging
+import numpy as np
 import xarray as xr
 from cartopy import crs
 from statistical_evaluation import feature_importance
@@ -70,13 +71,13 @@ def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_ta
                                         patch_size=patch_size, variable_dim=variable_dim)
     
     rel_changes = feature_scores / ref_score
-    max_rel_change = np.ceil(np.amax(rel_change) + 1.)
+    max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
 
     # plot feature importance scores in a box-plot with whiskers where each variable is a box
     plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
 
     create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
-                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper}", "labels": predictors, 
+                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
                                                  "yticks": range(1, max_rel_change), "colors": "b"})
 
     return feature_scores
