@@ -94,7 +94,11 @@ def main(parser_args):
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
-        da_train = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False))
+        da_train = HandleDataClass.reshape_ds(ds_train).astype("float32", copy=True)
+
+        # free up some memory
+        del ds_train
+        gc.collect()
 
         if not data_norm:
             # data_norm must be freshly instantiated (triggering later parameter retrieval)
@@ -105,8 +109,13 @@ def main(parser_args):
                                                             predictors=ds_dict.get("predictors", None),
                                                             var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
+        
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
+
+        # clean up to save some memory
+        del da_train
+        gc.collect()
 
     if write_norm:
         data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
@@ -119,15 +128,20 @@ def main(parser_args):
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     with xr.open_dataset(fdata_val) as ds_val:
         ds_val = data_norm.normalize(ds_val)
-    da_val = HandleDataClass.reshape_ds(ds_val)
+    da_val = HandleDataClass.reshape_ds(ds_val).astype("float32", copy=True)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"],
+    # free up some memory
+    del ds_val
+    gc.collect()
+
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"],
                                                       ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
                                                       named_targets=named_targets)
     
     # clean up to save some memory
-    free_mem([ds_val, da_val])
+    del da_val
+    gc.collect()
 
     tval_load = timer() - t0_val
     print(f"Validation data preparation time: {tval_load:.2f}s.")
