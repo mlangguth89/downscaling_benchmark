@@ -21,7 +21,6 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 from tensorflow.keras.utils import plot_model
-import wandb
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
@@ -44,15 +43,18 @@ def main(parser_args):
     job_id = parser_args.id
     dataset = parser_args.dataset.lower()
     js_norm = parser_args.js_norm
+    wb = parser_args.wb
 
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
-    wandb_dir = os.path.join(model_savedir, "wandb")
+    if wb:
+        import wandb
+        wb_dir = os.path.join(model_savedir, "wandb")
 
-    # initialize wandb
-    if not os.path.isdir(wandb_dir):
-        print(f"Create output-directory for W&B '{wandb_dir'...")
-        os.makedirs(wandbdir)
+        # initialize wandb
+        if not os.path.isdir(wb_dir):
+            print(f"Create output-directory for W&B '{wb_dir}'...")
+            os.makedirs(wb_dir)
         
     wandb.init(project="benchmark_datasets", name=parser_args.exp_name, id=str(job_id), dir=model_savedir, 
                config={"dataset": dataset, "data_inputdir": datadir, "model": parser_args.model, "normalization": js_norm}) 
@@ -169,8 +171,9 @@ def main(parser_args):
     compile_opts = handle_opt_utils(model, "get_compile_opts")
     model.compile(**compile_opts)
 
-    # hyperparameters and dataset configuration to wandb
-    wandb.config.update({"hyperparameters": hparams_dict, "dataset_config": ds_dict})
+    # hyperparameters and dataset configuration to wandb if wandb is enabled
+    if wb:
+        wandb.config.update({"hyperparameters": hparams_dict, "dataset_config": ds_dict})
 
     # copy configuration and normalization JSON-file to model-directory (incl. renaming)
     filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
@@ -189,8 +192,8 @@ def main(parser_args):
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
                         verbose=2, **fit_opts)
 
-    # log training history to wandb
-    wandb.log(history.history)
+    # log training history to wandb if wandb is enabled
+    if wb: wandb.log(history.history)
 
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
@@ -244,6 +247,7 @@ if __name__ == "__main__":
     parser.add_argument("--json_norm_file", "-js_norm", dest="js_norm", type=str, default=None,
                         help="JSON-file providing normalization parameters.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
+    parser.add_argument("--wandb", "-wb", dest="wb", action="store_true", help="Flag to enable W&B logging.")
 
     args = parser.parse_args()
     main(args)
