@@ -27,7 +27,7 @@ try:
 except:
     from multiprocessing.pool import ThreadPool
 from all_normalizations import ZScore
-from other_utils import to_list, find_closest_divisor, free_mem
+from other_utils import to_list, find_closest_divisor#, free_mem
 
 
 class HandleDataClass(object):
@@ -667,7 +667,11 @@ class StreamMonthlyNetCDF(object):
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
             # free memory
-            free_mem([ds_add, add_samples, istart])
+            del ds_add
+            del add_samples
+            del istart
+            gc.collect()
+            #free_mem([ds_add, add_samples, istart])
 
         self.data_loaded[il] = data_now
         # timing
@@ -677,7 +681,11 @@ class StreamMonthlyNetCDF(object):
         print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
         # free memory
-        free_mem([nsamples, t_read, data_now])
+        del nsamples
+        del t_read
+        del data_now 
+        gc.collect()
+        #free_mem([nsamples, t_read, data_now])
 
         return il
 
