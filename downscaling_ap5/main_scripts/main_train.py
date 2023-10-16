@@ -127,7 +127,10 @@ def main(parser_args):
                                                       named_targets=named_targets)
     
     # clean up to save some memory
-    free_mem([ds_val, da_val])
+    del ds_val
+    del da_val
+    gc.collect()
+    #free_mem([ds_val, da_val])
 
     tval_load = timer() - t0_val
     print(f"Validation data preparation time: {tval_load:.2f}s.")

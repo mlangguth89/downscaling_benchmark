@@ -321,9 +321,11 @@ class HandleDataClass(object):
             data_iter = data_iter.repeat()
 
         # clean-up to free some memory
-        free_mem([da, da_in, da_tar, varnames_tar])
-        #del da
-        #gc.collect()
+        # free_mem([da, da_in, da_tar, varnames_tar])
+        del da
+        del da_in
+        del da_tar
+        gc.collect()
 
         return data_iter
 
@@ -667,7 +669,7 @@ class StreamMonthlyNetCDF(object):
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
             # free memory
-            free_mem([ds_add, add_samples, istart])
+            #free_mem([ds_add, add_samples, istart])
 
         self.data_loaded[il] = data_now
         # timing
@@ -677,7 +679,7 @@ class StreamMonthlyNetCDF(object):
         print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
         # free memory
-        free_mem([nsamples, t_read, data_now])
+        #free_mem([nsamples, t_read, data_now])
 
         return il
 
