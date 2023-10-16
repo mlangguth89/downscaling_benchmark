@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-08-10"
+__update__ = "2023-10-16"
 
 import os
 import argparse
@@ -25,7 +25,7 @@ import wandb
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
-from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import get_training_time_dict
 
 os.environ["WANDB_MODE"]="offline"
@@ -95,7 +95,7 @@ def main(parser_args):
     # the dataset
     if "*" in fname_or_patt_train:
         ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
-                                                                 30, ds_dict["predictands"],
+                                                                 ds_dict["num_files"], ds_dict["predictands"],
                                                                  predictors=ds_dict.get("predictors", None),
                                                                  var_tar2in=ds_dict["var_tar2in"],
                                                                  named_targets=named_targets,
@@ -105,7 +105,11 @@ def main(parser_args):
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
-        da_train = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False))
+        da_train = HandleDataClass.reshape_ds(ds_train).astype("float32", copy=True)
+
+        # free up some memory
+        del ds_train
+        gc.collect()
 
         if not data_norm:
             # data_norm must be freshly instantiated (triggering later parameter retrieval)
@@ -116,8 +120,13 @@ def main(parser_args):
                                                             predictors=ds_dict.get("predictors", None),
                                                             var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
+        
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
+
+        # clean up to save some memory
+        del da_train
+        gc.collect()
 
     if write_norm:
         data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
@@ -130,15 +139,17 @@ def main(parser_args):
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     with xr.open_dataset(fdata_val) as ds_val:
         ds_val = data_norm.normalize(ds_val)
-    da_val = HandleDataClass.reshape_ds(ds_val)
+    da_val = HandleDataClass.reshape_ds(ds_val).astype("float32", copy=True)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"],
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"],
                                                       ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
                                                       named_targets=named_targets)
     
     # clean up to save some memory
-    free_mem([ds_val, da_val])
+    del ds_val
+    del da_val
+    gc.collect()
 
     tval_load = timer() - t0_val
     print(f"Validation data preparation time: {tval_load:.2f}s.")

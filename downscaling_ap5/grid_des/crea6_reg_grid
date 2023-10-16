@@ -1,0 +1,18 @@
+#
+# Regular CREA6 grid for downscaling task
+#
+gridtype  = lonlat
+gridsize  = 93312
+xsize     = 432
+ysize     = 216
+xname     = lon
+xlongname = "longitude"
+xunits    = "degrees"
+yname     = lat
+ylongname = "latitude"
+yunits    = "degrees"
+xfirst    = -1.25
+xinc      = 0.0625
+yfirst    = 42.3125
+yinc      = 0.0625
+

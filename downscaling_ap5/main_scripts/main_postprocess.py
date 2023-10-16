@@ -9,23 +9,27 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2022-12-08"
+__update__ = "2023-08-21"
 
 import os, sys, glob
 import logging
 import argparse
 from timeit import default_timer as timer
 import json as js
+from datetime import datetime as dt
+import gc
 import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
+import cartopy.crs as ccrs
 from handle_data_unet import *
 from handle_data_class import HandleDataClass, get_dataset_filename
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial
-from datetime import datetime as dt
+from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
+from model_utils import convert_to_xarray
+from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
@@ -59,7 +63,8 @@ def main(parser_args):
 
     logger.addHandler(fh), logger.addHandler(ch)
     
-    logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    logger.info(f"Start postprocessing at...")
 
     # read configuration files
     md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
@@ -105,41 +110,48 @@ def main(parser_args):
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     with xr.open_dataset(fdata_test) as ds_test:
-        ground_truth = ds_test[tar_varname].astype("float32", copy=False)
+        ground_truth = ds_test[tar_varname].astype("float32", copy=True)
         ds_test = norm.normalize(ds_test)
 
     # prepare training and validation data
     logger.info(f"Start preparing test dataset...")
     t0_preproc = timer()
 
-    da_test = HandleDataClass.reshape_ds(ds_test.astype("float32", copy=False))
-    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test.astype("float32", copy=True), ds_dict["batch_size"],
-                                                       ds_dict["predictands"], lshuffle=False, var_tar2in=ds_dict["var_tar2in"],
-                                                       named_targets=named_targets, lrepeat=False, drop_remainder=False)
+    da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
+    
+    # clean-up to reduce memory footprint
+    del ds_test
+    gc.collect()
+    #free_mem([ds_test])
 
-    # perform normalization
-    da_test_in, da_test_tar = HandleDataClass.split_in_tar(da_test, predictands=ds_dict["predictands"])
+    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
+                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
+
+    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test, **tfds_opts)
+    
+    predictors = ds_dict.get("predictors", None)
+    if predictors is None:
+        predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
+        if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
+
+    predictors = predictors[:2]
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
     t0_train = timer()
-    y_pred_trans = trained_model.predict(tfds_test, verbose=2)
+    y_pred = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
-    # get coordinates and dimensions from target data
-    slice_dict = {"variables": 0} if hparams_dict["z_branch"] else {}
-    coords = da_test_tar.isel(slice_dict).squeeze().coords
-    dims = da_test_tar.isel(slice_dict).squeeze().dims
-    if hparams_dict["z_branch"]:
-        # slice data to get first channel only
-        if isinstance(y_pred_trans, list): y_pred_trans = y_pred_trans[0]
-        y_pred = xr.DataArray(y_pred_trans[..., 0].squeeze(), coords=coords, dims=dims)
-    else:
-        # no slicing required
-        y_pred = xr.DataArray(y_pred_trans.squeeze(), coords=coords, dims=dims)
-    # perform denormalization
-    y_pred = norm.denormalize(y_pred.squeeze(), varname=tar_varname)
+    
+    # clean-up to reduce memory footprint
+    del tfds_test
+    gc.collect()
+    #free_mem([tfds_test])
+
+    # convert to xarray
+    y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
+                               da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
 
     # write inference data to netCDf
     logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
@@ -155,7 +167,7 @@ def main(parser_args):
 
     logger.info("Start temporal evaluation...")
     t0_tplot = timer()
-    _ = run_evaluation_time(score_engine, "rmse", "K", plt_dir, value_range=(0., 3.), model_type=model_type)
+    rmse_all = run_evaluation_time(score_engine, "rmse", "K", plt_dir, value_range=(0., 3.), model_type=model_type)
     _ = run_evaluation_time(score_engine, "bias", "K", plt_dir, value_range=(-1., 1.), ref_line=0.,
                             model_type=model_type)
     _ = run_evaluation_time(score_engine, "grad_amplitude", "1", plt_dir, value_range=(0.7, 1.1),
@@ -163,19 +175,43 @@ def main(parser_args):
 
     logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
+    # run feature importance analysis for RMSE
+    logger.info("Start feature importance analysis...")
+    t0_fi = timer()
+
+    rmse_ref = rmse_all.mean().values
+
+    _ = run_feature_importance(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
+                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
+    
+    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+    
+    # clean-up to reduce memory footprint
+    del da_test
+    gc.collect()
+    #free_mem([da_test])
+
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
+
+    # ad-hoc adaption to projection basaed on norm_dims
+    if "rlat" in ds_dict["norm_dims"]:
+        proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25)
+    else:
+        proj=ccrs.PlateCarree()
 
     logger.info("Start spatial evaluation...")
     lvl_rmse = np.arange(0., 3.1, 0.2)
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
-    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), cmap=cmap_rmse,
-                               levels=lvl_rmse)
+    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
+                               dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
+                               projection=proj)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
-    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), cmap=cmap_bias,
-                               levels=lvl_bias)
+    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
+                               dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
+                               projection=proj)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 

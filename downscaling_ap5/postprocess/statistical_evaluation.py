@@ -8,22 +8,31 @@ Collection of auxiliary functions for statistical evaluation and class for Score
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2022-09-11"
+__date__ = "2023-10-10"
 
-import numpy as np
-import xarray as xr
 from typing import Union, List
-import datetime
-import pandas as pd
 try:
     from tqdm import tqdm
     l_tqdm = True
 except:
     l_tqdm = False
-from other_utils import provide_default, check_str_in_list
+import logging
+import numpy as np
+import pandas as pd
+import xarray as xr
+from skimage.util.shape import view_as_blocks
+from handle_data_class import HandleDataClass
+from model_utils import convert_to_xarray
+from other_utils import provide_default, check_str_in_list, free_mem
+
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
+list_or_str = Union[List[str], str]
+
+# auxiliary variable for logger
+logger_module_name = f"main_postprocess.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 
 
 def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, factorization="calibration_refinement",
@@ -36,21 +45,30 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
     :param quantiles: conditional quantiles
     :return quantile_panel: conditional quantiles of p(m|o) or p(o|m)
     """
-    method = calculate_cond_quantiles.__name__
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{calculate_cond_quantiles.__name__}")
 
     # sanity checks
     if not isinstance(data_fcst, xr.DataArray):
-        raise ValueError("%{0}: data_fcst must be a DataArray.".format(method))
+        err_mess = f"data_fcst must be a DataArray, but is of type '{type(data_fcst)}'."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     if not isinstance(data_ref, xr.DataArray):
-        raise ValueError("%{0}: data_ref must be a DataArray.".format(method))
+        err_mess = f"data_ref must be a DataArray, but is of type '{type(data_ref)}'."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     if not (list(data_fcst.coords) == list(data_ref.coords) and list(data_fcst.dims) == list(data_ref.dims)):
-        raise ValueError("%{0}: Coordinates and dimensions of data_fcst and data_ref must be the same".format(method))
+        err_mess = f"Coordinates and dimensions of data_fcst and data_ref must be the same."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     nquantiles = len(quantiles)
     if not nquantiles >= 3:
-        raise ValueError("%{0}: quantiles must be a list/tuple of at least three float values ([0..1])".format(method))
+        err_mess = f"Quantiles must be a list/tuple of at least three float values ([0..1])."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     if factorization == "calibration_refinement":
         data_cond = data_fcst
@@ -59,8 +77,9 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
         data_cond = data_ref
         data_tar = data_fcst
     else:
-        raise ValueError("%{0}: Choose either 'calibration_refinement' or 'likelihood-base_rate' for factorization"
-                         .format(method))
+        err_mess = f"Choose either 'calibration_refinement' or 'likelihood-base_rate' for factorization"
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     # get and set some basic attributes
     data_cond_longname = provide_default(data_cond.attrs, "longname", "conditioning_variable")
@@ -87,7 +106,7 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
                                   attrs={"cond_var_name": data_cond_longname, "cond_var_unit": data_cond_unit,
                                          "tar_var_name": data_tar_longname, "tar_var_unit": data_tar_unit})
     
-    print("%{0}: Start caclulating conditional quantiles for all {1:d} bins.".format(method, nbins))
+    func_logger.info(f"Start caclulating conditional quantiles for all {nbins:d} bins.")
     # fill the quantile data array
     for i in np.arange(nbins):
         # conditioning of ground truth based on forecast
@@ -140,14 +159,18 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
     :param seed: seed for random block sampling (to be held constant for reproducability)
     :return: bootstrapped version of metric(-s)
     """
-
-    method = perform_block_bootstrap_metric.__name__
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{perform_block_bootstrap_metric.__name__}")
 
     if not isinstance(metric, da_or_ds.__args__):
-        raise ValueError("%{0}: Input metric must be a xarray DataArray or Dataset and not {1}".format(method,
-                                                                                                       type(metric)))
+        err_mess = f"Input metric must be a xarray DataArray or Dataset and not {type(metric)}."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
+    
     if dim_name not in metric.dims:
-        raise ValueError("%{0}: Passed dimension cannot be found in passed metric.".format(method))
+        err_mess = f"Passed dimension {dim_name} cannot be found in passed metric."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     metric = metric.sortby(dim_name)
 
@@ -155,8 +178,9 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
     nblocks = int(np.floor(dim_length/block_length))
 
     if nblocks < 10:
-        raise ValueError("%{0}: Less than 10 blocks are present with given block length {1:d}."
-                         .format(method, block_length) + " Too less for bootstrapping.")
+        err_mess = f"Less than 10 blocks are present with given block length {block_length:d}. Too less for bootstrapping."
+        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        raise ValueError(err_mess)
 
     # precompute metrics of block
     for iblock in np.arange(nblocks):
@@ -174,7 +198,7 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
     np.random.seed(seed)
     iblocks_boot = np.sort(np.random.randint(nblocks, size=(nboots_block, nblocks)))
 
-    print("%{0}: Start block bootstrapping...".format(method))
+    func_logger.info("Start block bootstrapping...")
     iterator_b = np.arange(nboots_block)
     if l_tqdm:
         iterator_b = tqdm(iterator_b)
@@ -192,6 +216,281 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
         metric_boot = metric_boot.rename(dict(zip(metric.data_vars, new_varnames)))
 
     return metric_boot
+
+
+def get_domain_info(da: xr.DataArray, lonlat_dims: list =["lon", "lat"], re:float = 6378*1.e+03): 
+    """
+    Get information about the underlying grid of a DataArray.
+    Assumes a regular, spherical grid (can also be a rotated one of lonlat_dims are adapted accordingly)
+    :param da: The xrray DataArray given on a regular, spherical grid (i.e. providing latitude and longitude coordinates)
+    :param lonlat_dims: Names of the longutude and latitude coordinates
+    :param re: radius of spherical Earth 
+    :return grid_dict: dictionary providing dx (grid spacing), nx (#gridpoints) and Lx(domain length) (same for y) as well as lat0 (central latitude)
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{get_domain_info.__name__}")
+
+    lon, lat = da[lonlat_dims[0]], da[lonlat_dims[1]]
+
+    try:
+        assert lon.ndim, f"Longitude data must be a 1D-array, but is a {lon.ndim:d}D-array"
+    except AssertionError as e:
+        func_logger.error(e, stack_info=True, exc_info=True)
+        raise e
+    
+    try:
+        assert lat.ndim, f"Latitude data must be a 1D-array, but is a {lat.ndim:d}D-array"
+    except AssertionError as e:
+        func_logger.error(e, stack_info=True, exc_info=True)
+        raise e 
+
+    lat0 = np.mean(lat)
+    nx, ny = len(lon), len(lat)
+    dx, dy = (lon[1] - lon[0]).values, (lat[1] - lat[0]).values 
+
+    deg2m = re*2*np.pi/360.
+    Lx, Ly = np.abs(nx*dx*deg2m)*np.cos(np.deg2rad(lat0)), np.abs(ny*dy*deg2m)
+
+    grid_dict = {"nx": nx, "ny": ny, "dx": dx, "dy": dy, 
+                 "Lx": Lx, "Ly": Ly, "lat0": lat0}
+    
+    return grid_dict
+
+
+def detrend_data(da: xr.DataArray, xy_dims: list =["lon", "lat"]):
+    """
+    Detrend data on a limited area domain to majke it periodic in horizontal directions.
+    Method based on Errico, 1985.
+    :param da: The data given on a regular (spherical) grid
+    :param xy_dims: Names of horizontal dimensions
+    :return detrended, periodic data:
+    """
+    
+    x_dim, y_dim = xy_dims[0], xy_dims[1]
+    nx, ny = len(da[x_dim]), len(da[y_dim])
+    
+    # remove trend in x-direction
+    fac_x = xr.full_like(da, 1.) * xr.DataArray(2*np.arange(nx) - nx, dims=x_dim, coords={x_dim: da[x_dim]})
+    fac_y = xr.full_like(da, 1.)* xr.DataArray(2*np.arange(ny) - ny, dims=y_dim, coords={y_dim: da[y_dim]})
+    trend_x, _ = xr.broadcast((da.isel({x_dim: -1}) - da.isel({x_dim: 0}))/float(nx-1), da)
+    da = da - 0.5 * trend_x*fac_x
+    # remove trend in y-direction
+    trend_y, _ = xr.broadcast((da.isel({y_dim: -1}) - da.isel({y_dim: 0}))/float(ny-1), da)
+    da = da - 0.5 * trend_y*fac_y
+    
+    return da
+
+
+def angular_integration(da_fft, grid_dict: dict, lcutoff: bool = True):
+    """
+    Get power spectrum as a function of the total wavenumber.
+    The integration in the (k_x, k_y)-plane is done by summation over (k_x, k_y)-pairs lying in annular rings, cf. Durran et al., 2017
+    :param da_fft: Fast Fourier transformed data with (lat, lon) as last two dimensions
+    :param grid_dict: dictionary providing information on underlying grid (generated by get_domain_info-method)
+    :param lcutoff: flag if spectrum should be truncated to cutoff frequency or if full spectrum should be returned (False)
+    :return power spectrum in total wavenumber space.
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{angular_integration.__name__}")
+
+    sh = da_fft.shape
+    nx, ny = grid_dict["nx"], grid_dict["ny"]
+    dk = np.array([2.*np.pi/grid_dict["Lx"], 2.*np.pi/grid_dict["Ly"]])
+    idkh = np.argmax(dk)
+    dkx, dky = dk
+    nmax = int(np.round(np.sqrt(np.square(nx*dkx) + np.square(ny*dky))/dk[idkh])) 
+
+    sh = (*sh[:-2], nmax) if da_fft.ndim >= 2 else (1, nmax)    # add singleton dim if da_fft is a 2D-array only 
+    spec_radial = np.zeros(sh, dtype="float")
+    
+    # start angular integration
+    func_logger.info(f"Start angular integration for {nmax:d} wavenumbers.")
+    for i in range(nx):
+        for j in range(ny):
+            k_now = int(np.round(np.sqrt(np.square(i*dkx) + np.square(j*dky))/dk[idkh]))
+            spec_radial[..., k_now] += da_fft[..., i, j].real**2 + da_fft[..., i, j].imag**2
+
+    if lcutoff:
+        # Cutting/truncating the spectrum is required to ensure that the combinations of kx and ky
+        # to yield the total wavenumber are complete. Without this truncation, the spectrum gets distorted 
+        # as argued in Errico, 1985 (cf. Eq. 6 therein).
+        # Note that Errico, 1985 chooses the maximum of (nx, ny) since dk is defined as dk=min(kx, ky).
+        # Here, we choose dk = max(dkx, dky) following Durran et al., 2017 (see Eq. 18 therein), and thus have to choose min(nx, ny).
+        cutoff = int(np.round(min(np.array([nx, ny]))/2 + 0.01))
+        spec_radial = spec_radial[..., :cutoff]                
+
+    return np.squeeze(spec_radial)
+
+
+def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool = True, re: float = 6378*1e+03):
+    """
+    Compute power spectrum in terms of total wavenumber from numpy-array.
+    Note: Assumes a regular, spherical grid with dx=dy.
+    :param da: DataArray with (lon, lat)-like dimensions
+    :param lcutoff: flag if spectrum should be truncated to cutoff frequency or if full spectrum should be returned (False)
+    :param re: (spherical) Earth radius
+    :return var_rad: power spectrum in terms of wavenumber
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{get_spectrum.__name__}")
+
+    # sanity check on # dimensions
+    grid_dict = get_domain_info(da, lonlat_dims, re=re)
+    nx, ny = grid_dict["nx"], grid_dict["ny"]
+    lx, ly = grid_dict["Lx"], grid_dict["Ly"]
+
+    da = da.transpose(..., *lonlat_dims)
+    # detrend data to get periodic boundary values (cf. Errico, 1985)
+    da_var = detrend_data(da, xy_dims=lonlat_dims)
+    # ... and apply FFT
+    func_logger.info("Start computing Fourier transformation")
+    fft_var = np.fft.fft2(da_var.values)/float(nx*ny)
+
+    var_rad = angular_integration(fft_var, {"nx": nx, "ny": ny, "Lx": lx, "Ly": ly}, lcutoff)
+
+    return var_rad
+
+
+def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (6, 6)):
+    """
+    Permutes sample in a spatio-temporal way following the method of Breiman (2001). 
+    The concrete implementation follows Höhlein et al., 2020 with spatial permutation based on patching.
+    Note that the latter allows to handle time-invariant data.
+    :param da_orig: original sample. Must be 3D with a 'time'-dimension 
+    :param patch_size: tuple for patch size
+    :return: spatio-temporally permuted sample 
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{sample_permut_xyt.__name__}")
+
+    try:
+        assert da_orig.ndim == 3, f"da_orig must be a 3D-array, but has {da_orig.ndim} dimensions."
+    except AssertionError as e:
+        func_logger.error(e, stack_info=True, exc_info=True)
+        raise e
+
+    coords_orig = da_orig.coords
+    dims_orig = da_orig.dims
+    sh_orig = da_orig.shape
+
+    # temporal permutation
+    func_logger.info(f"Start spatio-temporal permutation for sample with shape {sh_orig}.")
+
+    ntimes = len(da_orig["time"])
+    if dims_orig != "time":
+        da_orig = da_orig.transpose("time", ...)
+        coords_now, dims_now, sh_now = da_orig.coords, da_orig.dims, da_orig.shape
+    else:
+        coords_now, dims_now, sh_now = coords_orig, dims_orig, sh_orig
+
+    da_permute = np.random.permutation(da_orig).copy()
+    da_permute = xr.DataArray(da_permute, coords=coords_now, dims=dims_now)
+
+    # spatial permutation with patching
+    # time must be last dimension (=channel dimension)
+    sh_aux = da_permute.transpose(..., "time").shape
+
+    # Note that the order of x- and y-coordinates does not matter here
+    da_patched = view_as_blocks(da_permute.transpose(..., "time").values, block_shape=(*patch_size, ntimes))
+
+    # convert to DataArray
+    sh = da_patched.shape
+    dims = ["pat_x", "pat_y", "dummy", "ix", "iy", "time"]
+
+    da_patched = xr.DataArray(da_patched, coords={dims[0]: np.arange(sh[0]), dims[1]: np.arange(sh[1]), "dummy": range(1),
+                                                  dims[3]: np.arange(sh[3]), dims[4]: np.arange(sh[4]), "time": da_permute["time"]}, 
+                              dims=dims)
+    
+    # stack xy-patches and permute
+    da_patched = da_patched.stack({"pat_xy": ["pat_x", "pat_y"]})
+    da_patched[...] = np.random.permutation(da_patched.transpose()).transpose()
+    
+    # unstack
+    da_patched = da_patched.unstack().transpose(*dims)
+
+    # revert view_as_blocks-opertaion
+    da_patched = da_patched.values.transpose([0, 3, 1, 4, 2, 5]).reshape(sh_aux)
+    
+    # write data back on da_permute
+    da_permute[...] = np.moveaxis(da_patched, 2, 0)
+
+    # transpose to original dimension ordering if required
+    da_permute = da_permute.transpose(*dims_orig)
+
+    return da_permute
+
+
+def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                       data_loader_opt: dict, patch_size = (6, 6), variable_dim = "variable"):
+    """
+    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
+    :param da: The (test-)data provided in DataArray with variable-dimension
+    :param predictors: List of predictor variables
+    :param varname_tar: Name of target variable
+    :param model: Trained model for inference
+    :param norm: Normalization object
+    :param score_name: Name of metric-score to be calculated
+    :param data_loader_opt: Dictionary providing options for the TensorFlow data pipeline
+    :param patch_size: Tuple for patch size during spatio-temporal permutation
+    :param variable_dim: Name of variable dimension
+    :return score_all: DataArray with scores for all predictor variables
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
+
+    # sanity checks
+    _ = check_str_in_list(list(da[variable_dim]), predictors)
+    try:
+        assert da.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {da.dims[0]}."
+    except AssertionError as e:
+        func_logger.error(e, stack_info=True, exc_info=True)
+        raise e
+
+    ntimes = len(da["time"])
+
+    # get ground truth data and underlying metadata
+    ground_truth = norm.denormalize(da.sel({variable_dim: varname_tar}), varname=varname_tar)
+
+    # initialize score-array
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": da["time"]},
+                             dims=["predictor", "time"])
+
+    for var in predictors:
+        func_logger.info(f"Run sample importance analysis for {var}...")
+        # get copy of sample array
+        da_copy = da.copy(deep=True)
+        # permute sample
+        da_permut = sample_permut_xyt(da.sel({variable_dim: var}).copy(), patch_size=patch_size)
+        da_copy.loc[{variable_dim: var}] = da_permut
+        
+        # get TF dataset
+        func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
+        tfds_test = HandleDataClass.make_tf_dataset_allmem(da_copy, **data_loader_opt)
+
+        # predict
+        func_logger.info(f"Run inference with permuted sample for {var}...")
+        y_pred = model.predict(tfds_test, verbose=2)
+
+        # convert to xarray
+        y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
+
+        # calculate score
+        func_logger.info(f"Calculate score for permuted samples of {var}...")
+        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
+        score_all.loc[{"predictor": var}] = score_engine(score_name)
+
+        free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
+
+    return score_all
+
+
+
+
+                                    
+
+
+
+
 
 
 class Scores:
