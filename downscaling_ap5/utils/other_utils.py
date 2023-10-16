@@ -19,7 +19,7 @@ Some auxiliary functions for the project:
     * check_str_in_list
     * shape_from_str
     * find_closest_divisor
-    * free_mem
+#    * free_mem
     * print_gpu_usage
     * print_cpu_usage
     * get_memory_usage
@@ -302,16 +302,18 @@ def find_closest_divisor(n1, div):
         return all_divs[i]
 
 
-def free_mem(var_list: List):
-    """
-    Delete all variables in var_list and release memory
-    :param var_list: list of variables to be deleted
-    """
-    var_list = to_list(var_list)
-    for var in var_list:
-        del var
-
-    gc.collect()
+#def free_mem(var_list: List):
+# *** This was found to be in effective, cf. michael_issue085-memory_footprint ***
+#
+#    """
+#    Delete all variables in var_list and release memory
+#    :param var_list: list of variables to be deleted
+#    """
+#    var_list = to_list(var_list)
+#    for var in var_list:
+#        del var
+#
+#    gc.collect()
 
 # The following auxiliary methods have been adapted from MAELSTROM AP3,
 # see https://git.ecmwf.int/projects/MLFET/repos/maelstrom-radiation/browse/climetlab_maelstrom_radiation/benchmarks/

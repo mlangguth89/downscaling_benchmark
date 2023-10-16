@@ -17,6 +17,7 @@ import argparse
 from timeit import default_timer as timer
 import json as js
 from datetime import datetime as dt
+import gc
 import numpy as np
 import xarray as xr
 import tensorflow.keras as keras
@@ -116,7 +117,13 @@ def main(parser_args):
     logger.info(f"Start preparing test dataset...")
     t0_preproc = timer()
 
-    da_test = HandleDataClass.reshape_ds(ds_test)
+    da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
+    
+    # clean-up to reduce memory footprint
+    del ds_test
+    gc.collect()
+    #free_mem([ds_test])
+
     tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
                 "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
 
@@ -127,6 +134,8 @@ def main(parser_args):
         predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
         if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
 
+    predictors = predictors[:2]
+
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                  "Start inference on trained model...")
@@ -134,7 +143,11 @@ def main(parser_args):
     y_pred = trained_model.predict(tfds_test, verbose=2)
 
     logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
-    free_mem([tfds_test])
+    
+    # clean-up to reduce memory footprint
+    del tfds_test
+    gc.collect()
+    #free_mem([tfds_test])
 
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
@@ -172,6 +185,11 @@ def main(parser_args):
                                tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
     
     logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+    
+    # clean-up to reduce memory footprint
+    del da_test
+    gc.collect()
+    #free_mem([da_test])
 
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])

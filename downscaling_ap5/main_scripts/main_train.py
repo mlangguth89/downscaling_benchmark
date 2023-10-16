@@ -24,7 +24,7 @@ from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
-from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import get_training_time_dict
 
 
@@ -130,16 +130,13 @@ def main(parser_args):
         ds_val = data_norm.normalize(ds_val)
     da_val = HandleDataClass.reshape_ds(ds_val).astype("float32", copy=True)
 
-    # free up some memory
-    del ds_val
-    gc.collect()
-
     tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"],
                                                       ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
                                                       named_targets=named_targets)
     
     # clean up to save some memory
+    del ds_val
     del da_val
     gc.collect()
 
