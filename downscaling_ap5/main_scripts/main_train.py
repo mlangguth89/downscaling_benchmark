@@ -193,8 +193,18 @@ def main(parser_args):
                         verbose=2, **fit_opts)
 
     # log training history to wandb if wandb is enabled
-    if wb: wandb.log(history.history)
-
+    if wb: 
+        loss_data = history.history
+        for epoch in range(len(loss_data['loss'])):
+            wandb.log({'loss': float(loss_data['loss'][epoch]),
+                      't_2m_tar_loss': float(loss_data['t_2m_tar_loss'][epoch]),
+                      'hsurf_tar_loss': float(loss_data['hsurf_tar_loss'][epoch]),
+                      'val_loss': float(loss_data['val_loss'][epoch]),
+                      'val_t_2m_tar_loss': float(loss_data['val_t_2m_tar_loss'][epoch]),
+                      'val_hsurf_tar_loss': float(loss_data['val_hsurf_tar_loss'][epoch]),
+                      'lr': float(loss_data['lr'][epoch])
+                      }, step=epoch)        
+        
     # get some parameters from tracked training times and put to dictionary
     training_times = get_training_time_dict(time_tracker.epoch_times,
                                             nsamples * model.hparams["nepochs"])
