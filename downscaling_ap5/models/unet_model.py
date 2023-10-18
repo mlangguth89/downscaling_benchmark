@@ -107,7 +107,7 @@ def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int 
                    padding: str = "same", activation: str = "relu", kernel_init: str = "he_normal"):
 
     x = Conv2D(num_filters * (upscale_fac ** 2), kernel, padding=padding, kernel_initializer=kernel_init,
-               activation=activation)(inputs)
+               activation="relu")(inputs)
     x = tf.nn.depth_to_space(x, upscale_fac)
 
     return x
@@ -121,11 +121,11 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
     One complete decoder block used in U-net (reverting the encoder)
     """
     if l_subpixel:
-        x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same", 
-                            activation=activation, kernel_init=kernel_init)(inputs)
-    else:
         x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
                             activation=activation, kernel_init=kernel_init)
+    else:
+        x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same", 
+                            activation=activation, kernel_init=kernel_init)(inputs)
         
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
@@ -243,7 +243,7 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
 
-        add_unet_args = {"advanced_unet": self.hparams["advanced_unet"]} if "advanced_unet" in inspect.getargspec(self.unet).args else {}
+        add_unet_args = {"advanced_unet": self.hparams["advanced_unet"]} if "advanced_unet" in inspect.getfullargspec(self.unet).args else {}
 
         # instantiate model
         if self.hparams["z_branch"]:     # model has named branches (see also opt_dict in get_compile_opts)
