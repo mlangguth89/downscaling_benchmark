@@ -186,8 +186,9 @@ def main(parser_args):
     # save trained model
     t0_save = timer()
 
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
     os.makedirs(model_savedir, exist_ok=True)
-    model.save(filepath=model_savedir)
+    model.save(filepath=model_savedir_last)
 
     if callable(getattr(model, "plot_model", False)):
         model.plot_model(model_savedir, show_shapes=True)
