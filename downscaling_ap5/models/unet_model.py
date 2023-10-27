@@ -104,10 +104,17 @@ def encoder_block(inputs, num_filters, kernel_pool: tuple = (2, 2), l_large: boo
     return x, p
 
 def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int = 2,
-                   padding: str = "same", activation: str = "relu", kernel_init: str = "he_normal"):
+        padding: str = "same", activation: str = "relu", activation_args: dict = {},
+        kernel_init: str = "he_normal"):
 
     x = Conv2D(num_filters * (upscale_fac ** 2), kernel, padding=padding, kernel_initializer=kernel_init,
-               activation="relu")(inputs)
+               activation=None)(inputs)
+    try:
+        x = Activation(activation)(x)
+    except ValueError:
+        ac_layer = advanced_activation(activation, *activation_args)
+        x = ac_layer(x)
+    
     x = tf.nn.depth_to_space(x, upscale_fac)
 
     return x
@@ -122,11 +129,11 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
     """
     if l_subpixel:
         x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
-                            activation=activation, kernel_init=kernel_init)
+                            activation="relu", kernel_init=kernel_init)
     else:
-        x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same", 
-                            activation=activation, kernel_init=kernel_init)(inputs)
+        x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
         
+    ac_layer = advanced_activation(activation)
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
                      l_batch_normalization=l_batch_normalization)
@@ -154,7 +161,7 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
         config_encoder = {"activation": "leakyrelu"}
         config_decoder = config_encoder.copy()
         config_encoder["l_avgpool"] = True
-        config_decoder["l_subpixel"] = True
+        config_decoder["l_subpixel"] = False
     else:   
         config_encoder = {"activation": "relu"}
         config_decoder = config_encoder.copy()
@@ -167,7 +174,7 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     s3, e3 = encoder_block(e2, channels_start * 4, l_large=False, **config_encoder)
 
     """ bridge encoder <-> decoder """
-    b1 = conv_block(e3, channels_start * 8, activation=config_encoder["activation"])
+    b1 = conv_block(e3, channels_start * 8)
 
     """ decoder """
     d1 = decoder_block(b1, s3, channels_start * 4, **config_decoder)
@@ -218,7 +225,6 @@ class UNET(keras.Model):
         See https://stackoverflow.com/questions/65318036/is-it-possible-to-use-the-tensorflow-keras-functional-api-train_unet-model-err.6387845within-a-subclassed-mo
         for a reference how a model based on Keras functional API has to be integrated into a subclass.
         """
-        print(**kwargs)
         return self.unet(inputs, **kwargs)
 
     def get_compile_opts(self):
@@ -292,7 +298,9 @@ class UNET(keras.Model):
             callback_list = callback_list + [LearningRateScheduler(self.get_lr_scheduler(), verbose=1)]
 
         if self.hparams["lscheduled_train"]:
-            callback_list = callback_list + [ModelCheckpoint(self.savedir, monitor="val_loss", verbose=1,
+            savedir_best = os.path.join(self.savedir, f"{self.modelname}_best")
+            os.makedirs(savedir_best, exist_ok=True)
+            callback_list = callback_list + [ModelCheckpoint(savedir_best, monitor="val_t_2m_tar_loss", verbose=1,
                                                              save_best_only=True, mode="min")]
             #                                + EarlyStopping(monitor="val_recon_loss", patience=8)]
 
@@ -313,6 +321,9 @@ class UNET(keras.Model):
 
     def save(self, **kwargs):
         self.unet.save(**kwargs)
+
+    def plot_model(self, **kwargs):
+        self.unet.plot_model(**kwargs)
 
     @staticmethod
     def get_hparams_dict(hparams_user: dict) -> dict:
