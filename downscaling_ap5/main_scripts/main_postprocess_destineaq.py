@@ -51,7 +51,7 @@ def main(parser_args):
 
     # create output-directory and set name of netCDF-file to store inference data
     os.makedirs(plt_dir, exist_ok=True)
-    ncfile_out = os.path.join(plt_dir, "postprocessed_ds_test.nc")
+
     # create logger handlers
     logfile = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
     if os.path.isfile(logfile): os.remove(logfile)
@@ -65,8 +65,8 @@ def main(parser_args):
 
     logger.addHandler(fh), logger.addHandler(ch)
     
-    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"Start postprocessing at...")
+    logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    #logger.info(f"Start postprocessing at...")
 
     # read configuration files
     md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
@@ -92,11 +92,6 @@ def main(parser_args):
 
     named_targets = hparams_dict.get("named_targets", False)
 
-    # Load checkpointed model
-    logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
-    trained_model = keras.models.load_model(model_dir, compile=False)
-    logger.info(f"Model was loaded successfully.")
-
     # get datafile list
     fdata_test_list = glob.glob(os.path.join(parser_args.data_dir, "downscaling_{parser_args.dataset}*.nc"))
     nfiles = len(fdata_test_list)
@@ -114,14 +109,10 @@ def main(parser_args):
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     # initialize lists for timing
-    times_read = []
-    times_preproc = []
-    times_infer = []
-    times_postproc = []
-    times_plot = []
+    times_read, times_preproc, times_infer, times_postproc, times_plot = [], [], [], [], []
 
     for fdata_test in fdata_test_list:
-        # read test data
+        # Read test data
         t0_read = timer()
         logger.info(f"Start reading data from file '{fdata_test}'")
 
@@ -133,11 +124,15 @@ def main(parser_args):
         times_read.append(dt_read)
         logger.info(f"Data from file '{fdata_test}' successfully read in {dt_read:.2f}s.")            
 
-        # prepare training and validation data
+        # Prepare training and validation data
         logger.info(f"Start preparing test dataset...")
         t0_preproc = timer()
 
         da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
+        
+        # get date of test data and create directory
+        date_str = pd.to_datetime(da_test["time"][0].values).strftime("%Y%m%d_%H%M")
+        plt_dir_date = os.path.join(plt_dir, date_str)
     
         # clean-up to reduce memory footprint
         del ds_test
@@ -160,6 +155,16 @@ def main(parser_args):
 
         logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                     "Start inference on trained model...")
+        
+        # Load checkpointed model
+        t0_mload = timer()
+
+        logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
+        trained_model = keras.models.load_model(model_dir, compile=False)
+
+        dt_mload = timer() - t0_mload
+        logger.info(f"Loading model took {dt_mload:.2f}s.")
+        times_infer.append(dt_mload)
 
         # start inference
         t0_train = timer()
@@ -174,7 +179,7 @@ def main(parser_args):
         times_infer.append(dt_infer)
         logger.info(f"Inference on test dataset finished after {dt_infer:.2f}s.")
 
-        # start postprocessing
+        # Start postprocessing
         logger.info(f"Start postprocessing of inference data...")
         t0_postproc = timer()
     
@@ -183,6 +188,8 @@ def main(parser_args):
                                    da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
 
         # write inference data to netCDf
+        ncfile_out = os.path.join(plt_dir_date, f"{model_type}_downscaled_{tar_varname}_{date_str}.nc")
+
         logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
         y_pred.name = f"{tar_varname}_fcst"
         ds = y_pred.to_dataset()
@@ -193,7 +200,7 @@ def main(parser_args):
         times_postproc.append(dt_postproc)
         logger.info(f"Writing postprocessed output data in {dt_postproc:.2f}s. Start producing maps of downscaled product...")
 
-        # start creating plots
+        # Start creating plots
         t0_plot = timer()
 
         # set plot arguments
@@ -201,17 +208,17 @@ def main(parser_args):
         lvl_t2m = np.arange(-34, 46, 2.)
         cmap_t2m = mpl.hsv_r(np.linspace(0., 1., len(lvl_t2m)))
         plt_kwargs = {"dims": ds_dict["norm_dims"][1::], "cmap": cmap_t2m, "levels": lvl_t2m,
-                      "projection": proj}
+                      "projection": proj, "title": ""}
         
-        # Create a pool of processes
+        # create a pool of processes
         nworkers = min(mp.cpu_count(), len(y_pred["time"]))
         pool = Pool(processes=nworkers)
 
         for it, t in enumerate(y_pred["time"]):
             date = pd.to_datetime(t)
-            fname = os.path.join(plt_dir, f"{model_type}_downscaled_{tar_varname}_{date.strftime('%Y%m%d_%h00')}")
-            pool.apply_async(create_map_score, (y_pred.isel({"time": it}), fname, title=f"{date.strftime('%Y-%m%-%d %h:00 UTC')}",
-                                                **plt_kwargs))
+            fname = os.path.join(plt_dir_date, f"{model_type}_downscaled_{tar_varname}_{date.strftime('%Y%m%d_%H00')}")
+            plt_kwargs["title"] = f"{date.strftime('%Y-%m-%d %H:00 UTC')}"
+            pool.apply_async(create_map_score, (y_pred.isel({"time": it}), fname), plt_kwargs)
             
         pool.close()
         pool.join()
