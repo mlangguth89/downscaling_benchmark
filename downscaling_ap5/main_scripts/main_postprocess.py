@@ -17,6 +17,7 @@ import argparse
 from timeit import default_timer as timer
 import json as js
 from datetime import datetime as dt
+#import datetime as dt
 import gc
 import numpy as np
 import xarray as xr
@@ -35,6 +36,7 @@ from other_utils import free_mem
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+
 
 
 def main(parser_args):
