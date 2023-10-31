@@ -19,6 +19,7 @@ import json as js
 import gc
 import pandas as pd
 import xarray as xr
+import tensorflow as tf
 import tensorflow.keras as keras
 import cartopy.crs as ccrs
 import multiprocessing as mp
@@ -71,6 +72,14 @@ def main(parser_args):
     
     logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
     #logger.info(f"Start postprocessing at...")
+    
+    # Choose device
+    if parser_args.with_cpu:
+        device = "/cpu:0"
+    else:
+        device = "/gpu:0"
+    
+    logger.info(f"Inference will be run on device {device}.")
 
     # read configuration files
     md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
@@ -115,7 +124,7 @@ def main(parser_args):
     # initialize lists for timing
     times_read, times_preproc, times_infer, times_postproc, times_plot = [], [], [], [], []
 
-    for fdata_test in fdata_test_list[10:]:
+    for fdata_test in fdata_test_list[:100]:
         # Read test data
         t0_read = timer()
         logger.info(f"Start reading data from file '{fdata_test}'")
@@ -182,7 +191,9 @@ def main(parser_args):
 
         # start inference
         t0_train = timer()
-        y_pred = trained_model.predict(tfds_test, verbose=2)
+
+        with tf.device(device):
+            y_pred = trained_model.predict(tfds_test, verbose=2)
     
         # clean-up to reduce memory footprint
         del tfds_test
@@ -278,6 +289,8 @@ if __name__ == "__main__":
     parser.add_argument("--model_type", "-model_type", dest="model_type", default=None,
                         help="Name of model architecture. Only required if custom model architecture is not" +
                              "implemented in get_model_info-function (see postprocess.py)")
+    parser.add_argument("--inference_with_cpu", "-with_cpu", dest="with_cpu", default=False, action="store_true",
+                        help="Flag to run inference on CPU rather than GPU.")
 
     args = parser.parse_args()
     main(args)
