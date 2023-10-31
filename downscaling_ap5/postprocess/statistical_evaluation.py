@@ -23,7 +23,7 @@ import xarray as xr
 from skimage.util.shape import view_as_blocks
 from handle_data_class import HandleDataClass
 from model_utils import convert_to_xarray
-from other_utils import provide_default, check_str_in_list, free_mem
+from other_utils import provide_default, check_str_in_list
 
 
 # basic data types
