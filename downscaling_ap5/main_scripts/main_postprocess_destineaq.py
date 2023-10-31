@@ -122,7 +122,7 @@ def main(parser_args):
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     # initialize lists for timing
-    times_read, times_preproc, times_infer, times_postproc, times_plot = [], [], [], [], []
+    times_read, times_preproc, times_load, times_infer, times_postproc, times_plot = [], [], [], [], [], []
 
     for fdata_test in fdata_test_list[:100]:
         # Read test data
@@ -187,7 +187,7 @@ def main(parser_args):
 
         dt_mload = timer() - t0_mload
         logger.info(f"Loading model took {dt_mload:.2f}s.")
-        times_infer.append(dt_mload)
+        times_load.append(dt_mload)
 
         # start inference
         t0_train = timer()
@@ -209,9 +209,11 @@ def main(parser_args):
         t0_postproc = timer()
    
         # convert to xarray
-        y_pred = convert_to_xarray(y_pred - 273.15, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
+        y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
                                    ["time", "rlat", "rlon"], hparams_dict["z_branch"])
 
+        y_pred = y_pred - 273.15
+        
         # write inference data to netCDf
         ncfile_out = os.path.join(plt_dir_date, f"{model_type}_downscaled_{tar_varname}_{date_str}.nc")
 
@@ -261,14 +263,14 @@ def main(parser_args):
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {dt_all:.1f}s.")
 
-    time_dict = {"reading times": times_read, "preprocessing times": times_preproc, "inference times": times_infer,
+    time_dict = {"reading times": times_read, "preprocessing times": times_preproc, "model loading times": times_load, "inference times": times_infer,
                  "postprocessing times": times_postproc, "plotting times": times_plot, "total run time": dt_all}
     
 
-    times_js = os.path.join(plt_dir, "tracked_times.json")
+    times_js = os.path.join(plt_dir, f"tracked_times_{device.lstrip('/').rstrip(':0')}.json")
     logger.info(f"Save tracked times to {times_js}")
-    with open(times_js) as jsf:
-        jsf.dump(time_dict)
+    with open(times_js, "w") as jsf:
+        json.dump(time_dict, jsf)
     
 
 
