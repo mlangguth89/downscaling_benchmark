@@ -175,8 +175,8 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, hparams_unet: dict, con
 
     """ decoder """
     d1 = decoder_block(b1, s3, channels_start * 4, l_subpixel=l_subpixel, **config_conv)
-    d2 = decoder_block(d1, s2, channels_start * 2,l_subpixel=l_subpixel, **config_conv))
-    d3 = decoder_block(d2, s1, channels_start, l_subpixel=l_subpixel, **config_conv))
+    d2 = decoder_block(d1, s2, channels_start * 2, l_subpixel=l_subpixel, **config_conv)
+    d3 = decoder_block(d2, s1, channels_start, l_subpixel=l_subpixel, **config_conv)
 
     output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer=config_conv["kernel_init"], name=tar_channels[0])(d3)
     if z_branch:
