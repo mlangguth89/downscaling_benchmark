@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Methods to set-up U-net models incl. its building blocks.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2023-10-17"
+__update__ = "2023-11-13"
 
 # import modules
 import os
@@ -58,43 +58,35 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple 
     return x
 
 
-def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), strides: tuple = (1, 1),
-                 padding: str = "same", activation: str = "swish", activation_args={},
-                 kernel_init: str = "he_normal", l_batch_normalization: bool = True):
+def conv_block_n(inputs, num_filters: int, n: int = 2, **kwargs):
     """
     Sequential application of two convolutional layers (using conv_block).
     :param inputs: the input data with dimensions nx, ny and nc
     :param num_filters: number of filters (output channel dimension)
     :param n: number of convolutional blocks
-    :param kernel: tuple for convolution kernel size
-    :param strides: tuple for stride of convolution
-    :param padding: technique for padding (e.g. "same" or "valid")
-    :param activation: activation fuction for neurons (e.g. "relu")
-    :param activation_args: arguments for activation function given that advanced layers are applied
-    :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
-    :param l_batch_normalization: flag if batch normalization should be applied
+    :param kwargs: keyword arguments for conv_block
     """
-    x = conv_block(inputs, num_filters, kernel, strides, padding, activation, activation_args,
-                   kernel_init, l_batch_normalization)
+    x = conv_block(inputs, num_filters, **kwargs)
     for _ in np.arange(n - 1):
-        x = conv_block(x, num_filters, kernel, strides, padding, activation, activation_args,
-                       kernel_init, l_batch_normalization)
+        x = conv_block(x, num_filters, **kwargs)
 
     return x
 
 
-def encoder_block(inputs, num_filters, kernel_pool: tuple = (2, 2), l_large: bool = True, activation: str = "swish", l_avgpool: bool = False):
+def encoder_block(inputs, num_filters, l_large: bool = True, kernel_pool: tuple = (2, 2), l_avgpool: bool = False, **kwargs):
     """
     One complete encoder-block used in U-net.
     :param inputs: input to encoder block
     :param num_filters: number of filters/channel to be used in convolutional blocks
-    :param kernel_maxpool: kernel used in max-pooling
     :param l_large: flag for large encoder block (two consecutive convolutional blocks)
+    :param kernel_maxpool: kernel used in max-pooling
+    :param l_avgpool: flag if average pooling is used instead of max pooling
+    :param kwargs: keyword arguments for conv_block
     """
     if l_large:
-        x = conv_block_n(inputs, num_filters, n=2, activation=activation)
+        x = conv_block_n(inputs, num_filters, n=2, **kwargs)
     else:
-        x = conv_block(inputs, num_filters, activation=activation)
+        x = conv_block(inputs, num_filters, **kwargs)
 
     if l_avgpool:
         p = AveragePooling2D(kernel_pool)(x)
@@ -121,18 +113,18 @@ def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int 
 
 
 
-def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), strides_up: int = 2,
-                  padding: str = "same", activation="swish", kernel_init="he_normal",
-                  l_batch_normalization: bool = True, l_subpixel: bool = False):
+def decoder_block(inputs, skip_features, num_filters, strides_up: int = 2, l_subpixel: bool = False, **kwargs_conv_block):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
     if l_subpixel:
-        x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
-                            activation="swish", kernel_init=kernel_init)
+        x = subpixel_block(inputs, num_filters, upscale_fac=strides_up, **kwargs_conv_block)
     else:
         x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
         
+        activation = kwargs_conv_block.get("activation", "relu")
+        activation_args = kwargs_conv_block.get("activation_args", {})
+
         try:
             x = Activation(activation)(x)
         except ValueError:
@@ -140,15 +132,14 @@ def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), st
             x = ac_layer(x)
 
     x = Concatenate()([x, skip_features])
-    x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
-                     l_batch_normalization=l_batch_normalization)
+    x = conv_block_n(x, num_filters, 2, **kwargs_conv_block)
 
     return x
 
 
 # The particular U-net
-def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 56, z_branch: bool = False,
-             advanced_unet: bool = False, concat_out: bool = False, tar_channels=["output_dyn", "output_z"]) -> Model:
+def sha_unet(input_shape: tuple, n_predictands_dyn: int, hparams_unet: dict, concat_out: bool = False,
+             tar_channels=["output_dyn", "output_z"]) -> Model:
     """
     Builds up U-net model architecture adapted from Sha et al., 2020 (see https://doi.org/10.1175/JAMC-D-20-0057.1).
     :param input_shape: shape of input-data
@@ -160,37 +151,37 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     :param tar_channels: name of output/target channels (needed for associating losses during compilation)
     :return:
     """
+    # basic configuration of U-Net 
+    channels_start = hparams_unet["ngf"]
+    z_branch = hparams_unet["z_branch"]
+    kernel_pool = hparams_unet["kernel_pool"]   
+    l_avgpool = hparams_unet["l_avgpool"]
+    l_subpixel = hparams_unet["l_subpixel"]
+
+    config_conv = {"kernel": hparams_unet["kernel"], "strides": hparams_unet["strides"], "padding": hparams_unet["padding"], 
+                   "activation": hparams_unet["activation"], "activation_args": hparams_unet["activation_args"], 
+                   "kernel_init": hparams_unet["kernel_init"], "l_batch_normalization": hparams_unet["l_batch_normalization"]}
+
+    # build U-Net
     inputs = Input(input_shape)
 
-    if advanced_unet:
-        #config_encoder = {"activation": "leakyrelu"}
-        config_encoder = {"activation": "swish"}
-        config_decoder = config_encoder.copy()
-        config_encoder["l_avgpool"] = True
-        config_decoder["l_subpixel"] = False
-    else:   
-        config_encoder = {"activation": "relu"}
-        config_decoder = config_encoder.copy()
-        config_encoder["l_avgpool"] = False
-        config_decoder["l_subpixel"] = False
-
     """ encoder """
-    s1, e1 = encoder_block(inputs, channels_start, l_large=True, **config_encoder)
-    s2, e2 = encoder_block(e1, channels_start * 2, l_large=False, **config_encoder)
-    s3, e3 = encoder_block(e2, channels_start * 4, l_large=False, **config_encoder)
+    s1, e1 = encoder_block(inputs, channels_start, l_large=True, kernel_pool=kernel_pool, l_avgpool=l_avgpool,**config_conv)
+    s2, e2 = encoder_block(e1, channels_start * 2, l_large=False, kernel_pool=kernel_pool, l_avgpool=l_avgpool,**config_conv)
+    s3, e3 = encoder_block(e2, channels_start * 4, l_large=False, kernel_pool=kernel_pool, l_avgpool=l_avgpool,**config_conv)
 
     """ bridge encoder <-> decoder """
-    b1 = conv_block(e3, channels_start * 8)
+    b1 = conv_block(e3, channels_start * 8, **config_conv)
 
     """ decoder """
-    d1 = decoder_block(b1, s3, channels_start * 4, **config_decoder)
-    d2 = decoder_block(d1, s2, channels_start * 2,**config_decoder)
-    d3 = decoder_block(d2, s1, channels_start, **config_decoder)
+    d1 = decoder_block(b1, s3, channels_start * 4, l_subpixel=l_subpixel, **config_conv)
+    d2 = decoder_block(d1, s2, channels_start * 2,l_subpixel=l_subpixel, **config_conv))
+    d3 = decoder_block(d2, s1, channels_start, l_subpixel=l_subpixel, **config_conv))
 
-    output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer="he_normal", name=tar_channels[0])(d3)
+    output_dyn = Conv2D(n_predictands_dyn, (1, 1), kernel_initializer=config_conv["kernel_init"], name=tar_channels[0])(d3)
     if z_branch:
         print("Use z_branch...")
-        output_static = Conv2D(1, (1, 1), kernel_initializer="he_normal", name=tar_channels[1])(d3)
+        output_static = Conv2D(1, (1, 1), kernel_initializer=config_conv["kernel_init"], name=tar_channels[1])(d3)
 
         if concat_out:
             model = Model(inputs, tf.concat([output_dyn, output_static], axis=-1), name="downscaling_unet_with_z")
@@ -218,7 +209,7 @@ class UNET(keras.Model):
         self.hparams = UNET.get_hparams_dict(hparams)
         self.n_predictands = len(varnames_tar)                      # number of predictands
         self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["z_branch"] else self.n_predictands
-        if self.hparams["l_embed"]:
+        if self.hparams.get("l_embed", False):
             raise ValueError("Embedding is not implemented yet.")
         self.modelname = exp_name
         if not os.path.isdir(savedir):
@@ -255,15 +246,13 @@ class UNET(keras.Model):
 
     def compile(self, **kwargs):
 
-        add_unet_args = {"advanced_unet": self.hparams["advanced_unet"]} if "advanced_unet" in inspect.getfullargspec(self.unet).args else {}
-
         # instantiate model
         if self.hparams["z_branch"]:     # model has named branches (see also opt_dict in get_compile_opts)
             tar_channels = [f"{var}" for var in self.varnames_tar]
-            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=True,
-                                  concat_out=False, tar_channels=tar_channels, **add_unet_args)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, self.hparams,
+                                  concat_out=False, tar_channels=tar_channels)
         else:
-            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, z_branch=False, **add_unet_args)
+            self.unet = self.unet(self.shape_in, self.n_predictands_dyn, self.hparams)
 
         return self.unet.compile(**kwargs)
        # return super(UNET, self).compile(**kwargs)
@@ -364,10 +353,13 @@ class UNET(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr": 5.e-05, "nepochs": 70, "z_branch": True, "loss_func": "mae",
-                        "loss_weights": [1.0, 1.0], "lr_decay": False, "decay_start": 5, "decay_end": 30,
-                        "lr_end": 1.e-06, "l_embed": False, "ngf": 56, "optimizer": "adam", "lscheduled_train": True,
-                        "advanced_unet": False}
+
+        hparams_dict = {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "relu", "activation_args": {},      # arguments for building blocks of U-Net:
+                        "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": False,     # see keyword-aguments of sha_unet, conv_block,
+                        "l_subpixel": False, "z_branch": True, "ngf": 56,                                                         # encoder_block and decoder_block
+                        "batch_size": 32, "lr": 5.e-05, "nepochs": 70, "loss_func": "mae", "loss_weights": [1.0, 1.0],            # training parameters
+                        "lr_decay": False, "decay_start": 5, "decay_end": 30, "lr_end": 1.e-06, "l_embed": False, 
+                        "optimizer": "adam", "lscheduled_train": True}
 
         return hparams_dict
 
