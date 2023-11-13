@@ -31,7 +31,7 @@ from other_utils import to_list
 
 
 def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1, 1), padding: str = "same",
-               activation: str = "relu", activation_args={}, kernel_init: str = "he_normal",
+               activation: str = "swish", activation_args={}, kernel_init: str = "he_normal",
                l_batch_normalization: bool = True):
     """
     A convolutional layer with optional batch normalization
@@ -59,7 +59,7 @@ def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple 
 
 
 def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), strides: tuple = (1, 1),
-                 padding: str = "same", activation: str = "relu", activation_args={},
+                 padding: str = "same", activation: str = "swish", activation_args={},
                  kernel_init: str = "he_normal", l_batch_normalization: bool = True):
     """
     Sequential application of two convolutional layers (using conv_block).
@@ -83,7 +83,7 @@ def conv_block_n(inputs, num_filters: int, n: int = 2, kernel: tuple = (3, 3), s
     return x
 
 
-def encoder_block(inputs, num_filters, kernel_pool: tuple = (2, 2), l_large: bool = True, activation: str = "relu", l_avgpool: bool = False):
+def encoder_block(inputs, num_filters, kernel_pool: tuple = (2, 2), l_large: bool = True, activation: str = "swish", l_avgpool: bool = False):
     """
     One complete encoder-block used in U-net.
     :param inputs: input to encoder block
@@ -104,7 +104,7 @@ def encoder_block(inputs, num_filters, kernel_pool: tuple = (2, 2), l_large: boo
     return x, p
 
 def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int = 2,
-        padding: str = "same", activation: str = "relu", activation_args: dict = {},
+        padding: str = "same", activation: str = "swish", activation_args: dict = {},
         kernel_init: str = "he_normal"):
 
     x = Conv2D(num_filters * (upscale_fac ** 2), kernel, padding=padding, kernel_initializer=kernel_init,
@@ -122,18 +122,23 @@ def subpixel_block(inputs, num_filters, kernel: tuple = (3,3), upscale_fac: int 
 
 
 def decoder_block(inputs, skip_features, num_filters, kernel: tuple = (3, 3), strides_up: int = 2,
-                  padding: str = "same", activation="relu", kernel_init="he_normal",
+                  padding: str = "same", activation="swish", kernel_init="he_normal",
                   l_batch_normalization: bool = True, l_subpixel: bool = False):
     """
     One complete decoder block used in U-net (reverting the encoder)
     """
     if l_subpixel:
         x = subpixel_block(inputs, num_filters, kernel, upscale_fac=strides_up, padding=padding,
-                            activation="relu", kernel_init=kernel_init)
+                            activation="swish", kernel_init=kernel_init)
     else:
         x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
         
-    ac_layer = advanced_activation(activation)
+        try:
+            x = Activation(activation)(x)
+        except ValueError:
+            ac_layer = advanced_activation(activation, *activation_args)
+            x = ac_layer(x)
+
     x = Concatenate()([x, skip_features])
     x = conv_block_n(x, num_filters, 2, kernel, (1, 1), padding, activation, kernel_init=kernel_init, 
                      l_batch_normalization=l_batch_normalization)
@@ -158,7 +163,8 @@ def sha_unet(input_shape: tuple, n_predictands_dyn: int, channels_start: int = 5
     inputs = Input(input_shape)
 
     if advanced_unet:
-        config_encoder = {"activation": "leakyrelu"}
+        #config_encoder = {"activation": "leakyrelu"}
+        config_encoder = {"activation": "swish"}
         config_decoder = config_encoder.copy()
         config_encoder["l_avgpool"] = True
         config_decoder["l_subpixel"] = False

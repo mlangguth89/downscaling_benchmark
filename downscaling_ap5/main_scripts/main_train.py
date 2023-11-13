@@ -190,11 +190,13 @@ def main(parser_args):
     os.makedirs(model_savedir, exist_ok=True)
     model.save(filepath=model_savedir_last)
 
-    if callable(getattr(model, "plot_model", False)):
-        model.plot_model(model_savedir, show_shapes=True)
-    else:
+    #if callable(getattr(model, "plot_model", False)):
+    try:
+        model.plot_model(model_savedir, show_shapes=True) # , show_layer_actiavtions=True)
+    #else:
+    except:
         plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
-                   show_shapes=True)
+                   show_shapes=True) #, show_layer_activations=True)
 
     # final timing
     tend = timer()

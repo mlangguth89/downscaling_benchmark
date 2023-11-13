@@ -31,7 +31,7 @@ list_or_tuple = Union[List, Tuple]
 
 
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
-                 stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
+                 stride: tuple = (2, 2), activation: str = "swish", lbatch_norm: bool = True):
     """
     Set-up convolutional discriminator model that is followed by two dense-layers
     :param shape: input shape of data (either real or generated data)
