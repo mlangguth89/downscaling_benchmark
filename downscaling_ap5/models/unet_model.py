@@ -9,7 +9,7 @@ Methods to set-up U-net models incl. its building blocks.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2023-11-13"
+__update__ = "2023-11-22"
 
 # import modules
 import os
@@ -357,9 +357,9 @@ class UNET(keras.Model):
         Return default hyperparameter dictionary.
         """
 
-        hparams_dict = {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "relu", "activation_args": {},      # arguments for building blocks of U-Net:
-                        "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": False,     # see keyword-aguments of sha_unet, conv_block,
-                        "l_subpixel": False, "z_branch": True, "ngf": 56,                                                         # encoder_block and decoder_block
+        hparams_dict = {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
+                        "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,     # see keyword-aguments of sha_unet, conv_block,
+                        "l_subpixel": True, "z_branch": True, "ngf": 56,                                                         # encoder_block and decoder_block
                         "batch_size": 32, "lr": 5.e-05, "nepochs": 70, "loss_func": "mae", "loss_weights": [1.0, 1.0],            # training parameters
                         "lr_decay": False, "decay_start": 5, "decay_end": 30, "lr_end": 1.e-06, "l_embed": False, 
                         "optimizer": "adam", "lscheduled_train": True}
