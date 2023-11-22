@@ -118,7 +118,10 @@ def decoder_block(inputs, skip_features, num_filters, strides_up: int = 2, l_sub
     One complete decoder block used in U-net (reverting the encoder)
     """
     if l_subpixel:
-        x = subpixel_block(inputs, num_filters, upscale_fac=strides_up, **kwargs_conv_block)
+        kwargs_subpixel = kwargs_conv_block.copy()
+        for ex_key in ["strides", "l_batch_normalization"]:
+            kwargs_subpixel.pop(ex_key, None)
+        x = subpixel_block(inputs, num_filters, upscale_fac=strides_up, **kwargs_subpixel)
     else:
         x = Conv2DTranspose(num_filters, (strides_up, strides_up), strides=strides_up, padding="same")(inputs)
         
