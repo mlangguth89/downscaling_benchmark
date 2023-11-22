@@ -202,7 +202,7 @@ class ERA5_Data_Loader(object):
             for month in range(month_start, month_end+1):
                 # get last day of month
                 last_day = pd.Timestamp(year, month, 1) + pd.offsets.MonthEnd(1)
-                req_dict["date"] = f"{year}/{month:02d}/01/to/{year}/{month:02d}/{last_day.day}" 
+                req_dict["date"] = f"{year}-{month:02d}-01/to/{year}-{month:02d}-{last_day.day}" 
                 fout = f"era5_ml_{year}-{month:02d}.{format}"
 
                 func_logger.debug(f"Downloading ERA5 model-level data for {year}-{month:02d} to {os.path.join(data_dir, fout)}")
@@ -227,7 +227,7 @@ class ERA5_Data_Loader(object):
         func_logger = logging.getLogger(f"{logger_module_name}.{self.check_request_result.__name__}")
 
         # check if all requests were successful
-        stat = [o.get().check().__dict__["reply"]["state"] == "completed" for o in results_dict.values()]
+        stat = [o.get().__dict__["reply"]["state"] == "completed" for o in results_dict.values()]
 
         ok = True
 
