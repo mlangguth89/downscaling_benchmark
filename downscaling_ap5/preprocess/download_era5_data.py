@@ -18,7 +18,7 @@ import cdsapi
 import numpy as np
 import pandas as pd
 from multiprocessing import Pool
-from utils import to_list
+from other_utils import to_list
 
 # get logger
 logger_module_name = f"main_download_era5.{__name__}"
@@ -48,10 +48,10 @@ class ERA5_Data_Loader(object):
         
         self.nworkers = nworkers
         try: 
-            self.cds = [cdsapi.Client() for _ in range(self.nworkers)]
+            self.cds = cdsapi.Client()
         except Exception as e:
             func_logger.error(f"Could not initialize CDS API client: {e} \n" + \
-                              "Please follow the instructions at https://cds.climate.copernicus.eu/api-how-to to install the CDS API.")                                                 ")
+                              "Please follow the instructions at https://cds.climate.copernicus.eu/api-how-to to install the CDS API.")                                                 
             raise e
         
     def __call__(self, req_dict, data_dir, start, end, format, **kwargs):
