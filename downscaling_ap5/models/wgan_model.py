@@ -103,7 +103,9 @@ class WGAN(keras.Model):
         # instantiate model components (generator and critci)
         self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"], concat_out=True)
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
-        self.critic = self.critic(tar_shape, self.hparams["hparams_critic"])
+        critic_kwargs = self.hparams["hparams_critic"].copy()
+        critic_kwargs.pop("lr", None)
+        self.critic = self.critic(tar_shape, **critic_kwargs)
 
         # losses
         self.critic_loss = get_custom_loss("critic")
