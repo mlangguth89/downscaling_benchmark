@@ -57,7 +57,7 @@ def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tup
 
     # finally perform global average pooling and finalize by fully connected layers
     x = GlobalAveragePooling2D()(x)
-    x = Dense(channels_start)(x)
+    x = Dense(channels_start, activation=activation)(x)
     # ... and end with linear output layer
     out = Dense(1, activation="linear")(x)
 
@@ -92,7 +92,7 @@ class WGAN(keras.Model):
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.n_predictands = len(varnames_tar)                      # number of predictands
-        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["z_branch"] else self.n_predictands
+        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["hparams_generator"]["z_branch"] else self.n_predictands
         print(f"Dynamic predictands: {self.n_predictands_dyn}, Predictands: {self.n_predictands}")
         self.modelname = exp_name
         if not os.path.isdir(savedir):
@@ -101,15 +101,14 @@ class WGAN(keras.Model):
 
         # instantiate submodels
         # instantiate model components (generator and critci)
-        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, channels_start=self.hparams["ngf"],
-                                        concat_out=True, z_branch=self.hparams["z_branch"])
+        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"])
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
-        self.critic = self.critic(tar_shape)
+        self.critic = self.critic(tar_shape, self.hparams["hparams_critic"])
 
         # losses
         self.critic_loss = get_custom_loss("critic")
         self.critic_gen_loss = get_custom_loss("critic_generator")
-        self.recon_loss = self.get_recon_loss()
+        self.recon_loss = self.get_recon_loss() 
 
         # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
         self.varnames_tar = None
@@ -162,7 +161,7 @@ class WGAN(keras.Model):
         :return: learning rate scheduler
         """
         decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
-        lr_start, lr_end = self.hparams["lr_gen"], self.hparams["lr_gen_end"]
+        lr_start, lr_end = self.hparams["hparams_generator"]["lr"], self.hparams["hparams_generator"]["lr_end"]
 
         if not decay_end > decay_st:
             raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
@@ -367,12 +366,12 @@ class WGAN(keras.Model):
 
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr_critic"], beta_1=0.0, beta_2=0.9)
-            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr_gen"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["hparams_critic"]["lr"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["hparams_generator"]["lr"], beta_1=0.0, beta_2=0.9)
         elif hparams_dict["optimizer"].lower() == "rmsprop":
             rmsprop = keras.optimizers.RMSprop
-            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["lr_critic"])  # increase beta-values ?
-            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["lr_gen"])
+            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["hparams_critic"]["lr"])  # increase beta-values ?
+            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["hparams_generator"]["lr"])
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
@@ -383,11 +382,16 @@ class WGAN(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
-                        "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
-                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "recon_loss": "mae_channels"}
-
+        hparams_dict = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
+                        "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                        "lscheduled_train": True, "recon_loss": "mae_channels", 
+                        "hparams_generator": {"ngf": 56, "z_branch": False, "activation": "swish",
+                                              "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2),
+                                              "lr": 1.e-05, "lr_end": 1.e-06}, 
+                        "hparams_critic": {"num_conv": 4, "channels_start": 64, "activation": "swish",
+                                           "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
+                       }
+                     
         return hparams_dict
 
 

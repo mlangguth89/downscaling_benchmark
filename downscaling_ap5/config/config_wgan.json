@@ -1,11 +1,8 @@
 {
   "nepochs": 60,
   "d_steps": 5,
-  "z_branch": true,
-  "lr_gen": 5e-05,
-  "lr_critic": 1e-06,
-  "lr_gen_end": 5e-06,
   "lr_decay": true,
-  "named_targets": false
-
+  "named_targets": false,
+  "hparams_generator": {"lr": 5e-05, "lr_end": 5e-06, "z_branch": true, "activation": "swish", "l_avgpool": true},
+  "hparams_critic": {"lr": 1e-06, "activation": "swish"}
 }
