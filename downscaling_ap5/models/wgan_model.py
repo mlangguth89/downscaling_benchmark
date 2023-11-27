@@ -350,9 +350,10 @@ class WGAN(keras.Model):
 
         # check if parsed hyperparameters are known
         unknown_keys = [key for key in hparams_user.keys() if key not in hparams_default]
-        if unknown_keys:
+        if unknown_keys:        # if unknown keys are found, remove them from user-defined hyperparameters
             print("The following parsed hyperparameters are unknown and thus are ignored: {0}".format(
                 ", ".join(unknown_keys)))
+            [hparams_user.pop(unknown_key) for unknown_key in unknown_keys]
             
         hparams_dict = merge_dicts(hparams_default, hparams_user)   # merge default and user-defined hyperparameters
 
@@ -378,9 +379,9 @@ class WGAN(keras.Model):
         hparams_dict = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
                         "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                         "lscheduled_train": True, "recon_loss": "mae_channels", 
-                        "hparams_generator": {"ngf": 56, "z_branch": False, "activation": "swish",
-                                              "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2),
-                                              "lr": 1.e-05, "lr_end": 1.e-06}, 
+                        "hparams_generator": {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
+                                              "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,     # see keyword-aguments of sha_unet, conv_block,
+                                              "l_subpixel": True, "z_branch": True, "ngf": 56, "lr": 1.e-05, "lr_end": 1.e-06}, 
                         "hparams_critic": {"num_conv": 4, "channels_start": 64, "activation": "swish",
                                            "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
                        }
