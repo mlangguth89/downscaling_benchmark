@@ -25,7 +25,7 @@ from tensorflow.keras.models import Model
 # other modules
 from custom_losses import get_custom_loss
 from unet_model import conv_block
-from other_utils import to_list
+from other_utils import to_list, merge_dicts
 
 list_or_tuple = Union[List, Tuple]
 
@@ -101,7 +101,7 @@ class WGAN(keras.Model):
 
         # instantiate submodels
         # instantiate model components (generator and critci)
-        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"])
+        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"], concat_out=True)
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
         self.critic = self.critic(tar_shape, self.hparams["hparams_critic"])
 
@@ -353,17 +353,10 @@ class WGAN(keras.Model):
         if unknown_keys:
             print("The following parsed hyperparameters are unknown and thus are ignored: {0}".format(
                 ", ".join(unknown_keys)))
+            
+        hparams_dict = merge_dicts(hparams_default, hparams_user)   # merge default and user-defined hyperparameters
 
-        # get complete hyperparameter dictionary while checking type of parsed values
-        hparams_merged = {**hparams_default, **hparams_user}
-        hparams_dict = {}
-        for key in hparams_default:
-            if isinstance(hparams_merged[key], type(hparams_default[key])):
-                hparams_dict[key] = hparams_merged[key]
-            else:
-                raise TypeError("Parsed hyperparameter '{0}' must be of type '{1}', but is '{2}'"
-                                .format(key, type(hparams_default[key]), type(hparams_merged[key])))
-
+        # check if optimizer is valid and set corresponding optimizers for generator and critic
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
             hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["hparams_critic"]["lr"], beta_1=0.0, beta_2=0.9)
