@@ -30,7 +30,7 @@ from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
 from model_utils import convert_to_xarray
-from other_utils import free_mem
+#from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
@@ -135,8 +135,6 @@ def main(parser_args):
     if predictors is None:
         predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
         if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
-
-    predictors = predictors[:2]
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +

@@ -25,13 +25,14 @@ Some auxiliary functions for the project:
     * get_memory_usage
     * get_max_memory_usage
     * copy_filelist
+    * merge_dicts
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-08-17"
+__update__ = "2023-11-27"
 
 import os
 import gc
@@ -395,3 +396,22 @@ def copy_filelist(file_list: List, dest_dir: str, file_list_dest: List = None ,l
                 raise FileNotFoundError(f"Could not find file '{f}'. Error will be raised.")
             else:
                 print(f"WARNING: Could not find file '{f}'.")
+
+def merge_dicts(default_dict, user_dict):
+    """
+    Recursively merge two dictionaries, ensuring that all default keys are set.
+    """
+    merged_dict = default_dict.copy()
+
+    for key, value in user_dict.items():
+        if isinstance(value, dict) and key in merged_dict and isinstance(merged_dict[key], dict):
+            # If the value is a dictionary and the key exists in both dictionaries,
+            # recursively merge the dictionaries.
+            merged_dict[key] = merge_dicts(merged_dict[key], value)
+        else:
+            # Otherwise, set the value in the merged dictionary.
+            assert isinstance(value, type(merged_dict[key])), \
+                f"Type mismatch for key '{key}': {type(value)} != {type(merged_dict[key])}"
+            merged_dict[key] = value
+
+    return merged_dict

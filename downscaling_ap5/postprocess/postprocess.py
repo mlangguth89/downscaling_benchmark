@@ -35,18 +35,19 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
     func_logger = logging.getLogger(f"{logger_module_name}.{get_model_info.__name__}")
 
     model_name = os.path.basename(model_base)
+    norm_dir = model_base
+
+
+    add_str = "_last" if bool_last else "_best"
 
     if "wgan" in exp_name:
         func_logger.debug(f"WGAN-modeltype detected.")
-        add_str = "_last" if bool_last else ""
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}_generator{add_str}"), \
                              os.path.join(output_base, model_name)
-        norm_dir = model_base
         model_type = "wgan"
     elif "unet" in exp_name or "deepru" in exp_name:
         func_logger.debug(f"U-Net-modeltype detected.")
-        model_dir, plt_dir = model_base, os.path.join(output_base, model_name)
-        norm_dir = model_dir
+        model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
         model_type = "unet" if "unet" in exp_name else "deepru"
     else:
         func_logger.debug(f"Model type could not be inferred from experiment name. Try my best by defaulting...")
