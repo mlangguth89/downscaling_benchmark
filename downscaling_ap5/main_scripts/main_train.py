@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-04-17"
+__update__ = "2023-08-18"
 
 import os
 import argparse
@@ -24,16 +24,13 @@ from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_utils import ModelEngine, TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import HandleDataClass, get_dataset_filename
-from other_utils import free_mem, print_gpu_usage, print_cpu_usage, copy_filelist
-from benchmark_utils import BenchmarkCSV, get_training_time_dict
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
+from benchmark_utils import get_training_time_dict
 
 
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
-# * flag named_targets must be set to False in hparams_dict for WGAN to work with U-Net 
-# * ensure that dataset defaults are set (such as predictands for WGAN)
-# * replacement of manual benchmarking by JUBE-benchmarking to avoid duplications
 
 def main(parser_args):
     # start timing
@@ -67,9 +64,6 @@ def main(parser_args):
         data_norm, write_norm = None, True
         norm_dims = ds_dict["norm_dims"]
 
-    # initialize benchmarking object
-    bm_obj = BenchmarkCSV(os.path.join(os.getcwd(), f"benchmark_training_{parser_args.model}.csv"))
-
     # get model instance and set-up batch size
     model_instance = ModelEngine(parser_args.model)
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
@@ -90,7 +84,7 @@ def main(parser_args):
     # the dataset
     if "*" in fname_or_patt_train:
         ds_obj, tfds_train = HandleDataClass.make_tf_dataset_dyn(datadir, fname_or_patt_train, bs_train, nepochs,
-                                                                 30, ds_dict["predictands"],
+                                                                 ds_dict["num_files"], ds_dict["predictands"],
                                                                  predictors=ds_dict.get("predictors", None),
                                                                  var_tar2in=ds_dict["var_tar2in"],
                                                                  named_targets=named_targets,
@@ -100,7 +94,11 @@ def main(parser_args):
         tfds_train_size = ds_obj.dataset_size
     else:
         ds_train = xr.open_dataset(fname_or_patt_train)
-        da_train = HandleDataClass.reshape_ds(ds_train.astype("float32", copy=False))
+        da_train = HandleDataClass.reshape_ds(ds_train).astype("float32", copy=True)
+
+        # free up some memory
+        del ds_train
+        gc.collect()
 
         if not data_norm:
             # data_norm must be freshly instantiated (triggering later parameter retrieval)
@@ -111,8 +109,13 @@ def main(parser_args):
                                                             predictors=ds_dict.get("predictors", None),
                                                             var_tar2in=ds_dict["var_tar2in"],
                                                             named_targets=named_targets)
+        
         nsamples, shape_in = da_train.shape[0], tfds_train.element_spec[0].shape[1:].as_list()
         tfds_train_size = da_train.nbytes
+
+        # clean up to save some memory
+        del da_train
+        gc.collect()
 
     if write_norm:
         data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
@@ -125,15 +128,17 @@ def main(parser_args):
     fdata_val = get_dataset_filename(datadir, dataset, "val", ds_dict.get("laugmented", False))
     with xr.open_dataset(fdata_val) as ds_val:
         ds_val = data_norm.normalize(ds_val)
-    da_val = HandleDataClass.reshape_ds(ds_val)
+    da_val = HandleDataClass.reshape_ds(ds_val).astype("float32", copy=True)
 
-    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val.astype("float32", copy=True), ds_dict["batch_size"],
+    tfds_val = HandleDataClass.make_tf_dataset_allmem(da_val, ds_dict["batch_size"],
                                                       ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
                                                       lshuffle=True, var_tar2in=ds_dict["var_tar2in"],
                                                       named_targets=named_targets)
     
     # clean up to save some memory
-    free_mem([ds_val, da_val])
+    del ds_val
+    del da_val
+    gc.collect()
 
     tval_load = timer() - t0_val
     print(f"Validation data preparation time: {tval_load:.2f}s.")
@@ -177,21 +182,21 @@ def main(parser_args):
         ttrain_load = sum(ds_obj.reading_times) + tval_load
         print(f"Data loading time: {ttrain_load:.2f}s.")
         print(f"Average throughput: {ds_obj.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
-    benchmark_dict = {**{"data loading time": ttrain_load}, **training_times}
-    print(f"Model '{parser_args.exp_name}' training time: {training_times['Total training time']:.2f} s. " +
-          f"Save model to '{model_savedir}'")
 
     # save trained model
     t0_save = timer()
 
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
     os.makedirs(model_savedir, exist_ok=True)
-    model.save(filepath=model_savedir)
+    model.save(filepath=model_savedir_last)
 
-    if callable(getattr(model, "plot_model", False)):
-        model.plot_model(model_savedir, show_shapes=True)
-    else:
+    #if callable(getattr(model, "plot_model", False)):
+    try:
+        model.plot_model(model_savedir, show_shapes=True) # , show_layer_actiavtions=True)
+    #else:
+    except:
         plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
-                   show_shapes=True)
+                   show_shapes=True) #, show_layer_activations=True)
 
     # final timing
     tend = timer()
@@ -202,36 +207,6 @@ def main(parser_args):
     # some statistics on memory usage
     print_gpu_usage("Final GPU memory: ")
     print_cpu_usage("Final CPU memory: ")
-
-    # populate benchmark dictionary
-    benchmark_dict.update({"saving model time": saving_time, "total runtime": tot_run_time})
-    benchmark_dict.update({"job id": job_id, "#nodes": 1, "#cpus": len(os.sched_getaffinity(0)), "#gpus": 1,
-                           "#mpi tasks": 1, "node id": None, "max. gpu power": None, "gpu energy consumption": None})
-    try:
-        benchmark_dict["final training loss"] = get_loss_from_history(history, "loss")
-    except KeyError:
-        benchmark_dict["final training loss"] = get_loss_from_history(history, "recon_loss")
-    try:
-        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_loss")
-    except KeyError:
-        benchmark_dict["final validation loss"] = get_loss_from_history(history, "val_recon_loss")
-    # ... and save CSV-file with tracked data on disk
-    bm_obj.populate_csv_from_dict(benchmark_dict)
-
-    js_file = os.path.join(model_savedir, "benchmark_training_static.json")
-    if not os.path.isfile(js_file):
-        func_model_info = getattr(model, "get_model_info", None)
-        if callable(func_model_info):
-            model_info = func_model_info()
-        else:
-            model_info = {}
-        stat_info = {"static_model_info": model_info,
-                     "data_info": {"training data size": tfds_train_size, "validation data size": da_val.nbytes,
-                                   "nsamples": nsamples, "shape_samples": shape_in,
-                                   "batch_size": ds_dict["batch_size"]}}
-
-        with open(js_file, "w") as jsf:
-            js.dump(stat_info, jsf)
 
     print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
 

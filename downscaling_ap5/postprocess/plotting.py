@@ -9,7 +9,7 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2022-12-08"
+__update__ = "2023-12-10"
 
 # for processing data
 import os
@@ -26,6 +26,9 @@ import cartopy.crs as ccrs
 from other_utils import provide_default
 
 # auxiliary variable for logger
+# auxiliary variable for logger
+logger_module_name = f"main_postprocess.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 module_name = os.path.basename(__file__).rstrip(".py")
 
 
@@ -50,7 +53,7 @@ def get_colormap_temp(levels=None):
 
 
 # for making plot nice
-def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
+def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[3.5, 16.5, 44.5, 54.]):
     fs = 16
     # if "login" in host:
     # add nice coast- and borderlines
@@ -62,7 +65,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True):
     ax_plot.set_xticks(np.arange(0., 360. + 0.1, 5.))  # ,crs=projection_crs)
     ax_plot.set_yticks(np.arange(-90., 90. + 0.1, 5.))  # ,crs=projection_crs)
 
-    ax_plot.set_extent([3.5, 16.5, 44.5, 54.])    # , crs=prj_crs)
+    ax_plot.set_extent(extent)    # , crs=prj_crs)
     ax_plot.minorticks_on()
     ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=fs)
 
@@ -127,7 +130,7 @@ def create_map_score(score, plt_fname, **kwargs):
     func_logger = logging.getLogger(f"postprocess.{module_name}.{create_map_score.__name__}")
 
     # get keywor arguments
-    score_dims = kwargs.get("score_dims", ["lat", "lon"])
+    dims = kwargs.get("dims", ["lat", "lon"])
     title = kwargs.get("title", "Score")
     levels = kwargs.get("levels", np.arange(-5., 5., 0.5))
     # auxiliary variables
@@ -135,17 +138,22 @@ def create_map_score(score, plt_fname, **kwargs):
     nbounds = len(lvl)
     cmap = kwargs.get("cmap", mpl.cm.PuOr_r(np.linspace(0., 1., nbounds)))
     fs = kwargs.get("fs", 16)
-    projection = kwargs.get("projection", ccrs.PlateCarree())
+    projection = kwargs.get("projection", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
+    extent = kwargs.get("extent", None)
+    
+    decorate_dict = {}
+    if extent:
+        decorate_dict["extent"] = extent
     
     # get coordinate data
     try:
-        lat, lon = score[score_dims[0]].values, score[score_dims[1]].values
+        lat, lon = score[dims[0]].values, score[dims[1]].values
     except Exception as err:
         print("Failed to retrieve coordinates from score-data")
         raise err
     # construct array for edges of grid points
-    dy, dx = np.round((lat[1] - lat[0]), 3), np.round((lon[1] - lon[0]), 3)
-    lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)
+    dy, dx = np.round((lat[1] - lat[0]), 4), np.round((lon[1] - lon[0]), 4)
+    lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)  
 
     # get colormap
     # create colormap and corresponding norm
@@ -158,7 +166,7 @@ def create_map_score(score, plt_fname, **kwargs):
     plt1 = ax.pcolormesh(lon_e, lat_e, np.squeeze(score.values), cmap=cmap_obj, norm=norm, 
                          transform=projection)
 
-    ax = decorate_plot(ax)
+    ax = decorate_plot(ax, **decorate_dict)
 
     ax.set_title(title, size=fs)
 
@@ -208,3 +216,66 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close(fig)
+
+
+# write the create_box_plot function
+def create_box_plot(data, plt_fname: str, **plt_kwargs):
+    """
+    Create box plot of feature importance scores
+    :param feature_scores: Feature importance scores with predictors as firstdimension and time as second dimension
+    :param plt_fname: File name of plot
+    """    
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_box_plot.__name__}")
+
+    # get some plot parameters
+    val_range = plt_kwargs.get("value_range", [None])
+    widths = plt_kwargs.get("widths", None)
+    colors = plt_kwargs.get("colors", None)
+    fs = plt_kwargs.get("fs", 16)
+    ref_line = plt_kwargs.get("ref_line", 1.)
+    ref_linestyle = plt_kwargs.get("ref_linestyle", "k-")
+    title = plt_kwargs.get("title", "")
+    ylabel = plt_kwargs.get("ylabel", "")
+    xlabel = plt_kwargs.get("xlabel", "")
+    yticks = plt_kwargs.get("yticks", None)
+    labels = plt_kwargs.get("labels", None)
+    
+    # create box whiskers plot with matplotlib
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    bp = plt.boxplot(data, widths=widths, labels=labels, patch_artist=True)
+    
+    # modify fliers
+    fliers = bp['fliers'] 
+    for i in range(len(fliers)): # iterate through the Line2D objects for the fliers for each boxplot
+        box = fliers[i] # this accesses the x and y vectors for the fliers for each box 
+        box.set_data([[box.get_xdata()[0]],[np.max(box.get_ydata())]])
+        
+    if ref_line is not None:
+        nval = len(fliers)
+        ax.plot(np.array(range(0, nval+1)) + 0.5, np.full(nval+1, ref_line), ref_linestyle)
+        
+    if colors is None:
+        pass
+    else:
+        if isinstance(colors, str): colors = len(bp["boxes"])*[colors]
+        for patch, color in zip(bp['boxes'], colors):
+            patch.set_facecolor(color)
+    
+    ax.set_ylim(*val_range)
+    ax.set_yticks(yticks)    
+    
+    ax.set_title(title, fontsize=fs + 2)
+    ax.set_ylabel(ylabel, fontsize=fs, labelpad=8)
+    ax.set_xlabel(xlabel, fontsize=fs, labelpad=8)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+    ax.yaxis.grid(True)
+
+    # save plot
+    plt.tight_layout()
+    plt.savefig(plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname)
+    plt.close(fig)
+
+    func_logger.info(f"Feature importance scores saved to {plt_fname}.")
+    
+    return True

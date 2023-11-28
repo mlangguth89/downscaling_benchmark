@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2022-11-25"
+__update__ = "2023-08-08"
 
 import os, sys
 from typing import List, Tuple, Union
@@ -23,14 +23,15 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
+from custom_losses import get_custom_loss
 from unet_model import conv_block
-from other_utils import to_list
+from other_utils import to_list, merge_dicts
 
 list_or_tuple = Union[List, Tuple]
 
 
 def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
-                 stride: tuple = (2, 2), activation: str = "relu", lbatch_norm: bool = True):
+                 stride: tuple = (2, 2), activation: str = "swish", lbatch_norm: bool = True):
     """
     Set-up convolutional discriminator model that is followed by two dense-layers
     :param shape: input shape of data (either real or generated data)
@@ -56,7 +57,7 @@ def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tup
 
     # finally perform global average pooling and finalize by fully connected layers
     x = GlobalAveragePooling2D()(x)
-    x = Dense(channels_start)(x)
+    x = Dense(channels_start, activation=activation)(x)
     # ... and end with linear output layer
     out = Dense(1, activation="linear")(x)
 
@@ -91,7 +92,7 @@ class WGAN(keras.Model):
         if self.hparams["l_embed"]:
             raise ValueError("Embedding is not implemented yet.")
         self.n_predictands = len(varnames_tar)                      # number of predictands
-        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["z_branch"] else self.n_predictands
+        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["hparams_generator"]["z_branch"] else self.n_predictands
         print(f"Dynamic predictands: {self.n_predictands_dyn}, Predictands: {self.n_predictands}")
         self.modelname = exp_name
         if not os.path.isdir(savedir):
@@ -100,10 +101,16 @@ class WGAN(keras.Model):
 
         # instantiate submodels
         # instantiate model components (generator and critci)
-        self.generator = self.generator(self.shape_in, self.n_predictands, channels_start=self.hparams["ngf"],
-                                        concat_out=True, z_branch=self.hparams["z_branch"])
+        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"], concat_out=True)
         tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
-        self.critic = self.critic(tar_shape)
+        critic_kwargs = self.hparams["hparams_critic"].copy()
+        critic_kwargs.pop("lr", None)
+        self.critic = self.critic(tar_shape, **critic_kwargs)
+
+        # losses
+        self.critic_loss = get_custom_loss("critic")
+        self.critic_gen_loss = get_custom_loss("critic_generator")
+        self.recon_loss = self.get_recon_loss() 
 
         # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
         self.varnames_tar = None
@@ -112,6 +119,19 @@ class WGAN(keras.Model):
         self.c_optimizer, self.g_optimizer = None, None
         self.lr_scheduler = None
         self.checkpoint, self.earlystopping = None, None
+
+    def get_recon_loss(self):
+
+        kwargs_loss = {}
+        if "vec" in self.hparams["recon_loss"]:
+            kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self.n_predictands}
+        elif "channels" in self.hparams["recon_loss"]:
+            kwargs_loss = {"n_channels": self.n_predictands}
+        
+        loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
+
+        return loss_fn
+
 
     def compile(self, **kwargs):
         """
@@ -143,7 +163,7 @@ class WGAN(keras.Model):
         :return: learning rate scheduler
         """
         decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
-        lr_start, lr_end = self.hparams["lr_gen"], self.hparams["lr_gen_end"]
+        lr_start, lr_end = self.hparams["hparams_generator"]["lr"], self.hparams["hparams_generator"]["lr_end"]
 
         if not decay_end > decay_st:
             raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
@@ -206,7 +226,7 @@ class WGAN(keras.Model):
                 critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
                 critic_gt = self.critic(predictands_critic, training=True)
                 # calculate the loss (incl. gradient penalty)
-                c_loss = WGAN.critic_loss(critic_gt, critic_gen)
+                c_loss = self.critic_loss(critic_gt, critic_gen)
                 gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:self.n_predictands_dyn])
 
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
@@ -221,7 +241,7 @@ class WGAN(keras.Model):
             gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
             # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
             critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
-            cg_loss = WGAN.critic_gen_loss(critic_gen)
+            cg_loss = self.critic_gen_loss(critic_gen)
             rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
 
             g_loss = cg_loss + self.hparams["recon_weight"] * rloss
@@ -275,14 +295,6 @@ class WGAN(keras.Model):
 
         return gp
 
-    def recon_loss(self, real_data, gen_data):
-        # initialize reconstruction loss
-        rloss = 0.
-        # get MAE for all output heads
-        for i in range(self.hparams["n_predictands"]):
-            rloss += tf.reduce_mean(tf.abs(tf.squeeze(gen_data[..., i]) - real_data[..., i]))
-
-        return rloss
 
     def plot_model(self, save_dir, **kwargs):
         """
@@ -340,28 +352,22 @@ class WGAN(keras.Model):
 
         # check if parsed hyperparameters are known
         unknown_keys = [key for key in hparams_user.keys() if key not in hparams_default]
-        if unknown_keys:
+        if unknown_keys:        # if unknown keys are found, remove them from user-defined hyperparameters
             print("The following parsed hyperparameters are unknown and thus are ignored: {0}".format(
                 ", ".join(unknown_keys)))
+            [hparams_user.pop(unknown_key) for unknown_key in unknown_keys]
+            
+        hparams_dict = merge_dicts(hparams_default, hparams_user)   # merge default and user-defined hyperparameters
 
-        # get complete hyperparameter dictionary while checking type of parsed values
-        hparams_merged = {**hparams_default, **hparams_user}
-        hparams_dict = {}
-        for key in hparams_default:
-            if isinstance(hparams_merged[key], type(hparams_default[key])):
-                hparams_dict[key] = hparams_merged[key]
-            else:
-                raise TypeError("Parsed hyperparameter '{0}' must be of type '{1}', but is '{2}'"
-                                .format(key, type(hparams_default[key]), type(hparams_merged[key])))
-
+        # check if optimizer is valid and set corresponding optimizers for generator and critic
         if hparams_dict["optimizer"].lower() == "adam":
             adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["lr_critic"], beta_1=0.0, beta_2=0.9)
-            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["lr_gen"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["hparams_critic"]["lr"], beta_1=0.0, beta_2=0.9)
+            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["hparams_generator"]["lr"], beta_1=0.0, beta_2=0.9)
         elif hparams_dict["optimizer"].lower() == "rmsprop":
             rmsprop = keras.optimizers.RMSprop
-            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["lr_critic"])  # increase beta-values ?
-            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["lr_gen"])
+            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["hparams_critic"]["lr"])  # increase beta-values ?
+            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["hparams_generator"]["lr"])
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
@@ -372,31 +378,17 @@ class WGAN(keras.Model):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"batch_size": 32, "lr_gen": 1.e-05, "lr_critic": 1.e-06, "nepochs": 50, "z_branch": False,
-                        "lr_decay": False, "decay_start": 5, "decay_end": 10, "lr_gen_end": 1.e-06, "l_embed": False,
-                        "ngf": 56, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "var_tar2in": "", "n_predictands": 2}
-
+        hparams_dict = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
+                        "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                        "lscheduled_train": True, "recon_loss": "mae_channels", 
+                        "hparams_generator": {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
+                                              "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,     # see keyword-aguments of sha_unet, conv_block,
+                                              "l_subpixel": True, "z_branch": True, "ngf": 56, "lr": 1.e-05, "lr_end": 1.e-06}, 
+                        "hparams_critic": {"num_conv": 4, "channels_start": 64, "activation": "swish",
+                                           "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
+                       }
+                     
         return hparams_dict
-
-    @staticmethod
-    def critic_loss(critic_real, critic_gen):
-        """
-        The critic is optimized to maximize the difference between the generated and the real data max(real - gen).
-        This is equivalent to minimizing the negative of this difference, i.e. min(gen - real) = max(real - gen)
-        :param critic_real: critic on the real data
-        :param critic_gen: critic on the generated data
-        :return c_loss: loss to optize the critic
-        """
-        c_loss = tf.reduce_mean(critic_gen - critic_real)
-
-        return c_loss
-
-    @staticmethod
-    def critic_gen_loss(critic_gen):
-        cg_loss = -tf.reduce_mean(critic_gen)
-
-        return cg_loss
 
 
 class LearningRateSchedulerWGAN(LearningRateScheduler):

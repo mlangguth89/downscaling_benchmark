@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-04-17"
+__update__ = "2023-08-18"
 
 import os, glob
 from typing import List
@@ -27,7 +27,7 @@ try:
 except:
     from multiprocessing.pool import ThreadPool
 from all_normalizations import ZScore
-from other_utils import to_list, find_closest_divisor, free_mem
+from other_utils import to_list, find_closest_divisor
 
 
 class HandleDataClass(object):
@@ -321,7 +321,10 @@ class HandleDataClass(object):
             data_iter = data_iter.repeat()
 
         # clean-up to free some memory
+        # free_mem([da, da_in, da_tar, varnames_tar])
         del da
+        del da_in
+        del da_tar
         gc.collect()
 
         return data_iter
@@ -383,6 +386,11 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for Tier-2.")
+    elif dataset_name == "atmorep":
+        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
+        if subset == "train":
+            fname_suffix = f"{fname_suffix}*"
+        if laugmented: raise ValueError("No augmented dataset available for AtmoRep.")
     else:
         raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
 
@@ -431,7 +439,7 @@ class StreamMonthlyNetCDF(object):
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
-        self.all_vars = self.predictor_list + self.predictand_list
+        self.all_vars = self.predictor_list + self.predictand_list       # ordering important to ensure that predictors come first!
         self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
@@ -463,7 +471,7 @@ class StreamMonthlyNetCDF(object):
         return self.nsamples
 
     def getitems(self, indices):
-        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables")
+        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables").sel({"variables": self.all_vars})
         if self.var_tar2in is not None:
             # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
             #       * The following operation order must concatenate var_tar2in by da_in to ensure
@@ -600,7 +608,7 @@ class StreamMonthlyNetCDF(object):
             if all(stat_list):
                 selected_vars = var_list
             else:
-                miss_inds = [i for i, x in enumerate(stat_list) if x]
+                miss_inds = [i for i, x in enumerate(stat_list) if not x]
                 miss_vars = [var_list[i] for i in miss_inds]
                 raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
 
@@ -660,8 +668,6 @@ class StreamMonthlyNetCDF(object):
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
-            # free memory
-            free_mem([ds_add, add_samples, istart])
 
         self.data_loaded[il] = data_now
         # timing
@@ -670,8 +676,6 @@ class StreamMonthlyNetCDF(object):
         self.ds_proc_size += data_now.nbytes
         print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
-        # free memory
-        free_mem([nsamples, t_read, data_now])
 
         return il
 
