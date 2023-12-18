@@ -1,0 +1,7 @@
+{
+  "nepochs": 60,
+  "d_steps": 5,
+  "lr_decay": true,
+  "hparams_generator": {"lr": 5e-05, "lr_end": 5e-06, "z_branch": true, "activation": "swish", "l_avgpool": false, "named_target": false},
+  "hparams_critic": {"lr": 1e-06, "activation": "swish"}
+}
