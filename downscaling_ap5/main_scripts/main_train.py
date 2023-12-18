@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-12-18"
+__update__ = "2023-12-14"
 
 import os
 import argparse
@@ -19,9 +19,11 @@ import gc
 import json as js
 from timeit import default_timer as timer
 import numpy as np
+import xarray as xr
 from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_engine import ModelEngine
+from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import prepare_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
 from benchmark_utils import get_training_time_dict
@@ -132,7 +134,7 @@ def main(parser_args):
     if not ttrain_load:
         ttrain_load = sum(ds_obj_train.reading_times) #+ tval_load
         print(f"Training data loading time: {ttrain_load:.2f}s.")
-        print(f"Average throughput: {ds_obj['ds_proc_size'] / 1.e+06 / training_times['Total training time']:.3f} MB/s")
+        print(f"Average throughput: {ds_obj_train.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
 
     # save trained model
     t0_save = timer()
