@@ -1,14 +1,20 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
+
+"""
+Class for Wasserstein GAN (WGAN) model.
+"""
+
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2023-08-08"
+__update__ = "2023-12-14"
 
-import os, sys
+import os
 from typing import List, Tuple, Union
+import inspect
 from collections import OrderedDict
 import numpy as np
 import tensorflow as tf
@@ -23,138 +29,275 @@ from tensorflow.python.platform import tf_logging as logging
 from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
 from tensorflow.keras.models import Model
 # other modules
+from abstract_model_class import AbstractModelClass
+from unet_model import UNetModelBase
 from custom_losses import get_custom_loss
-from unet_model import conv_block
-from other_utils import to_list, merge_dicts
+from advanced_activations import advanced_activation
+
 
 list_or_tuple = Union[List, Tuple]
 
 
-def critic_model(shape, num_conv: int = 4, channels_start: int = 64, kernel: tuple = (3, 3),
-                 stride: tuple = (2, 2), activation: str = "swish", lbatch_norm: bool = True):
-    """
-    Set-up convolutional discriminator model that is followed by two dense-layers
-    :param shape: input shape of data (either real or generated data)
-    :param num_conv: number of convolutional layers
-    :param channels_start: number of channels in first layer
-    :param kernel: convolutional kernel, e.g. (3,3)
-    :param stride: stride for convolutional layer
-    :param activation: activation function to use (applies to convolutional and fully-connected layers)
-    :param lbatch_norm: flag to perform batch normalization on convolutional layers
-    :return: critic-model
-    """
-    critic_in = Input(shape=shape)
-    x = critic_in
+class Critic_Simple(AbstractModelClass):
+    
+    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List):
+        super().__init__(shape_in, hparams, varnames_tar, "", "")       # Pass empty savedir- and expname-arguments since this is not a stand-alone model
+        building_blocks = UNetModelBase()
+        self.conv_block = building_blocks.conv_block
+        
+        # set submodels
+        self.set_hparams(hparams)
+        self.set_model()
+        
+    def set_model(self):
+        critic_in = Input(shape=self._input_shape)
+        x = critic_in
+        
+        channels = self.hparams["channels_start"]
+        num_conv = int(self.hparams["num_conv"])
+        
+        assert num_conv > 1, f"Number of convolutional layers is {num_conv:d}, but must be at minimum 2."
+        
 
-    channels = channels_start
+        for _ in range(num_conv):
+            x = self.conv_block(x, channels, self.hparams["kernel"], self.hparams["stride"], 
+                                activation=self.hparams["activation"], l_batch_normalization=self.hparams["lbatch_norm"])
+            channels *= 2
+            
+        # finally perform global average pooling and finalize by fully connected layers
+        x = GlobalAveragePooling2D()(x)
+        try:
+            x = Dense(self.hparams["channels_start"], activation=self.hparams["activation"])(x)
+        except ValueError as _:
+            ac = advanced_activation(self.hparams["activation"]) 
+            x = Dense(self.hparams["channels_start"], activation=ac)(x)
+        # ... and end with linear output layer
+        out = Dense(1, activation="linear")(x)
 
-    if num_conv < 2:
-        raise ValueError("Number of convolutional layers num_conv must be 2 at minimum.")
-
-    for _ in range(num_conv):
-        x = conv_block(x, channels, kernel, stride, activation=activation, l_batch_normalization=lbatch_norm)
-        channels *= 2
-
-    # finally perform global average pooling and finalize by fully connected layers
-    x = GlobalAveragePooling2D()(x)
-    x = Dense(channels_start, activation=activation)(x)
-    # ... and end with linear output layer
-    out = Dense(1, activation="linear")(x)
-
-    critic = Model(inputs=critic_in, outputs=out)
-
-    return critic  # , out
-
-
-class WGAN(keras.Model):
-    """
-    Class for Wassterstein GAN models
-    """
-
-    def __init__(self, generator: keras.Model, critic: keras.Model, shape_in: List, varnames_tar: List, hparams: dict,
-                 savedir: str, exp_name: str = "wgan_model"):
+        self.model = Model(inputs=critic_in, outputs=out)
+                   
+    def set_compile_options(self):
+        raise RuntimeError(f"Critic model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
+        
+    def set_fit_options(self):
+        raise RuntimeError(f"Critic model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
+        
+    def set_hparams_default(self):
         """
-        Initiate Wasserstein GAN model
-        :param generator: A generator model returning a data field
-        :param critic: A critic model which returns a critic scalar on the data field
-        :param shape_in: shape of input data
-        :param varnames_tar: list of target variables/predictands (incl. static variables, e.g. for z_branch)
-        :param hparams: dictionary of hyperparameters
-        :param exp_name: name of the WGAN experiment
-        :param savedir: directory where checkpointed model will be saved
+        Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
+        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "swish",
+                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
 
-        super(WGAN, self).__init__()
 
-        self.generator, self.critic = generator, critic
-        self.shape_in = shape_in
-        self.hparams = WGAN.get_hparams_dict(hparams)
-        if self.hparams["l_embed"]:
-            raise ValueError("Embedding is not implemented yet.")
-        self.n_predictands = len(varnames_tar)                      # number of predictands
-        self.n_predictands_dyn = self.n_predictands - 1 if self.hparams["hparams_generator"]["z_branch"] else self.n_predictands
-        print(f"Dynamic predictands: {self.n_predictands_dyn}, Predictands: {self.n_predictands}")
-        self.modelname = exp_name
-        if not os.path.isdir(savedir):
-            os.makedirs(savedir, exist_ok=True)
-        self.savedir = savedir
+class WGAN_Model(keras.Model):
+    def __init__(self, generator, critic, hparams):
+        super().__init__()
+        self.generator = generator
+        self.critic = critic
+        self.hparams = hparams  
+        self._n_predictands, self._n_predictands_dyn = self._get_npredictands()
+        
+    def _get_npredictands(self):
+        """
+        Return the number of the generator's output channels, i.e. 2 if the U-Net uses an activated z_branch.
+        """
+        #npredictands = 
+        return self.generator.__dict__["_n_predictands"], self.generator.__dict__["_n_predictands_dyn"] 
 
-        # instantiate submodels
-        # instantiate model components (generator and critci)
-        self.generator = self.generator(self.shape_in, self.n_predictands_dyn, self.hparams["hparams_generator"], concat_out=True)
-        tar_shape = (*self.shape_in[:-1], self.n_predictands_dyn)   # critic only accounts for dynamic predictands
-        critic_kwargs = self.hparams["hparams_critic"].copy()
-        critic_kwargs.pop("lr", None)
-        self.critic = self.critic(tar_shape, **critic_kwargs)
-
+    def compile(self, optimizer, loss, **kwargs):
+        super().compile(**kwargs)
+        self.c_optimizer, self.g_optimizer = optimizer
+        
         # losses
+        self.recon_loss = loss
         self.critic_loss = get_custom_loss("critic")
         self.critic_gen_loss = get_custom_loss("critic_generator")
-        self.recon_loss = self.get_recon_loss() 
+        
+    def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
+        """
+        Training step for Wasserstein GAN
+        :param data_iter: Tensorflow Dataset providing training data
+        :param embed: embedding (not implemented yet)
+        :return: Ordered dictionary with several losses of generator and critic
+        """
 
-        # Unused attribute, but introduced for joint driver script with U-Net; to be solved with customized target vars
-        self.varnames_tar = None
+        predictors, predictands = data_iter
 
-        # attributes to be set in compile-method
-        self.c_optimizer, self.g_optimizer = None, None
-        self.lr_scheduler = None
-        self.checkpoint, self.earlystopping = None, None
+        # train the critic d_steps-times
+        for i in range(self.hparams["d_steps"]):
+            with tf.GradientTape() as tape_critic:
+                ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
+                # critic only operates on predictand channels
+                if self._n_predictands_dyn > 1:
+                    predictands_critic = predictands[ist:ie, :, :, 0:self._n_predictands_dyn]
+                else:
+                    predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
+                # generate (downscaled) data
+                gen_data = self.generator.model(predictors[ist:ie, ...], training=True)
+                # calculate critics for both, the real and the generated data
+                critic_gen = self.critic.model(gen_data[..., 0:self._n_predictands_dyn], training=True)
+                critic_gt = self.critic.model(predictands_critic, training=True)
+                # calculate the loss (incl. gradient penalty)
+                c_loss = self.critic_loss(critic_gt, critic_gen)
+                gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:self._n_predictands_dyn])
 
+                d_loss = c_loss + self.hparams["gp_weight"] * gp
+
+            # calculate gradients and update discrimintor
+            d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
+            self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
+
+        # train generator
+        with tf.GradientTape() as tape_generator:
+            # generate (downscaled) data
+            gen_data = self.generator.model(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
+            # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
+            critic_gen = self.critic.model(gen_data[..., 0:self._n_predictands_dyn], training=True)
+            cg_loss = self.critic_gen_loss(critic_gen)
+            rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
+
+            g_loss = cg_loss + self.hparams["recon_weight"] * rloss
+
+        g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
+        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+
+        return OrderedDict(
+            [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
+             ("recon_loss", rloss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
+
+    def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
+        """
+        Implement step to test trained generator on validation data
+        :param val_iter: Tensorflow Dataset with validation data
+        :return: dictionary with reconstruction loss on validation data
+        """
+        predictors, predictands = val_iter
+
+        gen_data = self.generator.model(predictors, training=False)
+        rloss = self.recon_loss(predictands, gen_data)
+
+        return OrderedDict([("recon_loss", rloss)])
+
+    def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
+
+        predictors, _ = test_iter
+
+        return self.generator.model(predictors, training=False)
+
+    def gradient_penalty(self, real_data, gen_data):
+        """
+        Calculates gradient penalty based on 'mixture' of generated and ground truth data
+        :param real_data: the ground truth data
+        :param gen_data: the generated/predicted data
+        :return: gradient penalty
+        """
+        # get mixture of generated and ground truth data
+        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, self._n_predictands_dyn], 0., 1.)
+        mix_data = real_data + alpha * (gen_data - real_data)
+
+        with tf.GradientTape() as gp_tape:
+            gp_tape.watch(mix_data)
+            critic_mix = self.critic.model(mix_data, training=True)
+
+        # calculate the gradient on the mixture data...
+        grads_mix = gp_tape.gradient(critic_mix, [mix_data])[0]
+        # ... and norm it
+        norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
+        gp = tf.reduce_mean((norm - 1.) ** 2)
+
+        return gp
+
+
+class WGAN(AbstractModelClass):
+    
+    def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
+        
+        super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
+
+        self.modelname = "wgan"
+        
+        # set hyperparmaters
+        self.set_hparams(hparams)
+        # set submodels
+        self.generator, self.critic = self.set_model(generator, critic)
+        # set compile and fit options as well as custom objects
+        self.set_compile_options()
+        self.set_custom_objects(loss=self.compile_options['loss'])
+        self.set_fit_options()
+        
+    def set_compile_options(self):
+        # set optimizers
+        # check if optimizer is valid and set corresponding optimizers for generator and critic
+        if self.hparams["optimizer"].lower() == "adam":
+            optimizer = keras.optimizers.Adam
+            kwargs_opt = {"beta_1": 0.0, "beta_2": 0.9}
+        elif self.hparams["optimizer"].lower() == "rmsprop":
+            optimizer = keras.optimizers.RMSprop
+            kwargs_opt = {}
+        else:
+            raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
+
+        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
+        self.loss = self.get_recon_loss()
+        
+    def get_fit_options(self):
+        wgan_callbacks = []
+        
+        if self.hparams["lr_decay"]:
+            wgan_callbacks.append(LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1))
+        
+        if self.hparams["lcheckpointing"]:
+            wgan_callbacks.append(ModelCheckpointWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+            
+        if self.hparams["learlystopping"]:
+            wgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+            
+        if wgan_callbacks is not None:
+            return {"callbacks": wgan_callbacks}
+        else:
+            return {}  
+        
+    def set_model(self, generator, critic):
+        """
+        Setting the WGAN-model is a three-step approach:
+            1. Get the generator model
+            2. Get the critic model
+            3. Put the generator and critic model into the actual WGAN
+        """
+        # get generator model
+        add_opts = {"concat_out": True} if "concat_out" in str(inspect.signature(generator)) else {}         # generator might have a concat_out-argument to handle z_branch-outputs
+        gen_model = generator(self._input_shape, self.hparams["hparams_generator"], self._varnames_tar, self._savedir, 
+                              self._expname, **add_opts)        
+        # correct number of dynamic predictors
+        self._n_predictands_dyn = gen_model.__dict__["_n_predictands_dyn"]
+        
+        # get critic model
+        tar_shape = (*self._input_shape[:-1], self._n_predictands_dyn)   # critic only accounts for dynamic predictands
+        critic_model = critic(tar_shape, self.hparams["hparams_critic"], self._varnames_tar)
+        
+        # get hyperparamters of WGAN only
+        hparams_wgan_only = self.hparams.copy()
+        hparams_wgan_only.pop("hparams_critic")
+        hparams_wgan_only.pop("hparams_generator")
+                
+        # ...and create WGAN model instance
+        self.model = WGAN_Model(gen_model, critic_model, hparams_wgan_only)
+
+        return gen_model, critic_model
+    
     def get_recon_loss(self):
 
         kwargs_loss = {}
         if "vec" in self.hparams["recon_loss"]:
-            kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self.n_predictands}
+            kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self._n_predictands}
         elif "channels" in self.hparams["recon_loss"]:
-            kwargs_loss = {"n_channels": self.n_predictands}
-        
+            kwargs_loss = {"n_channels": self._n_predictands}
+
         loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
 
         return loss_fn
-
-
-    def compile(self, **kwargs):
-        """
-        Instantiate generator and critic, compile model and then set optimizer as well optional learning rate decay and
-        supervision of fitting (checkpointing and early stopping.
-        :return: -
-        """
-        # call Keras compile method
-        super(WGAN, self).compile(**kwargs)
-        # set optimizers
-        self.c_optimizer, self.g_optimizer = self.hparams["d_optimizer"], self.hparams["g_optimizer"]
-
-        # get learning rate schedule if desired
-        if self.hparams["lr_decay"]:
-            self.lr_scheduler = LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1)
-
-        if self.hparams["lscheduled_train"]:
-            self.checkpoint = ModelCheckpointWGAN(self.savedir, monitor="val_recon_loss", verbose=1,
-                                                  save_best_only=True, mode="min")
-            # self.earlystopping = EarlyStopping(monitor="val_recon_loss", patience=8)
-
-        return True
-
+        
     def get_lr_decay(self):
         """
         Get callable of learning rate scheduler which can be used as callabck in Keras models.
@@ -183,127 +326,14 @@ class WGAN(keras.Model):
 
         return lr_scheduler
 
-    def get_fit_opts(self, default_callbacks: List = None):
-        """
-        Add customized learning rate scheduler, checkpointing and early stopping to list of callbacks.
-        """
-        wgan_callbacks = {"wgan_callbacks": [self.lr_scheduler, self.checkpoint, self.earlystopping]}
-
-        return wgan_callbacks
-
-    def fit(self, callbacks=None, wgan_callbacks: List = None, **kwargs):
-        """
-        Takes all (non-positional) arguments of Keras fit-method, but expands the list of callbacks to include
-        the WGAN callbacks (see get_fit_opt-method)
-        """
-        default_callbacks, wgan_callbacks = to_list(callbacks), to_list(wgan_callbacks)
-        all_callbacks = [e for e in wgan_callbacks + default_callbacks if e is not None]
-
-        return super(WGAN, self).fit(callbacks=all_callbacks, **kwargs)
-
-    def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
-        """
-        Training step for Wasserstein GAN
-        :param data_iter: Tensorflow Dataset providing training data
-        :param embed: embedding (not implemented yet)
-        :return: Ordered dictionary with several losses of generator and critic
-        """
-
-        predictors, predictands = data_iter
-
-        # train the critic d_steps-times
-        for i in range(self.hparams["d_steps"]):
-            with tf.GradientTape() as tape_critic:
-                ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
-                # critic only operates on predictand channels
-                if self.n_predictands_dyn > 1:
-                    predictands_critic = predictands[ist:ie, :, :, 0:self.n_predictands_dyn]
-                else:
-                    predictands_critic = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
-                # generate (downscaled) data
-                gen_data = self.generator(predictors[ist:ie, ...], training=True)
-                # calculate critics for both, the real and the generated data
-                critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
-                critic_gt = self.critic(predictands_critic, training=True)
-                # calculate the loss (incl. gradient penalty)
-                c_loss = self.critic_loss(critic_gt, critic_gen)
-                gp = self.gradient_penalty(predictands_critic, gen_data[..., 0:self.n_predictands_dyn])
-
-                d_loss = c_loss + self.hparams["gp_weight"] * gp
-
-            # calculate gradients and update discrimintor
-            d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
-            self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
-
-        # train generator
-        with tf.GradientTape() as tape_generator:
-            # generate (downscaled) data
-            gen_data = self.generator(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
-            # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
-            critic_gen = self.critic(gen_data[..., 0:self.n_predictands_dyn], training=True)
-            cg_loss = self.critic_gen_loss(critic_gen)
-            rloss = self.recon_loss(predictands[-self.hparams["batch_size"]:, :, :, :], gen_data)
-
-            g_loss = cg_loss + self.hparams["recon_weight"] * rloss
-
-        g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
-        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
-
-        return OrderedDict(
-            [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
-             ("recon_loss", rloss * self.hparams["recon_weight"]), ("g_loss", g_loss)])
-
-    def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
-        """
-        Implement step to test trained generator on validation data
-        :param val_iter: Tensorflow Dataset with validation data
-        :return: dictionary with reconstruction loss on validation data
-        """
-        predictors, predictands = val_iter
-
-        gen_data = self.generator(predictors, training=False)
-        rloss = self.recon_loss(predictands, gen_data)
-
-        return OrderedDict([("recon_loss", rloss)])
-
-    def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
-
-        predictors, _ = test_iter
-
-        return self.generator(predictors, training=False)
-
-    def gradient_penalty(self, real_data, gen_data):
-        """
-        Calculates gradient penalty based on 'mixture' of generated and ground truth data
-        :param real_data: the ground truth data
-        :param gen_data: the generated/predicted data
-        :return: gradient penalty
-        """
-        # get mixture of generated and ground truth data
-        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, self.n_predictands_dyn], 0., 1.)
-        mix_data = real_data + alpha * (gen_data - real_data)
-
-        with tf.GradientTape() as gp_tape:
-            gp_tape.watch(mix_data)
-            critic_mix = self.critic(mix_data, training=True)
-
-        # calculate the gradient on the mixture data...
-        grads_mix = gp_tape.gradient(critic_mix, [mix_data])[0]
-        # ... and norm it
-        norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
-        gp = tf.reduce_mean((norm - 1.) ** 2)
-
-        return gp
-
-
     def plot_model(self, save_dir, **kwargs):
         """
         Plot generator and critic model separately.
         :param save_dir: directory under which plots will be saved
         :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
         """
-        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self.modelname}_generator.png"), **kwargs)
-        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self.modelname}_critic.png"), **kwargs)
+        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
+        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
 
     def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
              signatures=None, options=None, save_traces: bool = True):
@@ -327,70 +357,23 @@ class WGAN(keras.Model):
                             all custom layers/models implement a `get_config()` method.
         :return: -
         """
-        generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self.modelname)), \
-                                      os.path.join(filepath, "{0}_critic_last".format(self.modelname))
+        generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self._expname)), \
+                                      os.path.join(filepath, "{0}_critic_last".format(self._expname))
         self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
         self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
 
-    # required for customized models, see here: https://www.tensorflow.org/guide/keras/save_and_serialize
-    def get_config(self):
-        return self.hparams
-
-    @classmethod
-    def from_config(cls, config):
-        return cls(**config)
-
-    @staticmethod
-    def get_hparams_dict(hparams_user: dict) -> dict:
+                          
+    def set_hparams_default(self):
         """
-        Merge user-defined and default hyperparameter dictionary to retrieve a complete customized one
-        :param hparams_user: dictionary of hyperparameters parsed by user
-        :return: merged hyperparameter dictionary
+        Note: Hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
+              Thus, the default just sets empty dictionaries.
         """
+        self.hparams_default = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
+                                "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels",
+                                "hparams_generator": {}, "hparams_critic": {}}
 
-        hparams_default = WGAN.get_hparams_default()
-
-        # check if parsed hyperparameters are known
-        unknown_keys = [key for key in hparams_user.keys() if key not in hparams_default]
-        if unknown_keys:        # if unknown keys are found, remove them from user-defined hyperparameters
-            print("The following parsed hyperparameters are unknown and thus are ignored: {0}".format(
-                ", ".join(unknown_keys)))
-            [hparams_user.pop(unknown_key) for unknown_key in unknown_keys]
-            
-        hparams_dict = merge_dicts(hparams_default, hparams_user)   # merge default and user-defined hyperparameters
-
-        # check if optimizer is valid and set corresponding optimizers for generator and critic
-        if hparams_dict["optimizer"].lower() == "adam":
-            adam = keras.optimizers.Adam
-            hparams_dict["d_optimizer"] = adam(learning_rate=hparams_dict["hparams_critic"]["lr"], beta_1=0.0, beta_2=0.9)
-            hparams_dict["g_optimizer"] = adam(learning_rate=hparams_dict["hparams_generator"]["lr"], beta_1=0.0, beta_2=0.9)
-        elif hparams_dict["optimizer"].lower() == "rmsprop":
-            rmsprop = keras.optimizers.RMSprop
-            hparams_dict["d_optimizer"] = rmsprop(lr=hparams_dict["hparams_critic"]["lr"])  # increase beta-values ?
-            hparams_dict["g_optimizer"] = rmsprop(lr=hparams_dict["hparams_generator"]["lr"])
-        else:
-            raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
-
-        return hparams_dict
-
-    @staticmethod
-    def get_hparams_default() -> dict:
-        """
-        Return default hyperparameter dictionary.
-        """
-        hparams_dict = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
-                        "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                        "lscheduled_train": True, "recon_loss": "mae_channels", 
-                        "hparams_generator": {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
-                                              "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,     # see keyword-aguments of sha_unet, conv_block,
-                                              "l_subpixel": True, "z_branch": True, "ngf": 56, "lr": 1.e-05, "lr_end": 1.e-06}, 
-                        "hparams_critic": {"num_conv": 4, "channels_start": 64, "activation": "swish",
-                                           "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
-                       }
-                     
-        return hparams_dict
-
-
+                          
 class LearningRateSchedulerWGAN(LearningRateScheduler):
 
     def __init__(self, schedule, verbose=0):
@@ -436,10 +419,11 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
 
 class ModelCheckpointWGAN(ModelCheckpoint):
 
-    def __init__(self, filepath,  monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
+    def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
                  mode='auto', save_freq='epoch', options=None, **kwargs):
         super(ModelCheckpointWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
+        self._expname = expname
 
     def _save_model(self, epoch, batch, logs):
         """Saves the model.
@@ -461,8 +445,12 @@ class ModelCheckpointWGAN(ModelCheckpoint):
             self.epochs_since_last_save = 0
             filepath = self._get_file_path(epoch, batch, logs)
             # ML S
-            filepath_gen = os.path.join(filepath, f"{self.model.modelname}_generator")
-            filepath_critic = os.path.join(filepath, f"{self.model.modelname}_critic")
+            if self.save_best_only:
+                add_str = "best"
+            else:
+                add_str = f"epoch{epoch:05d}"
+            filepath_gen = os.path.join(filepath, f"{self._expname}_generator_{add_str}")
+            filepath_critic = os.path.join(filepath, f"{self._expname}_critic_{add_str}")
             # ML E
 
             try:
@@ -515,3 +503,5 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                                   'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
                 # Re-throw the error for any other causes.
                 raise e
+               
+

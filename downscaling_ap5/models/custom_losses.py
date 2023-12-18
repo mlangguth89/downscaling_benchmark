@@ -55,8 +55,10 @@ def get_custom_loss(loss_name, **kwargs):
     elif loss_name == "critic_generator":
         loss_fn = critic_gen_loss
     else:
+        loss_fn = loss_name
         try:
-            loss_fn = getattr(tf.keras.losses, loss_name)(**kwargs)
+            _ = tf.keras.losses.get(loss_name)
+            loss_fn = loss_name
         except AttributeError:
             raise ValueError(f"{loss_name} is not a valid loss function. Choose one of the following: {known_losses}")
 

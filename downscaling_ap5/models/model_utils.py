@@ -9,92 +9,14 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2023-10-12"
+__update__ = "2023-12-11"
 
 # import modules
 from timeit import default_timer as timer
-import xarray as xr
 import tensorflow.keras as keras
-from unet_model import sha_unet, UNET
-from wgan_model import WGAN, critic_model
-from other_utils import to_list
-
-
-class ModelEngine(object):
-    """
-    Class to get and instantiate known models.
-    To add new models, please adapt known_models accoringly.
-    General info:
-    The key value of the implemented model should be based on keras.Model and should expect 'hparams', 'exp_name' and
-    'model_savedir' as arguments for initialization. Further keyword arguments are possible.
-    For composite models (e.g. GANs):
-    The key value should be a tuple whose first element constitutes the composited model (based on keras.Model).
-    The following arguments should then be model construction objects to define the components of the composite model.
-    Example: WGAN is a composite model consisting of a generator and critic (see wgan_model.py).
-             Thus, the derived class should be the first element of the tuple.
-             The model constructions of the generator (e.g. a U-Net) and the critic must then constitute the second and
-             third element of the tuple, i.e. {"wgan": (WGAN, unet_model, critic_model).
-    """
-
-    known_models = {"unet": (UNET, sha_unet),
-                    "wgan": (WGAN, sha_unet, critic_model)}
-
-    def __init__(self, model_name: str):
-        """
-        Initialize the model if known.
-        :param model_name: name of the model (must match any key of self.known_models)
-        Hint: Pass help to get an overview of the available models.
-        """
-        self.modelname = model_name
-        if self.modelname is None:
-            self.model = None
-        else:
-            self.model = self.known_models[self.modelname]
-
-    def __call__(self, shape_in, varnames_tar, hparams_dict, save_dir, exp_name, **kwargs):
-        """
-        Instantiate the model with some required arguments.
-        """
-        model_list = to_list(self.model)
-        target_model = model_list[0]
-        model_args = {"shape_in": shape_in, "varnames_tar": varnames_tar, "hparams": hparams_dict,
-                      "exp_name": exp_name, "savedir": save_dir, **kwargs}
-
-        try:
-            if len(model_list) == 1:
-                model = target_model(**model_args)
-            else:
-                submodels = model_list[1:]
-                model = target_model(*submodels, **model_args)
-        except Exception as e:
-            err_str = str(e)
-            raise RuntimeError(f"Failed to instantiate the model. The following error occured: \n {err_str}")
-
-        return model
-
-    @property
-    def modelname(self):
-        return self._modelname
-
-    @modelname.setter
-    def modelname(self, model_name):
-
-        help_str = self._get_help_str()
-        model_name_local = model_name.lower()
-
-        if model_name_local in self.known_models.keys():
-            self._modelname = model_name_local
-        elif model_name_local == "help":
-            print(help_str)
-            self._modelname = None
-        else:
-            raise ValueError(f"Model '{model_name}' is unknown. Please specify a known model. {help_str}")
-
-    def _get_help_str(self):
-        """
-        Create help-string listing all known models.
-        """
-        return f"Known models are: {', '.join(list(self.known_models.keys()))}"
+from tensorflow.python.keras.layers import deserialize, serialize
+from tensorflow.python.keras.saving import saving_utils
+from tensorflow.keras.models import Model
 
 
 # define class for creating timer callback
@@ -138,28 +60,30 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
     return opt_dict
 
 
-def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
-    """
-    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
-    :param mout_np: numpy-array of model output
-    :param norm: normalization object
-    :param varname: name of variable
-    :param coords: coordinates of target data
-    :param dims: dimensions of target data
-    :param z_branch: flag for z-branch
-    :return: xarray.DataArray of model output with denormalized data
-    """
-    if z_branch:
-        # slice data to get first channel only
-        if isinstance(mout_np, list): mout_np = mout_np[0]
-        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
-    else:
-        # no slicing required
-        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
+# Helpers from MLAir, see:
+# https://gitlab.jsc.fz-juelich.de/esde/machine-learning/mlair/-/blob/master/mlair/helpers/helpers.py?ref_type=heads (MIT License)
+def unpack(model, training_config, weights):
+    restored_model = deserialize(model)
+    if training_config is not None:
+        restored_model.compile(
+            **saving_utils.compile_args_from_training_config(
+                training_config
+            )
+        )
+    restored_model.set_weights(weights)
+    return restored_model
 
-    # perform denormalization
-    mout_xr = norm.denormalize(mout_xr, varname=varname)
+# Hotfix function
+def make_keras_pickable():
 
-    return mout_xr
+    def __reduce__(self):
+        model_metadata = saving_utils.model_metadata(self)
+        training_config = model_metadata.get("training_config", None)
+        model = serialize(self)
+        weights = self.get_weights()
+        return (unpack, (model, training_config, weights))
+
+    cls = Model
+    cls.__reduce__ = __reduce__
 
 
