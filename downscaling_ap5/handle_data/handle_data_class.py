@@ -27,7 +27,7 @@ try:
 except:
     from multiprocessing.pool import ThreadPool
 from all_normalizations import ZScore
-from other_utils import to_list, find_closest_divisor
+from other_utils import to_list, find_closest_divisor, finditem
 
 
 class HandleDataClass(object):
@@ -153,181 +153,9 @@ class HandleDataClass(object):
                         predictands]), f"At least one predictor is not a data variable. Available variables are {*da_vars,}"
             tarvars = list(predictands)
 
-        # DEPRECATED CODE #
-        # Unnecessary as predictands-list must be parsed to all data stream-methods
-        # (make_tf_dataset_dyn and make_tf_dataset_allmem)
-        # # ensure that ds_tar has a channel coordinate even in case of single target variable
-        # roll = False
-        # if len(tarvars) == 1:
-        #     sl_tarvars = tarvars
-        # else:
-        #     # sl_tarvars = slice(*tarvars)
-        #     sl_tarvars = tarvars
-        #     if tarvars[0] != target_var and predictands is None:  # ensure that target variable appears as first channel
-        #         roll = True
-        #
-        # da_in, da_tar = da.sel({"variables": invars}), da.sel(variables=list(sl_tarvars))
-        # if roll: da_tar = da_tar.roll(variables=1, roll_coords=True)
-        # DEPRECATED CODE #
         da_in, da_tar = da.sel({"variables": invars}), da.sel({"variables": tarvars})
 
         return da_in, da_tar
-
-    @staticmethod
-    def make_tf_dataset_dyn(datadir: str, file_patt: str, batch_size: int, nepochs: int, nfiles2merge: int,
-                            predictands: List, predictors: List = None, lshuffle: bool = True,
-                            named_targets: bool = False, var_tar2in: str = None, norm_obj=None, norm_dims: List = None,
-                            nworkers: int = 10):
-        """
-        Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
-        To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
-        TO-DO: Add flags for repeat and drop_remainder (cf. make_tf_dataset_allmem-method)
-        :param datadir: directory where netCDF-files for TF dataset are strored
-        :param file_patt: filename pattern to glob files from datadir
-        :param batch_size: desired mini-batch size
-        :param nepochs: (effective) number of epochs for training
-        :param nfiles2merge: number if files to merge for streaming
-        :param predictands: List of selected predictand variables
-        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :param lshuffle: boolean to enable sample shuffling
-        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
-        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
-                                                                         to the input)
-        :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
-        :param norm_obj: normalization instance used to normalize the data.
-                         If not passed, the normalization instance is retrieved from the data
-        :param nworkers: numbers of workers to read in netCDF-files
-        :return: tuple of (normalization object, TensorFlow dataset object)
-        """
-        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
-
-        if norm_obj and norm_dims:
-            print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
-            norm_dims = None
-
-        if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
-
-        ds_obj = StreamMonthlyNetCDF(datadir, file_patt, nfiles_merge=nfiles2merge, selected_predictands=predictands,
-                                     selected_predictors=predictors, var_tar2in=var_tar2in, norm_obj=norm_obj,
-                                     norm_dims=norm_dims, nworkers=nworkers)
-
-        tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
-        tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
-        tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
-        if named_targets:
-            varnames = ds_obj.predictand_list
-            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands],
-                                    {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
-        else:
-            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
-
-        if lshuffle:
-            nshuffle = ds_obj.samples_merged
-        else:
-            nshuffle = 1          # equivalent to no shuffling
-
-        # enable flexibility in factor for range
-        n_reads = int(ds_obj.nfiles_merged*nepochs)
-        tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
-        tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
-        tfds = tfds.flat_map(
-            lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
-            .batch(batch_size, drop_remainder=True).map(tf_getdata, num_parallel_calls=tf.data.AUTOTUNE))
-
-        tfds = tfds.map(tf_split, num_parallel_calls=tf.data.AUTOTUNE).repeat()
-
-        return ds_obj, tfds
-
-    @staticmethod
-    def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, predictands: List, predictors: List = None,
-                               lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
-                               var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
-                               lembed: bool = False) -> tf.data.Dataset:
-        """
-        Build-up TensorFlow dataset from a generator based on the xarray-data array.
-        NOTE: All data is loaded into memory
-        :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
-                   Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
-        :param batch_size: number of samples per mini-batch
-        :param predictands: List of selected predictand variables
-        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :param lshuffle: flag if shuffling should be applied to dataset
-        :param shuffle_samples: number of samples to load before applying shuffling
-        :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
-                                                                         to the input)
-        :param lrepeat: flag if dataset should be repeated
-        :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
-        :param lembed: flag to trigger temporal embedding (not implemented yet!)
-        """
-        da = da.load()
-        da_in, da_tar = HandleDataClass.split_in_tar(da, predictands=predictands, predictors=predictors)
-        if var_tar2in is not None:
-            # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
-            #       * The following operation order must concatenate var_tar2in by da_in to ensure
-            #         that the variable appears at first place. This is required to avoid
-            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-            da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
-
-        varnames_tar = da_tar["variables"].values
-
-        def gen_named(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
-            ntimes = len(darr_in["time"])
-            for t in range(ntimes):
-                tar_now = darr_tar.isel({"time": t})
-                yield tuple((darr_in.isel({"time": t}).values,
-                             {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
-
-        def gen_unnamed(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
-            ntimes = len(darr_in["time"])
-            for t in range(ntimes):
-                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
-
-        if named_targets is True:
-            gen_now = gen_named
-        else:
-            gen_now = gen_unnamed
-
-        # create output signatures from first sample
-        s0 = next(iter(gen_now(da_in, da_tar)))
-        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
-        if named_targets is True:
-            sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
-        else:
-            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
-
-        # re-instantiate the generator and build TF dataset
-        gen_train = gen_now(da_in, da_tar)
-
-        if lembed is True:
-            raise ValueError("Time embedding is not supported yet.")
-        else:
-            data_iter = tf.data.Dataset.from_generator(lambda: gen_train,
-                                                       output_signature=(sample_spec_in, sample_spec_tar))
-
-        # Notes:
-        # * cache is reuqired to make repeat work properly on datasets based on generators
-        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
-        # * repeat must be applied after shuffle to get varying mini-batches per epoch
-        # * batch-size is increased to allow substepping in train_step
-        if lshuffle is True:
-            data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=drop_remainder)
-        else:
-            data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
-
-        if lrepeat:
-            data_iter = data_iter.repeat()
-
-        # clean-up to free some memory
-        # free_mem([da, da_in, da_tar, varnames_tar])
-        del da
-        del da_in
-        del da_tar
-        gc.collect()
-
-        return data_iter
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):
@@ -403,6 +231,230 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
             raise FileNotFoundError(f"Could not find requested dataset file '{ds_filename}'")
 
     return ds_filename
+
+
+def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str, varnames_tar: List,
+                    norm_dims: List=None, norm_obj=None, shuffle: bool = True, nworkers: int = 10, lrepeat: bool = True,
+                    drop_remainder: bool = True):
+    """
+    Prepare training data for downscaling
+    :param datadir: directory where netCDF-files for TF dataset are strored
+    :param dataset_name: name of dataset to be loaded
+    :param ds_dict: dictionary of dataset names and their subsets
+    :param hparams_dict: dictionary of hyperparameters
+    :param mode: mode of dataset (train, val, test)
+    :param varnames_tar: list of target variables to be used for downscaling 
+    :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
+    :param norm_obj: normalization instance used to normalize the data.
+                     If not passed, the normalization instance is retrieved from the data
+    :param shuffle: flag if shuffling should be applied to dataset
+    :param nworkers: numbers of workers to read in netCDF-files (for the case where NOT all data is loaded into memory)
+    :param lrepeat: flag if dataset should be repeated
+    :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+    :return: tuple of (TensorFlow dataset object, dictionary of dataset information)
+    """
+    # check parsed mode
+    allowed_modes = ["train", "val", "test"]
+    assert mode in allowed_modes, f"{mode} is not a valid mode. Allowed modes are {*allowed_modes,}" 
+
+    # check if normalization object is provided (mandatory for validation and test mode)
+    if mode != "train" and not norm_obj:
+        raise ValueError(f"Normalization object norm_obj must be provided for mode {mode}.")
+    else:
+        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
+
+    if norm_obj and norm_dims:
+        print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+        norm_dims = None
+
+    if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
+
+    # check if target variables are provided
+    if finditem(hparams_dict, "z_branch", False):
+        varnames_tar_all = to_list(varnames_tar) + to_list(ds_dict["varname_z"])
+    else:
+        varnames_tar_all = varnames_tar
+
+    # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
+    # are applied to train the critic, before the generator is trained once.
+    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
+    bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
+    nepochs = hparams_dict["nepochs"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else hparams_dict["nepochs"]
+
+    
+    fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
+
+    if "*" in fname_or_pattern:                                             # do not load all data into memory
+        ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
+                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
+                                     var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
+                                     norm_dims=norm_dims, nworkers=nworkers)
+        
+        if shuffle:
+            nshuffle = ds_obj.samples_merged
+        else:
+            nshuffle = 1          # equivalent to no shuffling
+
+        tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
+                                   lrepeat=lrepeat, drop_remainder=drop_remainder)
+        
+        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
+                "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all}
+    else:                                                                   # load all data into memory
+        ds_train = xr.open_dataset(fname_or_pattern)
+        da_train = HandleDataClass.reshape_ds(ds_train).astype("float32", copy=True)
+
+        if not norm_obj:
+            # data_norm must be freshly instantiated (triggering later parameter retrieval)
+            norm_obj = ZScore(norm_dims)           # TO-DO: Allow for arbitrary normalization
+
+        da_train = norm_obj.normalize(da_train)
+
+        if shuffle:
+            nshuffle = da_train.shape[0]
+        else:
+            nshuffle = 1
+
+        tfds = make_tf_dataset_allmem(da_train, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
+                                      var_tar2in=ds_dict.get("var_tar2in", None), nshuffle=nshuffle,
+                                      named_targets=hparams_dict.get("named_targets", False), 
+                                      lrepeat=lrepeat, drop_remainder=drop_remainder)
+        
+        tfds_info = {"nsamples": da_train.shape[0], "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
+                     "dataset_size": da_train.nbytes, "varnames_tar": varnames_tar_all}
+        
+    return tfds, tfds_info
+
+
+def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
+                        lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
+    """
+    Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
+    To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
+    TO-DO: Add flags for repeat and drop_remainder (cf. make_tf_dataset_allmem-method)
+    :param ds_obj: StreamMonthlyNetCDF-object
+    :param batch_size: desired mini-batch size
+    :param nepochs: (effective) number of epochs for training
+    :param nshuffle: number of samples to shuffle (set to 1 to disable shuffling)
+    :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+    :param lrepeat: flag if dataset should be repeated
+    :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+    :return: TensorFlow dataset object that streams data from subset of many netCDF-files
+    """
+    tf_read_nc = lambda ind_set: tf.py_function(ds_obj.read_netcdf, [ind_set], tf.int64)
+    tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
+    tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
+    
+    if named_targets:
+        varnames = ds_obj.predictand_list
+        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands],
+                                {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
+    else:
+        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+
+    # enable flexibility in factor for range
+    n_reads = int(ds_obj.nfiles_merged*nepochs)
+    tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
+    tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
+    tfds = tfds.flat_map(
+        lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
+        .batch(batch_size, drop_remainder=drop_remainder).map(tf_getdata, num_parallel_calls=tf.data.AUTOTUNE))
+
+    tfds = tfds.map(tf_split, num_parallel_calls=tf.data.AUTOTUNE)
+    
+    if lrepeat:
+        tfds = tfds.repeat()
+
+    return tfds
+
+def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, predictands: List, predictors: List = None,
+                           nshuffle: int = 20000, named_targets: bool = False, var_tar2in: str = None,
+                           lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
+                           #lembed: bool = False) -> tf.data.Dataset:
+        """
+        Build-up TensorFlow dataset from a generator based on the xarray-data array.
+        NOTE: All data is loaded into memory
+        :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
+                   Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
+        :param batch_size: number of samples per mini-batch
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+        :param nshuffle: number of samples to shuffle (set to 1 to disable shuffling)
+        :param named_targets: flag if target of TF dataset should be dictionary with named target variables
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
+        :param lrepeat: flag if dataset should be repeated
+        :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+        #:param lembed: flag to trigger temporal embedding (not implemented yet!)
+        """
+        da = da.astype("float32", copy=True)
+        da_in, da_tar = HandleDataClass.split_in_tar(da, predictands=predictands, predictors=predictors)
+        if var_tar2in is not None:
+            # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
+            #       * The following operation order must concatenate var_tar2in by da_in to ensure
+            #         that the variable appears at first place. This is required to avoid
+            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            da_in = xr.concat([da.sel({"variables": var_tar2in}), da_in], "variables")
+
+        varnames_tar = da_tar["variables"].values
+
+        def gen_named(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                tar_now = darr_tar.isel({"time": t})
+                yield tuple((darr_in.isel({"time": t}).values,
+                             {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
+
+        def gen_unnamed(darr_in, darr_tar):
+            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+            ntimes = len(darr_in["time"])
+            for t in range(ntimes):
+                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+
+        if named_targets is True:
+            gen_now = gen_named
+        else:
+            gen_now = gen_unnamed
+
+        # create output signatures from first sample
+        s0 = next(iter(gen_now(da_in, da_tar)))
+        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
+        if named_targets is True:
+            sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
+        else:
+            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
+
+        # re-instantiate the generator and build TF dataset
+        gen_train = gen_now(da_in, da_tar)
+
+        #if lembed is True:
+        #    raise ValueError("Time embedding is not supported yet.")
+        #else:
+        data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=(sample_spec_in, sample_spec_tar))
+
+        # Notes:
+        # * cache is reuqired to make repeat work properly on datasets based on generators
+        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
+        # * repeat must be applied after shuffle to get varying mini-batches per epoch
+        # * batch-size is increased to allow substepping in train_step
+        if nshuffle > 1:
+            data_iter = data_iter.cache().shuffle(nshuffle).batch(batch_size, drop_remainder=drop_remainder)
+        else:
+            data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
+
+        if lrepeat:
+            data_iter = data_iter.repeat()
+
+        # clean-up to free some memory
+        # free_mem([da, da_in, da_tar, varnames_tar])
+        del da
+        del da_in
+        del da_tar
+        gc.collect()
+
+        return data_iter
+
 
 
 class StreamMonthlyNetCDF(object):
