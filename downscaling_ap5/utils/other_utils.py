@@ -26,13 +26,16 @@ Some auxiliary functions for the project:
     * get_max_memory_usage
     * copy_filelist
     * merge_dicts
+    * finditem
+    * remove_items
+    * convert_to_xarray
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-11-27"
+__update__ = "2023-12-15"
 
 import os
 import gc
@@ -41,11 +44,12 @@ import psutil
 import resource
 import numpy as np
 import pandas as pd
+import xarray as xr
 import tensorflow as tf
 import datetime as dt
 from dateutil.parser import parse as date_parser
 import shutil
-from typing import Any, List, Union
+from typing import Any, List, Union, Dict, Tuple
 try:
     from collections import Iterable
 except ImportError:
@@ -397,17 +401,28 @@ def copy_filelist(file_list: List, dest_dir: str, file_list_dest: List = None ,l
             else:
                 print(f"WARNING: Could not find file '{f}'.")
 
-def merge_dicts(default_dict, user_dict):
+def merge_dicts(default_dict, user_dict, recursive: bool = True):
     """
-    Recursively merge two dictionaries, ensuring that all default keys are set.
+    Merge two dictionaries, ensuring that all default keys are set.
+    Recursive strategy is optional.
+    :param default_dict: Dictionary with default values.
+    :param user_dict: Dictionary with user-specified values.
+    :param recursive: If True, recursively merge nested dictionaries.
+    :return: Merged dictionary.
     """
     merged_dict = default_dict.copy()
 
     for key, value in user_dict.items():
+        if key not in merged_dict:
+            raise KeyError(f"Key '{key}' not found in the default dictionary.")
+        
         if isinstance(value, dict) and key in merged_dict and isinstance(merged_dict[key], dict):
             # If the value is a dictionary and the key exists in both dictionaries,
             # recursively merge the dictionaries.
-            merged_dict[key] = merge_dicts(merged_dict[key], value)
+            if recursive:
+                merged_dict[key] = merge_dicts(merged_dict[key], value)
+            else:
+                merged_dict[key] = value
         else:
             # Otherwise, set the value in the merged dictionary.
             assert isinstance(value, type(merged_dict[key])), \
@@ -415,3 +430,90 @@ def merge_dicts(default_dict, user_dict):
             merged_dict[key] = value
 
     return merged_dict
+
+def finditem(d, key, default=None):
+    """
+    Return a value corresponding to the specified key in the (possibly
+    nested) dictionary d. If there is no item with that key, return
+    default.
+    :param d: the potentially nested dictionary
+    :param key: the key to find
+    :param default: default value for the key
+    """
+    stack = [iter(d.items())]
+    while stack:
+        for k, v in stack[-1]:
+            if isinstance(v, dict):
+                stack.append(iter(v.items()))
+                break
+            elif k == key:
+                return v
+        else:
+            stack.pop()
+    if default is not None:
+        return default
+    else: 
+        raise KeyError(f"Key {key} has not been found in dictionary")
+
+
+def remove_items(obj: Union[List, Dict, Tuple], items: Any):
+    """
+    Remove item(s) from either list, tuple or dictionary.
+
+    :param obj: object to remove items from (either dictionary or list)
+    :param items: elements to remove from obj. Can either be a list or single entry / key
+
+    :return: object without items
+    """
+
+    def remove_from_list(list_obj, item_list):
+        """Remove implementation for lists."""
+        if len(item_list) > 1:
+            return [e for e in list_obj if e not in item_list]
+        elif len(item_list) == 0:
+            return list_obj
+        else:
+            list_obj = list_obj.copy()
+            try:
+                list_obj.remove(item_list[0])
+            except ValueError:
+                pass
+            return list_obj
+
+    def remove_from_dict(dict_obj, key_list):
+        """Remove implementation for dictionaries."""
+        return {k: v for k, v in dict_obj.items() if k not in key_list}
+
+    items = to_list(items)
+    if isinstance(obj, list):
+        return remove_from_list(obj, items)
+    elif isinstance(obj, dict):
+        return remove_from_dict(obj, items)
+    elif isinstance(obj, tuple):
+        return tuple(remove_from_list(to_list(obj), items))
+    else:
+        raise TypeError(f"{inspect.stack()[0][3]} does not support type {type(obj)}.")
+    
+def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
+    """
+    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
+    :param mout_np: numpy-array of model output
+    :param norm: normalization object
+    :param varname: name of variable
+    :param coords: coordinates of target data
+    :param dims: dimensions of target data
+    :param z_branch: flag for z-branch
+    :return: xarray.DataArray of model output with denormalized data
+    """
+    if z_branch:
+        # slice data to get first channel only
+        if isinstance(mout_np, list): mout_np = mout_np[0]
+        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
+    else:
+        # no slicing required
+        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
+
+    # perform denormalization
+    mout_xr = norm.denormalize(mout_xr, varname=varname)
+
+    return mout_xr
