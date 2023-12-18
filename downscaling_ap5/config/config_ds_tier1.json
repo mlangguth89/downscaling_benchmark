@@ -3,5 +3,6 @@
   "batch_size": 32,
   "var_tar2in": "z_tar",
   "laugmented": true,
-  "predictands": ["t2m_tar", "z_tar"]
+  "predictands": ["t2m_tar"],
+  "varname_z": "z_tar"
 }
