@@ -4,8 +4,8 @@
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=48
-#SBATCH --output=train_unet-out.%j
-#SBATCH --error=train_unet-err.%j
+#SBATCH --output=train_sha_unet_t2m-out.%j
+#SBATCH --error=train_sha_unet_t2m-err.%j
 #SBATCH --time=02:00:00
 ##SBATCH --time=20:00:00
 #SBATCH --gres=gpu:1
