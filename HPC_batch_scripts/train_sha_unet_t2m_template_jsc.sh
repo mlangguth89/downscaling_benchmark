@@ -50,13 +50,13 @@ fi
 
 # data-directories
 # Adapt accordingly to your dataset
-indir=<training_data_dir>
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/all_files/
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_unet.json
-js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
+js_model_conf=${BASE_DIR}/config/config_sha_unet.json
+js_ds_conf=${BASE_DIR}/config/config_ds_t2m.json
 
-model=unet
-dataset=tier2
+model=sha_unet
+dataset=benchmark_t2m
 
 exp_name=<my_exp>
 
