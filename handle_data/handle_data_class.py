@@ -520,7 +520,13 @@ class StreamMonthlyNetCDF(object):
         # get file list and number of files to be merged for data subse
         self.file_list = patt
         self.nfiles = len(self.file_list)
+        # get relevant data dimensions
+        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
+        self.sample_dim = sample_dim
+        self.nsamples = self.ds_all.dims[sample_dim]
+        self.data_dim = self.get_data_dim()
         self.dataset_size = self.get_dataset_size()
+        # sampling of datafiles
         self.file_list_random = random.sample(self.file_list, self.nfiles)
         self.nfiles2merge = nfiles_merge                                # number of files to be merged for data subset  
         self.nfiles_merged = int(self.nfiles / self.nfiles2merge)       # number of data subsets
@@ -540,11 +546,6 @@ class StreamMonthlyNetCDF(object):
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
             self.n_predictors += len(to_list(self.var_tar2in))
-        # get relevant data dimensions
-        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
-        self.sample_dim = sample_dim
-        self.nsamples = self.ds_all.dims[sample_dim]
-        self.data_dim = self.get_data_dim()
         # split variables into constant and dynamic variables
         self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
         self.ds_const = self.get_const_vars()
