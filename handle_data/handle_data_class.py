@@ -310,7 +310,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
-        if not data_norm:
+        if not norm_obj:
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
             norm_obj = ZScore(ds_dict["norm_dims"])
 
