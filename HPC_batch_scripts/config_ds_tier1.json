@@ -1,6 +1,0 @@
-{
-  "norm_dims": ["time", "lat", "lon"],
-  "batch_size": 32,
-  "var_tar2in": "z",
-  "laugmented": true
-}
