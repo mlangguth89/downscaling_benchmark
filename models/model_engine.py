@@ -32,9 +32,9 @@ class ModelEngine(object):
              third element of the tuple, i.e. {"wgan": (WGAN, UNet_Sha, Critic_Simple).
     """
 
-    known_models = {"unet_sha": (UNet_Sha,),
+    known_models = {"sha_unet": (UNet_Sha,),
                     "deepru": (UNet_DeepRU,),
-                    "wgan": (WGAN, UNet_Sha, Critic_Simple)}
+                    "sha_wgan": (WGAN, UNet_Sha, Critic_Simple)}
 
     def __init__(self, model_name: str):
         """
