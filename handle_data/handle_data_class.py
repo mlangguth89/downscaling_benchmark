@@ -536,6 +536,10 @@ class StreamMonthlyNetCDF(object):
         self.sample_dim = sample_dim
         self.nsamples = self.ds_all.dims[sample_dim]
         self.data_dim = self.get_data_dim()
+        # split variables into constant and dynamic variables
+        self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
+        self.ds_const = self.get_const_vars()
+        # get normalization object
         t0 = timer()
         self.normalization_time = -999.
         if norm_obj is None:
@@ -556,53 +560,6 @@ class StreamMonthlyNetCDF(object):
         if not nworkers:
             nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge))
         self.pool = ThreadPool(nworkers)
-
-    def __len__(self):
-        return self.nsamples
-
-    def getitems(self, indices):
-        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables").sel({"variables": self.all_vars})
-        if self.var_tar2in is not None:
-            # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
-            #       * The following operation order must concatenate var_tar2in by da_in to ensure
-            #         that the variable appears at first place. This is required to avoid
-            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-            da_now = xr.concat([da_now.sel({"variables": self.var_tar2in}), da_now], dim="variables")
-
-        return da_now.transpose(..., "variables")
-
-    def get_dataset_size(self):
-        dataset_size = 0.
-        for datafile in self.file_list:
-            dataset_size += os.path.getsize(datafile)
-
-        return dataset_size
-
-    def get_data_dim(self):
-        """
-        Retrieve the dimensionality of the data to be handled, i.e. without sample_dim which will be batched in a
-        data stream.
-        :return: tuple of data dimensions
-        """
-        # get existing dimension names and remove sample_dim
-        dimnames = list(self.ds_all.coords)
-        dimnames.remove(self.sample_dim)
-
-        # get the dimensionality of the data of interest
-        all_dims = dict(self.ds_all.dims)
-        data_dim = itemgetter(*dimnames)(all_dims)
-
-        return data_dim
-
-    def get_samples_per_merged_file(self):
-        nsamples_merged = []
-
-        for i in range(self.nfiles_merged):
-            file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
-            ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
-            nsamples_merged.append(ds_now.dims[self.sample_dim])  
-
-        return max(nsamples_merged)
 
     @property
     def data_dir(self):
@@ -714,6 +671,53 @@ class StreamMonthlyNetCDF(object):
         assert isinstance(selected_predictands, list), "Selected predictands must be a list of variable names"
         self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
 
+    def __len__(self):
+        return self.nsamples
+
+    def getitems(self, indices):
+        da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables").sel({"variables": self.all_vars})
+        if self.var_tar2in is not None:
+            # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
+            #       * The following operation order must concatenate var_tar2in by da_in to ensure
+            #         that the variable appears at first place. This is required to avoid
+            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            da_now = xr.concat([da_now.sel({"variables": self.var_tar2in}), da_now], dim="variables")
+
+        return da_now.transpose(..., "variables")
+
+    def get_dataset_size(self):
+        dataset_size = 0.
+        for datafile in self.file_list:
+            dataset_size += os.path.getsize(datafile)
+
+        return dataset_size
+
+    def get_data_dim(self):
+        """
+        Retrieve the dimensionality of the data to be handled, i.e. without sample_dim which will be batched in a
+        data stream.
+        :return: tuple of data dimensions
+        """
+        # get existing dimension names and remove sample_dim
+        dimnames = list(self.ds_all.coords)
+        dimnames.remove(self.sample_dim)
+
+        # get the dimensionality of the data of interest
+        all_dims = dict(self.ds_all.dims)
+        data_dim = itemgetter(*dimnames)(all_dims)
+
+        return data_dim
+
+    def get_samples_per_merged_file(self):
+        nsamples_merged = []
+
+        for i in range(self.nfiles_merged):
+            file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
+            ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
+            nsamples_merged.append(ds_now.dims[self.sample_dim])  
+
+        return max(nsamples_merged)
+
     def get_all_varnames(self):
         ds_test = xr.open_dataset(self.file_list[0])
         return list(ds_test.variables)
@@ -738,6 +742,32 @@ class StreamMonthlyNetCDF(object):
                 raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
 
         return selected_vars
+    
+    def split_const_dyn_vars(self):
+        """
+        Split variables into constant and dynamic variables. Constant variables are those that do not vary over
+        the sample dimension, e.g. the topography. Dynamic variables are those that vary over the sample dimension,
+        e.g. the temperature.
+        :return: tuple of lists of constant and dynamic variables
+        """
+        const_vars, dyn_vars = [], []
+        for var in self.all_vars:
+            if self.sample_dim in self.ds_all[var].dims:
+                const_vars.append(var)
+            else:
+                dyn_vars.append(var)
+
+        return const_vars, dyn_vars
+    
+    def get_const_vars(self):
+        """
+        Return a copy of the constant variables from first netCDF-file.
+        :return: xarray dataset containing constant variables
+        """
+        if self.const_vars:
+            return None
+        else:
+            return self.ds_all[self.const_vars].copy(deep=True)
 
     @staticmethod
     def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
@@ -773,7 +803,7 @@ class StreamMonthlyNetCDF(object):
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
         t0 = timer()
-        data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
+        data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
         nsamples = data_now.dims[self.sample_dim]
 
         if nsamples < self.samples_merged:
@@ -793,7 +823,13 @@ class StreamMonthlyNetCDF(object):
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
+            
+        # append constant variables if required
+        if self.const_vars:
+            ds_const_append = self.ds_const.expand_dims({self.sample_dim: data_now[self.sample_dim]})
+            data_now = xr.merge([data_now, ds_const_append])
 
+        # write to class attribute
         self.data_loaded[il] = data_now
         # timing
         t_read = timer() - t0
