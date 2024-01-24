@@ -322,7 +322,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         else:
             nshuffle = 1
 
-        tfds = make_tf_dataset_allmem(ds, bs_train, ds_dict["predictands"], predictors=ds_dict.get("predictors", None),
+        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
                                       var_tar2in=ds_dict["var_tar2in"],
                                       named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
 
