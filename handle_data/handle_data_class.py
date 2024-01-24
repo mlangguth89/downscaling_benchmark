@@ -311,10 +311,10 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         ds = xr.open_dataset(fname_or_pattern)
 
         if not data_norm:
-            # data_norm must be freshly instantiated (triggering later parameter retrieval)
-            data_norm = ZScore(ds_dict["norm_dims"])
+            # norm_obj must be freshly instantiated (triggering later parameter retrieval)
+            norm_obj = ZScore(ds_dict["norm_dims"])
 
-        ds = data_norm.normalize(ds)
+        ds = norm_obj.normalize(ds)
 
         nsamples = len(ds["time"])
         if shuffle:
@@ -361,7 +361,7 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     # enable flexibility in factor for range
     n_reads = int(ds_obj.nfiles_merged*nepochs)
-    if ds_obj["with_horovod"]:
+    if ds_obj.with_horovod:
         tfds = tf.data.Dataset.range(n_reads).shard(hvd.size(), hvd.rank()).map(tf_read_nc).prefetch(1)
     else:
         tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
@@ -553,9 +553,14 @@ class StreamMonthlyNetCDF(object):
         t0 = timer()
         self.normalization_time = -999.
         if norm_obj is None:
+            max_samples_norm = 10000000
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            if self.nsamples > max_samples_norm:
+                print(f"Reducing samples for computing normalization parameters to {max_samples_norm}.")
+                self.norm_params = self.data_norm.get_required_stats(self.ds_all.isel({self.sample_dim: slice(max_samples_norm)}))
+            else:
+                self.norm_params = self.data_norm.get_required_stats(self.ds_all)
             self.normalization_time = timer() - t0
         else:
             self.data_norm = norm_obj
