@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-08-18"
+__update__ = "2024-01-24"
 
 import os, glob
-from typing import List
+from typing import List, Tuple
 import re
 from operator import itemgetter
 from functools import partial
@@ -127,7 +127,6 @@ class HandleDataClass(object):
         da = da.transpose(..., "variables")
         return da
 
-    @staticmethod
     @staticmethod
     def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
         """
@@ -402,7 +401,12 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         ntimes = len(ds["time"])
         inds = list(range(hvd.rank(), ntimes, hvd.size()))
         ds = ds.isel({"time": inds})
-    
+
+    # add time dimension to constant variables
+    for var in ds.data_vars:
+        if "time" not in ds[var].dims:
+            ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
+
     ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
 
     # convert dataset to data arrays and load into memory
