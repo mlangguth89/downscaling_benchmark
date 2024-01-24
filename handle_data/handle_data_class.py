@@ -548,7 +548,8 @@ class StreamMonthlyNetCDF(object):
             self.n_predictors += len(to_list(self.var_tar2in))
         # split variables into constant and dynamic variables
         self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
-        self.ds_const = self.get_const_vars()
+        # not required currently, since constant data get automatically broadcasted with xr.open_mfdataset and _read_mfdataset-methods
+        # self.ds_const = self.get_const_vars()
         # get normalization object
         t0 = timer()
         self.normalization_time = -999.
@@ -766,8 +767,13 @@ class StreamMonthlyNetCDF(object):
         :return: tuple of lists of constant and dynamic variables
         """
         const_vars, dyn_vars = [], []
+        
+        # only load one file, since open_mfdatset and _read_mfdatset already broadcast const variables
+        # over sample dimension (usually 'time')
+        ds_exp = xr.open_dataset(self.file_list[0])
+        
         for var in self.all_vars:
-            if self.sample_dim in self.ds_all[var].dims:
+            if self.sample_dim in ds_exp[var].dims:
                 const_vars.append(var)
             else:
                 dyn_vars.append(var)
@@ -779,10 +785,12 @@ class StreamMonthlyNetCDF(object):
         Return a copy of the constant variables from first netCDF-file.
         :return: xarray dataset containing constant variables
         """
+        ds_exp = xr.open_dataset(self.file_list[0])
+        
         if self.const_vars:
-            return None
+            return ds_exp[self.const_vars].copy(deep=True)
         else:
-            return self.ds_all[self.const_vars].copy(deep=True)
+            return None
 
     @staticmethod
     def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
@@ -818,7 +826,10 @@ class StreamMonthlyNetCDF(object):
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
         t0 = timer()
-        data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
+        # Restriction to read dynamic variables is not required currently,
+        # since constant data get automatically broadcasted with the _read_mfdataset-method
+        #data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
+        data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
         nsamples = data_now.dims[self.sample_dim]
 
         if nsamples < self.samples_merged:
@@ -839,10 +850,10 @@ class StreamMonthlyNetCDF(object):
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
             
-        # append constant variables if required
-        if self.const_vars:
-            ds_const_append = self.ds_const.expand_dims({self.sample_dim: data_now[self.sample_dim]})
-            data_now = xr.merge([data_now, ds_const_append])
+        # Appending with constant variables is not required since they are read and broadcast to data_now already (see above)
+        #if self.const_vars:
+        #    ds_const_append = self.ds_const.copy().expand_dims({self.sample_dim: data_now[self.sample_dim]})
+        #    data_now = xr.merge([data_now, ds_const_append])
 
         # write to class attribute
         self.data_loaded[il] = data_now
