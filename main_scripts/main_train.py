@@ -25,7 +25,7 @@ from all_normalizations import ZScore
 from model_engine import ModelEngine
 from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import prepare_dataset
-from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
 
 
 # Open issues:
