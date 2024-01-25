@@ -368,7 +368,7 @@ class WGAN(AbstractModelClass):
         Note: Hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
               Thus, the default just sets empty dictionaries.
         """
-        self.hparams_default = {"batch_size": 32, "nepochs": 50, "lr_decay": False, "decay_start": 5, "decay_end": 10, 
+        self.hparams_default = {"batch_size": 32, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
                                 "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels",
                                 "hparams_generator": {}, "hparams_critic": {}}

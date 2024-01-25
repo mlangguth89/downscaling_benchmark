@@ -314,8 +314,8 @@ class UNet_Sha(AbstractModelClass):
         self.hparams_default = {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
                                 "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,       # see keyword-aguments of conv_block,
                                 "l_subpixel": True, "z_branch": True, "channels_start": 56,                                                # encoder_block and decoder_block
-                                "batch_size": 32, "lr": 5.e-05, "nepochs": 70, "loss_func": "mae", "loss_weights": [1.0, 1.0], "named_targets": True,             # training parameters
-                                "lr_decay": False, "decay_start": 5, "decay_end": 30, "lr_end": 1.e-06, "l_embed": False, 
+                                "batch_size": 32, "lr": 5.e-05, "nepochs": 35, "loss_func": "mae", "loss_weights": [1.0, 1.0], "named_targets": True,             # training parameters
+                                "lr_decay": False, "decay_start": 3, "decay_end": 20, "lr_end": 1.e-06, "l_embed": False, 
                                 "optimizer": "adam", "lcheckpointing": True, "learlystopping": False, }
         
     def get_lr_scheduler(self):

@@ -1,5 +1,5 @@
 {
-  "nepochs": 70,
+  "nepochs": 35,
   "named_targets": true,
   "z_branch": true,
   "lr_decay": true,
