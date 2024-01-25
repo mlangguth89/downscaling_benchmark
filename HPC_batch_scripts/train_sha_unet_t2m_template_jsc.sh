@@ -54,13 +54,15 @@ indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_data
 outdir=${BASE_DIR}/trained_models/
 js_model_conf=${BASE_DIR}/config/config_sha_unet.json
 js_ds_conf=${BASE_DIR}/config/config_ds_t2m.json
+js_norm=${indir}/norm.json 
 
 model=sha_unet
 dataset=benchmark_t2m
 
+# customized experiment name
 exp_name=<my_exp>
 
 # run job
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} -js_norm ${js_norm} \
 	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 
