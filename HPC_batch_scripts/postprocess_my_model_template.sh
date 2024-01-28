@@ -4,8 +4,8 @@
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
-#SBATCH --output=postprocess_wgan-model-out.%j
-#SBATCH --error=postprocess_wgan-model-err.%j
+#SBATCH --output=postprocess_my-model-out.%j
+#SBATCH --error=postprocess_my-model-err.%j
 #SBATCH --time=02:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --partition=develgpus
@@ -41,9 +41,9 @@ fi
 
 # data-directories
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5_michael/preprocessed_era5_crea6/netcdf_data/all_files/
+datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/all_files/
 model_basedir=../trained_models/
-outdir=<my_outdir>
+outdir=../results/
 
 exp_name=<my_exp>
 dataset=tier2
