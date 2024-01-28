@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2023-08-21"
+__update__ = "2023-01-28"
 
 import os, sys, glob
 import logging
