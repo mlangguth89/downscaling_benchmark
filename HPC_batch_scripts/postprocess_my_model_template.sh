@@ -50,5 +50,5 @@ dataset=benchmark_t2m
 
 # run job
 srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py -data_dir ${datadir} -model_base_dir ${model_basedir} \
-                                                                    -exp_name ${exp_name} -dataset ${dataset}
+                                                                    -output_base_dir ${outdir} -exp_name ${exp_name} -dataset ${dataset}
 
