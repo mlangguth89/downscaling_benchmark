@@ -29,7 +29,7 @@ from handle_data_class import HandleDataClass, prepare_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
-from other_utils import convert_to_xarray
+from other_utils import convert_to_xarray, finditem
 #from other_utils import free_mem
 
 # get logger
@@ -146,7 +146,7 @@ def main(parser_args):
 
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, ground_truth.squeeze().coords,
-                               ground_truth.squeeze().dims, hparams_dict.get("z_branch", False))
+                               ground_truth.squeeze().dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
     logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
@@ -200,13 +200,13 @@ def main(parser_args):
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
     _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
                                dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
-                               projection=proj)
+                               projection=proj, model_type=model_type)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
                                dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
-                               projection=proj)
+                               projection=proj, model_type=model_type)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
