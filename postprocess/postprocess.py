@@ -40,15 +40,15 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
 
     add_str = "_last" if bool_last else "_best"
 
-    if "wgan" in exp_name:
+    if "sha_wgan" in exp_name:
         func_logger.debug(f"WGAN-modeltype detected.")
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}_generator{add_str}"), \
                              os.path.join(output_base, model_name)
-        model_type = "wgan"
-    elif "unet" in exp_name or "deepru" in exp_name:
+        model_type = "sha_wgan"
+    elif "sha_unet" in exp_name or "deepru" in exp_name:
         func_logger.debug(f"U-Net-modeltype detected.")
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
-        model_type = "unet" if "unet" in exp_name else "deepru"
+        model_type = "sha_unet" if "unet" in exp_name else "deepru"
     else:
         func_logger.debug(f"Model type could not be inferred from experiment name. Try my best by defaulting...")
         if not model_type:
@@ -62,7 +62,7 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
 
 
 def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
+                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (8, 8)):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -116,7 +116,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     func_logger.info(f"Start evaluation in terms of {score_name}")
     score_all = score_engine(score_name)
-    score_all = score_all.drop_vars("variables")
+    #score_all = score_all.drop_vars("variables")
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
                      f"standard deviation: {score_all.std().values:.4f}")  

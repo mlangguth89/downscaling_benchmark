@@ -22,9 +22,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from skimage.util.shape import view_as_blocks
-from handle_data_class import HandleDataClass
-from model_utils import convert_to_xarray
-from other_utils import provide_default, check_str_in_list
+from handle_data_class import make_tf_dataset_allmem 
+from other_utils import provide_default, check_str_in_list, convert_to_xarray
 
 
 # basic data types
@@ -352,7 +351,7 @@ def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool =
     return var_rad
 
 
-def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (6, 6)):
+def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
     """
     Permutes sample in a spatio-temporal way following the method of Breiman (2001). 
     The concrete implementation follows Höhlein et al., 2020 with spatial permutation based on patching.
@@ -422,7 +421,7 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (6, 6)):
 
 
 def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                       data_loader_opt: dict, patch_size = (6, 6)):
+                       data_loader_opt: dict, patch_size = (8, 8)):
     """
     Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
     :param ds: The unnormalized (test-)dataset
@@ -440,11 +439,11 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
 
     # sanity checks
     _ = check_str_in_list(list(ds.data_vars), predictors)
-    try:
-        assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
-    except AssertionError as e:
-        func_logger.error(e, stack_info=True, exc_info=True)
-        raise e
+    #try:
+    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
+    #except AssertionError as e:
+    #    func_logger.error(e, stack_info=True, exc_info=True)
+    #    raise e
 
     ntimes = len(ds["time"])
 
@@ -467,7 +466,7 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        tfds_test = HandleDataClass.make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
 
         # predict
         func_logger.info(f"Run inference with permuted sample for {var}...")

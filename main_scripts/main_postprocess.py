@@ -29,7 +29,7 @@ from handle_data_class import HandleDataClass, prepare_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
-from model_utils import convert_to_xarray
+from other_utils import convert_to_xarray
 #from other_utils import free_mem
 
 # get logger
@@ -106,27 +106,30 @@ def main(parser_args):
     logger.debug("Read normalization file for subsequent data transformation.")
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
-
-    # get dataset pipeline for inference
-    # get predictors
-    predictors = ds_dict.get("predictors", None)
-    if predictors is None:
-        predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
     
-    if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
-
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": predictors,
+    # get dataset pipeline for inference
+    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": None,
                  "lshuffle": False, "var_tar2in": ds_dict.get("var_tar2in", None), "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}
     
     tfds_test, test_info = prepare_dataset(parser_args.data_dir, parser_args.dataset, ds_dict, hparams_dict, "test", tfds_opts["predictands"], 
-                                           norm_obj=data_norm, norm_dims=ds_dict["norm_dims"], shuffle=tfds_opts["lshuffle"], lrepeat=tfds_opts["lrepeat"]) 
+                                           norm_obj=data_norm, norm_dims=ds_dict["norm_dims"], shuffle=tfds_opts["lshuffle"], lrepeat=tfds_opts["lrepeat"],
+                                           drop_remainder=tfds_opts["drop_remainder"]) 
 
     # get ground truth data
     tar_varname = test_info["varnames_tar"][0]
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
+    # get ground truth data
     ds_test = xr.open_dataset(test_info["file"])
     ground_truth = ds_test[tar_varname].astype("float32", copy=True)
+    
+    # get predictors
+    predictors = ds_dict.get("predictors", None)
+    if predictors is None:
+        predictors = [var for var in list(ds_test.data_vars) if var.endswith("_in")]
+
+    tfds_opts["predictors"] = predictors
+    tfds_opts["predictands"] = test_info["varnames_tar"]
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
@@ -174,12 +177,12 @@ def main(parser_args):
     rmse_ref = rmse_all.mean().values
 
     _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
-                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
+                               tfds_opts, plt_dir, patch_size=(8, 8))
     
     logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
     # clean-up to reduce memory footprint
-    del da_test
+    del ds_test
     gc.collect()
     #free_mem([da_test])
 
