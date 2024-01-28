@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Auxiliary methods for postprocessing.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2023-10-12"
+__update__ = "2024-01-28"
 
 import os
 from typing import Union, List
@@ -61,15 +61,27 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
     return model_dir, plt_dir, norm_dir, model_type
 
 
-def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6), variable_dim = "variable"):
-
+def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
+    """
+    Run feature importance analysis and create box-plot of results
+    :param ds: Unnormalized xr.Dataset with predictors and target variable
+    :param predictors: List of predictor names
+    :param varname_tar: Name of target variable
+    :param model: Model object
+    :param norm: Normalization object
+    :param score_name: Name of score to compute feature importance
+    :param ref_score: Reference score to normalize feature importance scores
+    :param data_loader_opt: Data loader options
+    :param plt_dir: Directory to save plot files
+    :param patch_size: Patch size for feature importance analysis
+    """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
     
     # get feature importance scores
-    feature_scores = feature_importance(da, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
-                                        patch_size=patch_size, variable_dim=variable_dim)
+    feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
+                                        patch_size=patch_size)
     
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
