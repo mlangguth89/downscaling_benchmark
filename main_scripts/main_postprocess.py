@@ -41,6 +41,8 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message
 
 def main(parser_args):
 
+    ### Preparation ###
+
     t0 = timer()
     # construct model directory path and infer model type
     model_base = os.path.join(parser_args.model_base_dir, parser_args.exp_name)
@@ -92,6 +94,7 @@ def main(parser_args):
 
     named_targets = hparams_dict.get("named_targets", False)
 
+    ### Run inference on trained model
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
     trained_model = keras.models.load_model(model_dir, compile=False)
@@ -144,6 +147,7 @@ def main(parser_args):
     gc.collect()
     #free_mem([tfds_test])
 
+    ### Post-process results from test dataset
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, ground_truth.squeeze().coords,
                                ground_truth.squeeze().dims, finditem(hparams_dict, "z_branch", False))
@@ -154,7 +158,7 @@ def main(parser_args):
     ds = xr.Dataset(xr.Dataset.merge(y_pred.to_dataset(), ground_truth.to_dataset()))
     ds.to_netcdf(ncfile_out)
 
-    # start evaluation
+    ### Start evaluation
     logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
 
     # instantiate score engine for time evaluation (i.e. hourly time series of evalutaion metrics)
