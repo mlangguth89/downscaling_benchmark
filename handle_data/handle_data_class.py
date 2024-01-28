@@ -327,9 +327,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
             nshuffle = 1
 
         # create TensorFlow dataset
-        # make_tf_dataset_allmem does not require n_epochs, since the dataset is repeated internally
         tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
-                                      var_tar2in=ds_dict.get("var_tar2in", None),
+                                      var_tar2in=ds_dict.get("var_tar2in", None), lrepeat=lrepeat, drop_remainder=drop_remainder,
                                       named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
 
         
