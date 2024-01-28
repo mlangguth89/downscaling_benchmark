@@ -517,3 +517,15 @@ def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
     mout_xr = norm.denormalize(mout_xr, varname=varname)
 
     return mout_xr
+
+def get_training_time_dict(epoch_times: list, steps):
+
+    tot_time = np.sum(epoch_times)
+
+    training_times = {"Total training time": np.sum(epoch_times), "Avg. training time per epoch": np.mean(epoch_times),
+                      "Min. training time per epoch": np.amin(epoch_times),
+                      "Max. training time per epoch": np.amax(epoch_times[1:]),
+                      "First epoch training time": epoch_times[0], "Avg. training time per iteration": tot_time/steps}
+
+    return training_times
+

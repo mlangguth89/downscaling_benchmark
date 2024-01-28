@@ -4,15 +4,15 @@
 #SBATCH --ntasks=1
 ##SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=48
-#SBATCH --output=train_wgan-out.%j
-#SBATCH --error=train_wgan-err.%j
-#SBATCH --time=02:00:00
-##SBATCH --time=20:00:00
+#SBATCH --output=train_sha_wgan_t2m-out.%j
+#SBATCH --error=train_sha_wgan_t2m-err.%j
+##SBATCH --time=02:00:00
+#SBATCH --time=24:00:00
 #SBATCH --gres=gpu:1
 ##SBATCH --partition=batch
 ##SBATCH --partition=gpus
-#SBATCH --partition=develgpus
-##SBATCH --partition=booster
+##SBATCH --partition=develgpus
+#SBATCH --partition=booster
 ##SBATCH --partition=develbooster
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=XXX@fz-juelich.de
@@ -50,17 +50,19 @@ fi
 
 # data-directories
 # Adapt accordingly to your dataset
-indir=<training_data_dir>
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/all_files/
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_wgan.json
-js_ds_conf=${BASE_DIR}/config/config_ds_tier2.json
+js_model_conf=${BASE_DIR}/config/config_sha_wgan.json
+js_ds_conf=${BASE_DIR}/config/config_ds_t2m.json
+js_norm=${indir}/norm.json
 
-model=wgan
-dataset=tier2
+model=sha_wgan
+dataset=benchmark_t2m
 
+# customized experiment name
 exp_name=<my_exp>
 
 # run job
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} \
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_train.py -in ${indir} -out ${outdir} -model ${model} -dataset ${dataset} -js_norm ${js_norm} \
 	                                                           -conf_ds ${js_ds_conf} -conf_md ${js_model_conf} -exp_name ${exp_name} -id ${SLURM_JOBID}
 

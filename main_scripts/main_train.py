@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2023-12-14"
+__update__ = "2024-01-24"
 
 import os
 import argparse
@@ -25,8 +25,7 @@ from all_normalizations import ZScore
 from model_engine import ModelEngine
 from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import prepare_dataset
-from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist
-from benchmark_utils import get_training_time_dict
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
 
 
 # Open issues:

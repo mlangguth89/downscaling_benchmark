@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-08-18"
+__update__ = "2024-01-24"
 
 import os, glob
-from typing import List
+from typing import List, Tuple
 import re
 from operator import itemgetter
 from functools import partial
@@ -128,7 +128,7 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(da: xr.DataArray, predictands: List = None, predictors: List = None) -> (xr.DataArray, xr.DataArray):
+    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
         """
         Split data array with variables-dimension into input and target data for downscaling
         :param da: The unsplitted data array
@@ -138,24 +138,24 @@ class HandleDataClass(object):
         :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
         :return: The split data array.
         """
-        da_vars = list(da["variables"].values)
+        varnames = list(ds.data_vars)
 
         if predictors is None:
-            invars = [var for var in da_vars if var.endswith("_in")]
+            invars = [var for var in varnames if var.endswith("_in")]
         else:
-            assert all([predictor in da_vars for predictor in
-                        predictors]), f"At least one predictor is not a data variable. Available variables are {*da_vars,}"
+            assert all([predictor in varnames for predictor in
+                        predictors]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             invars = list(predictors)
         if predictands is None:
-            tarvars = [var for var in da_vars if var.endswith("_tar")]
+            tarvars = [var for var in varnames if var.endswith("_tar")]
         else:
-            assert all([predictand in da_vars for predictand in
-                        predictands]), f"At least one predictor is not a data variable. Available variables are {*da_vars,}"
+            assert all([predictand in varnames for predictand in
+                        predictands]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             tarvars = list(predictands)
 
-        da_in, da_tar = da.sel({"variables": invars}), da.sel({"variables": tarvars})
+        ds_in, ds_tar = ds[invars], ds[tarvars]
 
-        return da_in, da_tar
+        return ds_in, ds_tar
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):
@@ -219,6 +219,11 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for AtmoRep.")
+    elif dataset_name == "benchmark_t2m":
+        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
+        if subset == "train":
+            fname_suffix = f"{fname_suffix}*"
+        if laugmented: raise ValueError("No augmented dataset available for benchmark_t2m.")
     else:
         raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
 
@@ -235,7 +240,7 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
 def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str, varnames_tar: List,
                     norm_dims: List=None, norm_obj=None, shuffle: bool = True, nworkers: int = 10, lrepeat: bool = True,
-                    drop_remainder: bool = True):
+                    drop_remainder: bool = True, with_horovod: bool = False, seed: int = None):
     """
     Prepare training data for downscaling
     :param datadir: directory where netCDF-files for TF dataset are strored
@@ -251,6 +256,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     :param nworkers: numbers of workers to read in netCDF-files (for the case where NOT all data is loaded into memory)
     :param lrepeat: flag if dataset should be repeated
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+    :param with_horovod: flag if horovod is used for distributed training
+    :param seed: seed for random shuffling of datafiles
     :return: tuple of (TensorFlow dataset object, dictionary of dataset information)
     """
     # check parsed mode
@@ -288,7 +295,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
                                      selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
                                      var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
-                                     norm_dims=norm_dims, nworkers=nworkers)
+                                     norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
         if shuffle:
             nshuffle = ds_obj.samples_merged
@@ -301,27 +308,27 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
                 "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all}
     else:                                                                   # load all data into memory
-        ds_train = xr.open_dataset(fname_or_pattern)
-        da_train = HandleDataClass.reshape_ds(ds_train).astype("float32", copy=True)
+        ds = xr.open_dataset(fname_or_pattern)
 
         if not norm_obj:
-            # data_norm must be freshly instantiated (triggering later parameter retrieval)
-            norm_obj = ZScore(norm_dims)           # TO-DO: Allow for arbitrary normalization
+            # norm_obj must be freshly instantiated (triggering later parameter retrieval)
+            norm_obj = ZScore(ds_dict["norm_dims"])
 
-        da_train = norm_obj.normalize(da_train)
+        ds = norm_obj.normalize(ds)
 
+        nsamples = len(ds["time"])
         if shuffle:
-            nshuffle = da_train.shape[0]
+            nshuffle = nsamples
         else:
             nshuffle = 1
 
-        tfds = make_tf_dataset_allmem(da_train, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
-                                      var_tar2in=ds_dict.get("var_tar2in", None), nshuffle=nshuffle,
-                                      named_targets=hparams_dict.get("named_targets", False), 
-                                      lrepeat=lrepeat, drop_remainder=drop_remainder)
+        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
+                                      var_tar2in=ds_dict.get("var_tar2in", None),
+                                      named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
+
         
-        tfds_info = {"nsamples": da_train.shape[0], "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
-                     "dataset_size": da_train.nbytes, "varnames_tar": varnames_tar_all}
+        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
+                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all}
         
     return tfds, tfds_info
 
@@ -354,6 +361,11 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     # enable flexibility in factor for range
     n_reads = int(ds_obj.nfiles_merged*nepochs)
+    if ds_obj.with_horovod:
+        tfds = tf.data.Dataset.range(n_reads).shard(hvd.size(), hvd.rank()).map(tf_read_nc).prefetch(1)
+    else:
+        tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
+
     tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
     tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
     tfds = tfds.flat_map(
@@ -367,100 +379,120 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     return tfds
 
-def make_tf_dataset_allmem(da: xr.DataArray, batch_size: int, predictands: List, predictors: List = None,
-                           nshuffle: int = 20000, named_targets: bool = False, var_tar2in: str = None,
-                           lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
-                           #lembed: bool = False) -> tf.data.Dataset:
-        """
-        Build-up TensorFlow dataset from a generator based on the xarray-data array.
-        NOTE: All data is loaded into memory
-        :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
-                   Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
-        :param batch_size: number of samples per mini-batch
-        :param predictands: List of selected predictand variables
-        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :param nshuffle: number of samples to shuffle (set to 1 to disable shuffling)
-        :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
-                                                                         to the input)
-        :param lrepeat: flag if dataset should be repeated
-        :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
-        #:param lembed: flag to trigger temporal embedding (not implemented yet!)
-        """
-        da = da.astype("float32", copy=True)
-        da_in, da_tar = HandleDataClass.split_in_tar(da, predictands=predictands, predictors=predictors)
-        if var_tar2in is not None:
-            # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
-            #       * The following operation order must concatenate var_tar2in by da_in to ensure
-            #         that the variable appears at first place. This is required to avoid
-            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-            da_in = xr.concat([da.sel({"variables": var_tar2in}), da_in], "variables")
+def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
+                            lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
+                            var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
+                            with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
+    """
+    Build-up TensorFlow dataset from a generator based on the xarray-data array.
+    NOTE: All data is loaded into memory
+    :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
+    :param batch_size: number of samples per mini-batch
+    :param predictands: List of selected predictand variables
+    :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+    :param lshuffle: flag if shuffling should be applied to dataset
+    :param shuffle_samples: number of samples to load before applying shuffling
+    :param named_targets: flag if target of TF dataset should be dictionary with named target variables
+    :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                        to the input)
+    :param lrepeat: flag if dataset should be repeated
+    :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+    :param with_horovod: flag to trigger horovod-based distributed dataset creation
+    :param lembed: flag to trigger temporal embedding (not implemented yet!)
+    """
 
-        varnames_tar = da_tar["variables"].values
+    if with_horovod:
+        import horovod.tensorflow as hvd
+        ntimes = len(ds["time"])
+        inds = list(range(hvd.rank(), ntimes, hvd.size()))
+        ds = ds.isel({"time": inds})
 
-        def gen_named(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
-            ntimes = len(darr_in["time"])
-            for t in range(ntimes):
-                tar_now = darr_tar.isel({"time": t})
-                yield tuple((darr_in.isel({"time": t}).values,
-                             {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
+    # add time dimension to constant variables
+    for var in ds.data_vars:
+        if "time" not in ds[var].dims:
+            ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
 
-        def gen_unnamed(darr_in, darr_tar):
-            # darr_in, darr_tar = darr_in.load(), darr_tar.load()
-            ntimes = len(darr_in["time"])
-            for t in range(ntimes):
-                yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
+    ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
 
-        if named_targets is True:
-            gen_now = gen_named
-        else:
-            gen_now = gen_unnamed
+    # convert dataset to data arrays and load into memory
+    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True), \
+                    HandleDataClass.reshape_ds(ds_tar).astype("float32", copy=True)
 
-        # create output signatures from first sample
-        s0 = next(iter(gen_now(da_in, da_tar)))
-        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
-        if named_targets is True:
-            sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
-        else:
-            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
+    if var_tar2in is not None:
+        # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
+        #       * The following operation order must concatenate var_tar2in by da_in to ensure
+        #         that the variable appears at first place. This is required to avoid
+        #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+        da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
 
-        # re-instantiate the generator and build TF dataset
-        gen_train = gen_now(da_in, da_tar)
+    varnames_tar = da_tar["variables"].values
 
-        #if lembed is True:
-        #    raise ValueError("Time embedding is not supported yet.")
-        #else:
-        data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=(sample_spec_in, sample_spec_tar))
+    def gen_named(darr_in, darr_tar):
+        # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+        ntimes = len(darr_in["time"])
+        for t in range(ntimes):
+            tar_now = darr_tar.isel({"time": t})
+            yield tuple((darr_in.isel({"time": t}).values,
+                            {var: tar_now.sel({"variables": var}).values for var in varnames_tar}))
 
-        # Notes:
-        # * cache is reuqired to make repeat work properly on datasets based on generators
-        #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
-        # * repeat must be applied after shuffle to get varying mini-batches per epoch
-        # * batch-size is increased to allow substepping in train_step
-        if nshuffle > 1:
-            data_iter = data_iter.cache().shuffle(nshuffle).batch(batch_size, drop_remainder=drop_remainder)
-        else:
-            data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
+    def gen_unnamed(darr_in, darr_tar):
+        # darr_in, darr_tar = darr_in.load(), darr_tar.load()
+        ntimes = len(darr_in["time"])
+        for t in range(ntimes):
+            yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
 
-        if lrepeat:
-            data_iter = data_iter.repeat()
+    if named_targets is True:
+        gen_now = gen_named
+    else:
+        gen_now = gen_unnamed
 
-        # clean-up to free some memory
-        # free_mem([da, da_in, da_tar, varnames_tar])
-        del da
-        del da_in
-        del da_tar
-        gc.collect()
+    # create output signatures from first sample
+    s0 = next(iter(gen_now(da_in, da_tar)))
+    sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
+    if named_targets is True:
+        sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
+    else:
+        sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
 
-        return data_iter
+    # re-instantiate the generator and build TF dataset
+    gen_train = gen_now(da_in, da_tar)
+
+    #if lembed is True:
+    #    raise ValueError("Time embedding is not supported yet.")
+    #else:
+    data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=(sample_spec_in, sample_spec_tar))
+
+    # Notes:
+    # * cache is reuqired to make repeat work properly on datasets based on generators
+    #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
+    # * repeat must be applied after shuffle to get varying mini-batches per epoch
+    # * batch-size is increased to allow substepping in train_step
+    if lshuffle > 1:
+        data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=drop_remainder)
+    else:
+        data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
+
+    if lrepeat:
+        data_iter = data_iter.repeat()
+
+    # clean-up to free some memory
+    # free_mem([da, da_in, da_tar, varnames_tar])
+    del ds
+    del ds_in
+    del ds_tar
+    del da_in
+    del da_tar
+    gc.collect()
+
+
+    return data_iter
 
 
 
 class StreamMonthlyNetCDF(object):
     def __init__(self, datadir, patt, nfiles_merge: int, selected_predictands: List, sample_dim: str = "time",
                  selected_predictors: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
-                 nworkers: int = 10):
+                 with_horovod: bool = False, seed: int = None, nworkers: int = 10):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
         rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
@@ -476,40 +508,66 @@ class StreamMonthlyNetCDF(object):
                           (e.g. static variables known a priori such as the surface topography)
         :param norm_dims: list of dimensions over which data will be normalized
         :param norm_obj: normalization object providing parameters for (de-)normalization
+        :param with_horovod: flag to trigger horovod-based distributed dataset creation
+        :param seed: seed for random sampling of netCDF-files
         :param nworkers: number of threads to read the netCDF-files
         """
+        self.with_horovod = with_horovod
+        if self.with_horovod:
+            import horovod.tensorflow as hvd
+        self.seed = seed
         self.data_dir = datadir
+        # get file list and number of files to be merged for data subse
         self.file_list = patt
         self.nfiles = len(self.file_list)
+        # get relevant data dimensions
+        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
+        self.sample_dim = sample_dim
+        self.nsamples = self.ds_all.dims[sample_dim]
+        self.data_dim = self.get_data_dim()
         self.dataset_size = self.get_dataset_size()
+        # sampling of datafiles
         self.file_list_random = random.sample(self.file_list, self.nfiles)
-        self.nfiles2merge = nfiles_merge
-        self.nfiles_merged = int(self.nfiles / self.nfiles2merge)
+        self.nfiles2merge = nfiles_merge                                # number of files to be merged for data subset  
+        self.nfiles_merged = int(self.nfiles / self.nfiles2merge)       # number of data subsets
         self.samples_merged = self.get_samples_per_merged_file()
+        # list of files can be larger for distributed training, i.e. effective dataset size can be increased
+        if self.with_horovod:
+            # re-do dataset calculation since file list is potentially larger for distributed training
+            self.effective_dataset_size = self.get_dataset_size()
+        else:
+            self.effective_dataset_size = self.dataset_size
+        # handle selected variables
         self.varnames_list = self.get_all_varnames()
-        print(f"Data subsets will comprise {self.samples_merged} samples.")
         self.predictor_list = selected_predictors
         self.predictand_list = selected_predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
         self.all_vars = self.predictor_list + self.predictand_list       # ordering important to ensure that predictors come first!
-        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
             self.n_predictors += len(to_list(self.var_tar2in))
-        self.sample_dim = sample_dim
-        self.nsamples = self.ds_all.dims[sample_dim]
-        self.data_dim = self.get_data_dim()
+        # split variables into constant and dynamic variables
+        self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
+        # not required currently, since constant data get automatically broadcasted with xr.open_mfdataset and _read_mfdataset-methods
+        # self.ds_const = self.get_const_vars()
+        # get normalization object
         t0 = timer()
         self.normalization_time = -999.
         if norm_obj is None:
+            max_samples_norm = 10000000
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            if self.nsamples > max_samples_norm:
+                print(f"Reducing samples for computing normalization parameters to {max_samples_norm}.")
+                self.norm_params = self.data_norm.get_required_stats(self.ds_all.isel({self.sample_dim: slice(max_samples_norm)}))
+            else:
+                self.norm_params = self.data_norm.get_required_stats(self.ds_all)
             self.normalization_time = timer() - t0
         else:
             self.data_norm = norm_obj
             self.norm_params = norm_obj.norm_stats
 
+        # initialize data loading
         self.data_loaded = [xr.Dataset, xr.Dataset]
         self.iload_next, self.iuse_next = 0, 0
         self.reading_times = []
@@ -518,6 +576,116 @@ class StreamMonthlyNetCDF(object):
         if not nworkers:
             nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge))
         self.pool = ThreadPool(nworkers)
+
+    @property
+    def data_dir(self):
+        return self._data_dir
+
+    @data_dir.setter
+    def data_dir(self, datadir):
+        if not os.path.isdir(datadir):
+            raise NotADirectoryError(f"Parsed data directory '{datadir}' does not exist.")
+
+        self._data_dir = datadir
+
+    @property
+    def file_list(self):
+        return self._file_list
+
+    @file_list.setter
+    def file_list(self, patt):
+        patt = patt if patt.endswith(".nc") else f"{patt}.nc"
+        files = glob.glob(os.path.join(self.data_dir, patt))
+
+        if not files:
+            raise FileNotFoundError(f"Could not find any files with pattern '{patt}' under '{self.data_dir}'.")
+
+        self._file_list = list(
+            np.asarray(sorted(files, key=lambda s: int(re.search(r'\d+', os.path.basename(s)).group()))))
+
+    @property
+    def seed(self):
+        return self._seed 
+
+    @seed.setter 
+    def seed(self, seed_int):
+        if self.with_horovod and seed_int is None:
+            raise ValueError(f"Seed integer must be provided for distitributed training with Horovod,")
+        
+        # set seed
+        random.seed(seed_int)
+        self._seed = seed_int
+
+    @property
+    def nfiles2merge(self):
+        return self._nfiles2merge
+    
+    @nfiles2merge.setter
+    def nfiles2merge(self, n2merge):
+        n = find_closest_divisor(self.nfiles, n2merge)
+
+        self._nfiles2merge = n
+        # for distributed training, data files must be distributed over workers
+        if self.with_horovod:
+            if hvd.rank() == 0:
+                if n != n2merge:
+                    print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
+                print(f"Distributed streaming over {hvd.size()} workers.")
+
+            assert n > hvd.size(), f"Number of files to merge {n} must be larger than number of workers {hvd.size()}."
+            self._nfiles2merge = int(n / hvd.size())
+            if n % hvd.size() > 0:
+                # In case that the modulo is non-zero, nfiles2merge is incremented and the file list is appended
+                # so that each work processes the same number of files.
+                # Note that duplicated files only occur in the last data subset. 
+                # To avoid duplicates in the last subset itself, only files from the preceiding subsets are appended.
+                self._nfiles2merge += 1
+                nfiles_req = int(hvd.size() * self._nfiles2merge * self.nfiles/n)
+                if hvd.rank() == 0: 
+                    print(f"Append file list by {nfiles_req - self.nfiles} files to get {nfiles_req} files ({self._nfiles2merge} files per worker).")
+                self.file_list_random += random.sample(self.file_list_random[0:self.nfiles-n], nfiles_req - self.nfiles)
+                self.nfiles = len(self.file_list_random)
+        else:
+            if n != n2merge:
+                print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
+
+
+    @property
+    def sample_dim(self):
+        return self._sample_dim
+
+    @sample_dim.setter
+    def sample_dim(self, sample_dim):
+        if not sample_dim in self.ds_all.dims:
+            raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
+
+        self._sample_dim = sample_dim
+
+    @property
+    def predictor_list(self):
+        return self._predictor_list
+
+    @predictor_list.setter
+    def predictor_list(self, selected_predictors: List):
+        """
+        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in`
+        in their names are selected.
+        In case that a list of selected_predictors is parsed, their availability is checked
+        :param selected_predictors: list of predictor variables or None
+        """
+        self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
+
+    @property
+    def predictand_list(self):
+        return self._predictand_list
+
+    @predictand_list.setter
+    def predictand_list(self, selected_predictands: List):
+        """
+        Similar to predictor_list-setter, but does not allow for parsing None.
+        """
+        assert isinstance(selected_predictands, list), "Selected predictands must be a list of variable names"
+        self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
 
     def __len__(self):
         return self.nsamples
@@ -562,84 +730,9 @@ class StreamMonthlyNetCDF(object):
         for i in range(self.nfiles_merged):
             file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
             ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
-            nsamples_merged.append(ds_now.dims["time"])  # To-Do: avoid hard-coding
+            nsamples_merged.append(ds_now.dims[self.sample_dim])  
 
         return max(nsamples_merged)
-
-    @property
-    def data_dir(self):
-        return self._data_dir
-
-    @data_dir.setter
-    def data_dir(self, datadir):
-        if not os.path.isdir(datadir):
-            raise NotADirectoryError(f"Parsed data directory '{datadir}' does not exist.")
-
-        self._data_dir = datadir
-
-    @property
-    def file_list(self):
-        return self._file_list
-
-    @file_list.setter
-    def file_list(self, patt):
-        patt = patt if patt.endswith(".nc") else f"{patt}.nc"
-        files = glob.glob(os.path.join(self.data_dir, patt))
-
-        if not files:
-            raise FileNotFoundError(f"Could not find any files with pattern '{patt}' under '{self.data_dir}'.")
-
-        self._file_list = list(
-            np.asarray(sorted(files, key=lambda s: int(re.search(r'\d+', os.path.basename(s)).group()))))
-
-    @property
-    def nfiles2merge(self):
-        return self._nfiles2merge
-
-    @nfiles2merge.setter
-    def nfiles2merge(self, n2merge):
-        n = find_closest_divisor(self.nfiles, n2merge)
-        if n != n2merge:
-            print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
-
-        self._nfiles2merge = n
-
-    @property
-    def sample_dim(self):
-        return self._sample_dim
-
-    @sample_dim.setter
-    def sample_dim(self, sample_dim):
-        if not sample_dim in self.ds_all.dims:
-            raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
-
-        self._sample_dim = sample_dim
-
-    @property
-    def predictor_list(self):
-        return self._predictor_list
-
-    @predictor_list.setter
-    def predictor_list(self, selected_predictors: List):
-        """
-        Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in`
-        in their names are selected.
-        In case that a list of selected_predictors is parsed, their availability is checked
-        :param selected_predictors: list of predictor variables or None
-        """
-        self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
-
-    @property
-    def predictand_list(self):
-        return self._predictand_list
-
-    @predictand_list.setter
-    def predictand_list(self, selected_predictands: List):
-        """
-        Similar to predictor_list-setter, but does not allow for parsing None.
-        """
-        assert isinstance(selected_predictands, list), "Selected predictands must be a list of variable names"
-        self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
 
     def get_all_varnames(self):
         ds_test = xr.open_dataset(self.file_list[0])
@@ -665,6 +758,39 @@ class StreamMonthlyNetCDF(object):
                 raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
 
         return selected_vars
+    
+    def split_const_dyn_vars(self):
+        """
+        Split variables into constant and dynamic variables. Constant variables are those that do not vary over
+        the sample dimension, e.g. the topography. Dynamic variables are those that vary over the sample dimension,
+        e.g. the temperature.
+        :return: tuple of lists of constant and dynamic variables
+        """
+        const_vars, dyn_vars = [], []
+        
+        # only load one file, since open_mfdatset and _read_mfdatset already broadcast const variables
+        # over sample dimension (usually 'time')
+        ds_exp = xr.open_dataset(self.file_list[0])
+        
+        for var in self.all_vars:
+            if self.sample_dim in ds_exp[var].dims:
+                const_vars.append(var)
+            else:
+                dyn_vars.append(var)
+
+        return const_vars, dyn_vars
+    
+    def get_const_vars(self):
+        """
+        Return a copy of the constant variables from first netCDF-file.
+        :return: xarray dataset containing constant variables
+        """
+        ds_exp = xr.open_dataset(self.file_list[0])
+        
+        if self.const_vars:
+            return ds_exp[self.const_vars].copy(deep=True)
+        else:
+            return None
 
     @staticmethod
     def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
@@ -700,6 +826,9 @@ class StreamMonthlyNetCDF(object):
         #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
         #                           parallel=True).load()
         t0 = timer()
+        # Restriction to read dynamic variables is not required currently,
+        # since constant data get automatically broadcasted with the _read_mfdataset-method
+        #data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
         nsamples = data_now.dims[self.sample_dim]
 
@@ -720,7 +849,13 @@ class StreamMonthlyNetCDF(object):
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
                   f"(total #samples: {data_now.dims[self.sample_dim]})")
+            
+        # Appending with constant variables is not required since they are read and broadcast to data_now already (see above)
+        #if self.const_vars:
+        #    ds_const_append = self.ds_const.copy().expand_dims({self.sample_dim: data_now[self.sample_dim]})
+        #    data_now = xr.merge([data_now, ds_const_append])
 
+        # write to class attribute
         self.data_loaded[il] = data_now
         # timing
         t_read = timer() - t0
