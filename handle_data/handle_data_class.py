@@ -284,9 +284,13 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
     # are applied to train the critic, before the generator is trained once.
-    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
-    bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
-    nepochs = hparams_dict["nepochs"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else hparams_dict["nepochs"]
+    # The validation and test dataset however do not perform substeeping and thus don't require an increased mini-batch size.
+    if mode == "train":
+        bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
+        nepochs = hparams_dict["nepochs"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else hparams_dict["nepochs"]
+    else:
+        bs_train = ds_dict["batch_size"]
+        nepochs = hparams_dict["nepochs"]
 
     
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
@@ -306,7 +310,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
                                    lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
-                "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all}
+                     "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all, "file": ds_obj.file_list}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -322,13 +326,15 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         else:
             nshuffle = 1
 
+        # create TensorFlow dataset
+        # make_tf_dataset_allmem does not require n_epochs, since the dataset is repeated internally
         tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
                                       var_tar2in=ds_dict.get("var_tar2in", None),
                                       named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
 
         
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
-                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all}
+                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all, "file": fname_or_pattern}
         
     return tfds, tfds_info
 
@@ -386,7 +392,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
-    :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
+    :param ds: the xarray dataset with normalized data. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)

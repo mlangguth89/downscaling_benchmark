@@ -25,7 +25,7 @@ import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from handle_data_class import HandleDataClass, get_dataset_filename
+from handle_data_class import HandleDataClass, prepare_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
@@ -98,43 +98,35 @@ def main(parser_args):
     logger.info(f"Model was loaded successfully.")
 
     # get datafile and read netCDF
-    fdata_test = get_dataset_filename(parser_args.data_dir, parser_args.dataset, "test",
-                                      ds_dict.get("laugmented", False))
 
-    logger.info(f"Start opening datafile {fdata_test}...")
+    t0_preproc = timer()
+    logger.info(f"Start preparing test dataset...")
     # prepare normalization
     js_norm = os.path.join(norm_dir, "norm.json")
     logger.debug("Read normalization file for subsequent data transformation.")
-    norm = ZScore(ds_dict["norm_dims"])
-    norm.read_norm_from_file(js_norm)
+    data_norm = ZScore(ds_dict["norm_dims"])
+    data_norm.read_norm_from_file(js_norm)
 
-    tar_varname = ds_dict["predictands"][0]
-    logger.info(f"Variable {tar_varname} serves as ground truth data.")
-
-    with xr.open_dataset(fdata_test) as ds_test:
-        ground_truth = ds_test[tar_varname].astype("float32", copy=True)
-        ds_test = norm.normalize(ds_test)
-
-    # prepare training and validation data
-    logger.info(f"Start preparing test dataset...")
-    t0_preproc = timer()
-
-    da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
-    
-    # clean-up to reduce memory footprint
-    del ds_test
-    gc.collect()
-    #free_mem([ds_test])
-
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
-                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
-
-    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test, **tfds_opts)
-    
+    # get dataset pipeline for inference
+    # get predictors
     predictors = ds_dict.get("predictors", None)
     if predictors is None:
         predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
-        if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
+    
+    if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
+
+    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": predictors,
+                 "lshuffle": False, "var_tar2in": ds_dict.get("var_tar2in", None), "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}
+    
+    tfds_test, test_info = prepare_dataset(parser_args.data_dir, parser_args.dataset, ds_dict, hparams_dict, "test", tfds_opts["predictands"], 
+                                           norm_obj=data_norm, norm_dims=ds_dict["norm_dims"], shuffle=tfds_opts["lshuffle"], lrepeat=tfds_opts["lrepeat"]) 
+
+    # get ground truth data
+    tar_varname = test_info["varnames_tar"][0]
+    logger.info(f"Variable {tar_varname} serves as ground truth data.")
+
+    ds_test = xr.open_dataset(test_info["file"])
+    ground_truth = ds_test[tar_varname].astype("float32", copy=True)
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
@@ -150,8 +142,8 @@ def main(parser_args):
     #free_mem([tfds_test])
 
     # convert to xarray
-    y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
-                               da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
+    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, ground_truth.squeeze().coords,
+                               ground_truth.squeeze().dims, hparams_dict.get("z_branch", False))
 
     # write inference data to netCDf
     logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
@@ -181,7 +173,7 @@ def main(parser_args):
 
     rmse_ref = rmse_all.mean().values
 
-    _ = run_feature_importance(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
+    _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
                                tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
     
     logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
