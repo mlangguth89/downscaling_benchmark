@@ -25,10 +25,10 @@ import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from handle_data_class import HandleDataClass, prepare_dataset
+from handle_data_class import prepare_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
+from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance, run_spectral_analysis
 from other_utils import convert_to_xarray, finditem
 #from other_utils import free_mem
 
@@ -170,22 +170,6 @@ def main(parser_args):
 
     logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
-    # run feature importance analysis for RMSE
-    logger.info("Start feature importance analysis...")
-    t0_fi = timer()
-
-    rmse_ref = rmse_all.mean().values
-
-    _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
-                               tfds_opts, plt_dir, patch_size=(8, 8))
-    
-    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
-    
-    # clean-up to reduce memory footprint
-    del ds_test
-    gc.collect()
-    #free_mem([da_test])
-
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
 
@@ -209,6 +193,32 @@ def main(parser_args):
                                projection=proj, model_type=model_type)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
+
+    # run spectral analysis
+    logger.info("Start spectral analysis...")
+    t0_spec = timer()
+
+    ds = ds.rename({f"{tar_varname}_ref": "COSMO-REA6", f"{tar_varname}_fcst": f"{model_type.upper().replace('_', ' ')}"})
+
+    run_spectral_analysis(ds, plt_dir, "T2m", "K", ["rlon", "rlat"], lcutoff=True)
+
+    logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
+
+    # run feature importance analysis for RMSE
+    logger.info("Start feature importance analysis...")
+    t0_fi = timer()
+
+    rmse_ref = rmse_all.mean().values
+
+    _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
+                               tfds_opts, plt_dir, patch_size=(8, 8))
+    
+    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+    
+    # clean-up to reduce memory footprint
+    del ds_test
+    gc.collect()
+    #free_mem([da_test])
 
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")

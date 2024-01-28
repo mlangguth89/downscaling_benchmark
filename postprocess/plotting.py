@@ -279,3 +279,46 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     func_logger.info(f"Feature importance scores saved to {plt_fname}.")
     
     return True
+
+
+def create_ps_plot(ds_ps, var_info: dict, plt_fname: str, x_coord: str = "wavenumber", **kwargs):
+    """
+    Plots power spectrum.
+    :param ds_ps: Dataset providing power spectrum of experiments as DataArrays
+    :param var_info: Dictionary providing name of variable and unit for which spectrum/spectra is/are poltted
+    :param plt_fname: File name of plot
+    :param x_coord: Name of coordinate along which spectrum is plotted
+    :param kwargs: Keyword arguments for plotting
+    """
+    # auxiliary variables
+    exps = list(ds_ps.data_vars)
+    nvars = len(vars)
+
+    # get some plot parameters
+    linestyle = kwargs.get("linestyle", "k-")
+    lw = kwargs.get("linewidth", 2.)
+    cols = kwargs.get("colors", nvars*["blue"])
+    fs = kwargs.get("fs", 16)
+
+    
+    fig, (ax) = plt.subplots(1, 1)#, figsize=(12, 8))
+    for i, exp in enumerate(exps):
+        da = ds_ps[exp]
+        ax.plot(da[x_coord].values, da.values, linestyle, label=exp, lw=lw, c=cols[i])
+
+    # set axis limits
+    ax.set_yscale("log")
+    ax.set_title(f"")
+    # label axis
+    ax.set_xlabel("wavenumber", fontsize=fs)
+    var_name, spectrum_unit = list(var_info.keys())[0], list(var_info.values())[0]
+    ax.set_ylabel(f"Spectral power {var_name} [{spectrum_unit}]", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+    ax.legend(fontsize=fs-2)
+    
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    print(f"Save plot in file '{plt_fname}'")
+    plt.tight_layout()
+    fig.savefig(plt_fname)
+    plt.close(fig)
