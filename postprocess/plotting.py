@@ -53,7 +53,7 @@ def get_colormap_temp(levels=None):
 
 
 # for making plot nice
-def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[3.5, 16.5, 44.5, 54.]):
+def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 42., 53.]):
     fs = 16
     # if "login" in host:
     # add nice coast- and borderlines

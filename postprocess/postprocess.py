@@ -162,7 +162,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     model_type = plt_kwargs.get("model_type", "wgan")
     score_all = score_engine(score_name)
-    score_all = score_all.drop_vars("variables")
+    #score_all = score_all.drop_vars("variables")
 
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
