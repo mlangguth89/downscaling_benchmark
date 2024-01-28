@@ -292,12 +292,12 @@ def create_ps_plot(ds_ps, var_info: dict, plt_fname: str, x_coord: str = "wavenu
     """
     # auxiliary variables
     exps = list(ds_ps.data_vars)
-    nvars = len(vars)
+    nexps = len(exps)
 
     # get some plot parameters
     linestyle = kwargs.get("linestyle", "k-")
     lw = kwargs.get("linewidth", 2.)
-    cols = kwargs.get("colors", nvars*["blue"])
+    cols = kwargs.get("colors", nexps*["blue"])
     fs = kwargs.get("fs", 16)
 
     

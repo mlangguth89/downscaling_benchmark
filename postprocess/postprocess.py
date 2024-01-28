@@ -198,7 +198,7 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, varname: str, var_unit: 
     exps = list(ds.data_vars)
     nexps = len(exps)
 
-    ps_list = []
+    ps_dict = {}
 
     # compute wave numbers based on size of input data
     nlon, nlat = ds[lonlat_dims[0]].size, ds[lonlat_dims[1]].size
@@ -214,11 +214,11 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, varname: str, var_unit: 
         # average over all time steps and create xarray.DataArray
         da_ps_exp = xr.DataArray(ps_exp.mean(axis=0), dims=dims, coords=coord_dict, name=exp)
 
-        # remove wavenumber 0 and append to list    
-        ps_list.append(da_ps_exp[1::])
+        # remove wavenumber 0 and append dictionary    
+        ps_dict[exp] = da_ps_exp[1::]
 
     # create xarray.Dataset 
-    ds_ps = xr.Dataset(ps_list)
+    ds_ps = xr.Dataset(ps_dict)
 
     # create plot   
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum.png")
