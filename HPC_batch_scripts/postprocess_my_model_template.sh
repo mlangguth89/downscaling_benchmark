@@ -46,7 +46,7 @@ model_basedir=../trained_models/
 outdir=../results/
 
 exp_name=<my_exp>
-dataset=tier2
+dataset=benchmark_t2m
 
 # run job
 srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py -data_dir ${datadir} -model_base_dir ${model_basedir} \
