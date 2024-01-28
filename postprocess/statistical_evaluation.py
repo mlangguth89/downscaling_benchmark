@@ -377,7 +377,7 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
     func_logger.info(f"Start spatio-temporal permutation for sample with shape {sh_orig}.")
 
     ntimes = len(da_orig["time"])
-    if dims_orig != "time":
+    if dims_orig[0] != "time":
         da_orig = da_orig.transpose("time", ...)
         coords_now, dims_now, sh_now = da_orig.coords, da_orig.dims, da_orig.shape
     else:
@@ -461,7 +461,10 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         # get copy of sample array
         ds_copy = ds.copy(deep=True)
         # permute sample
-        da_permut = sample_permut_xyt(ds[var].copy(), patch_size=patch_size)
+        da_now = ds[var].copy()
+        if "time" not in da_now.dims:
+            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
+        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
         ds_copy[var] = da_permut
         
         # get TF dataset
