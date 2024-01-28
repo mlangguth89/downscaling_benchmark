@@ -26,7 +26,7 @@ VENV_DIR=${BASE_DIR}/virtual_envs/
 VIRT_ENV_NAME=<my_venv>
 
 # Loading mouldes
-source ../env_setup/modules.sh
+source ../env_setup/modules_jsc.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
    if [[ -f ${VENV_DIR}/${VIRT_ENV_NAME}/bin/activate ]]; then
