@@ -418,7 +418,7 @@ class UNet_DeepRU(UNet_Sha):
         
         self.hparams_default = {"kernel": (3, 3), "nconv_res": 3, "padding": "same", "activation": "LeakyReLU", "kernel_init": "he_normal",
                                 "l_batch_normalization": True, "interpolation": "bilinear", "channels_start": 64, "dchannels": 64,
-                                "strides_list": [(2, 1), (1, 3), (2, 1), (2, 2), (2, 2), (2, 2)],               # for domain size of 96x120 grid points
+                                "strides_list": [(2, 1), (1, 3), (2, 1), (2, 3), (2, 2), (2, 2)],               # for domain size of 128x144 grid points
                                 "batch_size": 32, "lr": 1.e-03, "nepochs": 35, "loss_func": "mse",              # training parameters
                                 "lr_decay": False, "decay_start": 3, "decay_end": 20, "lr_end": 1.e-06, "l_embed": False, 
                                 "optimizer": "adam", "lcheckpointing": True, "learlystopping": False}
