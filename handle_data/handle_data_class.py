@@ -30,6 +30,60 @@ from all_normalizations import ZScore
 from other_utils import to_list, find_closest_divisor, finditem
 
 
+class HandleAllMemTorchDataset(Dataset):
+        """
+        Create mappable torch dataset to read all data once in a memory
+        :param da_in: input xarray obtained after the split
+        :param da_out: target xarray obtained after the split
+        :param varnames: named of the variables that is to be read in an order
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+        """
+    def __init__(self,da_in,da_tar,varnames,named_targets=False):
+        self.da_in = da_in
+        self.da_tar = da_tar
+        self.varnames = varnames
+        self.named_targets = named_targets
+
+    def __len__(self):
+        return len(self.da_in["time"])
+
+    def __getitem__(self,idx):
+        tar_now = self.da_tar.isel({"time":idx})
+        return ((self.da_in.isel({"time": idx}).values,
+                (np.array(list({var: tar_now.sel({"variables": var}).values for var in self.varnames}.values()))))
+                if self.named_targets else
+                (self.da_in.isel({"time": idx}).values.to_numpy(), self.da_tar.isel({"time": idx}).values.to_numpy()))
+
+        
+class HandlePartDatasetTorch(Dataset):
+    def __init__(self,stream_monthly_netcdf,file_sequence,named_targets=None):
+        """
+        Create mappable torch dataset
+        :param stream_monthly_netcdf: an instance object of StreamMonthltNetCDF 
+        :param file_sequence: chunk id or the index of chunked file sequence 
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+        """
+        super(HandlePartDatasetTorch).__init__()
+        self.stream_monthly_netcdf = stream_monthly_netcdf
+        self.named_targets = named_targets
+        self.max_files = self.stream_monthly_netcdf.get_samples_per_merged_file()
+        self.stream_monthly_netcdf.read_netcdf(file_sequence)
+        self.stream_monthly_netcdf.choose_data('filler')
+        self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        
+    def __len__(self):
+        return self.max_files
+
+    def __getitem__(self,idx):
+        arr =  self.stream_monthly_netcdf.getitems([idx]).to_numpy()
+        if self.named_targets is not None :
+            varnames = self.stream_monthly_netcdf.predictand_list
+            return (arr[..., 0:-self.stream_monthly_netcdf.n_predictands],
+                        np.array(list({var: arr[..., -self.stream_monthly_netcdf.n_predictands + i] for i, var in enumerate(varnames)}.values())))
+        else:
+            return (arr[..., 0:-self.stream_monthly_netcdf.n_predictands], arr[..., -self.stream_monthly_netcdf.n_predictands:])
+
+
 class HandleDataClass(object):
 
     def __init__(self, datadir: str, application: str, query: str, purpose: str = None, **kwargs) -> None:
@@ -237,6 +291,100 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
 
     return ds_filename
 
+def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str, varnames_tar: List,
+                    norm_dims: List=None, norm_obj=None, shuffle: bool = True, nworkers: int = 10, lrepeat: bool = True,
+                    drop_remainder: bool = True, with_horovod: bool = False, seed: int = None):
+    """
+    Prepare training data for downscaling
+    :param datadir: directory where netCDF-files for TF dataset are strored
+    :param dataset_name: name of dataset to be loaded
+    :param ds_dict: dictionary of dataset names and their subsets
+    :param hparams_dict: dictionary of hyperparameters
+    :param mode: mode of dataset (train, val, test)
+    :param varnames_tar: list of target variables to be used for downscaling 
+    :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
+    :param norm_obj: normalization instance used to normalize the data.
+                     If not passed, the normalization instance is retrieved from the data
+    :param shuffle: flag if shuffling should be applied to dataset
+    :param nworkers: numbers of workers to read in netCDF-files (for the case where NOT all data is loaded into memory)
+    :param lrepeat: flag if dataset should be repeated
+    :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+    :param with_horovod: flag if horovod is used for distributed training
+    :param seed: seed for random shuffling of datafiles
+    :return: tuple of (TensorFlow dataset object, dictionary of dataset information)
+    """
+    # check parsed mode
+    allowed_modes = ["train", "val", "test"]
+    assert mode in allowed_modes, f"{mode} is not a valid mode. Allowed modes are {*allowed_modes,}" 
+
+    # check if normalization object is provided (mandatory for validation and test mode)
+    if mode != "train" and not norm_obj:
+        raise ValueError(f"Normalization object norm_obj must be provided for mode {mode}.")
+    else:
+        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
+
+    if norm_obj and norm_dims:
+        print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+        norm_dims = None
+
+    if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
+
+    # check if target variables are provided
+    if finditem(hparams_dict, "z_branch", False):
+        varnames_tar_all = to_list(varnames_tar) + to_list(ds_dict["varname_z"])
+    else:
+        varnames_tar_all = varnames_tar
+
+    # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
+    # are applied to train the critic, before the generator is trained once.
+    # The validation dataset however does not perform substeeping and thus doesn't require an increased mini-batch size.
+    bs_train = ds_dict["batch_size"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else ds_dict["batch_size"]
+    nepochs = hparams_dict["nepochs"] * (hparams_dict["d_steps"] + 1) if "d_steps" in hparams_dict else hparams_dict["nepochs"]
+
+    
+    fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
+
+    if "*" in fname_or_pattern:                                             # do not load all data into memory
+        ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
+                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
+                                     var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
+                                     norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
+        
+        if shuffle:
+            nshuffle = ds_obj.samples_merged
+        else:
+            nshuffle = 1          # equivalent to no shuffling
+
+        torch_loader = make_torch_dataloader(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
+                                   lrepeat=lrepeat, drop_remainder=drop_remainder)
+        
+        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
+                "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all}
+    else:                                                                   # load all data into memory
+        ds = xr.open_dataset(fname_or_pattern)
+
+        if not norm_obj:
+            # norm_obj must be freshly instantiated (triggering later parameter retrieval)
+            norm_obj = ZScore(ds_dict["norm_dims"])
+
+        ds = norm_obj.normalize(ds)
+
+        nsamples = len(ds["time"])
+        if shuffle:
+            nshuffle = nsamples
+        else:
+            nshuffle = 1
+
+        torch_loader = make_tensor_dataloader_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
+                                      var_tar2in=ds_dict.get("var_tar2in", None),
+                                      named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
+
+        
+        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
+                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all}
+        
+    return torch_loader,tfds_info
+
 
 def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str, varnames_tar: List,
                     norm_dims: List=None, norm_obj=None, shuffle: bool = True, nworkers: int = 10, lrepeat: bool = True,
@@ -379,6 +527,44 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     return tfds
 
+def make_torch_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
+                          lrepeat: bool = True, drop_remainder: bool = True) -> torch.utils.data.DataLoader
+        """
+        Build Pytorch dataloader by from chunked netCDF files using xarray's open_mfdatset-method.
+        :param datadir: directory where netCDF-files are strored
+        :param file_patt: filename pattern to glob files from datadir
+        :param batch_size: desired mini-batch size
+        :param nepochs: (effective) number of epochs for training
+        :param nfiles2merge: number if files to merge for streaming
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+        :param lshuffle: boolean to enable sample shuffling
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
+        :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
+        :param norm_obj: normalization instance used to normalize the data.
+                         If not passed, the normalization instance is retrieved from the data
+        :param nworkers: numbers of workers to read in netCDF-files
+        :return: tuple of stream_monthly_netcdf object and torch dataloader
+        """
+        assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
+
+        if norm_obj and norm_dims:
+            print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+            norm_dims = None
+
+        if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
+
+        part_datasets = []
+        for i in range(ds_obj.nfiles_merged):
+            part_datasets.append(HandlePartDatasetTorch(ds_obj,i))
+
+        dataset = torch.utils.data.ConcatDataset(part_datasets) 
+        dataloader = DataLoader(dataset,batch_size=batch_size,num_workers=10)
+
+        return dataloader
+
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
                             lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
                             var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
@@ -415,7 +601,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
 
     # convert dataset to data arrays and load into memory
-    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True), \
+    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True),
                     HandleDataClass.reshape_ds(ds_tar).astype("float32", copy=True)
 
     if var_tar2in is not None:
@@ -484,10 +670,58 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     del da_tar
     gc.collect()
 
-
     return data_iter
 
+def make_tensor_dataloader_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
+                                  lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
+                                  var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
+                                  with_horovod:bool = False, lembed: bool = False) -> torch.utils.data.DataLoader :
 
+        """
+        Build-up torch dataloader from a generator based on the xarray-data array.
+        NOTE: All data is loaded into memory
+        :param da: the data-array from which the dataset should be cretaed. Must have dimensions [time, ..., variables].
+                   Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
+        :param batch_size: number of samples per mini-batch
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+        :param lshuffle: flag if shuffling should be applied to dataset
+        :param shuffle_samples: number of samples to load before applying shuffling
+        :param named_targets: flag if target of TF dataset should be dictionary with named target variables
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
+        :param lrepeat: flag if dataset should be repeated
+        :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
+        :param lembed: flag to trigger temporal embedding (not implemented yet!)
+        """
+    # add time dimension to constant variables
+    for var in ds.data_vars:
+        if "time" not in ds[var].dims:
+            ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
+
+    ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
+    # convert dataset to data arrays and load into memory
+    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True),
+                    HandleDataClass.reshape_ds(ds_tar).astype("float32", copy=True)
+
+        if var_tar2in is not None:
+            # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
+            #       * The following operation order must concatenate var_tar2in by da_in to ensure
+            #         that the variable appears at first place. This is required to avoid
+            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
+
+        varnames_tar = da_tar["variables"].values
+
+        
+        if lembed is True:
+            raise ValueError("Time embedding is not supported yet.")
+
+        dataset = HandleAllMemTorchDataset(da_in,da_tar,varnames_tar,named_targets)
+
+        dataloader = DataLoader(dataset,batch_size=batch_size,drop_last=drop_remainder)
+        
+        return dataloader                              
 
 class StreamMonthlyNetCDF(object):
     def __init__(self, datadir, patt, nfiles_merge: int, selected_predictands: List, sample_dim: str = "time",
