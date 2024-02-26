@@ -24,13 +24,131 @@ from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_engine import ModelEngine
 from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
-from handle_data_class import prepare_dataset
+from handle_data_class import prepare_dataset,prepare_torch_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
 
+
+#import for lightning_modules
+from swinir_lightning_model import SwinIRLightning
+from lightning import Trainer,seed_everything
+from lightning.pytorch.plugins.environments import SLURMEnvironment
+from lightning.pytorch.loggers import WandbLogger
+import random
 
 # Open issues:
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
+
+#conflicting issues:
+#prepare_torch_dataset does not exist for this branch, once merged with issue005 the integratin needs to be checked
+
+def lightning_main(parser_args):
+
+    random.seed(32)
+    seed_everything(32,workers=True)
+    wandb_logger = WandbLogger(project="downscaling",
+                                name= parser_args.exp_name)
+    # start timing
+    to = timer()
+    
+    # Get some basic directories and flags
+    datadir = parser_args.input_dir
+    outdir = parser_args.output_dir
+    job_id = parser_args.id
+    dataset = parser_args.dataset.lower()
+    js_norm = parser_args.js_norm
+
+    # initialize checkpoint-directory path for saving the model
+    model_savedir = os.path.join(outdir, parser_args.exp_name)
+
+    # read configuration files for model and dataset
+    with parser_args.conf_ds as dsf:
+        ds_dict = js.load(dsf)
+
+    with parser_args.conf_md as mdf:
+        hparams_dict = js.load(mdf)
+
+    # get normalization object if corresponding JSON-file is parsed
+    if js_norm:
+        data_norm = ZScore(ds_dict["norm_dims"])
+        data_norm.read_norm_from_file(js_norm
+        norm_dims, write_norm = None, False
+    else:
+        data_norm, write_norm = None, True
+        norm_dims = ds_dict["norm_dims"]
+
+    # get torch dataset objects for training and validation data
+    # training
+    t0_train = timer
+    torch_train_dataloader, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
+                                             norm_obj=data_norm, norm_dims=norm_dims) 
+    
+    data_norm, shape_in, nsamples, tfds_train_size = train_info["data_norm"], train_info["shape_in"], \
+                                                     train_info["nsamples"], train_info["dataset_size"]
+    ds_obj_train = train_info.get("ds_obj", None)
+
+    # Tracking training data preparation time if all data is already loaded into memory
+    if ds_obj_train is None:
+        ttrain_load = timer() - t0_train
+        print(f"Training data loading time: {ttrain_load:.2f}s.")
+    else:
+        # training data will be loaded on-the-fly
+        ttrain_load = None
+    
+    if write_norm:
+        data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
+    
+    # validation
+    t0_val = timer()
+    torch_val_dataloader, val_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
+                                         norm_obj=data_norm) 
+    
+    ds_obj_val = val_info.get("ds_obj", None)
+    
+    # Tracking validation data preparation time if all data is already loaded into memory
+    if ds_obj_val is None:
+        tval_load = timer() - t0_val
+        print(f"Validation data loading time: {tval_load:.2f}s.")
+    else:
+        # validation data will be loaded on-the-fly
+        tval_load = None
+
+    print("Finished data preparation")
+
+
+    # instantiate model...
+    model = SwinIRLightning(shape_in, varnames_tar, hparams_dict, model_savedir, parser_args.exp_name)
+
+    #args to be passed, currently magic numbers are used 
+    trainer = Trainer(enable_model_summary=True,
+                      enable_progress_bar=True,
+                      max_epochs=model.swinir.hparams['nepochs'],
+                      num_nodes=2,
+                      devices=4,
+                      accelerator='cuda',
+                      strategy='ddp',
+                      precision="16-mixed",
+                      sync_batchnorm=True,
+                      plugins=[SLURMEnvironment()],
+                      logger=wandb_logger)
+
+    trainer.fit(model,
+            torch_train_dataloader,
+            torch_val_dataloader,
+            ckpt_path=parser_args.ckpt_path)
+
+    # final timing
+    tend = timer()
+    saving_time = tend - t0_save
+    tot_run_time = tend - t0
+    print(f"Model saving time: {saving_time:.2f}s")
+    print(f"Total runtime: {tot_run_time:.1f}s")
+    # some statistics on memory usage
+    print_gpu_usage("Final GPU memory: ")
+    print_cpu_usage("Final CPU memory: ")
+
+    print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
+
 
 def main(parser_args):
     # start timing
@@ -67,7 +185,7 @@ def main(parser_args):
 
     # get tensoflow dataset objects for training and validation data
     # training
-    t0_train = timer()
+    t0_train = timer
     tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
                                              norm_obj=data_norm, norm_dims=norm_dims) 
     
@@ -180,6 +298,8 @@ if __name__ == "__main__":
     parser.add_argument("--json_norm_file", "-js_norm", dest="js_norm", type=str, default=None,
                         help="JSON-file providing normalization parameters.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
-
+    parser.add_argument("--checkpoint_path", "-ckpt_path", dest="ckpt_path", type=str, default=None,
+                        help="fielpath of the checkpoint to restart training")
     args = parser.parse_args()
-    main(args)
+    #main(args)
+    lightning_main(args)
