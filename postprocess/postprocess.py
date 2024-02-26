@@ -83,6 +83,27 @@ def run_feature_importance(da: xr.DataArray, predictors: list_or_str, varname_ta
 
     return feature_scores
 
+def run_feature_importance_lightning(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6), variable_dim = "variable"):
+
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
+    
+    # get feature importance scores
+    feature_scores = feature_importance_lightning(da, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
+                                        patch_size=patch_size, variable_dim=variable_dim)
+    
+    rel_changes = feature_scores / ref_score
+    max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
+
+    # plot feature importance scores in a box-plot with whiskers where each variable is a box
+    plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
+
+    create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
+                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
+                                                 "yticks": range(1, max_rel_change), "colors": "b"})
+
+    return feature_scores
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **plt_kwargs):
     """
