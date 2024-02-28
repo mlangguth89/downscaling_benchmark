@@ -929,8 +929,7 @@ class SwinIR(nn.Module):
         """
         hparams_dict = {"upscale": 1, "img_size": (96,120), "window_size": 8, "depths": [6, 6, 6, 6], "embed_dim":60, "num_heads" : [6, 6, 6, 6], "mlp_ratio": 2, "upsampler": 'pixelshuffledirect',"in_chans":15,"out_chans":2,"qkv_bias":True,"qk_scale":None,"drop_rate":0.,"attn_drop_rate":0.,"drop_path_rate":0.1,"norm_layer":nn.LayerNorm,"ape":False,"patch_norm":True,"img_range":1.,"patch_size":1,"resi_connection":'1conv',"resume_checkpoint":None,
                         "batch_size": 32, "lr": 6e-5, "nepochs": 70, "loss": "mae", "loss_weights": [1.0, 1.0],            # training parameters
-                        "weight_decay": 0.01, 
-                        "optimizer": "adamw", "lscheduled_train": True}
+                        "weight_decay": 0.01,"optimizer": "adamw", "lscheduled_train": True}
 
         return hparams_dict
 
