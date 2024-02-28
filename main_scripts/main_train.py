@@ -39,8 +39,6 @@ import random
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
 
-#conflicting issues:
-#prepare_torch_dataset does not exist for this branch, once merged with issue005 the integratin needs to be checked
 
 def lightning_main(parser_args):
 
@@ -71,7 +69,7 @@ def lightning_main(parser_args):
     # get normalization object if corresponding JSON-file is parsed
     if js_norm:
         data_norm = ZScore(ds_dict["norm_dims"])
-        data_norm.read_norm_from_file(js_norm
+        data_norm.read_norm_from_file(js_norm)
         norm_dims, write_norm = None, False
     else:
         data_norm, write_norm = None, True
@@ -80,11 +78,11 @@ def lightning_main(parser_args):
     # get torch dataset objects for training and validation data
     # training
     t0_train = timer
-    torch_train_dataloader, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
+    torch_train_dataloader, train_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
                                              norm_obj=data_norm, norm_dims=norm_dims) 
     
-    data_norm, shape_in, nsamples, tfds_train_size = train_info["data_norm"], train_info["shape_in"], \
-                                                     train_info["nsamples"], train_info["dataset_size"]
+    data_norm, shape_in, nsamples, tfds_train_size = (train_info["data_norm"], train_info["shape_in"], 
+                                                     train_info["nsamples"], train_info["dataset_size"])
     ds_obj_train = train_info.get("ds_obj", None)
 
     # Tracking training data preparation time if all data is already loaded into memory
@@ -100,7 +98,7 @@ def lightning_main(parser_args):
     
     # validation
     t0_val = timer()
-    torch_val_dataloader, val_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
+    torch_val_dataloader, val_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
                                          norm_obj=data_norm) 
     
     ds_obj_val = val_info.get("ds_obj", None)
@@ -115,15 +113,14 @@ def lightning_main(parser_args):
 
     print("Finished data preparation")
 
-
     # instantiate model...
-    model = SwinIRLightning(shape_in, varnames_tar, hparams_dict, model_savedir, parser_args.exp_name)
+    model = SwinIRLightning(shape_in, list(train_info["varnames_tar"]), hparams_dict, model_savedir, parser_args.exp_name)
 
     #args to be passed, currently magic numbers are used 
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
                       max_epochs=model.swinir.hparams['nepochs'],
-                      num_nodes=2,
+                      num_nodes=1,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',
@@ -189,8 +186,8 @@ def main(parser_args):
     tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
                                              norm_obj=data_norm, norm_dims=norm_dims) 
     
-    data_norm, shape_in, nsamples, tfds_train_size = train_info["data_norm"], train_info["shape_in"], \
-                                                     train_info["nsamples"], train_info["dataset_size"]
+    data_norm, shape_in, nsamples, tfds_train_size = (train_info["data_norm"], train_info["shape_in"], 
+                                                     train_info["nsamples"], train_info["dataset_size"])
     ds_obj_train = train_info.get("ds_obj", None)
 
     # Tracking training data preparation time if all data is already loaded into memory
