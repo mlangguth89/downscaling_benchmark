@@ -123,6 +123,7 @@ downscaling_ap5/jube/ap5_dataloader/*
 **/logs
 **/vp
 *.h5
+**/wandb
 
 # Ignore Jupyter Notebooks for testing
 **/jupyter_notebooks_test
