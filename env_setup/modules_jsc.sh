@@ -29,9 +29,10 @@ if [[ 0 == 0 ]]; then  # Restoring from model collection currently throws MPI-se
   ml xarray/0.20.1
   ml dask/2021.9.1
   ml TensorFlow/2.6.0-CUDA-11.5
+  ml PyTorch/1.11-CUDA-11.5
   ml Cartopy/0.20.0
   ml Graphviz/2.49.3
-
+  ml unload typing-extensions/3.10.0.0
 #  ml save ${ML_COLL}
 #  echo "%${ML_SCR}: Module collection ${ML_COLL} created successfully."
 else
