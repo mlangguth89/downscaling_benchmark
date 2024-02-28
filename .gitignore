@@ -148,3 +148,6 @@ downscaling_ap5/jube/ap5_dataloader/*
 # Ignore netCDF-files
 *.nc
 
+# Checkpoint
+HPC_batch_scripts/downscaling/
+
