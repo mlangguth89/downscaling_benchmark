@@ -42,7 +42,7 @@ import random
 
 def lightning_main(parser_args):
 
-    random.seed(32)
+    random_seed = 32
     seed_everything(32,workers=True)
     wandb_logger = WandbLogger(project="downscaling",
                                 name= parser_args.exp_name)
@@ -79,7 +79,8 @@ def lightning_main(parser_args):
     # training
     t0_train = timer
     torch_train_dataloader, train_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
-                                             norm_obj=data_norm, norm_dims=norm_dims) 
+                                             norm_obj=data_norm, norm_dims=norm_dims,seed=random_seed) 
+
     
     data_norm, shape_in, nsamples, tfds_train_size = (train_info["data_norm"], train_info["shape_in"], 
                                                      train_info["nsamples"], train_info["dataset_size"])
@@ -99,7 +100,7 @@ def lightning_main(parser_args):
     # validation
     t0_val = timer()
     torch_val_dataloader, val_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
-                                         norm_obj=data_norm) 
+                                         norm_obj=data_norm,seed=random_seed) 
     
     ds_obj_val = val_info.get("ds_obj", None)
     
@@ -120,7 +121,7 @@ def lightning_main(parser_args):
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
                       max_epochs=model.swinir.hparams['nepochs'],
-                      num_nodes=1,
+                      num_nodes=2,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',
