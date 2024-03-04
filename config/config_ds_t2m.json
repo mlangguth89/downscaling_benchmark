@@ -1,7 +1,7 @@
 {
   "num_files": 22,
   "norm_dims": ["time", "rlat", "rlon"],
-  "batch_size": 32,
+  "batch_size": 16,
   "var_tar2in": "hsurf_tar",
   "varname_z": "hsurf_tar",
   "predictands": ["t_2m_tar"],

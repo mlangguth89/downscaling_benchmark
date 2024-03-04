@@ -121,7 +121,7 @@ def lightning_main(parser_args):
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
                       max_epochs=model.swinir.hparams['nepochs'],
-                      num_nodes=2,
+                      num_nodes=1,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',
