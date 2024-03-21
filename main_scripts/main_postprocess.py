@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2023-08-21"
+__update__ = "2024-03-04"
 
 import os, sys, glob
 import logging
@@ -25,16 +25,16 @@ import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from handle_data_class import HandleDataClass, get_dataset_filename
+from handle_data_class import prepare_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
-from model_utils import convert_to_xarray
+from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance, run_spectral_analysis
+from other_utils import convert_to_xarray, finditem
 #from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 
 
@@ -57,8 +57,8 @@ def main(parser_args):
     if os.path.isfile(logfile): os.remove(logfile)
     fh = logging.FileHandler(logfile)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    fh.setLevel(logging.INFO)
+    ch.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
@@ -92,49 +92,46 @@ def main(parser_args):
 
     named_targets = hparams_dict.get("named_targets", False)
 
+
+    ### Run inference on trained model
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
     trained_model = keras.models.load_model(model_dir, compile=False)
     logger.info(f"Model was loaded successfully.")
 
     # get datafile and read netCDF
-    fdata_test = get_dataset_filename(parser_args.data_dir, parser_args.dataset, "test",
-                                      ds_dict.get("laugmented", False))
 
-    logger.info(f"Start opening datafile {fdata_test}...")
+    t0_preproc = timer()
+    logger.info(f"Start preparing test dataset...")
     # prepare normalization
     js_norm = os.path.join(norm_dir, "norm.json")
     logger.debug("Read normalization file for subsequent data transformation.")
-    norm = ZScore(ds_dict["norm_dims"])
-    norm.read_norm_from_file(js_norm)
+    data_norm = ZScore(ds_dict["norm_dims"])
+    data_norm.read_norm_from_file(js_norm)
+    
+    # get dataset pipeline for inference
+    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": None,
+                 "lshuffle": False, "var_tar2in": ds_dict.get("var_tar2in", None), "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}
+    
+    tfds_test, test_info = prepare_dataset(parser_args.data_dir, parser_args.dataset, ds_dict, hparams_dict, "test", tfds_opts["predictands"], 
+                                           norm_obj=data_norm, norm_dims=ds_dict["norm_dims"], shuffle=tfds_opts["lshuffle"], lrepeat=tfds_opts["lrepeat"],
+                                           drop_remainder=tfds_opts["drop_remainder"]) 
 
-    tar_varname = ds_dict["predictands"][0]
+    # get ground truth data
+    tar_varname = test_info["varnames_tar"][0]
     logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
-    with xr.open_dataset(fdata_test) as ds_test:
-        ground_truth = ds_test[tar_varname].astype("float32", copy=True)
-        ds_test = norm.normalize(ds_test)
-
-    # prepare training and validation data
-    logger.info(f"Start preparing test dataset...")
-    t0_preproc = timer()
-
-    da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
+    # get ground truth data
+    ds_test = xr.open_dataset(test_info["file"])
+    ground_truth = ds_test[tar_varname].astype("float32", copy=True)
     
-    # clean-up to reduce memory footprint
-    del ds_test
-    gc.collect()
-    #free_mem([ds_test])
-
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
-                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
-
-    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test, **tfds_opts)
-    
+    # get predictors
     predictors = ds_dict.get("predictors", None)
     if predictors is None:
-        predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
-        if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
+        predictors = [var for var in list(ds_test.data_vars) if var.endswith("_in")]
+
+    tfds_opts["predictors"] = predictors
+    tfds_opts["predictands"] = test_info["varnames_tar"]
 
     # start inference
     logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
@@ -149,9 +146,10 @@ def main(parser_args):
     gc.collect()
     #free_mem([tfds_test])
 
+    ### Post-process results from test dataset
     # convert to xarray
-    y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
-                               da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
+    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, ground_truth.squeeze().coords,
+                               ground_truth.squeeze().dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
     logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
@@ -175,22 +173,6 @@ def main(parser_args):
 
     logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
-    # run feature importance analysis for RMSE
-    logger.info("Start feature importance analysis...")
-    t0_fi = timer()
-
-    rmse_ref = rmse_all.mean().values
-
-    _ = run_feature_importance(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
-                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
-    
-    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
-    
-    # clean-up to reduce memory footprint
-    del da_test
-    gc.collect()
-    #free_mem([da_test])
-
     # instantiate score engine with retained spatial dimensions
     score_engine = Scores(y_pred, ground_truth, [])
 
@@ -205,18 +187,45 @@ def main(parser_args):
     cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
     _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
                                dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
-                               projection=proj)
+                               projection=proj, model_type=model_type)
 
     lvl_bias = np.arange(-2., 2.1, 0.1)
     cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
     _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
                                dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
-                               projection=proj)
+                               projection=proj, model_type=model_type)
 
     logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
+    # run spectral analysis
+    logger.info("Start spectral analysis...")
+    t0_spec = timer()
+
+    ds = ds.rename({f"{tar_varname}_ref": "COSMO-REA6", f"{tar_varname}_fcst": f"{model_type.upper().replace('_', ' ')}"})
+
+    run_spectral_analysis(ds, plt_dir, "T2m", "K", ["rlon", "rlat"], lcutoff=True)
+
+    logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
+
+    # run feature importance analysis for RMSE
+    logger.info("Start feature importance analysis...")
+    t0_fi = timer()
+
+    rmse_ref = rmse_all.mean().values
+
+    _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
+                               tfds_opts, plt_dir, patch_size=(8, 8))
+    
+    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+    
+    # clean-up to reduce memory footprint
+    del ds_test
+    gc.collect()
+    #free_mem([da_test])
+
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
+
 
 
 if __name__ == "__main__":
