@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2021 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -8,7 +8,7 @@ Collection of auxiliary functions for statistical evaluation and class for Score
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2023-12-18"
+__date__ = "2024-03-08"
 
 from typing import Union, List
 try:
@@ -21,8 +21,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from skimage.util.shape import view_as_blocks
-from handle_data_class import HandleDataClass
-from other_utils import provide_default, check_str_in_list, convert_to_xarray
+from handle_data_class import make_tf_dataset_allmem
+from other_utils import check_str_in_list, convert_to_xarray
 
 
 # basic data types
@@ -81,11 +81,11 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
         raise ValueError(err_mess)
 
     # get and set some basic attributes
-    data_cond_longname = provide_default(data_cond.attrs, "longname", "conditioning_variable")
-    data_cond_unit = provide_default(data_cond.attrs, "unit", "unknown")
+    data_cond_longname = data_cond.attrs.get("longname", "conditioning_variable")
+    data_cond_unit = data_cond.attrs.get("unit", "unknown")
 
-    data_tar_longname = provide_default(data_tar.attrs, "longname", "target_variable")
-    data_tar_unit = provide_default(data_cond.attrs, "unit", "unknown")
+    data_tar_longname = data_tar.attrs.get("longname", "target_variable")
+    data_tar_unit = data_tar.attrs.get("unit", "unknown")
 
     # get bins for conditioning
     data_cond_min, data_cond_max = np.floor(np.min(data_cond)), np.ceil(np.max(data_cond))
@@ -419,11 +419,11 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (6, 6)):
     return da_permute
 
 
-def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                       data_loader_opt: dict, patch_size = (6, 6), variable_dim = "variable"):
+def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                       data_loader_opt: dict, patch_size = (6, 6)):
     """
     Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
-    :param da: The (test-)data provided in DataArray with variable-dimension
+    :param ds: The unnormalized (test-)dataset
     :param predictors: List of predictor variables
     :param varname_tar: Name of target variable
     :param model: Trained model for inference
@@ -431,40 +431,44 @@ def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: s
     :param score_name: Name of metric-score to be calculated
     :param data_loader_opt: Dictionary providing options for the TensorFlow data pipeline
     :param patch_size: Tuple for patch size during spatio-temporal permutation
-    :param variable_dim: Name of variable dimension
     :return score_all: DataArray with scores for all predictor variables
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
 
     # sanity checks
-    _ = check_str_in_list(list(da[variable_dim]), predictors)
-    try:
-        assert da.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {da.dims[0]}."
-    except AssertionError as e:
-        func_logger.error(e, stack_info=True, exc_info=True)
-        raise e
+    _ = check_str_in_list(list(ds.data_vars), predictors)
+    #try:
+    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
+    #except AssertionError as e:
+    #    func_logger.error(e, stack_info=True, exc_info=True)
+    #    raise e
 
-    ntimes = len(da["time"])
+    ntimes = len(ds["time"])
 
     # get ground truth data and underlying metadata
-    ground_truth = norm.denormalize(da.sel({variable_dim: varname_tar}), varname=varname_tar)
+    ground_truth = ds[varname_tar].copy() 
+    # normalize dataset
+    ds = norm.normalize(ds)   
 
     # initialize score-array
-    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": da["time"]},
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
                              dims=["predictor", "time"])
 
     for var in predictors:
         func_logger.info(f"Run sample importance analysis for {var}...")
         # get copy of sample array
-        da_copy = da.copy(deep=True)
+        ds_copy = ds.copy(deep=True)
         # permute sample
-        da_permut = sample_permut_xyt(da.sel({variable_dim: var}).copy(), patch_size=patch_size)
-        da_copy.loc[{variable_dim: var}] = da_permut
+        da_now = ds[var].copy()
+        if "time" not in da_now.dims:
+            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
+        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
+        ds_copy[var] = da_permut
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        tfds_test = HandleDataClass.make_tf_dataset_allmem(da_copy, **data_loader_opt)
+        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
 
         # predict
         func_logger.info(f"Run inference with permuted sample for {var}...")
@@ -481,10 +485,6 @@ def feature_importance(da: xr.DataArray, predictors: list_or_str, varname_tar: s
         #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
 
     return score_all
-
-
-
-
                                     
 
 
