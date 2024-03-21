@@ -501,11 +501,15 @@ class Scores:
         :param data_ref: reference or ground truth data
         """
         self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias,
-                             "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr}
+                             "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
+                             "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
+                             "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
+                             "me_std": self.calc_mestd}
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
         self.avg_dims = dims
+        self.knwon_geodims = {"lat_dims": ["rlat", "lat", "latitude"], "lon_dims": ["rlon", "lon", "longitude"]}
 
     def __call__(self, score_name, **kwargs):
         try:
@@ -597,7 +601,7 @@ class Scores:
         :param thres: threshold to define events
         :return: fbi-values
         """
-        a, b, c, d = self.get_2x2_event_counts(thresh)
+        a, b, c, _ = self.get_2x2_event_counts(thresh)
 
         denom = a+c
         fbi = (a + b)/denom
@@ -728,6 +732,49 @@ class Scores:
             psnr = 20. * np.log10(pixel_max / np.sqrt(mse))
 
         return psnr
+    
+    def calc_mestd(self, downscaling_fac: int, **kwargs):
+        """
+        Calculate the mean error of standard deviation of forecast data w.r.t. reference data
+        Note that the MESTD is always averaged over the spatial dimensions (domanin average is returned).
+        Further averaging can be applied by passing the keyword argument 'non_spatial_avg_dims'.
+        :param downscaling_fac: downscaling factor (defines patching)
+        :return: mean error of standard deviation
+        """
+        xy_dims = [self.check_for_coords(self.data_dims, "lon"), self.check_for_coords(self.data_dims, "lat")]
+        dims_no_xy = [dim for dim in self.data_dims if dim not in xy_dims]
+    
+        # ensure that spatial dimensions are the first two dimensions for later patching
+        data_fcst = self.data_fcst.transpose(*xy_dims, *dims_no_xy,).copy()
+        data_ref = self.data_ref.transpose(*xy_dims, *dims_no_xy).copy()
+
+        data_sh = data_fcst.shape    
+
+        # Patching forecast data, 
+        # Note:
+        # view_as_blocks results into an array with shape: (np, nq, 1, nd, nd, ...) 
+        # where np and nq correspond to the number of patches in spatial directions and nd to the patch size (=downscaling_fac)
+        data_fcst_patches = np.squeeze(view_as_blocks(data_fcst.values, block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::])))
+        # Patching ground truth data
+        data_ref_patches = np.squeeze(view_as_blocks(data_ref.values, block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::])))
+        
+        # Calculate standard deviation for each patch
+        std_fcst_patches = np.std(data_fcst_patches, axis=(2, 3))
+        std_ref_patches = np.std(data_ref_patches, axis=(2, 3))
+        
+        # Calculate mean error of the standard deviation over all patches
+        mean_error_std = np.mean(np.abs(std_fcst_patches - std_ref_patches), axis=(0, 1))
+
+        # convert back to DataArray
+        mean_error_std = xr.DataArray(mean_error_std, coords={dim: data_fcst[dim] for dim in dims_no_xy}, dims=dims_no_xy)
+
+        # apply further averaging if requested
+        avg_dims = kwargs.get("non_spatial_avg_dims", None)
+        if avg_dims is not None:
+            mean_error_std = mean_error_std.mean(dim=avg_dims)
+        
+        return mean_error_std
+
 
     def calc_spatial_variability(self, **kwargs):
         """
@@ -874,8 +921,7 @@ class Scores:
 
         return seeps_values
 
-    @staticmethod
-    def calc_geo_spatial_diff(scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
+    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
@@ -890,24 +936,8 @@ class Scores:
         assert order in [1, 2], f"Order for {method} must be either 1 or 2."
 
         dims = list(scalar_field.dims)
-        lat_dims = ["rlat", "lat", "latitude"]
-        lon_dims = ["rlon", "lon", "longitude"]
 
-        def check_for_coords(coord_names_data, coord_names_expected):
-            stat = False
-            for i, coord in enumerate(coord_names_expected):
-                if coord in coord_names_data:
-                    stat = True
-                    break
-
-            if stat:
-                return i, coord_names_expected[i]  # just take the first value
-            else:
-                raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
-                                 .format(",".join(coord_names_expected)))
-
-        lat_ind, lat_name = check_for_coords(dims, lat_dims)
-        lon_ind, lon_name = check_for_coords(dims, lon_dims)
+        lat_name, lon_name = self.check_for_coords(dims, "lat"), self.check_for_coords(dims, "lon")
 
         lat, lon = np.deg2rad(scalar_field[lat_name]), np.deg2rad(scalar_field[lon_name])
         dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values
@@ -923,3 +953,30 @@ class Scores:
             raise ValueError(f"Second-order differentation is not implemenetd in {method} yet.")
 
         return var_diff_amplitude
+
+
+    def check_for_coords(self, coord_names_data, dim_query: str, return_index: bool = False):
+        """
+        Check if one of the known geographical coordinates is part of the passed list.
+        :param coord_names_data: list of coordinate names
+        :param dim_query: dimension to be checked for (either 'lat' or 'lon')
+        :param return_index: flag to return the index of the found coordinate instead of name
+        :return: index of the first found coordinate and the name of the coordinate
+        """
+        assert dim_query in ["lat", "lon"], "dim_query must be either 'lat' or 'lon'."
+
+        dim_key = dim_query + "_dims"
+        known_geodims = self.known_geodims[dim_key]
+
+        stat = False
+        for i, coord in enumerate(known_geodims):
+            if coord in coord_names_data:
+                stat = True
+                break
+
+        if stat:
+            return_val = i if return_index else known_geodims[i]
+            return return_val
+        else:
+            raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
+                                .format(",".join(known_geodims)))
