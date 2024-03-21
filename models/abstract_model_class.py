@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-11"
-__update__ = "2023-12-15"
+__update__ = "2024-03-20"
 
 # import modules
 import os
@@ -17,7 +17,8 @@ import tensorflow.keras as keras
 import tensorflow as tf
 
 from model_utils import TimeHistory, handle_opt_utils, make_keras_pickable
-from other_utils import merge_dicts, remove_items
+from other_utils import merge_dicts, remove_items, to_list
+import json
 
 
 class AbstractModelClass(ABC):
@@ -59,7 +60,7 @@ class AbstractModelClass(ABC):
         self.__compile_options_is_set = False
         self._input_shape = input_shape
         self.__hparams = hparams
-        self._varnames_tar = varnames_tar
+        self._varnames_tar = to_list(varnames_tar)
         self._savedir = savedir
         self._expname = expname
         self._n_predictands = len(self._varnames_tar)
@@ -278,18 +279,6 @@ class AbstractModelClass(ABC):
     def get_settings(self) -> Dict:
         """
         Get all class attributes that are not protected in the AbstractModelClass as dictionary.
-
-    def super_args(cls):
-        args = []
-        for super_cls in cls.__mro__:
-            if super_cls == cls:
-                continue
-            if hasattr(super_cls, "own_args"):
-                # args.extend(super_cls.own_args())
-                args.extend(getattr(super_cls, "own_args")())
-        return list(set(args))
-
-        :return: all class attributes
         """
         return dict((k, v) for (k, v) in self.__dict__.items() if not k.startswith("_AbstractModelClass__"))
 
@@ -329,7 +318,6 @@ class AbstractModelClass(ABC):
         def get_fit_opts(self):
             return {'callbacks': [EarlyStopping(monitor='val_loss', patience=10)]}
         """
-        print("Hallo")
         fit_opts = {'callbacks': [TimeHistory()]}
 
         add_opts = handle_opt_utils(self, "get_fit_options")
@@ -351,6 +339,13 @@ class AbstractModelClass(ABC):
         if "Padding2D" in kwargs.keys():
             kwargs.update(kwargs["Padding2D"].allowed_paddings)
         self.custom_objects = kwargs
+
+    def save_hparams_to_json(self):
+        """
+        Save hyperparameters to json file und savedir.
+        """
+        with open(os.path.join(self.savedir, f"config_{self.model_name.lower()}.json"), "w") as f:
+            json.dump(self.hparams, f)
 
     @classmethod
     def requirements(cls):

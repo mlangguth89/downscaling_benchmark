@@ -388,9 +388,9 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     return tfds
 
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
-                            lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
-                            var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
-                            with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
+                           lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
+                           var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
+                           with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
