@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Class for building blocks of U-Net as well as model classes for Sha U-Net and De
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2023-12-14"
+__update__ = "2024-03-08"
 
 # import modules
 import os
@@ -17,6 +17,7 @@ from typing import List
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
+import keras.backend as K
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
                                      Activation, AveragePooling2D, Add, UpSampling2D)
@@ -115,8 +116,6 @@ class UNetModelBase:
 
         return x
 
-
-
     def decoder_block(self, inputs, skip_features, num_filters, strides_up: int = 2, l_subpixel: bool = False, **kwargs_conv_block):
         """
         One complete decoder block used in U-net (reverting the encoder)
@@ -194,15 +193,19 @@ class UNetModelBase:
         return x
 
 
-class UNet_Sha(AbstractModelClass):
+class Sha_UNet(AbstractModelClass):
     
-    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False):
+    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False, with_horovod: bool = False):
         
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
         
         self.concat_out = concat_out
         self.modelname = "unet_sha"
-        
+        self.with_horovod = with_horovod
+        if self.with_horovod:
+            import horovod.tensorflow.keras as hvd
+            from horovod.tensorflow import callbacks as hvd_callbacks
+
         # get building blocks for U-Net
         building_blocks = UNetModelBase()
         self.conv_block = building_blocks.conv_block
@@ -214,6 +217,8 @@ class UNet_Sha(AbstractModelClass):
             self._n_predictands_dyn = self._n_predictands - 1
         else:
             self._n_predictands_dyn = self._n_predictands
+
+        assert self._n_predictands_dyn > 0, f"Number of dynamic predictors is zero, check varnames_tar: {self._varnames_tar}"
 
         self.set_model()
         # set compile and fit options as well as custom objects
@@ -270,8 +275,17 @@ class UNet_Sha(AbstractModelClass):
             opt = keras.optimizers.Adam
         elif custom_opt == "rmsprop":
             opt = keras.optimizers.RMSprop
+        elif custom_opt == "sgd":
+            opt = keras.optimizers.SGD
+        else:
+            raise ValueError(f"Optimizer '{custom_opt}' is unknown. Please specify a known optimizer.")
 
-        compile_opts = {"optimizer": opt(learning_rate=self.hparams["lr"])}
+        scale_fac = hvd.size() if self.with_horovod else 1.
+        compile_opts = {"optimizer": opt(learning_rate=self.hparams["lr"]*scale_fac)}
+
+        if self.with_horovod:
+            compile_opts["optimizer"] = hvd.DistributedOptimizer(compile_opts["optimizer"], backward_passes_per_step=1, 
+                                                                 average_aggregated_gradients=True)
 
         if self.hparams.get("z_branch", False):
             compile_opts["loss"] = {f"{var}": get_custom_loss(self.hparams["loss_func"]) for var in self._varnames_tar}
@@ -285,18 +299,29 @@ class UNet_Sha(AbstractModelClass):
     def get_fit_options(self):
         
         # get name of loss component to track
-        loss_monitor = f"val_{self.compile_options['loss'].keys()[0]}_loss" if self.hparams.get("z_branch", False) else "val_loss"
+        loss_monitor = f"val_{list(self.compile_options['loss'].keys())[0]}_loss" if self.hparams.get("z_branch", False) else "val_loss"
         
         unet_callbacks = []
         
         if self.hparams["lr_decay"]:
-            unet_callbacks.append(LearningRateScheduler(self.get_lr_scheduler(), verbose=1))
+            if self.with_horovod:
+                warmup_epochs = 5
+                start_epoch = max(self.hparams["decay_start"], warmup_epochs)     # avoid that lr is decayed during warmup
+                unet_callbacks += [hvd_callbacks.LearningRateScheduleCallback(initial_lr=self.hparams["lr"], multiplier=self.get_lr_scheduler(),
+                                                                             start_epoch=start_epoch, end_epoch=self.hparams["decay_end"]), 
+                                   hvd_callbacks.LearningRateWarmupCallback(self.hparams["lr"], warmup_epochs=warmup_epochs, verbose=1)] 
+            else:
+                unet_callbacks.append(LearningRateScheduler(self.get_lr_scheduler(), verbose=1))
         
         if self.hparams["lcheckpointing"]:
             savedir_best = os.path.join(self._savedir, f"{self._expname}_best")
             os.makedirs(savedir_best, exist_ok=True)
 
-            unet_callbacks.append(ModelCheckpoint(savedir_best, monitor=loss_monitor, verbose=1, save_best_only=True, mode="min"))
+            chkpt_obj = ModelCheckpoint(savedir_best, monitor=loss_monitor, verbose=1, save_best_only=True, mode="min")
+            if not self.with_horovod:
+                unet_callbacks.append(chkpt_obj)
+            else: # only add checkpointing for rank 0
+                if hvd.rank() == 0: unet_callbacks.append(chkpt_obj)  
             
         if self.hparams["learlystopping"]:
             unet_callbacks.append(EarlyStopping(monitor=loss_monitor, patience=8))
@@ -308,13 +333,12 @@ class UNet_Sha(AbstractModelClass):
         
     def set_hparams_default(self):
         """
-        Note: Hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
-              Thus, the default just sets empty dictionaries.
+        Note: Hyperparameters whose default is None must be parsed in any case.
         """
-        self.hparams_default = {"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},      # arguments for building blocks of U-Net:
-                                "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,       # see keyword-aguments of conv_block,
-                                "l_subpixel": True, "z_branch": True, "channels_start": 56,                                                # encoder_block and decoder_block
-                                "batch_size": 32, "lr": 5.e-05, "nepochs": 35, "loss_func": "mae", "loss_weights": [1.0, 1.0], "named_targets": True,             # training parameters
+        self.hparams_default = {"nepochs": None ,"kernel": (3, 3), "strides": (1, 1), "padding": "same", "activation": "swish", "activation_args": {},  # arguments for building blocks of U-Net:
+                                "kernel_init": "he_normal", "l_batch_normalization": True, "kernel_pool": (2, 2), "l_avgpool": True,                    # see keyword-aguments of conv_block,
+                                "l_subpixel": True, "z_branch": True, "channels_start": 56,                                                             # encoder_block and decoder_block
+                                "batch_size": 32, "lr": 5.e-05, "loss_func": "mae", "loss_weights": [1.0, 1.0], "named_targets": True,                  # training parameters
                                 "lr_decay": False, "decay_start": 3, "decay_end": 20, "lr_end": 1.e-06, "l_embed": False, 
                                 "optimizer": "adam", "lcheckpointing": True, "learlystopping": False, }
         
@@ -335,19 +359,30 @@ class UNet_Sha(AbstractModelClass):
         # calculate decay rate from start and end learning rate
         decay_rate = 1./ne_decay*np.log(lr_end/lr_start)
 
-        def lr_scheduler(epoch, lr):
-            if epoch < decay_st:
-                return lr
-            elif decay_st <= epoch < decay_end:
-                return lr * tf.math.exp(decay_rate)
-            elif epoch >= decay_end:
-                return lr
+        if self.with_horovod:
+            # Learning rate scheduler for Horovod requires only epoch as argument.
+            def lr_scheduler(epoch):
+                if epoch < decay_st:
+                    return 1.
+                elif decay_st <= epoch < decay_end:
+                    return tf.math.exp(decay_rate)
+                elif epoch >= decay_end:
+                    return 1.       
+        else:
+            # Learning rate scheduler for Keras requires epoch and learning rate as arguments.
+            def lr_scheduler(epoch, lr):
+                if epoch < decay_st:
+                    return lr
+                elif decay_st <= epoch < decay_end:
+                    return lr * tf.math.exp(decay_rate)
+                elif epoch >= decay_end:
+                    return lr
 
         return lr_scheduler
 
     
 
-class UNet_DeepRU(UNet_Sha):
+class DeepRU_UNet(Sha_UNet):
     
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
         
@@ -415,10 +450,12 @@ class UNet_DeepRU(UNet_Sha):
         self.model = Model(inputs, output_dyn, name="downscaling_deepru")
         
     def set_hparams_default(self):
-        
-        self.hparams_default = {"kernel": (3, 3), "nconv_res": 3, "padding": "same", "activation": "LeakyReLU", "kernel_init": "he_normal",
+        """
+        Note: Hyperparameters whose default is None must be parsed in any case.
+        """
+        self.hparams_default = {"nepochs": 50, "kernel": (3, 3), "nconv_res": 3, "padding": "same", "activation": "LeakyReLU", "kernel_init": "he_normal",
                                 "l_batch_normalization": True, "interpolation": "bilinear", "channels_start": 64, "dchannels": 64,
                                 "strides_list": [(2, 1), (1, 3), (2, 1), (2, 3), (2, 2), (2, 2)],               # for domain size of 128x144 grid points
-                                "batch_size": 32, "lr": 1.e-03, "nepochs": 35, "loss_func": "mse",              # training parameters
+                                "batch_size": 32, "lr": 5.e-05, "loss_func": "mae",                             # training parameters
                                 "lr_decay": False, "decay_start": 3, "decay_end": 20, "lr_end": 1.e-06, "l_embed": False, 
                                 "optimizer": "adam", "lcheckpointing": True, "learlystopping": False}
