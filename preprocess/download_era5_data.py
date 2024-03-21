@@ -36,7 +36,7 @@ class ERA5_Data_Loader(object):
     knwon_req_keys = ["ml", "sfc"]
     allowed_formats = ["netcdf", "grib"]
     # defaults 
-    area = [75, -45, 20, 65]
+    area = [60, 0, 40, 40]
     month_start = 1
     month_end = 12
 
@@ -128,9 +128,9 @@ class ERA5_Data_Loader(object):
 
         # create data requests for each month
         for year in range(start, end+1):
-            req_dict = req_dict_base.copy()
-            req_dict["year"] = [f"{year}"]
             for month in range(month_start, month_end+1):
+                req_dict = req_dict_base.copy()
+                req_dict["year"] = [f"{year}"]
                 req_dict["month"] = [f"{month:02d}"]
                 # get last day of month
                 last_day = pd.Timestamp(year, month, 1) + pd.offsets.MonthEnd(1)
@@ -187,7 +187,8 @@ class ERA5_Data_Loader(object):
                          "time": "00/to/23/by/1",
                          "type": "an", 
                          "area": area ,
-                         "grid": "0.25/0.25",}
+                         "grid": "0.25/0.25",
+                         "format": format}
 
         # initialize multiprocessing pool
         func_logger.info(f"Downloading ERA5 model-level data for variables {', '.join(vars)} with {self.nworkers} workers.")
@@ -198,10 +199,10 @@ class ERA5_Data_Loader(object):
 
         # create data requests for each month
         for year in range(start, end+1):
-            req_dict = req_dict_base.copy()
             for month in range(month_start, month_end+1):
                 # get last day of month
                 last_day = pd.Timestamp(year, month, 1) + pd.offsets.MonthEnd(1)
+                req_dict = req_dict_base.copy()
                 req_dict["date"] = f"{year}-{month:02d}-01/to/{year}-{month:02d}-{last_day.day}" 
                 fout = f"era5_ml_{year}-{month:02d}.{format}"
 
