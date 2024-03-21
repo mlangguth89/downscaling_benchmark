@@ -136,16 +136,6 @@ def main(parser_args):
         print(f"Training data loading time: {ttrain_load:.2f}s.")
         print(f"Average throughput: {ds_obj_train.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
 
-    # plot model architecture
-    try:
-        if callable(model.__dict__.get("plot_model", None)):
-            model.plot_model(model_savedir, show_shapes=True) # , show_layer_actiavtions=True)
-        else:
-            plot_model(model, os.path.join(model_savedir, f"plot_{parser_args.exp_name}.png"),
-                        show_shapes=True) #, show_layer_activations=True)
-    except Exception as _:
-        print("Model could not be plotted. Skip producing model plot.")
-
     # save model
     t0_save = timer()
     model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
