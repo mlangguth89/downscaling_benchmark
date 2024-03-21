@@ -1,11 +1,10 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 # doc-string
 """
 Some auxiliary functions for the project:
-    * provide_default
     * remove_key_from_dict
     * to_list
     * get_func_kwargs
@@ -29,13 +28,15 @@ Some auxiliary functions for the project:
     * finditem
     * remove_items
     * convert_to_xarray
+    * get_training_time_dict
+    * get_batch_size_mb
 """
 # doc-string
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-12-15"
+__update__ = "2024-02-26"
 
 import os
 import gc
@@ -45,7 +46,6 @@ import resource
 import numpy as np
 import pandas as pd
 import xarray as xr
-import tensorflow as tf
 import datetime as dt
 from dateutil.parser import parse as date_parser
 import shutil
@@ -56,28 +56,6 @@ except ImportError:
     from typing import Iterable
 
 str_or_List = Union[List, str]
-
-
-def provide_default(dict_in, keyname, default=None, required=False):
-    """
-    Returns values of key from input dictionary or alternatively its default
-    :param dict_in: input dictionary
-    :param keyname: name of key which should be added to dict_in if it is not already existing
-    :param default: default value of key (returned if keyname is not present in dict_in)
-    :param required: Forces existence of keyname in dict_in (otherwise, an error is returned)
-    :return: value of requested key or its default retrieved from dict_in
-    """
-
-    if not required and default is None:
-        raise ValueError("Provide default when existence of key in dictionary is not required.")
-
-    if keyname not in dict_in.keys():
-        if required:
-            print(dict_in)
-            raise ValueError("Could not find '{0}' in input dictionary.".format(keyname))
-        return default
-    else:
-        return dict_in[keyname]
 
 
 def remove_key_from_dict(dict_in: dict, key: str) -> dict:
@@ -212,7 +190,7 @@ def flatten(nested_iterable):
             yield x
 
 
-def remove_files(files: List, lbreak: True):
+def remove_files(files: List, lbreak: bool = True):
     """
     Remove files from a list
     :param files: list of file names
@@ -326,6 +304,10 @@ def find_closest_divisor(n1, div):
 
 
 def print_gpu_usage(message="", show_line=False):
+    
+    # This method is only available if tensorflow is installed
+    import tensorflow as tf
+
     try:
         usage = tf.config.experimental.get_memory_info("GPU:0")
         output = message + ' - '.join([f"{k}: {v / 1024**3:.2f} GB" for k, v in usage.items()])
@@ -425,7 +407,7 @@ def merge_dicts(default_dict, user_dict, recursive: bool = True):
                 merged_dict[key] = value
         else:
             # Otherwise, set the value in the merged dictionary.
-            assert isinstance(value, type(merged_dict[key])), \
+            assert isinstance(value, type(merged_dict[key])) or merged_dict[key] is None, \
                 f"Type mismatch for key '{key}': {type(value)} != {type(merged_dict[key])}"
             merged_dict[key] = value
 
@@ -519,7 +501,11 @@ def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
     return mout_xr
 
 def get_training_time_dict(epoch_times: list, steps):
-
+    """
+    Computes training times from a list of epoch times
+    :param epoch_times: list of epoch times obtained from TimeHistory-callback (see model_utils.py)
+    :param steps: number of steps
+    """
     tot_time = np.sum(epoch_times)
 
     training_times = {"Total training time": np.sum(epoch_times), "Avg. training time per epoch": np.mean(epoch_times),
@@ -529,3 +515,11 @@ def get_training_time_dict(epoch_times: list, steps):
 
     return training_times
 
+def get_batch_size_mb(shape_in, batch_size):
+    """
+    Computes the memory footprint of a batch of data
+    :param shape_in: shape of a single data sample
+    :param batch_size: batch size
+    :return: memory footprint of a batch of data
+    """
+    return np.prod(shape_in) * batch_size * 4 / 1.e+06

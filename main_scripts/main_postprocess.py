@@ -9,7 +9,11 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
+<<<<<<< HEAD
 __update__ = "2023-01-28"
+=======
+__update__ = "2024-03-04"
+>>>>>>> michael_issue_010-updates-maelstrom-repo
 
 import os, sys, glob
 import logging
@@ -34,7 +38,7 @@ from other_utils import convert_to_xarray, finditem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
 
 
@@ -59,8 +63,8 @@ def main(parser_args):
     if os.path.isfile(logfile): os.remove(logfile)
     fh = logging.FileHandler(logfile)
     ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    fh.setLevel(logging.INFO)
+    ch.setLevel(logging.INFO)
+    fh.setLevel(logging.DEBUG)
 
     fh.setFormatter(formatter)
     ch.setFormatter(formatter)
@@ -94,6 +98,10 @@ def main(parser_args):
 
     named_targets = hparams_dict.get("named_targets", False)
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> michael_issue_010-updates-maelstrom-repo
     ### Run inference on trained model
     # Load checkpointed model
     logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
@@ -226,6 +234,7 @@ def main(parser_args):
 
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
+
 
 
 if __name__ == "__main__":

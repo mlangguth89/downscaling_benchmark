@@ -2,13 +2,20 @@
 #
 # SPDX-License-Identifier: MIT
 
+"""
+Methods to handle data for the neural networks.
+
+To-Dos:
+    - Shuffle indices for sharding in make_tf_dataset_all-method
+"""
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-01-24"
+__update__ = "2024-03-08"
 
 import os, glob
-from typing import List, Tuple
+from typing import List, Tuple, Union, Dict
 import re
 from operator import itemgetter
 from functools import partial
@@ -296,6 +303,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
+
+
         ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
                                      selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
                                      var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
@@ -310,7 +319,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
                                    lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
-                     "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all, "file": ds_obj.file_list}
+                     "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all, "file": ds_obj.file_list,
+                     "effective_dataset_size": ds_obj.effective_dataset_size}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -321,19 +331,15 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         ds = norm_obj.normalize(ds)
 
         nsamples = len(ds["time"])
-        if shuffle:
-            nshuffle = nsamples
-        else:
-            nshuffle = 1
 
         # create TensorFlow dataset
         tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
                                       var_tar2in=ds_dict.get("var_tar2in", None), lrepeat=lrepeat, drop_remainder=drop_remainder,
-                                      named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
-
+                                      lshuffle=shuffle, named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
         
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
-                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all, "file": fname_or_pattern}
+                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all, "file": fname_or_pattern, 
+                     "effective_dataset_size": ds.nbytes}
         
     return tfds, tfds_info
 
@@ -367,6 +373,7 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     # enable flexibility in factor for range
     n_reads = int(ds_obj.nfiles_merged*nepochs)
     if ds_obj.with_horovod:
+        import horovod.tensorflow as hvd
         tfds = tf.data.Dataset.range(n_reads).shard(hvd.size(), hvd.rank()).map(tf_read_nc).prefetch(1)
     else:
         tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
@@ -385,13 +392,16 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     return tfds
 
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
-                            lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
-                            var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
-                            with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
+                           lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
+                           var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
+                           with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
-    :param ds: the xarray dataset with normalized data. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
+
+    TO-DO: 
+
+    :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
@@ -409,6 +419,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     if with_horovod:
         import horovod.tensorflow as hvd
         ntimes = len(ds["time"])
+        # To-Do: Indices should be shuffled to avoid daytime dependencies
         inds = list(range(hvd.rank(), ntimes, hvd.size()))
         ds = ds.isel({"time": inds})
 
@@ -472,7 +483,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     #   (see https://stackoverflow.com/questions/60226022/tf-data-generator-keras-repeat-does-not-work-why)
     # * repeat must be applied after shuffle to get varying mini-batches per epoch
     # * batch-size is increased to allow substepping in train_step
-    if lshuffle > 1:
+    if lshuffle:
         data_iter = data_iter.cache().shuffle(shuffle_samples).batch(batch_size, drop_remainder=drop_remainder)
     else:
         data_iter = data_iter.cache().batch(batch_size, drop_remainder=drop_remainder)
@@ -495,7 +506,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
 
 
 class StreamMonthlyNetCDF(object):
-    def __init__(self, datadir, patt, nfiles_merge: int, selected_predictands: List, sample_dim: str = "time",
+    def __init__(self, datadir, patt, nfiles_merge: Union[int, Dict], selected_predictands: List, sample_dim: str = "time",
                  selected_predictors: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
                  with_horovod: bool = False, seed: int = None, nworkers: int = 10):
         """
@@ -504,7 +515,7 @@ class StreamMonthlyNetCDF(object):
         Furthermore, the class attributes provide key information on the handled dataset
         :param datadir: directory where set of netCDF-files are located
         :param patt: filename pattern to allow globbing for netCDF-files
-        :param nfiles_merge: number of files that will be loaded into memory (corresponding to one dataset subset)
+        :param nfiles_merge: number of files per data subset loaded into memory (can be an integer or a dictionary like {"#GPUS=1": 33})
         :param selected_predictands: list of predictand variables names to be obtained
         :param sample_dim: name of dimension in the data over which sampling should be performed
         :param selected_predictors: list of predictor variable names to be obtained, pass None
@@ -539,7 +550,7 @@ class StreamMonthlyNetCDF(object):
         # list of files can be larger for distributed training, i.e. effective dataset size can be increased
         if self.with_horovod:
             # re-do dataset calculation since file list is potentially larger for distributed training
-            self.effective_dataset_size = self.get_dataset_size()
+            self.effective_dataset_size = self.get_dataset_size(random_list=True)
         else:
             self.effective_dataset_size = self.dataset_size
         # handle selected variables
@@ -557,16 +568,12 @@ class StreamMonthlyNetCDF(object):
         # self.ds_const = self.get_const_vars()
         # get normalization object
         t0 = timer()
+        # check if normalization object is provided
         self.normalization_time = -999.
         if norm_obj is None:
-            max_samples_norm = 10000000
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            if self.nsamples > max_samples_norm:
-                print(f"Reducing samples for computing normalization parameters to {max_samples_norm}.")
-                self.norm_params = self.data_norm.get_required_stats(self.ds_all.isel({self.sample_dim: slice(max_samples_norm)}))
-            else:
-                self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
             self.normalization_time = timer() - t0
         else:
             self.data_norm = norm_obj
@@ -626,8 +633,15 @@ class StreamMonthlyNetCDF(object):
         return self._nfiles2merge
     
     @nfiles2merge.setter
-    def nfiles2merge(self, n2merge):
-        n = find_closest_divisor(self.nfiles, n2merge)
+    def nfiles2merge(self, n2merge: Union[int, Dict]):
+
+        if isinstance(n2merge, int):
+            n = n2merge
+        else: 
+            n = n2merge[f"#GPUS={hvd.size()}"] if self.with_horovod else n2merge[f"#GPUS=1"]
+
+        # ensure that n is a divisor of the total number of files
+        n = find_closest_divisor(self.nfiles, n)
 
         self._nfiles2merge = n
         # for distributed training, data files must be distributed over workers
@@ -701,14 +715,22 @@ class StreamMonthlyNetCDF(object):
             # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
             #       * The following operation order must concatenate var_tar2in by da_in to ensure
             #         that the variable appears at first place. This is required to avoid
-            #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
+            #         that var_tar2in becomes a predictand when slicing takes place in tf_split
             da_now = xr.concat([da_now.sel({"variables": self.var_tar2in}), da_now], dim="variables")
 
         return da_now.transpose(..., "variables")
 
-    def get_dataset_size(self):
+    def get_dataset_size(self, random_list: bool = False):
+        """
+        Sum the size of all dataset files in bytes.
+        :param random_list: if True, the size computation is based on randomized list which might be longer for distributed training
+        :return: size of dataset files in bytes 
+        """
         dataset_size = 0.
-        for datafile in self.file_list:
+        # iterate over file_list_random-attribute since this comprises the actual files that are streamed 
+        # incl. duplicates in case of distributed training
+        flist = self.file_list_random if random_list else self.file_list 
+        for datafile in flist:
             dataset_size += os.path.getsize(datafile)
 
         return dataset_size
@@ -835,7 +857,7 @@ class StreamMonthlyNetCDF(object):
         # since constant data get automatically broadcasted with the _read_mfdataset-method
         #data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        nsamples = data_now.dims[self.sample_dim]
+        nsamples = data_now.sizes[self.sample_dim]
 
         if nsamples < self.samples_merged:
             t1 = timer()
@@ -843,7 +865,7 @@ class StreamMonthlyNetCDF(object):
             istart = random.randint(0, self.samples_merged - add_samples - 1)
             # slice data from data_now...
             ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
-            if ds_add.dims[self.sample_dim] != add_samples:
+            if ds_add.sizes[self.sample_dim] != add_samples:
                 print("WARNING: ds_add contains inconsistent number of samples. Re-try...")
                 add_samples = self.samples_merged - nsamples
                 istart = random.randint(0, self.samples_merged - add_samples - 1)
@@ -853,7 +875,7 @@ class StreamMonthlyNetCDF(object):
             ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
             data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
             print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
-                  f"(total #samples: {data_now.dims[self.sample_dim]})")
+                  f"(total #samples: {data_now.sizes[self.sample_dim]})")
             
         # Appending with constant variables is not required since they are read and broadcast to data_now already (see above)
         #if self.const_vars:

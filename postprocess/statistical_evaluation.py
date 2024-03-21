@@ -8,8 +8,7 @@ Collection of auxiliary functions for statistical evaluation and class for Score
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2023-10-10"
-__update__ = "2024-01-28"
+__date__ = "2024-03-08"
 
 from typing import Union, List
 try:
@@ -22,8 +21,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from skimage.util.shape import view_as_blocks
-from handle_data_class import make_tf_dataset_allmem 
-from other_utils import provide_default, check_str_in_list, convert_to_xarray
+from handle_data_class import make_tf_dataset_allmem
+from other_utils import check_str_in_list, convert_to_xarray
 
 
 # basic data types
@@ -82,11 +81,11 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
         raise ValueError(err_mess)
 
     # get and set some basic attributes
-    data_cond_longname = provide_default(data_cond.attrs, "longname", "conditioning_variable")
-    data_cond_unit = provide_default(data_cond.attrs, "unit", "unknown")
+    data_cond_longname = data_cond.attrs.get("longname", "conditioning_variable")
+    data_cond_unit = data_cond.attrs.get("unit", "unknown")
 
-    data_tar_longname = provide_default(data_tar.attrs, "longname", "target_variable")
-    data_tar_unit = provide_default(data_cond.attrs, "unit", "unknown")
+    data_tar_longname = data_tar.attrs.get("longname", "target_variable")
+    data_tar_unit = data_tar.attrs.get("unit", "unknown")
 
     # get bins for conditioning
     data_cond_min, data_cond_max = np.floor(np.min(data_cond)), np.ceil(np.max(data_cond))
@@ -486,17 +485,11 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
 
     return score_all
-
-
-
-
                                     
 
-
-
-
-
-
+"""
+Class for calculating scores
+"""
 class Scores:
     """
     Class to calculate scores and skill scores.
