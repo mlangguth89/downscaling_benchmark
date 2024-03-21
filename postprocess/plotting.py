@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,7 +9,7 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2023-12-10"
+__update__ = "2024-03-08"
 
 # for processing data
 import os
@@ -22,10 +22,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import cartopy
 import cartopy.crs as ccrs
-# make class for handling data available
-from other_utils import provide_default
 
-# auxiliary variable for logger
 # auxiliary variable for logger
 logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
@@ -94,9 +91,9 @@ def create_mapplot(data1, data2, plt_fname, opt_plot={}):
     dy, dx = np.round((lat[1] - lat[0]), 2), np.round((lon[1] - lon[0]), 2)
     lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)
 
-    title1, title2 = provide_default(opt_plot, "title1", "input T2m"), provide_default(opt_plot, "title2", "target T2m")
+    title1, title2 = opt_plot.get("title1", "input T2m"), opt_plot.get("title2", "target T2m")
     title1, title2 = "{0}, {1}".format(title1, time_stamp), "{0}, {1}".format(title2, time_stamp)
-    levels = provide_default(opt_plot, "levels", np.arange(-5., 25., 1.))
+    levels = opt_plot.get("levels", np.arange(-5., 25., 1.))
 
     # get colormap
     cmap_temp, norm_temp, lvl = get_colormap_temp(levels)
@@ -279,3 +276,47 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     func_logger.info(f"Feature importance scores saved to {plt_fname}.")
     
     return True
+
+
+
+def create_ps_plot(ds_ps, var_info: dict, plt_fname: str, x_coord: str = "wavenumber", **kwargs):
+    """
+    Plots power spectrum.
+    :param ds_ps: Dataset providing power spectrum of experiments as DataArrays
+    :param var_info: Dictionary providing name of variable and unit for which spectrum/spectra is/are poltted
+    :param plt_fname: File name of plot
+    :param x_coord: Name of coordinate along which spectrum is plotted
+    :param kwargs: Keyword arguments for plotting
+    """
+    # auxiliary variables
+    exps = list(ds_ps.data_vars)
+    nexps = len(exps)
+
+    # get some plot parameters
+    linestyle = kwargs.get("linestyle", "k-")
+    lw = kwargs.get("linewidth", 2.)
+    cols = kwargs.get("colors", nexps*["blue"])
+    fs = kwargs.get("fs", 16)
+
+    
+    fig, (ax) = plt.subplots(1, 1)#, figsize=(12, 8))
+    for i, exp in enumerate(exps):
+        da = ds_ps[exp]
+        ax.plot(da[x_coord].values, da.values, linestyle, label=exp, lw=lw, c=cols[i])
+
+    # set axis limits
+    ax.set_yscale("log")
+    ax.set_title(f"")
+    # label axis
+    ax.set_xlabel("wavenumber", fontsize=fs)
+    var_name, spectrum_unit = list(var_info.keys())[0], list(var_info.values())[0]
+    ax.set_ylabel(f"Spectral power {var_name} [{spectrum_unit}]", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+    ax.legend(fontsize=fs-2)
+    
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    print(f"Save plot in file '{plt_fname}'")
+    plt.tight_layout()
+    fig.savefig(plt_fname)
+    plt.close(fig)
