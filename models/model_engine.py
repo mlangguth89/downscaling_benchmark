@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,10 +9,10 @@ Model engine to get and instantiate known models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-15"
-__update__ = "2023-12-15"
+__update__ = "2024-03-21"
 
 # import modules
-from unet_model import UNet_Sha, UNet_DeepRU
+from unet_model import Sha_UNet, DeepRU_UNet
 from wgan_model import WGAN, Critic_Simple
 from other_utils import to_list
 
@@ -29,12 +29,12 @@ class ModelEngine(object):
     Example: WGAN is a composite model consisting of a generator and critic (see wgan_model.py).
              Thus, the derived class should be the first element of the tuple.
              The model constructions of the generator (e.g. a U-Net) and the critic must then constitute the second and
-             third element of the tuple, i.e. {"wgan": (WGAN, UNet_Sha, Critic_Simple).
+             third element of the tuple, i.e. {"wgan": (WGAN, Sha_UNet, Critic_Simple).
     """
 
-    known_models = {"sha_unet": (UNet_Sha,),
-                    "deepru": (UNet_DeepRU,),
-                    "sha_wgan": (WGAN, UNet_Sha, Critic_Simple)}
+    known_models = {"sha_unet": (Sha_UNet,),
+                    "deepru": (DeepRU_UNet,),
+                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple)}
 
     def __init__(self, model_name: str):
         """
