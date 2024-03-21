@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,10 +9,12 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2023-12-11"
+__update__ = "2024-03-07"
 
 # import modules
+import os
 from timeit import default_timer as timer
+import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
@@ -29,6 +31,31 @@ class TimeHistory(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         self.epoch_times.append(timer() - self.epoch_time_start)
+
+def check_horovod():
+    """
+    Check if job is run with Horovod based on environment variables
+
+    :return: True if Horovod is detected, False otherwise
+    """
+    # Program is run with horovodrun
+    with_horovod = "HOROVOD_RANK" in os.environ
+
+    if not with_horovod:
+        # Program is run with srun
+        with_horovod = "SLURM_STEP_NUM_TASKS" in os.environ and int(os.environ["SLURM_STEP_NUM_TASKS"]) > 1
+
+    return with_horovod
+
+
+def set_gpu_memory_growth():
+    """
+    Set GPU memory growth to avoid allocating all memory at once.
+    """
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
 
 def get_loss_from_history(history: keras.callbacks.History, loss_name: str = "loss"):
