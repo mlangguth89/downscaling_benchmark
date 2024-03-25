@@ -5,6 +5,7 @@
 # doc-string
 """
 Some auxiliary functions for the project:
+    * get_logger
     * remove_key_from_dict
     * to_list
     * get_func_kwargs
@@ -36,13 +37,14 @@ Some auxiliary functions for the project:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-02-26"
+__update__ = "2024-03-25"
 
-import os
+import os, sys
 import gc
 import inspect
 import psutil
 import resource
+import logging
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -57,6 +59,25 @@ except ImportError:
 
 str_or_List = Union[List, str]
 
+
+def config_logger(logfile: str, logger ,log_level_file=logging.DEBUG, log_level_console=logging.INFO, remove_existing_file: bool = True):
+
+    if remove_existing_file and os.path.isfile(logfile):
+        os.remove(logfile)
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+
+    fh = logging.FileHandler(logfile)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(log_level_console)
+    fh.setLevel(log_level_file)
+
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh), logger.addHandler(ch)
+
+    return logger
 
 def remove_key_from_dict(dict_in: dict, key: str) -> dict:
     """
