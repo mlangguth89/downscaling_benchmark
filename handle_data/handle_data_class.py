@@ -303,8 +303,6 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
-
-
         ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
                                      selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
                                      var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
@@ -320,7 +318,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all, "file": ds_obj.file_list,
-                     "effective_dataset_size": ds_obj.effective_dataset_size}
+                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -332,14 +330,24 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
         nsamples = len(ds["time"])
 
+        # get list of predictors (same approach as in split_in_tar-method) if it's None
+        predictors=ds_dict.get("predictors", None)
+        if predictors is None:
+            predictors = [var for var in ds.data_vars if var.endswith("_in")]
+
         # create TensorFlow dataset
-        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=ds_dict.get("predictors", None),
+        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=predictors,
                                       var_tar2in=ds_dict.get("var_tar2in", None), lrepeat=lrepeat, drop_remainder=drop_remainder,
                                       lshuffle=shuffle, named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
         
+        # append predictors if required. Order must be the same as in make_tf_dataset_allmem-method
+        if ds_dict.get("var_tar2in", None):
+            predictors = [ds_dict["var_tar2in"]] + predictors
+
+        # provide dict for later use
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
                      "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all, "file": fname_or_pattern, 
-                     "effective_dataset_size": ds.nbytes}
+                     "effective_dataset_size": ds.nbytes, "predictors": predictors}
         
     return tfds, tfds_info
 
