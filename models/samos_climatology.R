@@ -69,7 +69,7 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         dat <- read_stars(in_fls, proxy = TRUE, sub = paste0(variable, suffix)) # loaded as proxy
 
         dat <- dat %>%
-            filter(as_hms(time) == lead_time) %>% # extract lead time
+            .[ , , , which(as_hms(time) == lead_time)] %>% # would be more elegant with dplyr::filter, but there lead_time is not found
             st_as_stars() %>% # load to memory
             units::drop_units()
         st_crs(dat) <- 4326
