@@ -68,8 +68,8 @@ def main(parser_args):
     # get tensoflow dataset objects for training and validation data
     # training dataset
     t0_train = timer()
-    tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
-                                             norm_obj=data_norm, norm_dims=norm_dims) 
+    tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", norm_obj=data_norm, 
+                                             norm_dims=norm_dims) 
     
     data_norm, shape_in, nsamples, tfds_train_size = train_info["data_norm"], train_info["shape_in"], \
                                                      train_info["nsamples"], train_info["dataset_size"]
@@ -88,8 +88,7 @@ def main(parser_args):
     
     # validation dataset
     t0_val = timer()
-    tfds_val, val_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
-                                         norm_obj=data_norm) 
+    tfds_val, val_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "val", norm_obj=data_norm) 
     
     ds_obj_val = val_info.get("ds_obj", None)
     
