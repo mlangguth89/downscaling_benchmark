@@ -245,7 +245,7 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
     return ds_filename
 
 
-def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str, varnames_tar: List,
+def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict: dict, mode: str,
                     norm_dims: List=None, norm_obj=None, shuffle: bool = True, nworkers: int = 10, lrepeat: bool = True,
                     drop_remainder: bool = True, with_horovod: bool = False, seed: int = None):
     """
@@ -255,7 +255,6 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     :param ds_dict: dictionary of dataset names and their subsets
     :param hparams_dict: dictionary of hyperparameters
     :param mode: mode of dataset (train, val, test)
-    :param varnames_tar: list of target variables to be used for downscaling 
     :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
     :param norm_obj: normalization instance used to normalize the data.
                      If not passed, the normalization instance is retrieved from the data
@@ -284,10 +283,9 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
 
     # check if target variables are provided
+    varnames_tar_all = to_list(ds_dict["predictands"])
     if finditem(hparams_dict, "z_branch", False):
-        varnames_tar_all = to_list(varnames_tar) + to_list(ds_dict["varname_z"])
-    else:
-        varnames_tar_all = varnames_tar
+        varnames_tar_all += to_list(ds_dict["varname_z"])
 
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
     # are applied to train the critic, before the generator is trained once.
@@ -317,7 +315,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
                                    lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
-                     "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "varnames_tar": varnames_tar_all, "file": ds_obj.file_list,
+                     "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
                      "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
@@ -346,7 +344,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
         # provide dict for later use
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
-                     "dataset_size": ds.nbytes, "varnames_tar": varnames_tar_all, "file": fname_or_pattern, 
+                     "dataset_size": ds.nbytes, "all_predictands": varnames_tar_all, "file": fname_or_pattern, 
                      "effective_dataset_size": ds.nbytes, "predictors": predictors}
         
     return tfds, tfds_info

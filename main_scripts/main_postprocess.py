@@ -24,7 +24,6 @@ import xarray as xr
 import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from statistical_evaluation import Scores
 from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_feature_importance, run_spectral_analysis
 from other_utils import config_logger
 #from other_utils import free_mem
@@ -42,7 +41,7 @@ def main(parser_args):
     conf_postprocess = js.load(parser_args.conf_postprocess)    
 
     # get some variables for convenience
-    varname = conf_postprocess["varname_postprocess"]
+    varname = conf_postprocess["varname"]
     unit = conf_postprocess["unit"]
     model_type = parser_args.model_type
 
@@ -50,11 +49,12 @@ def main(parser_args):
     os.makedirs(plt_dir, exist_ok=True)
     
     log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
+    logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
     logger = config_logger(logger, log_file)    
 
     if parser_args.mode == "inference":
-        ds_test, test_info = results_from_inference(parser_args.model_base_dir, parser_args.expname, parser_args.data_dir, varname,
-                                                    model_type, parser_args.last, parser_args.dataset)
+        ds_test, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
+                                                    varname, model_type, parser_args.last, parser_args.dataset)
     elif parser_args.mode == "provided_results":
         ds_test = results_from_file(parser_args, plt_dir)  
 
@@ -121,27 +121,27 @@ if __name__ == "__main__":
                         help="Directory where results in form of plots are stored.")
     parser.add_argument("--configuration_postprocess", "--conf_postprocess", dest="conf_postprocess", type=argparse.FileType("r"), required=True,
                         help="JSON-file to configure postprocessing.")
-    parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
-                        help="Name of the experiment/trained model to postprocess.")
     # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
-    subparsers = parser.add_subparsers("Either perform inference on trained model or evaluate provided results.")
+    subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
 
     parser_inference = subparsers.add_parser("inference", help="Perform inference on trained model.")
     parser_inference.add_argument("--data_directory", "-data_dir", dest="data_dir", type=str, required=True,
-                        help="Directory where test dataset (netCDF-file) is stored.")
+                                  help="Directory where test dataset (netCDF-file) is stored.")
     parser_inference.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
                                   help="Base directory where trained models are saved.")
+    parser_inference.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
+                                  help="Name of the experiment/trained model to postprocess.")
     parser_inference.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
                                   help="Name of dataset to be used for downscaling model.")
     parser_inference.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
                                   help="Flag for evaluating last instead of best checkpointed model")
     parser_inference.add_argument("--model_type", "-model_type", dest="model_type", default=None,
                                   help="Name of model architecture. Only required if custom model architecture is not" +
-                                       "implemented in get_model_info-function (see postprocess.py)")
-    
+                                   "implemented in get_model_info-function (see postprocess.py)")
+
     parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
     parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
-                                help="NetCDF-file containing results to be evaluated.")
-
+                            help="NetCDF-file containing results to be evaluated.")
+    
     args = parser.parse_args()
     main(args)

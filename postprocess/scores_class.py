@@ -15,7 +15,6 @@ from typing import List
 import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
-from statistical_evaluation import get_cdf_of_x
 
 class Scores:
     """
@@ -377,8 +376,8 @@ class Scores:
         prob_simu = 1. * np.arange(nd_points_simu)/ (nd_points_simu - 1)
         prob_obs  = 1. * np.arange(nd_points_obs)/ (nd_points_obs -1)
 
-        cdf_simu = get_cdf_of_x(data_simu_filt,prob_simu)
-        cdf_obs  = get_cdf_of_x(data_obs_filt,prob_obs)
+        cdf_simu = self.get_cdf_of_x(data_simu_filt,prob_simu)
+        cdf_obs  = self.get_cdf_of_x(data_obs_filt,prob_obs)
 
         yvals_simu = cdf_simu(xnodes)
         yvals_obs  = cdf_obs(xnodes)
@@ -507,3 +506,13 @@ class Scores:
         else:
             raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
                                 .format(",".join(known_geodims)))
+    @staticmethod
+    def get_cdf_of_x(sample_in, prob_in):
+        """
+        Wrappper for interpolating CDF-value for given data
+        :param sample_in : input values to derive discrete CDF
+        :param prob_in   : corresponding CDF
+        :return: lambda function converting arbitrary input values to corresponding CDF value
+        """
+        return lambda xin: np.interp(xin, sample_in, prob_in)
+

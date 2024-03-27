@@ -47,7 +47,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     # construct model directory path and infer model type
     model_base = os.path.join(model_base_dir, exp_name)
 
-    model_dir, norm_dir, model_type = get_model_info(model_base, exp_name, last, model_type)
+    model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, out_dir, exp_name, last, model_type)
 
     #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
     func_logger.info(f"Start postprocessing at...")
@@ -114,6 +114,8 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     t0_train = timer()
     y_pred = trained_model.predict(tfds_test, verbose=2)
 
+    print(type(y_pred))
+
     func_logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     
     # clean-up to reduce memory footprint
@@ -123,14 +125,14 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
 
     ### Post-process results from test dataset
     # convert to xarray
-    y_pred = convert_to_xarray(y_pred, data_norm, varname, coords, dims, finditem(hparams_dict, "z_branch", False))
+    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(out_dir, f"downscaled_{varname}_{model_type}.nc")
+    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_type}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
-                        coords=coords, dims=dims) 
+                        coords=coords) 
     # add attributes such as model_type and from which model the data was generated and used ds_dict
     # This is also relevant for later processing (e,g. when doing feature importance analysis)
     ds_out.attrs["model_path"] = model_dir

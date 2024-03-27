@@ -61,7 +61,7 @@ except ImportError:
 str_or_List = Union[List, str]
 
 
-def config_logger(logfile: str, logger ,log_level_file=logging.DEBUG, log_level_console=logging.INFO, remove_existing_file: bool = True):
+def config_logger(logger, logfile: str, log_level_file=logging.DEBUG, log_level_console=logging.INFO, remove_existing_file: bool = True):
 
     if remove_existing_file and os.path.isfile(logfile):
         os.remove(logfile)
