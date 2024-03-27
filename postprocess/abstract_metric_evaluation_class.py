@@ -66,7 +66,7 @@ class AbstractMetricEvaluation(ABC):
         default = self.get_default_config(eval_dict)
         default_metrics = list(default.keys())
         
-        if eval_dict is None:
+        if not eval_dict:
             eval_dict = default
         else:
             for metric, metric_config in eval_dict.items():

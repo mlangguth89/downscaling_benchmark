@@ -114,7 +114,6 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     t0_train = timer()
     y_pred = trained_model.predict(tfds_test, verbose=2)
 
-    print(type(y_pred))
 
     func_logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     
@@ -390,10 +389,10 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
         if self.varname == "t2m":
-            eval_dict = {"rmse": {"unit": "K", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"unit": "K", "value_range": (-1., 1.), "ref_line": 0},
-                         "grad_amplitude": {"unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"unit": "K", "value_range": (0.1, 0.3), "ref_line": None}}
+            eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None}, 
+                         "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -402,7 +401,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         return eval_dict
     
     def required_config_keys(self):
-        return ["unit", "value_range", "ref_line"]
+        return ["score_unit", "value_range", "ref_line"]
     
 
 class SpatialEvaluation(AbstractMetricEvaluation):
