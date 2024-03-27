@@ -8,7 +8,7 @@ Collection of auxiliary functions for statistical evaluation and class for Score
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2024-03-08"
+__date__ = "2024-03-27"
 
 from typing import Union, List
 try:
@@ -21,6 +21,7 @@ import numpy as np
 import xarray as xr
 from skimage.util.shape import view_as_blocks
 from handle_data_class import make_tf_dataset_allmem
+from scores_class import Scores
 from other_utils import check_str_in_list, convert_to_xarray
 
 

@@ -39,7 +39,7 @@ list_or_str = Union[List[str], str]
 logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
-def results_from_inference(model_base_dir, exp_name, data_dir, varname, model_type, last, dataset):
+def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname, model_type, last, dataset):
 
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{results_from_inference.__name__}")
@@ -74,45 +74,39 @@ def results_from_inference(model_base_dir, exp_name, data_dir, varname, model_ty
             hparams_dict = js.load(mdf)
             func_logger.debug(hparams_dict)
 
-    named_targets = hparams_dict.get("named_targets", False)
-
     ### Run inference on trained model
     # Load checkpointed model
     func_logger.info(f"Load model '{exp_name}' from {model_dir}")
     trained_model = keras.models.load_model(model_dir, compile=False)
     func_logger.info(f"Model was loaded successfully.")
 
-    # get datafile and read netCDF
-
+    # get normalization object and preprare test dataset
     t0_preproc = timer()
     func_logger.info(f"Start preparing test dataset...")
+
     # prepare normalization
     js_norm = os.path.join(norm_dir, "norm.json")
     func_logger.debug("Read normalization file for subsequent data transformation.")
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
     
-    # get dataset pipeline for inference
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": None,
-                 "lshuffle": False, "var_tar2in": ds_dict.get("var_tar2in", None), "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}
+    # get dataset pipeline for inference    
+    tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, hparams_dict, "test", norm_obj=data_norm, 
+                                           shuffle=False, lrepeat=False, drop_remainder=False) 
     
-    tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, hparams_dict, "test", tfds_opts["predictands"], 
-                                           norm_obj=data_norm, norm_dims=ds_dict["norm_dims"], shuffle=tfds_opts["lshuffle"], lrepeat=tfds_opts["lrepeat"],
-                                           drop_remainder=tfds_opts["drop_remainder"]) 
+    # add further information to test_info (for later processing)
+    test_info["ds_dict"] = ds_dict
+    test_info["hparams_dict"] = hparams_dict
+    test_info["trained_model"] = trained_model
 
     # get ground truth data
     # To-Do: Enable handling of multiple target variables (e.g. wind vectors)
-    tar_varname = test_info["varnames_tar"][0]
+    tar_varname = test_info["all_predictands"][0]
     func_logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     # get ground truth data
     ds_test = xr.open_dataset(test_info["file"])
-    ground_truth = ds_test[tar_varname].astype("float32", copy=True)
-    
-    # get predictors
-    predictors = ds_dict.get("predictors", None)
-    if predictors is None:
-        predictors = [var for var in list(ds_test.data_vars) if var.endswith("_in")]
+    coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
 
     # start inference
     func_logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
@@ -129,15 +123,17 @@ def results_from_inference(model_base_dir, exp_name, data_dir, varname, model_ty
 
     ### Post-process results from test dataset
     # convert to xarray
-    y_pred = convert_to_xarray(y_pred, data_norm, varname, ground_truth.squeeze().coords,
-                               ground_truth.squeeze().dims, finditem(hparams_dict, "z_branch", False))
+    y_pred = convert_to_xarray(y_pred, data_norm, varname, coords, dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_type}.nc")
+    ncfile_out = os.path.join(out_dir, f"downscaled_{varname}_{model_type}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
-    ground_truth.name, y_pred.name = f"{varname}_ref", f"{varname}_fcst"
-    ds_out = xr.Dataset(xr.Dataset.merge(y_pred.to_dataset(), ground_truth.to_dataset()))
+    ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
+                        coords=coords, dims=dims) 
+    # add attributes such as model_type and from which model the data was generated and used ds_dict
+    # This is also relevant for later processing (e,g. when doing feature importance analysis)
+    ds_out.attrs["model_path"] = model_dir
     ds_out.to_netcdf(ncfile_out)
 
     func_logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
@@ -154,7 +150,6 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
 
     model_name = os.path.basename(model_base)
     norm_dir = model_base
-
 
     add_str = "_last" if bool_last else "_best"
 

@@ -5,7 +5,7 @@
 # doc-string
 """
 Some auxiliary functions for the project:
-    * get_logger
+    * config_logger
     * remove_key_from_dict
     * to_list
     * get_func_kwargs
@@ -17,6 +17,7 @@ Some auxiliary functions for the project:
     * flatten
     * remove_files
     * check_str_in_list
+    * check_and_get_vars_from_ds
     * shape_from_str
     * find_closest_divisor
 #    * free_mem
@@ -265,6 +266,30 @@ def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True
         return stat, [list_in.index(str_curr) for str_curr in str2check]
     else:
         return stat, []
+    
+def check_and_get_vars_from_ds(ds, var_list: List[str], suffix: str = "*"):
+    """
+    Checks if all variables in var_list are part of the dataset. If var_list is None, all variables with a given
+    suffix are returned.
+    :param ds: The xarray.Dataset 
+    :param var_list: list of predictor variables or None
+    :param suffix: optional suffix of variables to selected. Only effective if var_list is None
+    :return selected_vars: list of selected variables
+    """
+    data_vars = list(ds.variables)
+
+    if var_list is None:
+        selected_vars = [var for var in data_vars if var.endswith(suffix)]
+    else:
+        stat_list = [var in data_vars for var in var_list]
+        if all(stat_list):
+            selected_vars = var_list
+        else:
+            miss_inds = [i for i, x in enumerate(stat_list) if not x]
+            miss_vars = [var_list[i] for i in miss_inds]
+            raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
+
+    return selected_vars
 
 
 def shape_from_str(fname):

@@ -79,13 +79,10 @@ def main(parser_args):
 
     # run spectral analysis
     if conf_postprocess.get("do_spectral_analysis", False):
-        # To-DO: fix labels from dataset
         logger.info("Start spectral analysis...")
         t0_spec = timer()
 
-        ds = ds_test.rename({f"{varname}_ref": "COSMO-REA6", f"{varname}_fcst": f"{model_type.upper().replace('_', ' ')}"})
-
-        run_spectral_analysis(ds, plt_dir, varname, unit, ["rlon", "rlat"], lcutoff=True)
+        run_spectral_analysis(ds_test, [f"{varname}_tar", f"{varname}_ref"], plt_dir, [model_type, "COSMO-REA6"], varname, unit)
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 
@@ -93,11 +90,18 @@ def main(parser_args):
         # To-DO: make executable
         logger.info("Start feature importance analysis...")
         t0_fi = timer()
+        
+        conf_fi = conf_postprocess["config_feature_importance"]
+        ds_dict = test_info["ds_dict"]
 
-        rmse_ref = rmse_all.mean().values
-
-        _ = run_feature_importance(ds_test, predictors, tar_varname, trained_model, data_norm, "rmse", rmse_ref,
-                                   tfds_opts, plt_dir, patch_size=(8, 8))
+        # To-Do: allow for multiple target variables, e.g. for wind downscaling
+        varname_tar = test_info["all_predictands"][0]
+        data_loader_opts = {"batch_size": 32, "varnames_tar": ds_dict.get("predictands", None), "predictors": ds_dict.get("predictors", None),
+                            "var_tar2in": ds_dict.get("var_tar2in", None), "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
+                            "named_targets": test_info["hparams_dict"].get("named_targets", None)}
+                             
+        _ = run_feature_importance(ds_test, conf_fi.get("predictors", test_info["all_predictors"]), varname_tar, test_info["model"], 
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir, conf_fi.get("patch_size", (8, 8)))
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
