@@ -19,7 +19,7 @@ from other_utils import to_list
 class ModelEngine(object):
     """
     Class to get and instantiate known models.
-    To add new models, please adapt known_models accoringly.
+    To add new models, please adapt known_models accordingly.
     General info:
     The key value of the implemented model should be based on keras.Model and should expect 'hparams', 'exp_name' and
     'model_savedir' as arguments for initialization. Further keyword arguments are possible.
@@ -35,6 +35,11 @@ class ModelEngine(object):
     known_models = {"sha_unet": (Sha_UNet,),
                     "deepru": (DeepRU_UNet,),
                     "sha_wgan": (WGAN, Sha_UNet, Critic_Simple)}
+    
+    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN"]
+    
+    assert len(known_models) == len(long_names), f"Conflicting number of known_models ({len(known_models)})" + \
+                                                 f" and long_names ({len(long_names)})."
 
     def __init__(self, model_name: str):
         """
@@ -43,10 +48,8 @@ class ModelEngine(object):
         Hint: Pass help to get an overview of the available models.
         """
         self.modelname = model_name
-        if self.modelname is None:
-            self.model = None
-        else:
-            self.model = self.known_models[self.modelname]
+        self.model = self.known_models[self.modelname]
+        self.model_longname = self.long_names[list(self.known_models.keys()).index(self.modelname)]
 
     def __call__(self, shape_in, varnames_tar, hparams_dict, save_dir, expname, **kwargs):
         """

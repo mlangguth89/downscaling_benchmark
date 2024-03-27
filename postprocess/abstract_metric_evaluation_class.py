@@ -15,13 +15,13 @@ from other_utils import merge_dicts
 
 class AbstractMetricEvaluation(ABC):
 
-    def __init__(self, varname: str, plt_dir: str, model_type:str, avg_dims: List[str] = ["rlat", "rlon"],
+    def __init__(self, varname: str, plt_dir: str, model_info: dict, avg_dims: List[str] = ["rlat", "rlon"],
                  eval_dict: Dict = None):
         """
         Abstract class for metric evaluation.
         :param varname: Variable name.
         :param plt_dir: Directory for saving plots.
-        :param model_type: Model type. 
+        :param model_info: Dictionary with keys model_type and model_name
         :param avg_dims: Dimensions for averaging.
         :param eval_dict: Dictionary for configuring evaluation.
         """
@@ -29,7 +29,7 @@ class AbstractMetricEvaluation(ABC):
         self.required_config_keys = self.required_config_keys()
         self.varname = varname
         self.plt_dir = plt_dir
-        self.model_type = model_type
+        self.model_info = model_info
         self.evaluation_dict = eval_dict
         self.avg_dims = avg_dims
 

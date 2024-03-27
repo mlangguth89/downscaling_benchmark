@@ -25,6 +25,7 @@ import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_class import prepare_dataset
 from all_normalizations import ZScore
+from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import feature_importance, get_spectrum
@@ -47,13 +48,13 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     # construct model directory path and infer model type
     model_base = os.path.join(model_base_dir, exp_name)
 
-    model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, out_dir, exp_name, last, model_type)
+    model_dir, plt_dir, norm_dir, model_info = get_model_info(model_base, out_dir, exp_name, last, model_type)
 
     #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
     func_logger.info(f"Start postprocessing at...")
 
     # read configuration files
-    md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{dataset}.json"
+    md_config_pattern, ds_config_pattern = f"config_{model_info["model_type"]}.json", f"config_ds_{dataset}.json"
     md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
@@ -98,6 +99,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     test_info["ds_dict"] = ds_dict
     test_info["hparams_dict"] = hparams_dict
     test_info["trained_model"] = trained_model
+    test_info["model_info"] = model_info
 
     # get ground truth data
     # To-Do: Enable handling of multiple target variables (e.g. wind vectors)
@@ -127,7 +129,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_type}.nc")
+    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_info["model_type"]}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
@@ -154,27 +156,42 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
 
     add_str = "_last" if bool_last else "_best"
 
-    if "sha_wgan" in exp_name:
-        func_logger.debug(f"WGAN-modeltype detected.")
+    def modelinfo_from_expname(expname):
+        found_model = None
+
+        for known_model in ModelEngine.known_models:
+            if known_model in expname:
+                found_model = known_model
+
+        if not found_model: raise ValueError(f"Could not infer known model from experiment name '{expname}'")
+        
+        model_dummy = ModelEngine(found_model)
+
+        nsubmodels = len(model_dummy.model) - 1
+        
+        return (found_model, model_dummy.model_longname, nsubmodels)
+
+    if model_type:
+        func_logger.debug(f"Get model info from parsed model type '{model_type}'")
+
+        model_dummy = ModelEngine(model_type)
+        model_info = {"model_type": model_type, "model_longname": model_dummy.model_longname,
+                      "nsubmodels": len(model_dummy.model) - 1}
+    else:
+        func_logger.debug(f"Try to infer model info from parsed experiment name '{exp_name}'")
+
+        model_type, model_longname, nsubmodels = modelinfo_from_expname(exp_name)
+        model_info = {"model_type": model_type, "model_longname": model_longname,
+                      "nsubmodels": nsubmodels}
+        
+    if nsubmodels == 1:
+        model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
+    else: 
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}", f"{exp_name}_generator{add_str}"), \
                              os.path.join(output_base, model_name)
-        model_type = "sha_wgan"
-    elif "unet" in exp_name or "deepru" in exp_name:
-        func_logger.debug(f"U-Net-modeltype detected.")
-        model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
-        model_type = "sha_unet" if "unet" in exp_name else "deepru"
-    else:
-        func_logger.debug(f"Model type could not be inferred from experiment name. Try my best by defaulting...")
-        if not model_type:
-            raise ValueError(f"Could not infer model type from experiment name" +
-                             "nor found parsed model type --model_type/model.")
-        model_dir, plt_dir = model_base, os.path.join(output_base, model_name)
-        norm_dir = model_dir
-        model_type = model_type
 
-    return model_dir, plt_dir, norm_dir, model_type
-
-
+    return model_dir, plt_dir, norm_dir, model_info      
+        
 
 def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
                            ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (8, 8)):
@@ -227,7 +244,8 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
     
-    model_type = plt_kwargs.get("model_type", "wgan")
+    model_type = plt_kwargs.get("model_type", "sha_wgan")
+    model_name = plt_kwargs.get("model_name", "Sha WGAN")
 
     func_logger.info(f"Start evaluation in terms of {score_name}")
     score_all = score_engine(score_name)
@@ -239,7 +257,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean, score_hourly_std = score_hourly_all.mean(), score_hourly_all.std()
 
     # create plots
-    create_line_plot(score_hourly_mean, score_hourly_std, model_type.upper(),
+    create_line_plot(score_hourly_mean, score_hourly_std, model_name,
                      {score_name.upper(): score_unit},
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
 
@@ -255,9 +273,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         score_sea_hh_mean, score_sea_hh_std = score_sea_hh.mean(), score_sea_hh.std()
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea_hh_mean.values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea_hh_std.values:.4f}")  
-        create_line_plot(score_sea_hh_mean,
-                         score_sea_hh.std(),
-                         model_type.upper(), {score_name.upper(): score_unit},
+        
+        create_line_plot(score_sea_hh_mean, score_sea_hh.std(),
+                         model_name, {score_name.upper(): score_unit},
                          os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"),
                          **plt_kwargs)
         
@@ -280,7 +298,9 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     
     os.makedirs(plot_dir, exist_ok=True)
 
-    model_type = plt_kwargs.get("model_type", "wgan")
+    model_type = plt_kwargs.get("model_type", "sha_wgan")
+    model_name = plt_kwargs.get("model_name", "Sha WGAN")
+
     score_all = score_engine(score_name)
     #score_all = score_all.drop_vars("variables")
 
@@ -369,18 +389,18 @@ class TemporalEvaluation(AbstractMetricEvaluation):
     """
     Class for temporal evaluation of downscaling results.
     """
-    def __init__(self, varname: str, plt_dir: str, model_type: str, avg_dims: List[str] = ["rlat", "rlon"], eval_dict: Dict = None, 
+    def __init__(self, varname: str, plt_dir: str, model_info: dict, avg_dims: List[str] = ["rlat", "rlon"], eval_dict: Dict = None, 
                  proj = ccrs.PlateCarree()):
-        super().__init__(varname, plt_dir, model_type, avg_dims, eval_dict)
+        super().__init__(varname, plt_dir, model_info, avg_dims, eval_dict)
 
-    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, model_type: str, **plt_kwargs):
+    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
 
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
-            _ = run_evaluation_time(score_engine, metric, plot_dir=self.plt_dir, model_type=model_type, **metric_config, **plt_kwargs)
+            _ = run_evaluation_time(score_engine, metric, plot_dir=self.plt_dir, **metric_config, **self.model_info, **plt_kwargs)
 
     def get_default_config(self, eval_dict):
         """
@@ -408,13 +428,13 @@ class SpatialEvaluation(AbstractMetricEvaluation):
     """
     Class for spatial evaluation of downscaling results.
     """
-    def __init__(self, varname: str, plt_dir: str, model_type: str, proj, spatial_dims = ["rlat", "rlon"], avg_dims: List[str] = [], eval_dict: Dict = None):
-        super().__init__(varname, plt_dir, model_type, avg_dims, eval_dict)
+    def __init__(self, varname: str, plt_dir: str, model_info: dict, proj, spatial_dims = ["rlat", "rlon"], avg_dims: List[str] = [], eval_dict: Dict = None):
+        super().__init__(varname, plt_dir, model_info, avg_dims, eval_dict)
 
         self.spatial_dims = spatial_dims
         self.proj = proj
 
-    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, model_type: str, **plt_kwargs):
+    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
@@ -422,7 +442,7 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
             _ = run_evaluation_spatial(score_engine, metric, plot_dir=os.path.join(self.plt_dir, f"{metric}_spatial"), 
-                                       dims=self.spatial_dims, projection=self.proj, model_type=model_type, 
+                                       dims=self.spatial_dims, projection=self.proj, **self.model_info, 
                                        **metric_config, **plt_kwargs)
 
     def get_default_config(self, eval_dict):

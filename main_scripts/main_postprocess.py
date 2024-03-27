@@ -35,6 +35,7 @@ logger.setLevel(logging.DEBUG)
 def main(parser_args):
 
     ### Preparation ###
+    t0 = timer()
     plt_dir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
 
     # load configuration for postprocessing
@@ -55,15 +56,16 @@ def main(parser_args):
     if parser_args.mode == "inference":
         ds_test, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
                                                     varname, model_type, parser_args.last, parser_args.dataset)
+        model_info = test_info["model_info"]
     elif parser_args.mode == "provided_results":
-        ds_test = results_from_file(parser_args, plt_dir)  
+        ds_test, model_info = results_from_file(parser_args, plt_dir)  
 
     if conf_postprocess.get("do_evaluation_time", False):
         logger.info("Start temporal evaluation...")
         t0_tplot = timer()
 
-        temp_eval = TemporalEvaluation(varname, plt_dir, model_type, eval_dict=conf_postprocess.get("config_evaluation_time", None))
-        temp_eval(ds_test[f"{varname}_fcst"], ds_test[f"{varname}_ref"], model_type)
+        temp_eval = TemporalEvaluation(varname, plt_dir, model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
+        temp_eval(ds_test[f"{varname}_fcst"], ds_test[f"{varname}_ref"])
         
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
         
@@ -71,9 +73,9 @@ def main(parser_args):
         logger.info("Start spatial evaluation...")
         t0_splot = timer()
 
-        spat_eval = SpatialEvaluation(varname, plt_dir, model_type, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
+        spat_eval = SpatialEvaluation(varname, plt_dir, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
                                       eval_dict=conf_postprocess.get("config_evaluation_spatial", None))
-        spat_eval(ds_test[f"{varname}_fcst"], ds_test[f"{varname}_ref"], model_type)
+        spat_eval(ds_test[f"{varname}_fcst"], ds_test[f"{varname}_ref"])
 
         logger.info(f"Spatial evalutaion finished in {timer() - t0_splot:.2f}s.")
 
@@ -82,7 +84,7 @@ def main(parser_args):
         logger.info("Start spectral analysis...")
         t0_spec = timer()
 
-        run_spectral_analysis(ds_test, [f"{varname}_tar", f"{varname}_ref"], plt_dir, [model_type, "COSMO-REA6"], varname, unit)
+        run_spectral_analysis(ds_test, [f"{varname}_tar", f"{varname}_ref"], plt_dir, [model_info["model_name"], "COSMO-REA6"], varname, unit)
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 
