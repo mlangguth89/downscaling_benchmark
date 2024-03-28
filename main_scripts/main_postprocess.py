@@ -55,7 +55,7 @@ def main(parser_args):
                                                     varname, parser_args.model_type, parser_args.last, parser_args.dataset)
         model_info = test_info["model_info"]
     elif parser_args.mode == "provided_results":
-        ds_out, model_info = results_from_file(parser_args.results_nc, parser_args.model_name)  
+        ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
 
     if conf_postprocess.get("do_evaluation_time", False):
         logger.info("Start temporal evaluation...")

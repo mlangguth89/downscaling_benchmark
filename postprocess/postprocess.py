@@ -143,8 +143,24 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
 
     return ds_out, test_info
 
-def results_from_file(nc_file, varname):
-    raise NotImplementedError
+def results_from_file(nc_file, varname, model_name):
+
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{results_from_file.__name__}")
+
+    func_logger.info(f"Read results from netCDF-file '{nc_file}'...")
+
+    ds_out = xr.open_dataset(nc_file)
+
+    # check if dataset contains required variables
+    req_varnames = [f"{varname}_ref", f"{varname}_fcst"]
+    for req_var in req_varnames:
+        if req_var not in ds_out.variables:
+            raise ValueError(f"Variable '{req_var}' not found in dataset '{nc_file}'")
+
+    model_info = {"model_type": model_name, "model_longname": model_name.replace(" ", "_").lower()}
+
+    return ds_out, model_info
 
 def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool = False, model_type: str = None):
 
