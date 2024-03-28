@@ -19,6 +19,7 @@ from timeit import default_timer as timer
 import logging
 import gc
 import numpy as np
+import pandas as pd
 import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
@@ -193,7 +194,7 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
         
 
 def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (8, 8)):
+                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -211,15 +212,25 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
     
     # get feature importance scores
+    func_logger.debug(f"Start feature importance analysis for {score_name}...")
     feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
                                         patch_size=patch_size)
     
+    # get reference score
+    func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
+    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.csv")
+    if not os.path.exists(score_file):
+        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time for score '{score_name}' first.")
+    score_data = pd.read_csv(score_file)
+    ref_score = score_data[f"{score_name}_mean"].mean()
+
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
 
     # plot feature importance scores in a box-plot with whiskers where each variable is a box
     plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
 
+    func_logger.debug(f"Plot feature importance-analysis results into file '{plt_fname}'.")
     create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
                                                  "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
                                                  "yticks": range(1, max_rel_change), "colors": "b"})
