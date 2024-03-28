@@ -210,7 +210,7 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
         
 
 def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           ref_score: float, data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
+                           data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -219,7 +219,6 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     :param model: Model object
     :param norm: Normalization object
     :param score_name: Name of score to compute feature importance
-    :param ref_score: Reference score to normalize feature importance scores
     :param data_loader_opt: Data loader options
     :param plt_dir: Directory to save plot files
     :param patch_size: Patch size for feature importance analysis

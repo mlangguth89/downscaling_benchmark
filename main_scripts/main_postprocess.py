@@ -101,9 +101,12 @@ def main(parser_args):
                             "var_tar2in": ds_dict.get("var_tar2in", None), "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
                             "named_targets": test_info["hparams_dict"].get("named_targets", None)}
                              
-        _ = run_feature_importance(ds_test, conf_fi.get("predictors", test_info["all_predictors"]), varname_tar, test_info["model"], 
+        _ = run_feature_importance(ds_test, conf_fi.get("predictors", test_info["all_predictors"]), varname_tar, test_info["trained_model"], 
                                    test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir, conf_fi.get("patch_size", (8, 8)))
         
+
+        run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                           data_loader_opt: dict, plt_dir: str, patch_size = (6, 6))
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
     # clean-up to reduce memory footprint
