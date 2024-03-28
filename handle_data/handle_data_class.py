@@ -316,7 +316,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
-                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list}
+                     "effective_dataset_size": ds_obj.effective_dataset_size, "all_predictors": ds_obj.predictor_list}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -345,7 +345,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         # provide dict for later use
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
                      "dataset_size": ds.nbytes, "all_predictands": varnames_tar_all, "file": fname_or_pattern, 
-                     "effective_dataset_size": ds.nbytes, "predictors": predictors}
+                     "effective_dataset_size": ds.nbytes, "all_predictors": predictors}
         
     return tfds, tfds_info
 
