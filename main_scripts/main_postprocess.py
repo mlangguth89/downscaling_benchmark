@@ -33,7 +33,8 @@ def main(parser_args):
 
     ### Preparation ###
     t0 = timer()
-    plt_dir = os.path.join(parser_args.output_base_dir, parser_args.get("exp_name", parser_args.model_name))
+    dirname = parser_args.exp_name if parser_args.mode == "inference" else parser_args.model_name
+    plt_dir = os.path.join(parser_args.output_base_dir, dirname)
 
     # load configuration for postprocessing
     conf_postprocess = js.load(parser_args.conf_postprocess)    
