@@ -9,19 +9,16 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-03-04"
+__update__ = "2024-03-28"
 
 import os, sys, glob
 import logging
 import argparse
 from timeit import default_timer as timer
 import json as js
-from datetime import datetime as dt
 #import datetime as dt
 import gc
-import numpy as np
 import xarray as xr
-import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
 from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_feature_importance, run_spectral_analysis
@@ -36,7 +33,7 @@ def main(parser_args):
 
     ### Preparation ###
     t0 = timer()
-    plt_dir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
+    plt_dir = os.path.join(parser_args.output_base_dir, parser_args.get("exp_name", parser_args.model_name))
 
     # load configuration for postprocessing
     conf_postprocess = js.load(parser_args.conf_postprocess)    
@@ -44,7 +41,6 @@ def main(parser_args):
     # get some variables for convenience
     varname = conf_postprocess["varname"]
     unit = conf_postprocess["unit"]
-    model_type = parser_args.model_type
 
     # create output-directory and initialze logger
     os.makedirs(plt_dir, exist_ok=True)
@@ -55,10 +51,10 @@ def main(parser_args):
 
     if parser_args.mode == "inference":
         ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
-                                                    varname, model_type, parser_args.last, parser_args.dataset)
+                                                    varname, parser_args.model_type, parser_args.last, parser_args.dataset)
         model_info = test_info["model_info"]
     elif parser_args.mode == "provided_results":
-        ds_out, model_info = results_from_file(parser_args, plt_dir)  
+        ds_out, model_info = results_from_file(parser_args.results_nc, parser_args.model_name)  
 
     if conf_postprocess.get("do_evaluation_time", False):
         logger.info("Start temporal evaluation...")
@@ -146,6 +142,8 @@ if __name__ == "__main__":
     parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
     parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
                             help="NetCDF-file containing results to be evaluated.")
+    parser_results.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
+                                help="Name of the model for which results are provided.")
     
     args = parser.parse_args()
     main(args)

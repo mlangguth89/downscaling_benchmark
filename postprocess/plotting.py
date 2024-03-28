@@ -278,11 +278,12 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     return True
 
 
-def create_ps_plot(ds_ps, var_info: dict, plt_fname: str, x_coord: str = "wavenumber", **kwargs):
+def create_ps_plot(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
     """
     Plots power spectrum.
     :param ds_ps: Dataset providing power spectrum of experiments as DataArrays
     :param var_info: Dictionary providing name of variable and unit for which spectrum/spectra is/are poltted
+    :param labels: List of labels for experiments
     :param plt_fname: File name of plot
     :param x_coord: Name of coordinate along which spectrum is plotted
     :param kwargs: Keyword arguments for plotting
@@ -290,18 +291,18 @@ def create_ps_plot(ds_ps, var_info: dict, plt_fname: str, x_coord: str = "wavenu
     # auxiliary variables
     exps = list(ds_ps.data_vars)
     nexps = len(exps)
+    assert nexps == len(labels), "Number of labels must match number of experiments"
 
     # get some plot parameters
     linestyle = kwargs.get("linestyle", "k-")
     lw = kwargs.get("linewidth", 2.)
     cols = kwargs.get("colors", nexps*["blue"])
     fs = kwargs.get("fs", 16)
-
     
     fig, (ax) = plt.subplots(1, 1)#, figsize=(12, 8))
     for i, exp in enumerate(exps):
         da = ds_ps[exp]
-        ax.plot(da[x_coord].values, da.values, linestyle, label=exp, lw=lw, c=cols[i])
+        ax.plot(da[x_coord].values, da.values, linestyle, label=labels[i], lw=lw, c=cols[i])
 
     # set axis limits
     ax.set_yscale("log")
