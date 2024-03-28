@@ -116,7 +116,6 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     t0_train = timer()
     y_pred = trained_model.predict(tfds_test, verbose=2)
 
-
     func_logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
     
     # clean-up to reduce memory footprint
