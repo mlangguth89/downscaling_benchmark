@@ -97,7 +97,7 @@ def main(parser_args):
 
         # To-Do: allow for multiple target variables, e.g. for wind downscaling
         varname_tar = test_info["all_predictands"][0]
-        data_loader_opts = {"batch_size": 32, "varnames_tar": ds_dict.get("predictands", None), "predictors": ds_dict.get("predictors", None),
+        data_loader_opts = {"batch_size": 32, "predictands": ds_dict.get("predictands", None), "predictors": ds_dict.get("predictors", None),
                             "var_tar2in": ds_dict.get("var_tar2in", None), "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
                             "named_targets": test_info["hparams_dict"].get("named_targets", None)}
                              
