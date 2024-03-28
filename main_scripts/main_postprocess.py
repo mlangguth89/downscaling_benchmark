@@ -46,7 +46,7 @@ def main(parser_args):
     # create output-directory and initialze logger
     os.makedirs(plt_dir, exist_ok=True)
     
-    log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
+    log_file = os.path.join(plt_dir, f"postprocessing_{dirname}.log")
     logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
     logger = config_logger(logger, log_file)    
 
@@ -111,7 +111,7 @@ def main(parser_args):
     gc.collect()
     #free_mem([da_test])
 
-    logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
+    logger.info(f"Postprocessing of experiment '{dirname}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
 
 
