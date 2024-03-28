@@ -84,7 +84,7 @@ def main(parser_args):
         logger.info("Start spectral analysis...")
         t0_spec = timer()
 
-        run_spectral_analysis(ds_test, [f"{varname}_tar", f"{varname}_ref"], plt_dir, [model_info["model_name"], "COSMO-REA6"], varname, unit)
+        run_spectral_analysis(ds_test, [f"{varname}_tar", f"{varname}_ref"], plt_dir, [model_info["model_longname"], "COSMO-REA6"], varname, unit)
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 

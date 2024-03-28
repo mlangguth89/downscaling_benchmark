@@ -54,7 +54,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     func_logger.info(f"Start postprocessing at...")
 
     # read configuration files
-    md_config_pattern, ds_config_pattern = f"config_{model_info["model_type"]}.json", f"config_ds_{dataset}.json"
+    md_config_pattern, ds_config_pattern = f"config_{model_info['model_type']}.json", f"config_ds_{dataset}.json"
     md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
                                      glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
@@ -129,7 +129,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(hparams_dict, "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_info["model_type"]}.nc")
+    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
@@ -271,8 +271,8 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     for sea, score_sea in score_seas:
         score_sea_hh = score_sea.groupby("time.hour")
         score_sea_hh_mean, score_sea_hh_std = score_sea_hh.mean(), score_sea_hh.std()
-        func_logger.info(f"Averaged {score_name} for {sea}: {score_sea_hh_mean.values:.4f} {score_unit}, " +
-                         f"standard deviation: {score_sea_hh_std.values:.4f}")  
+        func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
+                         f"standard deviation: {score_sea.std().values:.4f}")  
         
         create_line_plot(score_sea_hh_mean, score_sea_hh.std(),
                          model_name, {score_name.upper(): score_unit},
