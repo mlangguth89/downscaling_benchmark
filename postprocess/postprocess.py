@@ -287,7 +287,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
 
     func_logger.debug(f"Save hourly averaged {score_name} to {os.path.join(metric_dir, f'eval_{score_name}_year.csv')}...")
-    scores_to_csv(score_hourly_mean, score_hourly_std, score_name, fname=os.path.join(metric_dir, f"eval_{score_name}_year.´csv"))
+    scores_to_csv(score_hourly_mean, score_hourly_std, score_name, fname=os.path.join(metric_dir, f"eval_{score_name}_year.csv"))
 
     # seasonal evaluation
     func_logger.debug("Run seasonal evaluation...")
