@@ -295,7 +295,7 @@ def create_ps_plot(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fna
     assert nexps == len(labels), "Number of labels must match number of experiments"
 
     # get some plot parameters
-    linestyle = kwargs.get("linestyle", "k-")
+    linestyle = kwargs.get("linestyle", "-")
     lw = kwargs.get("linewidth", 2.)
     cols = kwargs.get("colors", nexps*["blue"])
     fs = kwargs.get("fs", 16)
