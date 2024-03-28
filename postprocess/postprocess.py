@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-03-25"
+__update__ = "2024-03-28"
 
 import os
 import glob
@@ -30,7 +30,7 @@ from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import feature_importance, get_spectrum
 from plotting import create_line_plot, create_map_score, create_box_plot, create_ps_plot
-from other_utils import convert_to_xarray, finditem
+from other_utils import convert_to_xarray, finditem, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -329,16 +329,29 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     return True
    
 
-def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, varname: str, var_unit: str,
+def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
                           lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371.):
     """
-    Run spectral analysis for all experiments provided in xr.Dataset and plot the data.
+    Run spectral analysis for chosen variables and create power spectrum plot.
+    :param ds: xarray.Dataset with input data
+    :param ds_vars: List of variable names for spectral analysis
+    :param plt_dir: Directory to save plot files
+    :param labels: List of labels for each variable
+    :param varname: Name of variable
+    :param var_unit: Unit of variable
+    :param lonlat_dims: Name of longitude and latitude dimensions
+    :param lcutoff: Flag to apply low-pass filter
+    :param re: Earth radius
     """
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
 
-    exps = list(ds.data_vars)
-    nexps = len(exps)
+    # check if number of vairables for spectral analysis and labels are equal
+    ds_vars, labels = to_list(ds_vars), to_list(labels)
+    nexps = len(ds_vars)    
+    assert nexps== len(labels), f"Number of variables ({nexps}) and labels ({len(labels)}) must be equal."
+    assert all([var in ds.variables for var in ds_vars]), f"Some variables from {', '.join(ds_vars)} are not in dataset."
 
+    # initialize dictionary for power spectrum
     ps_dict = {}
 
     # compute wave numbers based on size of input data
@@ -347,7 +360,7 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, varname: str, var_unit: 
     dims = ["wavenumber"]
     coord_dict = {"wavenumber": np.arange(0, np.amin(np.array([int(nlon/2), int(nlat/2)])))}
 
-    for i, exp in enumerate(exps):
+    for i, exp in enumerate(ds_vars):
         func_logger.info(f"Start spectral analysis for experiment {exp} ({i+1}/{nexps})...")
 
         # run spectral analysis
@@ -363,7 +376,7 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, varname: str, var_unit: 
 
     # create plot   
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum.png")
-    create_ps_plot(ds_ps, {varname: f"{var_unit}**2 m"}, plt_fname, colors= ["navy", "green"],
+    create_ps_plot(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
                    x_coord="wavenumber")
 
 def scores_to_csv(score_mean, score_std, score_name, fname="scores.csv"):
