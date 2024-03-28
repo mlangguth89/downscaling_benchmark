@@ -9,10 +9,11 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-03-08"
+__update__ = "2024-03-28"
 
 # for processing data
 import os
+from typing import List
 import logging
 import numpy as np
 import xarray as xr
