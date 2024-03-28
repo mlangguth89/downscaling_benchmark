@@ -21,6 +21,9 @@ class Scores:
     Class to calculate scores and skill scores.
     """
 
+    known_geodims = {"lon_dims": ["longitude", "lon", "rlon"],
+                     "lat_dims": ["latitude", "lat", "rlat"]} 
+
     def __init__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, dims: List[str]):
         """
         :param data_fcst: forecast data to evaluate
@@ -259,7 +262,7 @@ class Scores:
 
         return psnr
     
-    def calc_mestd(self, downscaling_fac: int, **kwargs):
+    def calc_mestd(self, downscaling_fac: int = 4, **kwargs):
         """
         Calculate the mean error of standard deviation of forecast data w.r.t. reference data
         Note that the MESTD is always averaged over the spatial dimensions (domanin average is returned).
