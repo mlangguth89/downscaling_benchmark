@@ -180,10 +180,20 @@ def create_map_score(score, plt_fname, **kwargs):
     plt.close(fig)
 
 
-def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str, metric: dict,
-                     plt_fname: str, x_coord: str = "hour", **kwargs):
-
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_line_plot.__name__}")
+def metric_line_plot(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.DataArray, model_name: str, metric: dict,
+                     plt_fname: str, varname: str = "T2m", x_coord: str = "hour", **kwargs):
+    """
+    Create line plots of 2D-metric data (e.g. metric plotted against time) 
+    :param data: DataArray containing the mean values
+    :param data_up: DataArray containing the upper error bounds
+    :param data_down: DataArray containing the lower error bounds
+    :param model_name: Name of model
+    :param metric: Dictionary containing metric name and unit 
+    :param plt_fname: File name of plot
+    :param varname: Name of variable that was evaluated
+    :param x_coord: Name of coordinate along which metric is plotted
+    """
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{metric_line_plot.__name__}")
 
     # get some plot parameters
     linestyle = kwargs.get("linestyle", "k-")
@@ -195,7 +205,7 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     
     fig, (ax) = plt.subplots(1, 1)
     ax.plot(data[x_coord].values, data.values, linestyle, label=model_name)
-    ax.fill_between(data[x_coord].values, data.values-data_std.values, data.values+data_std.values, facecolor=err_col,
+    ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
                     alpha=0.2)
     if ref_line is not None:
         nval = np.shape(data[x_coord].values)[0]
@@ -204,7 +214,7 @@ def create_line_plot(data: xr.DataArray, data_std: xr.DataArray, model_name: str
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=fs)
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
-    ax.set_ylabel(f"{metric_name} T2m [{metric_unit}]", fontsize=fs)
+    ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
 
     # save plot and close figure
