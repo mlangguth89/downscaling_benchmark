@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: MIT
 
 """
-Collection of auxiliary functions for statistical evaluation and class for Score-functions
+Collection of statistical evaluation methods used in postprocess.py.
 """
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2024-03-27"
+__date__ = "2024-03-29"
 
 from typing import Union, List
 try:
@@ -215,6 +215,31 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
         metric_boot = metric_boot.rename(dict(zip(metric.data_vars, new_varnames)))
 
     return metric_boot
+
+def bootstrap_grouped_hourly(score_hourly_grouped, score_hourly_mean, nboots, block_length):
+    """
+    Perform block bootstrapping on grouped hourly scores 
+    :param score_hourly_grouped: Grouped hourly scores
+    :param score_hourly_mean: Mean scores array
+    :param nboots: Number of bootstraps
+    :param block_length: Block length for bootstrapping
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{bootstrap_grouped_hourly.__name__}")    
+
+    # initialize arrays for block bootstrapping
+    dims_boot = to_list(score_hourly_mean.dims) + ["iboot"]
+    coords_boot = dict(score_hourly_mean).copy()
+    coords_boot["iboot"] = np.arange(nboots)
+
+    score_hourly_mean_b = xr.DataArray(np.zeros((nboots, len(score_hourly_mean))), dims=dims_boot, coords=coords_boot)
+
+    # run block bootstrapping for group
+    for hh, score_hh in score_hourly_grouped:
+        func_logger.debug(f"Run block bootstrapping for {score_name} at {hh:02d} UTC...")
+        score_hourly_mean_b.sel({"hour": hh})[...] = perform_block_bootstrap_metric(score_hh, "time", nboots, block_length)
+
+    return score_hourly_mean_b
 
 
 def get_domain_info(da: xr.DataArray, lonlat_dims: list =["lon", "lat"], re:float = 6378*1.e+03): 

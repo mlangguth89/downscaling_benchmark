@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-03-28"
+__update__ = "2024-03-29"
 
 import os
 import glob
@@ -29,8 +29,8 @@ from all_normalizations import ZScore
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import feature_importance, get_spectrum
-from plotting import create_line_plot, create_map_score, create_box_plot, create_ps_plot
+from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum
+from plotting import metric_line_plot, create_map_score, create_box_plot, create_ps_plot
 from other_utils import convert_to_xarray, finditem, to_list
 
 # basic data types
@@ -42,7 +42,17 @@ logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
 def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname, model_type, last, dataset):
-
+    """
+    Run inference on trained model, convert output to xarray.DataArray and save results to disc.
+    :param model_base_dir: Base directory where trained models are stored
+    :param exp_name: Experiment name
+    :param data_dir: Directory where testdata is stored
+    :param out_dir: Output directory
+    :param varname: Name of variable that was downscaled
+    :param model_type: Type of model (if None, model type is inferred from experiment name)
+    :param last: Flag to use last checkpointed model
+    :param dataset: Name of dataset
+    """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{results_from_inference.__name__}")
 
@@ -144,7 +154,12 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     return ds_out, test_info
 
 def results_from_file(nc_file, varname, model_name):
-
+    """
+    Read downscaling results from netCDF-file.
+    :param nc_file: Path to netCDF-file with downscaling results
+    :param varname: Name of variable that was downscaled
+    :param model_name: Name of model that was used for downscaling
+    """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{results_from_file.__name__}")
 
@@ -163,7 +178,14 @@ def results_from_file(nc_file, varname, model_name):
     return ds_out, model_info
 
 def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool = False, model_type: str = None):
-
+    """
+    Get model information from model base directory and output base directory
+    :param model_base: Base directory of model
+    :param output_base: Base directory of output
+    :param exp_name: Experiment name
+    :param bool_last: Flag to use last checkpointed model
+    :param model_type: Model type
+    """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{get_model_info.__name__}")
 
@@ -233,11 +255,11 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     
     # get reference score
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
-    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.csv")
+    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time for score '{score_name}' first.")
-    score_data = pd.read_csv(score_file)
-    ref_score = score_data[f"{score_name}_mean"].mean()
+        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
+    ds_score = xr.open_dataset(score_file)
+    ref_score = ds_score[f"{score_name}_mean"] 
 
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
@@ -253,7 +275,7 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     return feature_scores
 
 
-def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **plt_kwargs):
+def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str,**kwargs):
     """
     Create line plots of desired evaluation metric. Evaluation metric must have a time-dimension
     :param score_engine: Score engine object to comput evaluation metric
@@ -269,8 +291,12 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
     
-    model_type = plt_kwargs.get("model_type", "sha_wgan")
-    model_name = plt_kwargs.get("model_name", "Sha WGAN")
+    # get possible keyword arguments
+    model_type = kwargs.get("model_type", "sha_wgan")
+    model_name = kwargs.get("model_name", "Sha WGAN")
+    # keyword arguments for configuring bootstrapping
+    nboots = kwargs.pop("nboots", 1000)
+    block_length = kwargs.pop("block_length", 5)
 
     func_logger.info(f"Start evaluation in terms of {score_name}")
     score_all = score_engine(score_name)
@@ -279,15 +305,21 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      f"standard deviation: {score_all.std().values:.4f}")  
     
     score_hourly_all = score_all.groupby("time.hour")
-    score_hourly_mean, score_hourly_std = score_hourly_all.mean(), score_hourly_all.std()
+    score_hourly_mean = score_hourly_all.mean()
+
+    score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, nboots, block_length)   
 
     # create plots
-    create_line_plot(score_hourly_mean, score_hourly_std, model_name,
-                     {score_name.upper(): score_unit},
-                     os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **plt_kwargs)
+    metric_line_plot(score_hourly_mean, score_hourly_mean_b.quantile(.25, dim="iboot"), score_hourly_mean_b.quantile(.75, dim="iboot"),
+                     model_name, {score_name.upper(): score_unit},
+                     os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **kwargs)
 
-    func_logger.debug(f"Save hourly averaged {score_name} to {os.path.join(metric_dir, f'eval_{score_name}_year.csv')}...")
-    scores_to_csv(score_hourly_mean, score_hourly_std, score_name, fname=os.path.join(metric_dir, f"eval_{score_name}_year.csv"))
+    # save scores to netCDF
+    fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
+
+    func_logger.debug(f"Save hourly averaged {score_name} to {fname_nc}...")
+    ds = xr.Dataset({f"{score_name}": score_all, f"{score_name}_mean": score_hourly_mean, f"{score_name}_mean_boot": score_hourly_mean_b})
+    ds.to_netcdf(fname_nc)
 
     # seasonal evaluation
     func_logger.debug("Run seasonal evaluation...")
@@ -295,18 +327,22 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     for sea, score_sea in score_seas:
         score_sea_hh = score_sea.groupby("time.hour")
-        score_sea_hh_mean, score_sea_hh_std = score_sea_hh.mean(), score_sea_hh.std()
+        score_sea_hh_mean = score_sea_hh.mean()
+        score_sea_hh_mean_b = bootstrap_grouped_hourly(score_sea_hh, score_sea_hh_mean, nboots, block_length)  
+
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
-        create_line_plot(score_sea_hh_mean, score_sea_hh.std(),
+        metric_line_plot(score_sea_hh_mean, score_sea_hh_mean_b.quantile(.25, dim="iboot"), score_sea_hh_mean_b.quantile(.75, dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
-                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"),
-                         **plt_kwargs)
+                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
         
-        func_logger.debug(f"Save hourly averaged {score_name} to {os.path.join(metric_dir, f'eval_{score_name}_{sea}.csv')}...")
-        scores_to_csv(score_sea_hh_mean, score_sea_hh_std, score_name, 
-                      fname=os.path.join(metric_dir, f"eval_{score_name}_{sea}.csv"))
+        # save scores to netCDF
+        fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{sea}.nc')
+        func_logger.debug(f"Save hourly averaged {score_name} for season {sea} to {fname_nc}...")
+        ds_sea = xr.Dataset({f"{score_name}": score_sea, f"{score_name}_mean": score_sea_hh_mean, f"{score_name}_mean_boot": score_sea_hh_mean_b})
+        ds_sea.to_netcdf(fname_nc)
+
     return score_all
 
 
@@ -403,24 +439,6 @@ def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labe
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum.png")
     create_ps_plot(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
                    x_coord="wavenumber")
-
-def scores_to_csv(score_mean, score_std, score_name, fname="scores.csv"):
-    """
-    Save scores to csv file
-    :param score_mean: Hourly mean of score
-    :param score_std: Hourly standard deviation of score
-    :param score_name: Name of score
-    :param fname: Filename of csv file
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{scores_to_csv.__name__}")
-    
-    df_mean = score_mean.to_dataframe(name=f"{score_name}_mean")
-    df_std = score_std.to_dataframe(name=f"{score_name}_std")
-    df = df_mean.join(df_std)
-
-    func_logger.info(f"Save values of {score_name} to {fname}...")
-    df.to_csv(fname)
 
 
 class TemporalEvaluation(AbstractMetricEvaluation):
