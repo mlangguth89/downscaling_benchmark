@@ -307,7 +307,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_all = score_all.groupby("time.hour")
     score_hourly_mean = score_hourly_all.mean()
 
-    score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, nboots, block_length)   
+    score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
 
     # create plots
     metric_line_plot(score_hourly_mean, score_hourly_mean_b.quantile(.25, dim="iboot"), score_hourly_mean_b.quantile(.75, dim="iboot"),
@@ -328,7 +328,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     for sea, score_sea in score_seas:
         score_sea_hh = score_sea.groupby("time.hour")
         score_sea_hh_mean = score_sea_hh.mean()
-        score_sea_hh_mean_b = bootstrap_grouped_hourly(score_sea_hh, score_sea_hh_mean, nboots, block_length)  
+        score_sea_hh_mean_b = bootstrap_grouped_hourly(score_sea_hh, score_sea_hh_mean, block_length, nboots)  
 
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  

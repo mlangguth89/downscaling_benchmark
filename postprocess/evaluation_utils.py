@@ -11,19 +11,13 @@ __author__ = "Michael Langguth"
 __date__ = "2024-03-29"
 
 from typing import Union, List
-try:
-    from tqdm import tqdm
-    l_tqdm = True
-except:
-    l_tqdm = False
 import logging
 import numpy as np
 import xarray as xr
 from skimage.util.shape import view_as_blocks
 from handle_data_class import make_tf_dataset_allmem
 from scores_class import Scores
-from other_utils import check_str_in_list, convert_to_xarray
-
+from other_utils import check_str_in_list, convert_to_xarray, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -197,11 +191,7 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
     np.random.seed(seed)
     iblocks_boot = np.sort(np.random.randint(nblocks, size=(nboots_block, nblocks)))
 
-    func_logger.info("Start block bootstrapping...")
-    iterator_b = np.arange(nboots_block)
-    if l_tqdm:
-        iterator_b = tqdm(iterator_b)
-    for iboot_b in iterator_b:
+    for iboot_b in range(nboots_block):
         metric_boot_aux = metric_val_block.isel(iblock=iblocks_boot[iboot_b, :]).mean(dim="iblock")
         if iboot_b == 0:
             metric_boot = metric_boot_aux.expand_dims(dim={"iboot": 1}, axis=0).copy(deep=True)
@@ -216,28 +206,28 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
 
     return metric_boot
 
-def bootstrap_grouped_hourly(score_hourly_grouped, score_hourly_mean, nboots, block_length):
+def bootstrap_grouped_hourly(score_hourly_grouped, score_hourly_mean, block_length, nboots):
     """
     Perform block bootstrapping on grouped hourly scores 
     :param score_hourly_grouped: Grouped hourly scores
     :param score_hourly_mean: Mean scores array
-    :param nboots: Number of bootstraps
     :param block_length: Block length for bootstrapping
+    :param nboots: Number of bootstraps
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{bootstrap_grouped_hourly.__name__}")    
 
     # initialize arrays for block bootstrapping
     dims_boot = to_list(score_hourly_mean.dims) + ["iboot"]
-    coords_boot = dict(score_hourly_mean).copy()
+    coords_boot = dict(score_hourly_mean.coords).copy()
     coords_boot["iboot"] = np.arange(nboots)
 
-    score_hourly_mean_b = xr.DataArray(np.zeros((nboots, len(score_hourly_mean))), dims=dims_boot, coords=coords_boot)
+    score_hourly_mean_b = xr.DataArray(np.zeros((len(score_hourly_mean), nboots)), dims=dims_boot, coords=coords_boot)
 
     # run block bootstrapping for group
     for hh, score_hh in score_hourly_grouped:
-        func_logger.debug(f"Run block bootstrapping for {score_name} at {hh:02d} UTC...")
-        score_hourly_mean_b.sel({"hour": hh})[...] = perform_block_bootstrap_metric(score_hh, "time", nboots, block_length)
+        func_logger.debug(f"Run block bootstrapping at {hh:02d} UTC...")
+        score_hourly_mean_b.sel({"hour": hh})[...] = perform_block_bootstrap_metric(score_hh, "time", block_length, nboots)
 
     return score_hourly_mean_b
 
