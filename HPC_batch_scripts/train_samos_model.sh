@@ -1,11 +1,11 @@
 #! /bin/bash -x
 #SBATCH --account=deepacf
-#SBATCH --partition=devel
+#SBATCH --partition=batch
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=40G
-#SBATCH --time=02:00:00
+#SBATCH --mem=80G
+#SBATCH --time=10:00:00
 #SBATCH --output=train_samos-model-out.%j
 #SBATCH --error=train_samos-model-err.%j
 #SBATCH --mail-type=ALL
