@@ -28,9 +28,9 @@ args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     ))
 
 # TODO: this can easily be parallelized if RAM allows using furrr by replacing calls to `map` with `future_map` and uncommenting the lines below
-# library(future)
-# library(furrr)
-# plan(multicore, workers = 8)
+library(future)
+library(furrr)
+plan(multicore, workers = 20)
 
 # write selected datasets provided as commandline arguments to object, calculate for both ERA5 and COSMO-REA6 if none are provided
 datasets <- args[["dataset"]]
@@ -99,7 +99,7 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         # fit model per pixel
         log_info("Start fit of climatology models.")
         mdls <- mdls |> 
-            mutate(mdl = map2(i, j, ~striptease(crch(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend | 
+            mutate(mdl = future_map2(i, j, ~striptease(crch(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend | 
                             sin1 + cos1 + sin2 + cos2 + trend, data = predictors,
                             dist = 'gaussian')), .progress = interactive()))
 
