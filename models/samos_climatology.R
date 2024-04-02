@@ -131,7 +131,7 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
 doall_dataset <- function(dataset) {
     log_info("START iterations to calculate climatologies and residuals from {toupper(dataset)} data.")
     lead_times <- seq(0, 21, by = 3)
-    walk(lead_times, ~dothis(lead_time = .x, dataset = dataset, variable = "t2m"))
+    walk(lead_times, ~dothis(lead_time = .x, dataset = dataset, variable = switch(dataset, "ERA5" = "t2m", "COSMO-REA6" = "t_2m")))
     log_info("END iterations to calculate climatologies and residuals from {toupper(dataset)} data.")
 }
 

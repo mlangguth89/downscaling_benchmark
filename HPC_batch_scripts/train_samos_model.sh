@@ -23,5 +23,5 @@ export source_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_be
 export destination_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m
 
 
-srun Rscript $(pwd)/models/samos_climatology.R -in ${source_dir} -out ${destination_dir} --dataset "ERA5" # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
+srun Rscript $(pwd)/models/samos_climatology.R -in ${source_dir} -out ${destination_dir} --dataset "COSMO-REA6" # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
 # srun Rscript $(pwd)/models/samos_model.R -in ${source_dir} -out ${destination_dir} 
