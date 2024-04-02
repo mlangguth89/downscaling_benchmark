@@ -20,6 +20,7 @@ library(purrr)
 library(stars.ncdf) 
 library(logger)
 library(R.utils)
+options(future.globals.maxSize = 30000 * 1024^2)
 
 args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     defaults = c(
