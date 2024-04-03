@@ -104,7 +104,7 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
                             sin1 + cos1 + sin2 + cos2 + trend, data = predictors,
                             dist = 'gaussian')), .progress = interactive()))
 
-        saveRDS(mdls, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_climatology-models.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
+        saveRDS(mdls, file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_climatology-models.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
         log_info("Models fittet and saved to disk.")
 
         # fill predicted mu and sd to stars object
@@ -114,14 +114,14 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         prediction$sd_modeled <- reshape_results(map(mdls$mdl, ~predict(.x, newdata = predictors, type = "scale"), .progress = interactive()), dat)
 
         st_crs(prediction) <- 4326
-        write_stars_ncdf(prediction[1], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_mu-prediction.nc")))
-        write_stars_ncdf(prediction[2], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_sd-prediction.nc")))
+        write_stars_ncdf(prediction[1], file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_mu-prediction.nc")))
+        write_stars_ncdf(prediction[2], file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_sd-prediction.nc")))
         log_info("Predicted mu and sd, based on climatology model, saved to disk.")
 
         
         # calculate residuals
         residuals <- (dat - prediction["mu_modeled"]) / prediction["sd_modeled"]
-        write_stars_ncdf(residuals, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_residuals.nc")))
+        write_stars_ncdf(residuals, file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_residuals.nc")))
         log_info("Residuals saved to disk.")
 
         log_info("Calculation for lead time {lead_time} was successful.")
