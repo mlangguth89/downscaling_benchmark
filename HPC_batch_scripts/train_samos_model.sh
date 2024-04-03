@@ -1,10 +1,9 @@
 #! /bin/bash -x
 #SBATCH --account=deepacf
-#SBATCH --partition=batch
+#SBATCH --partition=mem192
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=20
-#SBATCH --mem=80G
+#SBATCH --cpus-per-task=1
 #SBATCH --time=10:00:00
 #SBATCH --output=train_samos-model-out.%j
 #SBATCH --error=train_samos-model-err.%j
@@ -23,5 +22,5 @@ export source_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_be
 export destination_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m
 
 
-srun Rscript $(pwd)/models/samos_climatology.R -in ${source_dir} -out ${destination_dir} --dataset "COSMO-REA6" # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
+srun Rscript $(pwd)/models/samos_climatology.R -in ${source_dir} -out ${destination_dir} --dataset "ERA5" # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
 # srun Rscript $(pwd)/models/samos_model.R -in ${source_dir} -out ${destination_dir} 
