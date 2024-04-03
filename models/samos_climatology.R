@@ -20,7 +20,7 @@ library(purrr)
 library(stars.ncdf) 
 library(logger)
 library(R.utils)
-options(future.globals.maxSize = 30000 * 1024^2)
+# options(future.globals.maxSize = 30000 * 1024^2)
 
 args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     defaults = c(
@@ -29,9 +29,9 @@ args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     ))
 
 # TODO: this can easily be parallelized if RAM allows using furrr by replacing calls to `map` with `future_map` and uncommenting the lines below
-library(future)
-library(furrr)
-plan(multicore, workers = 20)
+# library(future)
+# library(furrr)
+# plan(multicore, workers = 20)
 
 # write selected datasets provided as commandline arguments to object, calculate for both ERA5 and COSMO-REA6 if none are provided
 datasets <- args[["dataset"]]
@@ -43,9 +43,23 @@ if (length(datasets) == 0) {
 
 striptease <- function(fit) {
     # reduce object size of stored models
-    attr(fit$terms$location, '.Environment') <- attr(fit$terms$scale, '.Environment') <- attr(fit$terms$full, '.Environment') <- NULL
-    fit$residuals <- fit$fitted.values <- fit$model <- fit$link$scale$dmu.deta <- fit$control$start <- fit$formula <- NULL
-    fit
+    attr(fit$terms, '.Environment') <- NULL
+
+    fit$y <- 
+        fit$model <- 
+        # fit$residuals <- # commented out as needed for the sd modelling
+        fit$fitted.values <- 
+        fit$effects <- fit$qr$qr <- 
+        fit$linear.predictors <- 
+        fit$prior.weights <- 
+        fit$data <- 
+        fit$family$variance <- 
+        fit$family$dev.resids <- 
+        fit$family$aic <- 
+        fit$family$validmu <- 
+        fit$family$simulate <- 
+        NULL
+    fit 
 }
 
 reshape_results <- function(x, dat) {
@@ -100,18 +114,19 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         # fit model per pixel
         log_info("Start fit of climatology models.")
         mdls <- mdls |> 
-            mutate(mdl = future_map2(i, j, ~striptease(crch(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend | 
-                            sin1 + cos1 + sin2 + cos2 + trend, data = predictors,
-                            dist = 'gaussian')), .progress = interactive()))
+            mutate(
+                mdl_mu = map2(i, j, ~striptease(lm(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend, data = predictors)), .progress = interactive()),
+                mdl_sd = map(mdl_mu, ~striptease(lm(abs(residuals(.x)) ~ sin1 + cos1 + sin2 + cos2 + trend, data = predictors)), .progress = interactive()) # this is only valid for symmetric distributions
+            )
 
         saveRDS(mdls, file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_climatology-models.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
         log_info("Models fittet and saved to disk.")
 
-        # fill predicted mu and sd to stars object
-        log_info("Predict mu and sd from climatology models.")
+        # fill predicted mu to stars object
+        log_info("Predict mu from climatology models.")
         prediction <- dat[0] #initialize empty stars object with same coordinates as dat
-        prediction$mu_modeled <- reshape_results(map(mdls$mdl, ~predict(.x, newdata = predictors, type = "location"), .progress = interactive()), dat)
-        prediction$sd_modeled <- reshape_results(map(mdls$mdl, ~predict(.x, newdata = predictors, type = "scale"), .progress = interactive()), dat)
+        prediction$mu_modeled <- reshape_results(map(mdls$mdl_mu, ~predict(.x, newdata = predictors), .progress = interactive()), dat)
+        prediction$sd_modeled <- reshape_results(map(mdls$mdl_sd, ~predict(.x, newdata = predictors), .progress = interactive()), dat)
 
         st_crs(prediction) <- 4326
         write_stars_ncdf(prediction[1], file.path(args[["out"]], glue("climatology/{variable}_{tolower(dataset)}_{lead_time}_mu-prediction.nc")))
