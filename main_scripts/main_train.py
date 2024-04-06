@@ -104,7 +104,7 @@ def main(parser_args):
 
     # instantiate model...
     # Note: Parse varnames from train_info since list of varnames might get updated depending on model and dataset configuration
-    model = model_instance(shape_in, list(train_info["varnames_tar"]), hparams_dict, model_savedir, parser_args.exp_name) 
+    model = model_instance(shape_in, list(train_info["all_predictands"]), hparams_dict, model_savedir, parser_args.exp_name) 
 
     # ... compile
     model.compile(**model.compile_options)
