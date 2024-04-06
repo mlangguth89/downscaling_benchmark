@@ -9,9 +9,9 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-03-28"
+__update__ = "2024-04-06"
 
-import os, sys, glob
+import os
 import logging
 import argparse
 from timeit import default_timer as timer
@@ -21,7 +21,8 @@ import gc
 import xarray as xr
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_feature_importance, run_spectral_analysis
+from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_conditional_quantile_analysis, \
+                        run_feature_importance, run_spectral_analysis
 from other_utils import config_logger
 #from other_utils import free_mem
 
@@ -50,6 +51,7 @@ def main(parser_args):
     logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
     logger = config_logger(logger, log_file)    
 
+    # get data from inference or from data file
     if parser_args.mode == "inference":
         ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
                                                     varname, parser_args.model_type, parser_args.last, parser_args.dataset)
@@ -57,6 +59,7 @@ def main(parser_args):
     elif parser_args.mode == "provided_results":
         ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
 
+    # run temporal evaluation if specified
     if conf_postprocess.get("do_evaluation_time", False):
         logger.info("Start temporal evaluation...")
         t0_tplot = timer()
@@ -66,6 +69,7 @@ def main(parser_args):
         
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
         
+    # run spatial evaluation if specified
     if conf_postprocess.get("do_evaluation_spatial", False):
         logger.info("Start spatial evaluation...")
         t0_splot = timer()
@@ -76,7 +80,7 @@ def main(parser_args):
 
         logger.info(f"Spatial evalutaion finished in {timer() - t0_splot:.2f}s.")
 
-    # run spectral analysis
+    # run spectral analysis if specified
     if conf_postprocess.get("do_spectral_analysis", False):
         logger.info("Start spectral analysis...")
         t0_spec = timer()
@@ -85,6 +89,18 @@ def main(parser_args):
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 
+    # create conditional quantile plots if specified
+    if conf_postprocess.get("do_cond_quantile_analysis", False):
+        logger.info("Start conditional quantile plots...")
+        t0_cq = timer()
+    
+        labels = [f"{varname.capitalize()} {model_info["model_longname"]}", f"{varname.capitalize()} COSMO-REA6"]
+        run_conditional_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
+                                          factorization=conf_postprocess.get("config_cond_quantile_analysis", "calibration-refinement"))      
+
+        logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
+
+    # run feature importance analysis if specified
     if conf_postprocess.get("do_feature_importance", False) and parser_args.mode == "inference":
         # To-DO: make executable
         logger.info("Start feature importance analysis...")

@@ -9,7 +9,7 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-03-28"
+__update__ = "2024-04-06"
 
 # for processing data
 import os
@@ -331,3 +331,100 @@ def create_ps_plot(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fna
     plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close(fig)
+
+def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, opt: dict = {}):
+    """
+    Creates conditional quantile plot
+    :param quantile_panel: quantile panel created by calculate_cond_quantiles
+    :param data_marginal: data array for which histogram will be plotted
+    :param plt_fname: name of the plot-file to be created
+    :param opt: options to customize the plot
+                Valid keys are:
+                - "figsize": tuple with dimensions of figure, default: (12, 6)
+                - "fs_title": font size of title, default: 16)
+                - "fs_axis_label": font size of axis labels, default: fs_title-2
+                - "plt_title": title of plot, default: ""
+    :return:
+    """
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_cond_quantile.__name__}") 
+
+    if not isinstance(quantile_panel, xr.DataArray):
+        raise ValueError("quantile_panel must be a DataArray, but is a {0}".format(type(quantile_panel)))
+
+    if not isinstance(data_marginal, xr.DataArray):
+        raise ValueError("data_marginal must be a DataArray, but is a {0}".format(type(data_marginal)))
+
+    if list(quantile_panel.coords) != ["bin_center", "quantile"]:
+        raise ValueError("The coordinates of quantile_panel must be ['bin_center', 'quantile']. Use calculate_cond_quantiles to calculate them.")
+
+    if opt is None:
+        opt = {}
+
+    func_logger.info(f"Start creating conditional quantile plot in file '{plt_fname}'")
+
+    bins_c = quantile_panel["bin_center"]
+    bin_width = bins_c[1] - bins_c[0]
+    bins = np.arange(bins_c[0]-bin_width/2., bins_c[-1]+1.5*bin_width/2, bin_width)
+    quantiles = quantile_panel["quantile"]
+    nquantiles = len(quantiles)
+    if nquantiles%2 != 1:
+        raise ValueError(f"Number of quantiles must be odd, but is {nquantiles}.")
+
+    # auxiliary functions
+    def get_ls_mirrored(n, ls_base=("--", ":")):
+
+        nls_base = len(ls_base)
+        lss = []
+        for ilw in np.arange(n):
+            if ilw < nls_base:
+                lss.append(ls_base[ilw])
+            else:
+                lss.append("-")
+
+        lss = lss + ["-"] + lss[::-1]
+
+        return lss
+
+    ls_all = get_ls_mirrored(int(nquantiles/2))
+    lw_all = list(np.full(nquantiles, 2.))
+    lw_all[int(nquantiles/2)] = 1.5
+
+    # start plotting
+    figsize = opt.get("figsize", (12, 6))
+    fs_title = opt.get("fs_axis_title", 16)
+    fs_label = opt.get("fs_axis_label", fs_title-2)
+    plt_title = opt.get("plt_title", "")
+    fig, ax = plt.subplots(figsize=figsize)
+
+    # plot reference line
+    ax.plot(bins_c, bins_c, color='k', label='reference 1:1', linewidth=1.)
+    # plot conditional quantiles
+    for iq in np.arange(nquantiles):
+        ax.plot(bins_c, quantile_panel.isel(quantile=iq), ls=ls_all[iq], color="k", lw=lw_all[iq],
+                label="{0:d}th quantile".format(int(quantiles[iq]*100.)))
+    # plot histogram of marginal distribution
+    ax2 = ax.twinx()
+    xr.plot.hist(data_marginal, ax=ax2, bins=bins, color="k", alpha=0.3)
+    ax2.set_yscale("log")
+    
+    qp_attrs = dict(quantile_panel.attrs)
+
+    xlabel = "{0} [{1}]".format(qp_attrs.get("cond_varname", "conditiong variable"),
+                                qp_attrs.get("unit", "unknown"))
+    ylabel = "{0} [{1}]".format(qp_attrs.get("tar_varname", "target variable"),
+                                qp_attrs.get("unit", "unknown"))
+
+    ax.set_ylabel(ylabel, fontsize=fs_title)
+    ax2.set_ylabel("counts", fontsize=fs_title)
+    ax.set_xlabel(xlabel, fontsize=fs_title)
+    # ensure that histogram extends to the lower half of the plot
+    y2_max_power = int(np.log10(ax2.get_ylim()[1]))
+    ax2.set(ylim=(1.e00, np.power(10, y2_max_power*4)), yticks=np.logspace(0, y2_max_power+1, y2_max_power+2)) 
+    ax2.set_title(plt_title)
+
+    ax.tick_params(axis="both", labelsize=fs_label)
+    ax2.tick_params(axis="both", labelsize=fs_label)
+
+    fig.savefig(plt_fname)
+    plt.close("all")
+

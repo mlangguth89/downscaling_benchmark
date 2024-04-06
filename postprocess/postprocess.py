@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-03-29"
+__update__ = "2024-04-06"
 
 import os
 import glob
@@ -19,7 +19,6 @@ from timeit import default_timer as timer
 import logging
 import gc
 import numpy as np
-import pandas as pd
 import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
@@ -29,8 +28,8 @@ from all_normalizations import ZScore
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum
-from plotting import metric_line_plot, create_map_score, create_box_plot, create_ps_plot
+from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum, calculate_cond_quantiles
+from plotting import metric_line_plot, create_map_score, create_box_plot, create_ps_plot, plot_cond_quantile
 from other_utils import convert_to_xarray, finditem, to_list
 
 # basic data types
@@ -231,50 +230,6 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
     return model_dir, plt_dir, norm_dir, model_info      
         
 
-def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
-    """
-    Run feature importance analysis and create box-plot of results
-    :param ds: Unnormalized xr.Dataset with predictors and target variable
-    :param predictors: List of predictor names
-    :param varname_tar: Name of target variable
-    :param model: Model object
-    :param norm: Normalization object
-    :param score_name: Name of score to compute feature importance
-    :param data_loader_opt: Data loader options
-    :param plt_dir: Directory to save plot files
-    :param patch_size: Patch size for feature importance analysis
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
-    
-    # get feature importance scores
-    func_logger.debug(f"Start feature importance analysis for {score_name}...")
-    feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
-                                        patch_size=patch_size)
-    
-    # get reference score
-    func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
-    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
-    if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
-    ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}_mean"] 
-
-    rel_changes = feature_scores / ref_score
-    max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
-
-    # plot feature importance scores in a box-plot with whiskers where each variable is a box
-    plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
-
-    func_logger.debug(f"Plot feature importance-analysis results into file '{plt_fname}'.")
-    create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
-                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
-                                                 "yticks": range(1, max_rel_change), "colors": "b"})
-
-    return feature_scores
-
-
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str,**kwargs):
     """
     Create line plots of desired evaluation metric. Evaluation metric must have a time-dimension
@@ -388,7 +343,50 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
                              title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
     return True
-   
+
+def run_conditional_quantile(data_fcst, data_ref, plt_dir, varname_lables, unit, opts: dict):
+    """
+    Create conditional quantile plots for given variables.
+    :param data_fcst: xarray.DataArray with forecast data
+    :param data_ref: xarray.DataArray with reference data
+    :param plt_dir: Directory to save plot files
+    :param varname_lables: List of variable names
+    :param unit: Unit of variable
+    :param opt: Dictionary with configuration options
+                Valid keys are: 
+                - "factorization": Factorization of conditional quantile plots, i.e. "calibration-refinement" (default) or "likelihood-base-rate"
+                - "quantiles": Quantiles for dashed lines in plot
+                - "figsize": tuple with dimensions of figure, default: (12, 6)
+                - "fs_title": font size of title, default: 16)
+                - "fs_axis_label": font size of axis labels, default: fs_title-2
+                - "plt_title": title of plot, default: ""
+    """
+
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_conditional_quantile.__name__}")
+
+    factorization = opts.pop("factorization", "calibration-refinement")  
+    quantiles = opts.pop("quantiles", [0.05, 0.5, 0.95])
+
+    # conditional quantile analysis on all data
+    quantile_panel_all, marginal_all = calculate_cond_quantiles(data_fcst, data_ref, varname_lables, unit, factorization=factorization, quantiles=quantiles)
+
+    # create plot
+    plt_fname = os.path.join(plt_dir, f"conditional_quantile_plot_{factorization}_all.png")
+    plot_cond_quantile(quantile_panel_all, marginal_all, plt_fname, **opts)
+
+    # conditional quantile analysis for each season
+    data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
+
+    for sea, data_fcst_sea in data_fcst_seas:
+        func_logger.info(f"Start conditional quantile analysis for season '{sea}'...")
+        data_ref_sea = data_ref_seas.get_group(sea)
+
+        quantile_panel_sea, marginal_sea = calculate_cond_quantiles(data_fcst_sea, data_ref_sea, varname_lables, unit, factorization=factorization, quantiles=quantiles)
+
+        plt_fname = os.path.join(plt_dir, f"conditional_quantile_plot_{factorization}_{sea}.png")
+        plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
+                           
 
 def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
                           lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371.):
@@ -440,6 +438,49 @@ def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labe
     create_ps_plot(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
                    x_coord="wavenumber")
 
+
+def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                           data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
+    """
+    Run feature importance analysis and create box-plot of results
+    :param ds: Unnormalized xr.Dataset with predictors and target variable
+    :param predictors: List of predictor names
+    :param varname_tar: Name of target variable
+    :param model: Model object
+    :param norm: Normalization object
+    :param score_name: Name of score to compute feature importance
+    :param data_loader_opt: Data loader options
+    :param plt_dir: Directory to save plot files
+    :param patch_size: Patch size for feature importance analysis
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
+    
+    # get feature importance scores
+    func_logger.debug(f"Start feature importance analysis for {score_name}...")
+    feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
+                                        patch_size=patch_size)
+    
+    # get reference score
+    func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
+    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
+    if not os.path.exists(score_file):
+        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
+    ds_score = xr.open_dataset(score_file)
+    ref_score = ds_score[f"{score_name}_mean"] 
+
+    rel_changes = feature_scores / ref_score
+    max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
+
+    # plot feature importance scores in a box-plot with whiskers where each variable is a box
+    plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
+
+    func_logger.debug(f"Plot feature importance-analysis results into file '{plt_fname}'.")
+    create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
+                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
+                                                 "yticks": range(1, max_rel_change), "colors": "b"})
+
+    return feature_scores
 
 class TemporalEvaluation(AbstractMetricEvaluation):
     """

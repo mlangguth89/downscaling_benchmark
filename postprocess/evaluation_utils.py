@@ -8,7 +8,7 @@ Collection of statistical evaluation methods used in postprocess.py.
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2024-03-29"
+__date__ = "2024-04-06"
 
 from typing import Union, List
 import logging
@@ -28,8 +28,8 @@ logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
 
-def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, factorization="calibration_refinement",
-                             quantiles=(0.05, 0.5, 0.95)):
+def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, data_names: List[str], 
+                             unit: str, factorization="calibration_refinement", quantiles=(0.05, 0.5, 0.95)):
     """
     Calculate conditional quantiles of forecast and observation/reference data with selected factorization
     :param data_fcst: forecast data array
@@ -64,22 +64,15 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
         raise ValueError(err_mess)
 
     if factorization == "calibration_refinement":
-        data_cond = data_fcst
-        data_tar = data_ref
+        data_cond, data_tar = data_fcst, data_ref
+        data_cond_name, data_tar_name = data_names[0], data_names[1]
     elif factorization == "likelihood-base_rate":
-        data_cond = data_ref
-        data_tar = data_fcst
+        data_cond, data_tar = data_ref, data_fcst
+        data_cond_name, data_tar_name = data_names[1], data_names[0]
     else:
         err_mess = f"Choose either 'calibration_refinement' or 'likelihood-base_rate' for factorization"
         func_logger.error(err_mess, stack_info=True, exc_info=True)
         raise ValueError(err_mess)
-
-    # get and set some basic attributes
-    data_cond_longname = data_cond.attrs.get("longname", "conditioning_variable")
-    data_cond_unit = data_cond.attrs.get("unit", "unknown")
-
-    data_tar_longname = data_tar.attrs.get("longname", "target_variable")
-    data_tar_unit = data_tar.attrs.get("unit", "unknown")
 
     # get bins for conditioning
     data_cond_min, data_cond_max = np.floor(np.min(data_cond)), np.ceil(np.max(data_cond))
@@ -96,10 +89,10 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, fa
     quantile_panel = xr.DataArray(np.full((len(bins_c_all), nquantiles), np.nan),
                                   coords={"bin_center": bins_c_all, "quantile": list(quantiles)},
                                   dims=["bin_center", "quantile"],
-                                  attrs={"cond_var_name": data_cond_longname, "cond_var_unit": data_cond_unit,
-                                         "tar_var_name": data_tar_longname, "tar_var_unit": data_tar_unit})
+                                  attrs={"cond_varname": data_cond_name, "unit": unit,
+                                         "tar_varname": data_tar_name})
     
-    func_logger.info(f"Start caclulating conditional quantiles for all {nbins:d} bins.")
+    func_logger(f"Start caclulating conditional quantiles for all {nbins:d} bins.")
     # fill the quantile data array
     for i in np.arange(nbins):
         # conditioning of ground truth based on forecast
