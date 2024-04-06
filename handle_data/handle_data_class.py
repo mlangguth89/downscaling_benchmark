@@ -283,7 +283,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
 
     # check if target variables are provided
-    varnames_tar_all = to_list(ds_dict["predictands"])
+    varnames_tar_all = to_list(ds_dict["predictands"]).copy()
     if finditem(hparams_dict, "z_branch", False):
         varnames_tar_all += to_list(ds_dict["varname_z"])
 
