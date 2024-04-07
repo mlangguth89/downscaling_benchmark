@@ -344,7 +344,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     return True
 
-def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, unit, opts: dict):
+def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, unit, **opts: dict):
     """
     Create conditional quantile plots for given variables.
     :param data_fcst: xarray.DataArray with forecast data
@@ -363,7 +363,7 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
     """
 
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_conditional_quantile.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_cond_quantile_analysis.__name__}")
 
     factorization = opts.pop("factorization", "calibration-refinement")  
     quantiles = opts.pop("quantiles", [0.05, 0.5, 0.95])
