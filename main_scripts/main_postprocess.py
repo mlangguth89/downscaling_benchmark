@@ -20,8 +20,8 @@ import json as js
 import gc
 import xarray as xr
 import cartopy.crs as ccrs
-from handle_data_unet import *
-from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_conditional_quantile_analysis, \
+from handle_data_class import prepare_dataset
+from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
                         run_feature_importance, run_spectral_analysis
 from other_utils import config_logger
 #from other_utils import free_mem
@@ -94,8 +94,8 @@ def main(parser_args):
         logger.info("Start conditional quantile plots...")
         t0_cq = timer()
     
-        labels = [f"{varname.capitalize()} {model_info["model_longname"]}", f"{varname.capitalize()} COSMO-REA6"]
-        run_conditional_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
+        labels = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
+        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
                                           factorization=conf_postprocess.get("config_cond_quantile_analysis", "calibration-refinement"))      
 
         logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
