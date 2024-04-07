@@ -221,7 +221,7 @@ def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool 
         model_info = {"model_type": model_type, "model_longname": model_longname,
                       "nsubmodels": nsubmodels}
         
-    if nsubmodels == 1:
+    if nsubmodels == 0:
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
     else: 
         model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}", f"{exp_name}_generator{add_str}"), \
@@ -344,7 +344,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     return True
 
-def run_conditional_quantile(data_fcst, data_ref, plt_dir, varname_lables, unit, opts: dict):
+def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, unit, opts: dict):
     """
     Create conditional quantile plots for given variables.
     :param data_fcst: xarray.DataArray with forecast data
