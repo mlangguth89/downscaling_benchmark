@@ -96,7 +96,7 @@ def main(parser_args):
     
         labels = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
         run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
-                                          factorization=conf_postprocess.get("config_cond_quantile_analysis", "calibration-refinement"))      
+                                          **conf_postprocess.get("config_cond_quantile_analysis", {}))      
 
         logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
 
@@ -113,8 +113,11 @@ def main(parser_args):
 
         # To-Do: allow for multiple target variables, e.g. for wind downscaling
         varname_tar = test_info["all_predictands"][0]
-        data_loader_opts = {"batch_size": 32, "predictands": ds_dict.get("predictands", None), "predictors": ds_dict.get("predictors", None),
-                            "var_tar2in": ds_dict.get("var_tar2in", None), "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
+        # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
+        #       ds_test is directly parsed to the make_tf_dataset_allmem-method and thus, the list of predictors and predictands 
+        #       must be complete here, i.e. we deduce them from test_info (therefore var_tar2in must be None in any case)
+        data_loader_opts = {"batch_size": 32, "predictands": test_info["all_predictands"], "predictors": test_info["all_predictors"],
+                            "var_tar2in": None, "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
                             "named_targets": test_info["hparams_dict"].get("named_targets", None)}
                              
         _ = run_feature_importance(ds_test, conf_fi.get("predictors", test_info["all_predictors"]), varname_tar, test_info["trained_model"], 
