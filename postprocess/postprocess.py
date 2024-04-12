@@ -354,7 +354,7 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
     :param unit: Unit of variable
     :param opt: Dictionary with configuration options
                 Valid keys are: 
-                - "factorization": Factorization of conditional quantile plots, i.e. "calibration-refinement" (default) or "likelihood-base-rate"
+                - "factorization": Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
                 - "quantiles": Quantiles for dashed lines in plot
                 - "figsize": tuple with dimensions of figure, default: (12, 6)
                 - "fs_title": font size of title, default: 16)
@@ -365,7 +365,7 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_cond_quantile_analysis.__name__}")
 
-    factorization = opts.pop("factorization", "calibration-refinement")  
+    factorization = opts.pop("factorization", "calibration_refinement")  
     quantiles = opts.pop("quantiles", [0.05, 0.5, 0.95])
 
     # conditional quantile analysis on all data
@@ -380,7 +380,7 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
 
     for sea, data_fcst_sea in data_fcst_seas:
         func_logger.info(f"Start conditional quantile analysis for season '{sea}'...")
-        data_ref_sea = data_ref_seas.get_group(sea)
+        data_ref_sea = data_ref_seas[sea]
 
         quantile_panel_sea, marginal_sea = calculate_cond_quantiles(data_fcst_sea, data_ref_sea, varname_lables, unit, factorization=factorization, quantiles=quantiles)
 
@@ -444,12 +444,12 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
-    :param predictors: List of predictor names
+    :param predictors: List of predictor names for which feature importance analysis should be run
     :param varname_tar: Name of target variable
     :param model: Model object
     :param norm: Normalization object
     :param score_name: Name of score to compute feature importance
-    :param data_loader_opt: Data loader options
+    :param data_loader_opt: Data loader options that will be parsed to the make_tf_dataset_allmem-method
     :param plt_dir: Directory to save plot files
     :param patch_size: Patch size for feature importance analysis
     """

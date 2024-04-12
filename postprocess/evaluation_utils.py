@@ -70,7 +70,7 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, da
         data_cond, data_tar = data_ref, data_fcst
         data_cond_name, data_tar_name = data_names[1], data_names[0]
     else:
-        err_mess = f"Choose either 'calibration_refinement' or 'likelihood-base_rate' for factorization"
+        err_mess = f"Choose either 'calibration_refinement' or 'likelihood-base_rate' for factorization. Your choice {factorization}"
         func_logger.error(err_mess, stack_info=True, exc_info=True)
         raise ValueError(err_mess)
 
@@ -92,7 +92,7 @@ def calculate_cond_quantiles(data_fcst: xr.DataArray, data_ref: xr.DataArray, da
                                   attrs={"cond_varname": data_cond_name, "unit": unit,
                                          "tar_varname": data_tar_name})
     
-    func_logger(f"Start caclulating conditional quantiles for all {nbins:d} bins.")
+    func_logger.info(f"Start caclulating conditional quantiles for all {nbins:d} bins.")
     # fill the quantile data array
     for i in np.arange(nbins):
         # conditioning of ground truth based on forecast
@@ -432,12 +432,12 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
     """
     Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
     :param ds: The unnormalized (test-)dataset
-    :param predictors: List of predictor variables
+    :param predictors: List of predictor variables for which feature importance analysis should be run
     :param varname_tar: Name of target variable
     :param model: Trained model for inference
     :param norm: Normalization object
     :param score_name: Name of metric-score to be calculated
-    :param data_loader_opt: Dictionary providing options for the TensorFlow data pipeline
+    :param data_loader_opt: Dictionary providing options for the make_tf_dataset_allmem-method
     :param patch_size: Tuple for patch size during spatio-temporal permutation
     :return score_all: DataArray with scores for all predictor variables
     """
