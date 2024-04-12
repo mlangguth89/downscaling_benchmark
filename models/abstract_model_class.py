@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-11"
-__update__ = "2024-03-20"
+__update__ = "2024-04-11"
 
 # import modules
 import os
@@ -15,6 +15,7 @@ from typing import Any, Dict
 
 import tensorflow.keras as keras
 import tensorflow as tf
+from tensorflow.keras import backend as K
 
 from model_utils import TimeHistory, handle_opt_utils, make_keras_pickable
 from other_utils import merge_dicts, remove_items, to_list
@@ -346,6 +347,16 @@ class AbstractModelClass(ABC):
         """
         with open(os.path.join(self.savedir, f"config_{self.model_name.lower()}.json"), "w") as f:
             json.dump(self.hparams, f)
+
+    def count_params(self):
+        """
+        Count trainable and untrainable parameters of model.
+        :return: (trainable_param, untrainable_param)
+        """
+        trainable_param = int(np.sum([K.count_params(p) for p in self.model.trainable_weights]))
+        untrainable_param = int(np.sum([K.count_params(p) for p in self.model.non_trainable_weights]))
+
+        return trainable_param, untrainable_param
 
     @classmethod
     def requirements(cls):
