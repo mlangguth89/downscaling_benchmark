@@ -13,6 +13,7 @@ import inspect
 from abc import ABC
 from typing import Any, Dict
 
+import numpy as np
 import tensorflow.keras as keras
 import tensorflow as tf
 from tensorflow.keras import backend as K
