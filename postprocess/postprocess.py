@@ -172,7 +172,7 @@ def results_from_file(nc_file, varname, model_name):
         if req_var not in ds_out.variables:
             raise ValueError(f"Variable '{req_var}' not found in dataset '{nc_file}'")
 
-    model_info = {"model_type": model_name, "model_longname": model_name.replace(" ", "_").lower()}
+    model_info = {"model_type": model_name.repalce(" ", "_").lower(), "model_longname": model_name}
 
     return ds_out, model_info
 
@@ -247,8 +247,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     os.makedirs(metric_dir, exist_ok=True)
     
     # get possible keyword arguments
-    model_type = kwargs.get("model_type", "sha_wgan")
-    model_name = kwargs.get("model_name", "Sha WGAN")
+    model_type = kwargs.pop("model_type", "sha_wgan")
+    model_name = kwargs.pop("model_name", "Sha WGAN")
+    quantiles = kwargs.pop("quantiles", (.1, .9))
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
     block_length = kwargs.pop("block_length", 5)
@@ -265,7 +266,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
 
     # create plots
-    metric_line_plot(score_hourly_mean, score_hourly_mean_b.quantile(.25, dim="iboot"), score_hourly_mean_b.quantile(.75, dim="iboot"),
+    metric_line_plot(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **kwargs)
 
@@ -288,7 +289,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
-        metric_line_plot(score_sea_hh_mean, score_sea_hh_mean_b.quantile(.25, dim="iboot"), score_sea_hh_mean_b.quantile(.75, dim="iboot"),
+        metric_line_plot(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[2], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
                          os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
         
@@ -467,7 +468,7 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}_mean"] 
+    ref_score = ds_score[f"{score_name}"] 
 
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
