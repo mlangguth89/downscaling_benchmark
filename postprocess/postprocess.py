@@ -485,7 +485,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
 
     return feature_scores
 
-def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, seaonal_levels: bool = True, **kwargs):
+def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, seasonal_levels: bool = True, **kwargs):
     """
     Run comparison plots for a given number of samples. The samples will be picked based on the performance 
     of the downscaling model in terms of the provided score.

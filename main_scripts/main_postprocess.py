@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-06"
+__update__ = "2024-04-16"
 
 import os
 import logging
@@ -20,9 +20,8 @@ import json as js
 import gc
 import xarray as xr
 import cartopy.crs as ccrs
-from handle_data_class import prepare_dataset
 from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
-                        run_feature_importance, run_spectral_analysis
+                        run_feature_importance, run_spectral_analysis, run_comparison_plots
 from other_utils import config_logger
 #from other_utils import free_mem
 
@@ -88,6 +87,26 @@ def main(parser_args):
         run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir, [model_info["model_longname"], "COSMO-REA6"], varname, unit)
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
+
+    # create comparison plots if specified
+    if conf_postprocess.get("do_comparison_plots", False):
+        logger.info("Start creating comparison plots...")
+        t0_cplot = timer()
+
+        plt_dir_comp = os.path.join(plt_dir, "comparison_plots")
+
+        # access configuration for comparison plots for convenience and set arguments for run_comparison_plots
+        conf_cp = conf_postprocess["config_comparison_plots"]
+        nsamples = conf_cp.pop("nsamples", 200)
+        score_name = conf_cp.pop("score_name", "rmse")
+
+        # Note that conf_cp is parsed to the plot_comparison_maps in run_comparison_plots
+        conf_cp["titles"] = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
+        conf_cp["vars2plt"] = [f"{varname}_ref", f"{varname}_fcst"] 
+
+        run_comparison_plots(ds_out, plt_dir_comp, score_name, model_info["model_type"], nsamples, **conf_cp)
+
+        logger.info(f"Comparison plots finished in {timer() - t0_cplot:.2f}s.")
 
     # create conditional quantile plots if specified
     if conf_postprocess.get("do_cond_quantile_analysis", False):
