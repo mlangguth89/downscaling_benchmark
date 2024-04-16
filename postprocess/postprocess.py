@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-06"
+__update__ = "2024-04-16"
 
 import os
 import glob
@@ -18,7 +18,10 @@ import json as js
 from timeit import default_timer as timer
 import logging
 import gc
+import multiprocessing as mp
+from multiprocessing.pool import Pool
 import numpy as np
+import pandas as pd
 import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
@@ -29,7 +32,8 @@ from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum, calculate_cond_quantiles
-from plotting import metric_line_plot, create_map_score, create_box_plot, create_ps_plot, plot_cond_quantile
+from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
+                     plot_comparison_maps, get_season_t2m_levels
 from other_utils import convert_to_xarray, finditem, to_list
 
 # basic data types
@@ -98,6 +102,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     # prepare normalization
     js_norm = os.path.join(norm_dir, "norm.json")
     func_logger.debug("Read normalization file for subsequent data transformation.")
+    # To-Do: Enable handling of multiple normalizations
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
     
@@ -266,7 +271,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
 
     # create plots
-    metric_line_plot(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
+    plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
                      os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **kwargs)
 
@@ -289,7 +294,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
-        metric_line_plot(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[2], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
+        plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[2], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
                          os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
         
@@ -315,24 +320,21 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     
     os.makedirs(plot_dir, exist_ok=True)
 
-    model_type = plt_kwargs.get("model_type", "sha_wgan")
-    model_name = plt_kwargs.get("model_name", "Sha WGAN")
+    model_type = plt_kwargs.pop("model_type", "sha_wgan")
 
     score_all = score_engine(score_name)
-    #score_all = score_all.drop_vars("variables")
 
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
-    create_map_score(score_mean, fname, dims=dims,
+    plot_score_map(score_mean, fname, dims=dims,
                      title=f"{score_name.upper()} (avg.)", **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
-        create_map_score(score_hourly_mean.sel({"hour": hh}), fname,
-                         dims=dims, title=f"{score_name.upper()} {hh:02d} UTC",
-                         **plt_kwargs)
+        plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
+                       dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
 
     for hh in range(24):
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
@@ -340,8 +342,8 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
-            create_map_score(score_now.sel({"season": sea}), fname, dims=dims,
-                             title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
+            plot_score_map(score_now.sel({"season": sea}), fname, dims=dims,
+                           title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
     return True
 
@@ -436,11 +438,11 @@ def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labe
 
     # create plot   
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum.png")
-    create_ps_plot(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
-                   x_coord="wavenumber")
+    plot_power_spectra(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
+                       x_coord="wavenumber")
 
 
-def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
                            data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
     """
     Run feature importance analysis and create box-plot of results
@@ -482,6 +484,60 @@ def run_feature_importance(ds: xr.DataArray, predictors: list_or_str, varname_ta
                                                  "yticks": range(1, max_rel_change), "colors": "b"})
 
     return feature_scores
+
+def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, seaonal_levels: bool = True, **kwargs):
+    """
+    Run comparison plots for a given number of samples. The samples will be picked based on the performance 
+    of the downscaling model in terms of the provided score.
+    For instance, for nsamples=100 and score_name='rmse', samples with an RMSE corresponding to
+    the 0th, 1st, 2nd, ... 100th percentile will be selected.
+    :param ds: xarray.Dataset providing the downscaled and reference/ground truth data
+    :param plt_dir: Directory to save plot files
+    :param score_name: Name of score to determine which samples to plot
+    :param model_type: Type of model
+    :param nsamples: Number of samples to plot
+    :param seasonal_levels: Flag to use seasonal levels (for 2m temperature only!)
+    :param kwargs: Additional keyword arguments for plotting that are parsed to the plot_comparison_maps-method
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_comparison_plots.__name__}")
+
+    # create output-directories if necessary
+    os.makedirs(plt_dir, exist_ok=True)
+
+    # get score data
+    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
+    if not os.path.exists(score_file):
+        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
+    
+    func_logger.debug(f"Read {score_file} to determine which samples to plot...")
+    ds_score = xr.open_dataset(score_file)
+
+    # get sample indices to plot
+    sorted_score = ds_score[f"{score_name}"].sortby(ds_score[f"{score_name}"])
+    indices = np.linspace(0, len(sorted_score), nsamples, dtype="int", endpoint=False)
+    times2plt = sorted_score["time"].isel({"time": indices})
+
+    varname = kwargs.get("vars2plt")[0].replace("_ref", "").replace("_fcst", "")
+
+    # run parallelized plotting
+    nworkers = min(mp.cpu_count(), nsamples)
+    pool = Pool(processes=nworkers)
+    func_logger.info(f"Start parallelized plotting of comparison plots for {nsamples} samples over {nworkers} workers...")
+
+    def errorhandler(exc):
+        print('Exception:', exc)
+
+    for i, t in enumerate(times2plt):
+        date_str = (pd.to_datetime(t.values)).strftime("%Y%m%dT%H00")
+        quantile_now = f"{(i+1) / nsamples}:.3f"
+        fname = os.path.join(plt_dir, f"{model_type}_{varname}_{date_str}_{score_name}_q{quantile_now}.png")
+        if varname == "t2m" and seasonal_levels:
+            kwargs["levels"] = get_season_t2m_levels(t.values)
+        pool.apply_async(plot_comparison_maps, (ds.sel({"time": t}), fname), kwargs, error_callback=errorhandler)
+        
+    pool.close()
+    pool.join()
 
 class TemporalEvaluation(AbstractMetricEvaluation):
     """
