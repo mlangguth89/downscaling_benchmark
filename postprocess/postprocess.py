@@ -177,7 +177,7 @@ def results_from_file(nc_file, varname, model_name):
         if req_var not in ds_out.variables:
             raise ValueError(f"Variable '{req_var}' not found in dataset '{nc_file}'")
 
-    model_info = {"model_type": model_name.repalce(" ", "_").lower(), "model_longname": model_name}
+    model_info = {"model_type": model_name.replace(" ", "_").lower(), "model_longname": model_name}
 
     return ds_out, model_info
 
@@ -255,6 +255,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     model_type = kwargs.pop("model_type", "sha_wgan")
     model_name = kwargs.pop("model_name", "Sha WGAN")
     quantiles = kwargs.pop("quantiles", (.1, .9))
+    # ad-hoc fix to remove unnecessary keyword arguments
+    for key in ["model_longname", "nsubmodels"]:
+        _ = kwargs.pop(key, None)
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
     block_length = kwargs.pop("block_length", 5)
@@ -294,7 +297,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
-        plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[2], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
+        plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[0], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
                          os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
         
@@ -321,6 +324,9 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     os.makedirs(plot_dir, exist_ok=True)
 
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
+    # ad-hoc fix to remove unnecessary keyword arguments
+    for key in ["model_longname", "nsubmodels"]:
+        _ = plt_kwargs.pop(key, None)
 
     score_all = score_engine(score_name)
 
@@ -485,7 +491,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
 
     return feature_scores
 
-def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, seasonal_levels: bool = True, **kwargs):
+def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
     """
     Run comparison plots for a given number of samples. The samples will be picked based on the performance 
     of the downscaling model in terms of the provided score.
@@ -496,6 +502,7 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, se
     :param score_name: Name of score to determine which samples to plot
     :param model_type: Type of model
     :param nsamples: Number of samples to plot
+    :param offset: value to offset data (e.g. -273.15 for temperature)
     :param seasonal_levels: Flag to use seasonal levels (for 2m temperature only!)
     :param kwargs: Additional keyword arguments for plotting that are parsed to the plot_comparison_maps-method
     """
@@ -506,7 +513,7 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, se
     os.makedirs(plt_dir, exist_ok=True)
 
     # get score data
-    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
+    score_file = os.path.join(plt_dir, "..", "metric_files", f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     
@@ -518,10 +525,11 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, se
     indices = np.linspace(0, len(sorted_score), nsamples, dtype="int", endpoint=False)
     times2plt = sorted_score["time"].isel({"time": indices})
 
+    # auxiliary variables
     varname = kwargs.get("vars2plt")[0].replace("_ref", "").replace("_fcst", "")
 
     # run parallelized plotting
-    nworkers = min(mp.cpu_count(), nsamples)
+    nworkers = min(mp.cpu_count(), nsamples, 96)
     pool = Pool(processes=nworkers)
     func_logger.info(f"Start parallelized plotting of comparison plots for {nsamples} samples over {nworkers} workers...")
 
@@ -529,12 +537,13 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, se
         print('Exception:', exc)
 
     for i, t in enumerate(times2plt):
+        kwargs_now = kwargs.copy()
         date_str = (pd.to_datetime(t.values)).strftime("%Y%m%dT%H00")
-        quantile_now = f"{(i+1) / nsamples}:.3f"
+        quantile_now = f"{(i+1) / nsamples:.3f}".replace(".", "p")
         fname = os.path.join(plt_dir, f"{model_type}_{varname}_{date_str}_{score_name}_q{quantile_now}.png")
         if varname == "t2m" and seasonal_levels:
-            kwargs["levels"] = get_season_t2m_levels(t.values)
-        pool.apply_async(plot_comparison_maps, (ds.sel({"time": t}), fname), kwargs, error_callback=errorhandler)
+           kwargs_now["levels"] = get_season_t2m_levels(t.values)
+        pool.apply_async(plot_comparison_maps, (ds.sel({"time": t}) + offset, fname), kwargs_now, error_callback=errorhandler)
         
     pool.close()
     pool.join()

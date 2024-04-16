@@ -185,7 +185,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     # create plot objects
     fig, axs = plt.subplots(1, 3, figsize=figsize, sharex=True, sharey=True,
                             subplot_kw={"projection": proj_plot})
-    
+        
     # perform plotting
     for i, ax in enumerate(axs):
         if i < nplots:
@@ -236,7 +236,7 @@ def plot_score_map(score, plt_fname, **kwargs):
                   - cbar_name: colorbar name used for plotting the score
                   - further valid arguments of ax.pcolormesh
     """
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_map_score.__name__}")
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_score_map.__name__}")
 
     # get keyword arguments
     title = kwargs.pop("title", "Score")

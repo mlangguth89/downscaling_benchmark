@@ -33,8 +33,7 @@ def main(parser_args):
 
     ### Preparation ###
     t0 = timer()
-    dirname = parser_args.exp_name if parser_args.mode == "inference" else parser_args.model_name
-    plt_dir = os.path.join(parser_args.output_base_dir, dirname)
+    plt_dir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
 
     # load configuration for postprocessing
     conf_postprocess = js.load(parser_args.conf_postprocess)    
@@ -46,7 +45,7 @@ def main(parser_args):
     # create output-directory and initialze logger
     os.makedirs(plt_dir, exist_ok=True)
     
-    log_file = os.path.join(plt_dir, f"postprocessing_{dirname}.log")
+    log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
     logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
     logger = config_logger(logger, log_file)    
 
@@ -99,12 +98,13 @@ def main(parser_args):
         conf_cp = conf_postprocess["config_comparison_plots"]
         nsamples = conf_cp.pop("nsamples", 200)
         score_name = conf_cp.pop("score_name", "rmse")
+        offset = conf_cp.pop("offset", 0.)
 
         # Note that conf_cp is parsed to the plot_comparison_maps in run_comparison_plots
-        conf_cp["titles"] = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
+        conf_cp["titles"] = [f"{varname.capitalize()} COSMO-REA6", f"{varname.capitalize()} {model_info['model_longname']}"]
         conf_cp["vars2plt"] = [f"{varname}_ref", f"{varname}_fcst"] 
 
-        run_comparison_plots(ds_out, plt_dir_comp, score_name, model_info["model_type"], nsamples, **conf_cp)
+        run_comparison_plots(ds_out, plt_dir_comp, score_name, model_info["model_type"], nsamples, offset, **conf_cp)
 
         logger.info(f"Comparison plots finished in {timer() - t0_cplot:.2f}s.")
 
@@ -149,7 +149,7 @@ def main(parser_args):
     gc.collect()
     #free_mem([da_test])
 
-    logger.info(f"Postprocessing of experiment '{dirname}' finished. " +
+    logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
 
 
@@ -160,6 +160,9 @@ if __name__ == "__main__":
                         help="Directory where results in form of plots are stored.")
     parser.add_argument("--configuration_postprocess", "--conf_postprocess", dest="conf_postprocess", type=argparse.FileType("r"), required=True,
                         help="JSON-file to configure postprocessing.")
+    parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
+                                  help="Name of the experiment/trained model to postprocess.")
+    
     # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
     subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
 
@@ -168,8 +171,6 @@ if __name__ == "__main__":
                                   help="Directory where test dataset (netCDF-file) is stored.")
     parser_inference.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
                                   help="Base directory where trained models are saved.")
-    parser_inference.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
-                                  help="Name of the experiment/trained model to postprocess.")
     parser_inference.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
                                   help="Name of dataset to be used for downscaling model.")
     parser_inference.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
