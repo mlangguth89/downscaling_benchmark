@@ -25,7 +25,7 @@ import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_unet import *
-from handle_data_class import HandleDataClass, get_dataset_filename
+from handle_data_class import HandleDataClass, get_dataset_filename,prepare_torch_dataset
 from all_normalizations import ZScore
 from statistical_evaluation import Scores
 from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance_lightning
@@ -112,7 +112,7 @@ def main(parser_args):
     fdata_test = get_dataset_filename(parser_args.data_dir, parser_args.dataset, "test",
                                       ds_dict.get("laugmented", False))
 
-    logger.info(f"Start opening datafile {fdata_test}...")
+    #logger.info(f"Start opening datafile {fdata_test}...")
     # prepare normalization
     js_norm = os.path.join(norm_dir, "norm.json")
     logger.debug("Read normalization file for subsequent data transformation.")
@@ -126,21 +126,24 @@ def main(parser_args):
         ground_truth = ds_test[tar_varname].astype("float32", copy=True)
         ds_test = norm.normalize(ds_test)
 
-    # prepare training and validation data
+    ## prepare training and validation data
     logger.info(f"Start preparing test dataset...")
     t0_preproc = timer()
 
     da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
-    
-    # clean-up to reduce memory footprint
+    #
+    ## clean-up to reduce memory footprint
     del ds_test
     gc.collect()
     #free_mem([ds_test])
 
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
-                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
+    #tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
+    #            "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
 
-    torch_test_dataloader = HandleDataClass.make_tensor_dataloader_allmem(da_test,**tfds_opts)
+    #torch_test_dataloader = HandleDataClass.make_tensor_dataloader_allmem(da_test,**tfds_opts)
+
+    
+    torch_test_dataloader, test_info = prepare_torch_dataset(parser_args.data_dir,parser_args.dataset,ds_dict,hparams_dict,"test",ds_dict['predictands'],norm_obj=norm,norm_dims=ds_dict['norm_dims'],seed=32)
 
     predictors = ds_dict.get("predictors", None)
     if predictors is None:
@@ -192,16 +195,16 @@ def main(parser_args):
     logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
     # run feature importance analysis for RMSE
-    logger.info("Start feature importance analysis...")
-    t0_fi = timer()
+    #logger.info("Start feature importance analysis...")
+    #t0_fi = timer()
 
-    rmse_ref = rmse_all.mean().values
+    #rmse_ref = rmse_all.mean().values
 
-    _ = run_feature_importance_lightning(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
-                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
-    
-    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
-    
+    #_ = run_feature_importance_lightning(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
+    #                           tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
+    #
+    #logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+    #
     # clean-up to reduce memory footprint
     del da_test
     gc.collect()

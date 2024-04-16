@@ -945,6 +945,7 @@ class SwinIRLightning(L.LightningModule):
 
 
     def training_step(self,batch,batch_idx):
+
         x,y = batch
         x,y = torch.squeeze(x,dim=1) , torch.squeeze(y,dim=1)
         x,y = torch.permute(x,dims=(0,3,1,2)), torch.permute(y,dims=(0,3,1,2))
@@ -956,6 +957,8 @@ class SwinIRLightning(L.LightningModule):
         self.log_dict({"train_loss":loss},on_step=True,on_epoch=True,prog_bar=True,logger=True,sync_dist=True)
         return loss
 
+    def on_train_epoch_end(self):
+        self.trainer.train_dataloader.dataset.update()
 
     def validation_step(self,batch,batch_idx):
         x,y = batch

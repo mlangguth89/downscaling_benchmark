@@ -27,6 +27,9 @@ from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import prepare_dataset,prepare_torch_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
 
+#import torch module
+import torch
+from swinir_lightning_model import SwinIR
 
 #import for lightning_modules
 from swinir_lightning_model import SwinIRLightning
@@ -39,12 +42,13 @@ import random
 # * d_steps must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
 
-
 def lightning_main(parser_args):
 
     random_seed = 32
     seed_everything(32,workers=True)
-    wandb_logger = WandbLogger(project="downscaling",
+
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
+    wandb_logger = WandbLogger(project=model_savedir_last,
                                 name= parser_args.exp_name)
     # start timing
     to = timer()
@@ -113,6 +117,14 @@ def lightning_main(parser_args):
         tval_load = None
 
     print("Finished data preparation")
+    
+    
+    os.makedirs(model_savedir, exist_ok=True)
+    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
+    if not write_norm:
+        filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
+    
+    copy_filelist(filelist, model_savedir, filelist_new)
 
     # instantiate model...
     model = SwinIRLightning(shape_in, list(train_info["varnames_tar"]), hparams_dict, model_savedir, parser_args.exp_name)
@@ -120,8 +132,9 @@ def lightning_main(parser_args):
     #args to be passed, currently magic numbers are used 
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
-                      max_epochs=model.swinir.hparams['nepochs'],
-                      num_nodes=1,
+                      max_epochs=ds_obj_train.nfiles_merged*model.swinir.hparams['nepochs'],
+                      check_val_every_n_epoch=ds_obj_train.nfiles_merged,
+                      num_nodes=2,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',
@@ -134,7 +147,19 @@ def lightning_main(parser_args):
             torch_train_dataloader,
             torch_val_dataloader,
             ckpt_path=parser_args.ckpt_path)
+    
+    
+    if not ttrain_load:
+        ttrain_load = sum(ds_obj_train.reading_times) #+ tval_load
+        print(f"Training data loading time: {ttrain_load:.2f}s.")
+        print(f"Average throughput: {ds_obj_train.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
 
+    # save trained model
+    t0_save = timer()
+
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
+    model.save(filepath=model_savedir_last)
+    
     # final timing
     tend = timer()
     saving_time = tend - t0_save
@@ -301,3 +326,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     #main(args)
     lightning_main(args)
+    #torch_main(args)

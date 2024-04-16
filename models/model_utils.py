@@ -17,7 +17,7 @@ import tensorflow.keras as keras
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
 from tensorflow.keras.models import Model
-
+import xarray as xr
 
 # define class for creating timer callback
 class TimeHistory(keras.callbacks.Callback):
@@ -85,5 +85,30 @@ def make_keras_pickable():
 
     cls = Model
     cls.__reduce__ = __reduce__
+
+
+def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
+    """
+    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
+    :param mout_np: numpy-array of model output
+    :param norm: normalization object
+    :param varname: name of variable
+    :param coords: coordinates of target data
+    :param dims: dimensions of target data
+    :param z_branch: flag for z-branch
+    :return: xarray.DataArray of model output with denormalized data
+    """
+    if z_branch:
+        # slice data to get first channel only
+        if isinstance(mout_np, list): mout_np = mout_np[0]
+        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
+    else:
+        # no slicing required
+        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
+
+    # perform denormalization
+    mout_xr = norm.denormalize(mout_xr, varname=varname)
+
+    return mout_xr
 
 

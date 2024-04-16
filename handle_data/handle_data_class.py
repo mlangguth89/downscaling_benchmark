@@ -22,6 +22,8 @@ import xarray as xr
 import tensorflow as tf
 from abstract_data_normalization import Normalize
 import multiprocessing
+import math
+
 try:
     from multiprocessing import Pool as ThreadPool
 except:
@@ -58,7 +60,59 @@ class HandleAllMemTorchDataset(Dataset):
                 if self.named_targets else
                 (self.da_in.isel({"time": idx}).values.to_numpy(), self.da_tar.isel({"time": idx}).values.to_numpy()))
 
+       
+class HandleIterDataset(IterDataPipe):
+    def __init__(self,stream_monthly_netcdf,named_targets=None):
+        """
+        Create iterable torch dataset
+        :param stream_monthly_netcdf: an instance object of StreamMonthltNetCDF 
+        :param file_sequence: chunk id or the index of chunked file sequence 
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+        """
+        super(HandleIterDataset).__init__()
+        self.stream_monthly_netcdf = stream_monthly_netcdf
+        self.named_targets = named_targets
+        self.max_files = self.stream_monthly_netcdf.get_samples_per_merged_file()
+        self.file_sequence  = 0
+        self.stream_monthly_netcdf.read_netcdf(self.file_sequence)
+        self.stream_monthly_netcdf.choose_data('filler')
+        self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        self.num_gpus = int(os.environ['SLURM_NTASKS']) 
+        #self.rank = int(os.environ['SLURM_NODEID'])*int(os.environ['SLURM_NTASKS_PER_NODE']) + int(os.environ['SLURM_LOCALID'])
+        self.rank = int(os.environ['SLURM_PROCID'])
+        self.samples_per_gpu = self.max_files//self.num_gpus
+
+    
+    def __iter__(self):
+
+        iter_start = self.rank*self.samples_per_gpu
+        iter_end = (self.rank+1)*self.samples_per_gpu
+
+        data = map(lambda x : self.getitem(x), range(iter_start,iter_end))
         
+        return iter(data)
+    
+    def __len__(self):
+        return int(self.max_files//self.num_gpus)
+    
+
+    def update(self):
+        self.file_sequence = self.file_sequence % self.stream_monthly_netcdf.nfiles_merged
+        self.stream_monthly_netcdf.read_netcdf(self.file_sequence)
+        self.stream_monthly_netcdf.choose_data('filler')
+        self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        self.file_sequence+=1
+
+    def getitem(self,idx):
+        arr =  self.stream_monthly_netcdf.getitems([idx]).to_numpy()
+        if self.named_targets is not None :
+            varnames = self.stream_monthly_netcdf.predictand_list
+            return (arr[..., 0:-self.stream_monthly_netcdf.n_predictands],
+                        np.array(list({var: arr[..., -self.stream_monthly_netcdf.n_predictands + i] for i, var in enumerate(varnames)}.values())))
+        else:
+            return (arr[..., 0:-self.stream_monthly_netcdf.n_predictands], arr[..., -self.stream_monthly_netcdf.n_predictands:])
+
+
 class HandlePartDatasetTorch(Dataset):
     def __init__(self,stream_monthly_netcdf,file_sequence,named_targets=None):
         """
@@ -359,7 +413,7 @@ def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparam
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        torch_loader = make_torch_dataloader(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
+        torch_loader = make_torch_iter_dataloader(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
                                    lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
@@ -561,6 +615,34 @@ def make_torch_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: int, 
         dataloader = DataLoader(dataset,batch_size=batch_size,num_workers=10)
 
         return dataloader
+
+def make_torch_iter_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
+                        lrepeat: bool = True, drop_remainder: bool = True) -> torch.utils.data.DataLoader:
+        """
+        Build Pytorch dataloader by from chunked netCDF files using xarray's open_mfdatset-method.
+        :param datadir: directory where netCDF-files are strored
+        :param file_patt: filename pattern to glob files from datadir
+        :param batch_size: desired mini-batch size
+        :param nepochs: (effective) number of epochs for training
+        :param nfiles2merge: number if files to merge for streaming
+        :param predictands: List of selected predictand variables
+        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+        :param lshuffle: boolean to enable sample shuffling
+        :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
+        :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
+                                                                         to the input)
+        :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
+        :param norm_obj: normalization instance used to normalize the data.
+                         If not passed, the normalization instance is retrieved from the data
+        :param nworkers: numbers of workers to read in netCDF-files
+        :return: tuple of stream_monthly_netcdf object and torch dataloader
+        """
+
+        dataset = HandleIterDataset(ds_obj) 
+        dataloader = DataLoader(dataset,batch_size=batch_size)
+
+        return dataloader
+
 
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
                             lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
