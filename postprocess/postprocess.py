@@ -254,7 +254,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # get possible keyword arguments
     model_type = kwargs.pop("model_type", "sha_wgan")
     model_name = kwargs.pop("model_name", "Sha WGAN")
-    quantiles = kwargs.pop("quantiles", (.1, .9))
+    quantiles = kwargs.pop("quantiles", (.001, .99))
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels"]:
         _ = kwargs.pop(key, None)
