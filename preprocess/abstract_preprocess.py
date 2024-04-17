@@ -1,16 +1,26 @@
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+#
+# SPDX-License-Identifier: MIT
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
 __update__ = "2022-04-29"
 
-import os
+import os, glob
 from abc import ABC
+from typing import List, Tuple
+from collections import OrderedDict
+import logging
 import numpy as np
 import xarray as xr
-from other_utils import get_func_kwargs, remove_key_from_dict
+from tools_utils import NCRENAME
+from other_utils import get_func_kwargs, remove_key_from_dict, remove_files
 
 
 class AbstractPreprocessing(ABC):
+   
+    ncrename = NCRENAME()
     """
     Abstract class for preprocessing
     """
@@ -80,6 +90,40 @@ class AbstractPreprocessing(ABC):
         raise NotImplementedError(self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__))
 
     @staticmethod
+    def run_preproc_func(preproc_func: callable, args: List, kwargs: dict, logger: logging.Logger, nwarns: int,
+                         max_warns: int) -> Tuple[int, str]:
+        """
+        Run a function where arguments are parsed from list. Counts failures as warnings unless max_warns is exceeded
+        or the error is not a Runtime-Error
+        :param preproc_func: the callable preprocessing-function
+        :param args: list of arguments to be parsed to preproc_func
+        :param kwargs: dictionary of keyword arguments to be parsed to preproc_func
+        :param logger: logger instance
+        :param nwarns: current number of issued warnings
+        :param max_warns: maximum allowed number of warnings
+        :return: updated nwarns and outfile
+        """
+        assert callable(preproc_func), "func is not a callable, but of type '{0}'".format(type(preproc_func))
+
+        try:
+            outfile = preproc_func(*args, **kwargs)
+        except (RuntimeError, FileNotFoundError) as err:
+            mess = "Pre-Processing data from '{0}' failed! ".format(args[0])
+            nwarns += 1
+            if nwarns > max_warns:
+                logger.fatal(mess + "Maximum number of warnings exceeded.")
+                raise err
+            else:
+                logger.error(mess), logger.error(str(err))
+                outfile = None
+        except BaseException as err:
+            logger.fatal("Something unexpected happened when handling data from '{0}'. See error-message"
+                         .format(args[0]))
+            raise err
+
+        return nwarns, outfile
+
+    @staticmethod
     def check_target_dir(target_dir):
         method = AbstractPreprocessing.check_target_dir.__name__
 
@@ -121,9 +165,46 @@ class AbstractPreprocessing(ABC):
 
         return stat
 
+    @staticmethod
+    def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
+        """
+        Add file2merge to list of files or clean-up temp-dirctory if file2merge is None
+        :param filelist: list of files to be updated
+        :param file2merge: file to merge
+        :param tmp_dir: directory for temporary data
+        :param search_patt: search pattern for files to remove
+        :return: updated filelist
+        """
+        if file2merge:
+            filelist.append(file2merge)
+        else:
+            remove_list = glob.iglob(os.path.join(tmp_dir, search_patt))
+            remove_files(remove_list, lbreak=True)
+            filelist = []
+        return filelist
+    
+    @staticmethod
+    def add_varname_suffix(nc_file: str, varnames: List, suffix: str):
+        """
+        Rename variables in netCDF-file by adding a suffix. Also adheres to the convention to use lower-case names!
+        :param nc_file: netCDF-file to process
+        :param varnames: (old) variable names to modify
+        :param suffix: suffix to add to variable names
+        :return: status-flag
+        """
+        ncrename = AbstractPreprocessing.ncrename
 
+        varnames_new = [varname + suffix for varname in varnames]
+        varnames_pair = ["{0},{1}".format(varnames[i], varnames_new[i].lower()) for i in range(len(varnames))]
 
+        try:
+            ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))
+            stat = True
+        except RuntimeError as err:
+            print("Could not rename all parsed variables: {0}".format(",".join(varnames)))
+            raise err
 
+        return stat
 
     @classmethod
     def print_implement_err(cls, method):
@@ -229,9 +310,9 @@ class CDOGridDes(ABC):
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n, prefac_first = 0, (downscaling_fac-1)/2
-        else:
             add_n, prefac_first = 2, -(downscaling_fac+1)/2
+        else:
+            add_n, prefac_first = 0, (downscaling_fac-1)/2
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 

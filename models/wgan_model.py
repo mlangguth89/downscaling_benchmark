@@ -1,16 +1,19 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 """
 Class for Wasserstein GAN (WGAN) model.
+
+To-Dos:
+    - Implement learning rate schedule and warmup for Horovod
 """
 
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2023-12-14"
+__update__ = "2024-03-08"
 
 import os
 from typing import List, Tuple, Union
@@ -114,6 +117,7 @@ class WGAN_Model(keras.Model):
         self.critic_loss = get_custom_loss("critic")
         self.critic_gen_loss = get_custom_loss("critic_generator")
         
+    @tf.function
     def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
         """
         Training step for Wasserstein GAN
@@ -211,12 +215,34 @@ class WGAN_Model(keras.Model):
 
 class WGAN(AbstractModelClass):
     
-    def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
+    def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str,
+                 with_horovod: bool = False):
+        """
+        Imsantiate a Wasserstein GAN (WGAN) model.
+        :param generator: generator model returning the downsampled data
+        :param critic: critic model returning the critic score on the data
+        :param shape_in: shape of the input data
+        :param hparams: hyperparameters for WGAN
+        :param varnames_tar: list of target variable names
+        :param savedir: directory to save the model
+        :param expname: name of the experiment
+        :param with_horovod: whether to use horovod for distributed training
+        """
         
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "wgan"
         
+        # flag if horovod is used and import required modules
+        self.with_horovod = with_horovod
+        if self.with_horovod: 
+            import horovod.tensorflow as hvd
+            import horovod.keras.callbacks as hvd_callbacks
+            # Print warning since Horovod is not fully supported yet (missing learning rate schedule and warmup).
+            # Thus, it should only be used for benchmarking with JUBE so far.
+            if hvd.rank() == 0:
+                print("Warning: Horovod is not fully supported yet. It should only be used for benchmarking with JUBE so far.")
+
         # set hyperparmaters
         self.set_hparams(hparams)
         # set submodels
@@ -228,6 +254,8 @@ class WGAN(AbstractModelClass):
         
     def set_compile_options(self):
         # set optimizers
+        scale_fac = hvd.size() if self.with_horovod else 1.
+
         # check if optimizer is valid and set corresponding optimizers for generator and critic
         if self.hparams["optimizer"].lower() == "adam":
             optimizer = keras.optimizers.Adam
@@ -238,20 +266,40 @@ class WGAN(AbstractModelClass):
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
-        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
+        self.optimizer = (optimizer(self.critic.hparams["lr"]*scale_fac, **kwargs_opt), 
+                          optimizer(self.generator.hparams["lr"]*scale_fac, **kwargs_opt))
+        if self.with_horovod:
+            kwargs_opt_hvd = {"backward_passes_per_step": 1, "average_aggregated_gradients": True}
+            self.optimizer = (hvd.DistributedOptimizer(self.optimizer[0], **kwargs_opt_hvd), hvd.DistributedOptimizer(self.optimizer[1], **kwargs_opt_hvd))
+
         self.loss = self.get_recon_loss()
         
     def get_fit_options(self):
+        """
+        Add callbacks to the fit options.
+        """
         wgan_callbacks = []
         
         if self.hparams["lr_decay"]:
             wgan_callbacks.append(LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1))
         
-        if self.hparams["lcheckpointing"]:
-            wgan_callbacks.append(ModelCheckpointWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+        if self.hparams["lcheckpointing"]:          
+            savedir_best = os.path.join(self._savedir, f"{self._expname}_best")
+            os.makedirs(savedir_best, exist_ok=True)
+
+            chkpt_obj = ModelCheckpointWGAN(savedir_best, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min")
+            if not self.with_horovod:
+                wgan_callbacks.append(chkpt_obj)
+            else: # only add checkpointing for rank 0
+                if hvd.rank() == 0: wgan_callbacks.append(chkpt_obj)    
+
             
         if self.hparams["learlystopping"]:
             wgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+
+        if self.with_horovod:
+            wgan_callbacks["wgan_callbacks"] += [hvd_callbacks.BroadcastGlobalVariablesCallback(0), hvd_callbacks.MetricAverageCallback()]
+
             
         if wgan_callbacks is not None:
             return {"callbacks": wgan_callbacks}
@@ -359,17 +407,34 @@ class WGAN(AbstractModelClass):
         """
         generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self._expname)), \
                                       os.path.join(filepath, "{0}_critic_last".format(self._expname))
-        self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-        self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        if tf.__version__ >= "2.12.0":
+            self.generator.save(generator_path, overwrite, save_format)
+            self.critic.save(critic_path, overwrite, save_format)
+        else:
+            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+
+    def count_params(self):
+        """
+        Count number of trainable and untrainable parameters
+        """
+        trainable_param = int(np.sum([K.count_params(p) for p in self.generator.trainable_weights]))
+        untrainable_param = int(np.sum([K.count_params(p) for p in self.generator.non_trainable_weights]))
+
+        trainable_param += int(np.sum([K.count_params(p) for p in self.critic.trainable_weights]))
+        untrainable_param += int(np.sum([K.count_params(p) for p in self.critic.non_trainable_weights]))
+        
+        return trainable_param, untrainable_param
 
                           
     def set_hparams_default(self):
         """
-        Note: Hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
+        Note I: Hyperparametrs whose default is None must be parsed in any case.        
+        Note II: Hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
               Thus, the default just sets empty dictionaries.
         """
-        self.hparams_default = {"batch_size": 32, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
-                                "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+        self.hparams_default = {"d_steps": None, "nepochs": None, "batch_size": 32, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
+                                "l_embed": False, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels",
                                 "hparams_generator": {}, "hparams_critic": {}}
 
