@@ -364,23 +364,24 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
                         - "labels": labels of boxes, default: None
                         - other valid arguments of plt.boxplot
     """    
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_box_plot.__name__}")
+    func_logger = logging.getLogger(f"postpess.{module_name}.{create_box_plot.__name__}")
 
-    # get some plot parameters
-    val_range = plt_kwargs.get("value_range", [None])
-    widths = plt_kwargs.get("widths", None)
-    colors = plt_kwargs.get("colors", None)
-    fs = plt_kwargs.get("fs", 16)
-    ref_line = plt_kwargs.get("ref_line", 1.)
-    ref_linestyle = plt_kwargs.get("ref_linestyle", "k-")
-    title = plt_kwargs.get("title", "")
-    ylabel = plt_kwargs.get("ylabel", "")
-    xlabel = plt_kwargs.get("xlabel", "")
-    yticks = plt_kwargs.get("yticks", None)
-    labels = plt_kwargs.get("labels", None)
+    # get parametrs that should not be parsed to the boxplot-method 
+    figsize = plt_kwargs.pop("figsize", (12, 8))
+    val_range = plt_kwargs.pop("value_range", [None])
+    widths = plt_kwargs.pop("widths", .3)
+    colors = plt_kwargs.pop("colors","black")
+    fs = plt_kwargs.pop("fs", 16)
+    ref_line = plt_kwargs.pop("ref_line", 1.)
+    ref_linestyle = plt_kwargs.pop("ref_linestyle", "-")
+    title = plt_kwargs.pop("title", "")
+    ylabel = plt_kwargs.pop("ylabel", "")
+    xlabel = plt_kwargs.pop("xlabel", "")
+    yticks = plt_kwargs.pop("yticks", None)
+    labels = plt_kwargs.pop("labels", None)
     
     # create box whiskers plot with matplotlib
-    fig, ax = plt.subplots(figsize=(12, 8))
+    fig, ax = plt.subplots(figsize=figsize)
 
     bp = plt.boxplot(data, widths=widths, labels=labels, patch_artist=True, **plt_kwargs)
     
