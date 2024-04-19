@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-16"
+__update__ = "2024-04-19"
 
 import os
 import glob
@@ -31,7 +31,7 @@ from all_normalizations import ZScore
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum, calculate_cond_quantiles
+from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum_exps, calculate_cond_quantiles
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, get_season_t2m_levels
 from other_utils import convert_to_xarray, finditem, to_list
@@ -255,6 +255,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     model_type = kwargs.pop("model_type", "sha_wgan")
     model_name = kwargs.pop("model_name", "Sha WGAN")
     quantiles = kwargs.pop("quantiles", (.001, .99))
+
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels"]:
         _ = kwargs.pop(key, None)
@@ -397,12 +398,13 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
         plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
                            
 
-def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
+def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
                           lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371.):
     """
-    Run spectral analysis for chosen variables and create power spectrum plot.
+    Run spectral analysis for chosen variables, create power spectrum plot and save results into a netCDF-file.
+    Spectral analysis is done for all data and each season.
     :param ds: xarray.Dataset with input data
-    :param ds_vars: List of variable names for spectral analysis
+    :param data_vars: List of variable names from ds for spectral analysis 
     :param plt_dir: Directory to save plot files
     :param labels: List of labels for each variable
     :param varname: Name of variable
@@ -414,39 +416,54 @@ def run_spectral_analysis(ds: xr.Dataset, ds_vars: List[str], plt_dir: str, labe
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
 
     # check if number of vairables for spectral analysis and labels are equal
-    ds_vars, labels = to_list(ds_vars), to_list(labels)
+    ds_vars, labels = to_list(data_vars), to_list(labels)
     nexps = len(ds_vars)    
     assert nexps== len(labels), f"Number of variables ({nexps}) and labels ({len(labels)}) must be equal."
     assert all([var in ds.variables for var in ds_vars]), f"Some variables from {', '.join(ds_vars)} are not in dataset."
-
-    # initialize dictionary for power spectrum
-    ps_dict = {}
 
     # compute wave numbers based on size of input data
     nlon, nlat = ds[lonlat_dims[0]].size, ds[lonlat_dims[1]].size
 
     dims = ["wavenumber"]
     coord_dict = {"wavenumber": np.arange(0, np.amin(np.array([int(nlon/2), int(nlat/2)])))}
+    var_unit = f"{var_unit}**2 m"
 
-    for i, exp in enumerate(ds_vars):
-        func_logger.info(f"Start spectral analysis for experiment {exp} ({i+1}/{nexps})...")
+    info = {"latlon_dims": lonlat_dims, "dims": dims, "coord_dict": coord_dict, "varname": varname, "var_unit": var_unit}
 
-        # run spectral analysis
-        ps_exp = get_spectrum(ds[exp], lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
-        # average over all time steps and create xarray.DataArray
-        da_ps_exp = xr.DataArray(ps_exp.mean(axis=0), dims=dims, coords=coord_dict, name=exp)
+    # get power spectrum for complete dataset
+    func_logger.info(f"Start spectral analysis for all data...")
 
-        # remove wavenumber 0 and append dictionary    
-        ps_dict[exp] = da_ps_exp[1::]
-
-    # create xarray.Dataset 
-    ds_ps = xr.Dataset(ps_dict)
+    ds_ps = get_spectrum_exps(ds, ds_vars, info, lcutoff=lcutoff, re=re) 
 
     # create plot   
-    plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum.png")
+    plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_all.png")
     plot_power_spectra(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
                        x_coord="wavenumber")
+    
+    # save power spectrum to netCDF
+    fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_all.nc')
 
+    func_logger.debug(f"Save power spectrum to {fname_nc}...")
+    ds_ps.to_netcdf(fname_nc)
+
+    # get power spectrum for each season
+    ds_seas = ds.groupby("time.season")
+
+    for sea, ds_sea in ds_seas:
+        func_logger.info(f"Start spectral analysis for season '{sea}'...")
+
+        ds_ps_sea = get_spectrum_exps(ds_sea, ds_vars, info, lcutoff=lcutoff, re=re)
+
+        plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_{sea}.png")
+        plot_power_spectra(ds_ps_sea, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
+                           x_coord="wavenumber")
+        
+        # save power spectrum to netCDF
+        fname_nc = os.path.join(plt_dir, "..", f'{varname}_power_spectrum_{sea}.nc')
+
+        func_logger.debug(f"Save power spectrum to {fname_nc}...")
+        ds_ps_sea.to_netcdf(fname_nc)
+        
 
 def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
                            data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
