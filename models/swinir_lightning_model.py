@@ -676,9 +676,9 @@ class SwinIR(nn.Module):
         
         self.device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
         self.varnames_tar = varnames_tar
-        self.hparams = SwinIR.get_hparams_default()
+        self.hparams = SwinIR.get_hparams_default() 
         if hparams is not None:
-            self.get_hparams_dict(hparams)
+            self.hparams = self.get_hparams_dict(hparams)
         in_chans = self.hparams["in_chans"]
         num_in_ch = in_chans
         out_chans = self.hparams["out_chans"]
@@ -975,8 +975,7 @@ class SwinIRLightning(L.LightningModule):
         y_pred = self.swinir(x)
         return torch.permute(y_pred,dims=(0,2,3,1))
 
-    def configure_optimizers(self):
-    
+    def configure_optimizers(self): 
         if self.swinir.hparams['optimizer'].lower() ==  'adamw' :
             optimizer = torch.optim.AdamW(
                     self.swinir.parameters(),
