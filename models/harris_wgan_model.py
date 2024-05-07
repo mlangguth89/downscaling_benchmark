@@ -25,39 +25,37 @@ class GeneratorHarris(AbstractModelClass):
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List):
         super().__init__(shape_in, hparams, varnames_tar, "", "")       # Pass empty savedir- and expname-arguments since this is not a stand-alone model
         
-        # TODO: incorporate them accordingly
-        old_input_kwargs = dict(
-            downscaling_steps=5,
-            input_channels=9,
-            latent_variables=1,
-            noise_channels=8,
-            filters_gen=64,
-            constant_fields=2,
-            conv_size=(3, 3),
-            padding=None,
-            relu_alpha=0.2,
-            norm=None,
-        )
+        # # shape_in as dict as follow:
+        # shape_in = {
+        #     "lo_res_inputs": (36, 32, input_channels),
+        #     "hi_res_inputs": (144, 128, constant_fields),
+        #     "noise_input": (36, 32, noise_channels),
+        # }
         # set submodels
         self.set_hparams(hparams)
         self.set_model()
         
     def set_model(self):
+        ds_steps = self.hparams["ds_steps"]
+        filters_gen = self.hparams["filters_gen"]
+        kernel = self.hparams["kernel"]
+        relu_alpha = self.hparams["relu_alpha"]
+        padding = self.hparams["padding"]
         # Network inputs
         # low resolution condition
-        generator_input = Input(shape=(None, None, input_channels), name="lo_res_inputs")
+        generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
         print(f"generator_input shape: {generator_input.shape}")
         # constant fields
-        const_input = Input(shape=(None, None, constant_fields), name="hi_res_inputs")
+        const_input = Input(shape=self._input_shape["hi_res_inputs"], name="hi_res_inputs")
         print(f"constants_input shape: {const_input.shape}")
 
         # Convolve constant fields down to match other input dimensions
         upscaled_const_input = const_upscale_block(
-            const_input, steps=downscaling_steps, filters=filters_gen
+            const_input, steps=ds_steps, filters=filters_gen
         )
         print(f"upscaled constants shape: {upscaled_const_input.shape}")
         # noise
-        noise_input = Input(shape=(None, None, noise_channels), name="noise_input")
+        noise_input = Input(shape=self._input_shape["noise_input"], name="noise_input")
         print(f"noise_input shape: {noise_input.shape}")
         # Concatenate all inputs together
         generator_output = concatenate(
@@ -70,18 +68,17 @@ class GeneratorHarris(AbstractModelClass):
             generator_output = residual_block(
                 generator_output,
                 filters=filters_gen,
-                conv_size=conv_size,
+                conv_size=kernel,
                 stride=1,
                 relu_alpha=relu_alpha,
-                norm=norm,
                 padding=padding,
             )
         print("End of first residual block")
         print(f"Shape after first residual block: {generator_output.shape}")
         # Upsampling from low-res to high-res with alternating residual blocks
         # In the paper, this was [2*filters_gen, filters_gen] for steps of 5 and 2
-        block_channels = [2 * filters_gen] * (len(downscaling_steps) - 1) + [filters_gen]
-        for ii, step in enumerate(downscaling_steps):
+        block_channels = [2 * filters_gen] * (len(ds_steps) - 1) + [filters_gen]
+        for ii, step in enumerate(ds_steps):
             generator_output = UpSampling2D(size=(step, step), interpolation="bilinear")(
                 generator_output
             )
@@ -89,10 +86,9 @@ class GeneratorHarris(AbstractModelClass):
             generator_output = residual_block(
                 generator_output,
                 filters=block_channels[ii],
-                conv_size=conv_size,
+                conv_size=kernel,
                 stride=1,
                 relu_alpha=relu_alpha,
-                norm=norm,
                 padding=padding,
             )
             print(f"Shape after residual block: {generator_output.shape}")
@@ -106,10 +102,9 @@ class GeneratorHarris(AbstractModelClass):
             generator_output = residual_block(
                 generator_output,
                 filters=filters_gen,
-                conv_size=conv_size,
+                conv_size=kernel,
                 stride=1,
                 relu_alpha=relu_alpha,
-                norm=norm,
                 padding=padding,
             )
         print(f"Shape after third residual block: {generator_output.shape}")
@@ -121,7 +116,7 @@ class GeneratorHarris(AbstractModelClass):
         print(f"Output shape: {generator_output.shape}")
 
         self.model = Model(
-            inputs=[generator_input, const_input, noise_input],
+            inputs={"lo_res_inputs": generator_input, "hi_res_inputs": const_input, "noise_input": noise_input},
             outputs=generator_output,
             name="gen",
         )
@@ -136,8 +131,8 @@ class GeneratorHarris(AbstractModelClass):
         """
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "swish",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
+        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "leaky_relu",
+                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06, "ds_steps": 4, "filters_gen": 64, "padding": None, "relu_alpha": 0.2}
 
 
 class DiscriminatorHarris(AbstractModelClass):
@@ -146,39 +141,37 @@ class DiscriminatorHarris(AbstractModelClass):
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List):
         super().__init__(shape_in, hparams, varnames_tar, "", "")       # Pass empty savedir- and expname-arguments since this is not a stand-alone model
         
-        # TODO: incorporate them accordingly
-        old_input_kwargs = dict(
-            downscaling_steps=5,
-            input_channels=9,
-            noise_channels=8,
-            constant_fields=2,
-            filters_disc=64,
-            conv_size=(3, 3),
-            padding=None,
-            stride=1,
-            relu_alpha=0.2,
-            norm=None,
-        )
+        # # shape_in as dict as follow:
+        # shape_in = {
+        #     "lo_res_inputs": (36, 32, input_channels),
+        #     "hi_res_inputs": (144, 128, constant_fields),
+        #     "output": (144, 128, 1),
+        # }
         
         # set submodels
         self.set_hparams(hparams)
         self.set_model()
         
     def set_model(self):
+        ds_steps = self.hparams["ds_steps"]
+        filters_disc = self.hparams["filters_disc"]
+        kernel = self.hparams["kernel"]
+        relu_alpha = self.hparams["relu_alpha"]
+        padding = self.hparams["padding"]
         # Network inputs
         # low resolution condition
-        generator_input = Input(shape=(None, None, input_channels), name="lo_res_inputs")
+        generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
         print(f"generator_input shape: {generator_input.shape}")
         # constant fields
-        const_input = Input(shape=(None, None, constant_fields), name="hi_res_inputs")
+        const_input = Input(shape=self._input_shape["hi_res_inputs"], name="hi_res_inputs")
         print(f"constants_input shape: {const_input.shape}")
         # target image
-        generator_output = Input(shape=(None, None, 1), name="output")
+        generator_output = Input(shape=self._input_shape["output"], name="output")
         print(f"generator_output shape: {generator_output.shape}")
 
         # convolve down constant fields to match ERA
         lo_res_const_input = const_upscale_block(
-            const_input, steps=downscaling_steps, filters=filters_disc
+            const_input, steps=ds_steps, filters=filters_disc
         )
         print(f"upscaled constants shape: {lo_res_const_input.shape}")
 
@@ -192,16 +185,15 @@ class DiscriminatorHarris(AbstractModelClass):
 
         # encode inputs using residual blocks
         # In the paper, this was [filters_disc, 2*filters_disc] for steps of 5 and 2
-        block_channels = [filters_disc] * (len(downscaling_steps) - 1) + [2 * filters_disc]
+        block_channels = [filters_disc] * (len(ds_steps) - 1) + [2 * filters_disc]
 
-        for ii, step in enumerate(downscaling_steps):
+        for ii, step in enumerate(ds_steps):
             lo_res_input = residual_block(
                 lo_res_input,
                 filters=block_channels[ii],
-                conv_size=conv_size,
+                conv_size=kernel,
                 stride=1,
                 relu_alpha=relu_alpha,
-                norm=norm,
                 padding=padding,
             )
             print(f"Shape of lo-res input after residual block: {lo_res_input.shape}")
@@ -218,10 +210,9 @@ class DiscriminatorHarris(AbstractModelClass):
             hi_res_input = residual_block(
                 hi_res_input,
                 filters=block_channels[ii],
-                conv_size=conv_size,
+                conv_size=kernel,
                 stride=1,
                 relu_alpha=relu_alpha,
-                norm=norm,
                 padding=padding,
             )
             print(f"Shape of hi-res input after residual block: {hi_res_input.shape}")
@@ -236,10 +227,9 @@ class DiscriminatorHarris(AbstractModelClass):
         disc_input = residual_block(
             disc_input,
             filters=filters_disc,
-            conv_size=conv_size,
+            conv_size=kernel,
             stride=1,
             relu_alpha=relu_alpha,
-            norm=norm,
             padding=padding,
         )
         print(f"Shape after residual block: {disc_input.shape}")
@@ -269,8 +259,8 @@ class DiscriminatorHarris(AbstractModelClass):
         """
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "swish",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
+        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "leaky_relu",
+                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06, "ds_steps": 4, "filters_disc": 64, "padding": None, "relu_alpha": 0.2}
 
 
 
@@ -459,49 +449,39 @@ class WGANGP(object):
     def build_wgan_gp(self):
 
         # find shapes for inputs
-        if self.mode == 'GAN':
-            cond_shapes = input_shapes(self.gen, "lo_res_inputs")
-            const_shapes = input_shapes(self.gen, "hi_res_inputs")
-            noise_shapes = input_shapes(self.gen, "noise_input")
-        elif self.mode == 'VAEGAN':
-            cond_shapes = input_shapes(self.gen.encoder, "lo_res_inputs")
-            const_shapes = input_shapes(self.gen.encoder, "hi_res_inputs")
-            noise_shapes = input_shapes(self.gen.decoder, "noise_input")
+        # mode not needed here anymore
+        cond_shapes = input_shapes(self.gen, "lo_res_inputs")
+        const_shapes = input_shapes(self.gen, "hi_res_inputs")
+        noise_shapes = input_shapes(self.gen, "noise_input")
         sample_shapes = input_shapes(self.disc, "output")
 
         # Create generator training network
         with Nontrainable(self.disc):
-            if self.mode == 'GAN':
-                cond_in = [Input(shape=cond_shapes[0])]
-                const_in = [Input(shape=const_shapes[0])]
+            # if self.mode == 'GAN': ## mode not needed anymore
+            cond_in = [Input(shape=cond_shapes[0])]
+            const_in = [Input(shape=const_shapes[0])]
 
-                if self.ensemble_size is None:
-                    noise_in = [Input(shape=noise_shapes[0])]
-                else:
-                    noise_in = [Input(shape=noise_shapes[0])
-                                for ii in range(self.ensemble_size + 1)]
-                gen_in = cond_in + const_in + noise_in
+            if self.ensemble_size is None:
+                noise_in = [Input(shape=noise_shapes[0])]
+            else:
+                noise_in = [Input(shape=noise_shapes[0])
+                            for ii in range(self.ensemble_size + 1)]
+            gen_in = cond_in + const_in + noise_in
 
-                gen_out = self.gen(gen_in[0:3])  # only use cond/const/noise
-                gen_out = ensure_list(gen_out)
-                disc_in_gen = cond_in + const_in + gen_out
-                disc_out_gen = self.disc(disc_in_gen)
-                full_gen_out = [disc_out_gen]
-                if self.ensemble_size is not None:
-                    # generate ensemble of predictions and add mean to gen_trainer output
-                    preds = [self.gen([gen_in[0], gen_in[1], gen_in[3+ii]])
-                             for ii in range(self.ensemble_size)]
-                    preds = tf.stack(preds)
-                    full_gen_out.append(preds)
-                self.gen_trainer = Model(inputs=gen_in,
-                                         outputs=full_gen_out,
-                                         name='gen_trainer')
-            elif self.mode == 'VAEGAN':
-                self.gen_trainer = VAE_trainer(self.gen, self.disc,
-                                               self.kl_weight,
-                                               self.ensemble_size,
-                                               self.CLtype,
-                                               self.content_loss_weight)
+            gen_out = self.gen(gen_in[0:3])  # only use cond/const/noise
+            gen_out = ensure_list(gen_out)
+            disc_in_gen = cond_in + const_in + gen_out
+            disc_out_gen = self.disc(disc_in_gen)
+            full_gen_out = [disc_out_gen]
+            if self.ensemble_size is not None:
+                # generate ensemble of predictions and add mean to gen_trainer output
+                preds = [self.gen([gen_in[0], gen_in[1], gen_in[3+ii]])
+                         for ii in range(self.ensemble_size)]
+                preds = tf.stack(preds)
+                full_gen_out.append(preds)
+            self.gen_trainer = Model(inputs=gen_in,
+                                     outputs=full_gen_out,
+                                     name='gen_trainer')
 
         # Create discriminator training network
         with Nontrainable(self.gen):
@@ -511,13 +491,8 @@ class WGANGP(object):
             sample_in = [Input(shape=s, name='output') for s in sample_shapes]
             gen_in = cond_in + const_in + noise_in
             disc_in_real = sample_in[0]
-            if self.mode == 'GAN':
-                disc_in_fake = self.gen(gen_in)
-            elif self.mode == 'VAEGAN':
-                encoder_in = cond_in + const_in
-                encoder_mean, encoder_log_var = self.gen.encoder(encoder_in)
-                decoder_in = [encoder_mean, encoder_log_var, noise_in, const_in]
-                disc_in_fake = self.gen.decoder(decoder_in)
+            # if self.mode == 'GAN': ## mode not needed anymore
+            disc_in_fake = self.gen(gen_in)
             disc_in_avg = RandomWeightedAverage()([disc_in_real, disc_in_fake])
             disc_out_real = self.disc(cond_in + const_in + [disc_in_real])
             disc_out_fake = self.disc(cond_in + const_in + [disc_in_fake])
@@ -581,10 +556,6 @@ class WGANGP(object):
 
         batch_gen_iter = iter(batch_gen)
 
-        if self.mode == 'VAEGAN':
-            for tracker in self.gen_trainer.metrics:
-                tracker.reset_states()
-
         for kk in range(num_gen_batches):
 
             # train discriminator
@@ -627,12 +598,9 @@ class WGANGP(object):
                     gt_outputs = [gen_target, sample]
                 gt_inputs = condconst + noise_list
 
-                if self.mode == 'GAN':
-                    gen_loss = self.gen_trainer.train_on_batch(
-                        gt_inputs, gt_outputs)
-                elif self.mode == 'VAEGAN':
-                    gen_loss = self.gen_trainer.train_step(
-                        [gt_inputs, gt_outputs])
+                # if self.mode == 'GAN':  ## mode not needed anymore
+                gen_loss = self.gen_trainer.train_on_batch(
+                    gt_inputs, gt_outputs)
 
                 gen_loss = ensure_list(gen_loss)
                 del sample, cond, const
@@ -647,27 +615,18 @@ class WGANGP(object):
                             values=losses)
 
             loss_log = {}
-            if self.mode == "det":
-                raise RuntimeError("Doctor, what are you doing here? You're supposed to be on Gallifrey")
-            elif self.mode == "GAN":
-                loss_log["disc_loss"] = disc_loss[0]
-                loss_log["disc_loss_real"] = disc_loss[1]
-                loss_log["disc_loss_fake"] = disc_loss[2]
-                loss_log["disc_loss_gp"] = disc_loss[3]
-                loss_log["gen_loss_total"] = gen_loss[0]
-                if self.ensemble_size is not None:
-                    loss_log["gen_loss_disc"] = gen_loss[1]
-                    loss_log["gen_loss_ct"] = gen_loss[2]
-            elif self.mode == "VAEGAN":
-                loss_log["disc_loss"] = disc_loss[0]
-                loss_log["disc_loss_real"] = disc_loss[1]
-                loss_log["disc_loss_fake"] = disc_loss[2]
-                loss_log["disc_loss_gp"] = disc_loss[3]
-                loss_log["gen_loss_total"] = gen_loss[0].numpy()
-                loss_log["gen_loss_disc"] = gen_loss[1].numpy()
-                loss_log["gen_loss_kl"] = gen_loss[2].numpy()
-                if self.ensemble_size is not None:
-                    loss_log["gen_loss_ct"] = gen_loss[3].numpy()
+            #if self.mode == "det":
+            #    raise RuntimeError("Doctor, what are you doing here? You're supposed to be on Gallifrey")
+            # elif self.mode == "GAN":  ## mode not needed anymore
+            loss_log["disc_loss"] = disc_loss[0]
+            loss_log["disc_loss_real"] = disc_loss[1]
+            loss_log["disc_loss_fake"] = disc_loss[2]
+            loss_log["disc_loss_gp"] = disc_loss[3]
+            loss_log["gen_loss_total"] = gen_loss[0]
+            if self.ensemble_size is not None:
+                loss_log["gen_loss_disc"] = gen_loss[1]
+                loss_log["gen_loss_ct"] = gen_loss[2]
+
             gc.collect()
 
         return loss_log
@@ -677,7 +636,8 @@ class WGANGP(object):
     
     
     
-    
+# TODO trainstep von wgan_model 117 kann vermutlich großteils übernommen werden, aber  data_iter muss angepasst werden, 
+# weil 
     
     
     
@@ -1013,7 +973,7 @@ class Conv2DPadding(Layer):
         else:  # same
             return self.convsam(x)
         
-def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, norm=None, padding=None):
+def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None):
     in_channels = int(x.shape[-1])
     x_in = x
 
@@ -1025,23 +985,11 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     # first block of activation and 3x3 convolution (possibly strided, although we don't use this)
     x = LeakyReLU(relu_alpha)(x)
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
-    if norm == "batch":
-        x = BatchNormalization()(x)
-    elif norm is None:
-        pass
-    else:
-        print("norm type not implemented")
 
     # second block of activation and 3x3 unstrided convolution
     x = LeakyReLU(relu_alpha)(x)
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
-    if norm == "batch":
-        x = BatchNormalization()(x)
-    elif norm is None:
-        pass
-    else:
-        print("norm type not implemented")
-
+    
     # skip connection
     x = Add()([x, x_in])
 
