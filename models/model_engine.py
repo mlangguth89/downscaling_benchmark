@@ -14,6 +14,7 @@ __update__ = "2023-12-15"
 # import modules
 from unet_model import UNet_Sha, UNet_DeepRU
 from wgan_model import WGAN, Critic_Simple
+from harris_wgan_model import HarrisWGAN, GeneratorHarris, DiscriminatorHarris
 from other_utils import to_list
 
 class ModelEngine(object):
@@ -34,7 +35,8 @@ class ModelEngine(object):
 
     known_models = {"sha_unet": (UNet_Sha,),
                     "deepru": (UNet_DeepRU,),
-                    "sha_wgan": (WGAN, UNet_Sha, Critic_Simple)}
+                    "sha_wgan": (WGAN, UNet_Sha, Critic_Simple),
+                    "harris_wgan": (HarrisWGAN, GeneratorHarris, DiscriminatorHarris)}
 
     def __init__(self, model_name: str):
         """
