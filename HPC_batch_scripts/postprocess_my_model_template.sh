@@ -52,7 +52,7 @@ dataset=benchmark_t2m
 # run job
 # data inference with trained model of this framework
 srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py --output_base_directory ${outdir} --configuration_postprocess ${config_postprocess} -exp_name ${exp_name} inference \
-´                                                                   -model_base_dir ${model_basedir} -data_dir ${datadir} -dataset ${dataset}
+                                                                   -model_base_dir ${model_basedir} -data_dir ${datadir} -dataset ${dataset}
 
 ## data provided from netcdf-file
 #results_nc=<path_results>
