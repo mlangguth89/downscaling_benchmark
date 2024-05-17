@@ -13,7 +13,7 @@ __update__ = "2024-04-16"
 
 # for processing data
 import os
-from typing import List
+from typing import List,Union,Dict
 import logging
 import numpy as np
 import xarray as xr
@@ -23,6 +23,9 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import cartopy
 import cartopy.crs as ccrs
+
+#read_config_files
+from metapostprocess import *
 
 # auxiliary variable for logger
 logger_module_name = f"main_postprocess.{__name__}"
@@ -106,12 +109,11 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
 
     return ax_plot
 
-
 # for creating plot
-def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
+def plot_comparison_maps(ds: Union[xr.Dataset,Config], plt_fname: str, **kwargs):
     """
     Plots two variables from a dataset and their difference next to each other, i.e. resulting in a 1x3 plot.
-    :param ds: dataset eithher providing two variables only for comparison
+    :param ds: dataset either providing two variables only for comparison
                or variables provided with vars2plt-keyword argument
     :param plt_fname: path to output filename
     :param kwargs: valid keyword arguments are
@@ -140,8 +142,8 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
     dims = kwargs.pop("dims", ["rlat", "rlon"])
     extent = kwargs.pop("extent", [3., 16.5, 43., 51.5])
-    fs = kwargs.pop("fs", 16)
-    figsize = kwargs.pop("figsize", (24, 6))
+    fs = kwargs.pop("fs", 14)
+
     # get levels and colorbars for 'normal' data plots and difference plots
     levels = kwargs.pop("levels", np.arange(-22., 42.1, 2))
     cbar_name = kwargs.pop("cbar_name", "jet")
@@ -149,13 +151,26 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     cbar_name_diff = kwargs.pop("cbar_name_diff", "PuOr_r")
     cbar_shrink = .8
     
+    labels = kwargs.pop("models",None)
+
+    save = kwargs.pop("save",True)
+    show = kwargs.pop("show",False)
+
+    if not isinstance(ds,Config):
+        ds = [ds]
+        labels = ["model"]
+    else:
+        labels = ds.models
+        ds = read_files_for_model_comparison(ds) 
+    
+    figsize = kwargs.pop("figsize", (36, 6*len(ds)))
     # auxiliary variables
     lvl, lvl_diff = np.asarray(levels), np.asarray(levels_diff)
     
     if vars2plt:
         vars2plt = list(vars2plt)
     else:
-        vars2plt = list(ds.data_vars)
+        vars2plt = list(ds[0].data_vars)
         
     nplots = len(vars2plt)
     
@@ -169,7 +184,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     
     # get coordinate data
     try:
-        var_now = ds[vars2plt[0]]
+        var_now = ds[0][vars2plt[0]]
         lat, lon = var_now[dims[0]].values, var_now[dims[1]].values
     except Exception as err:
         func_logger.debug(f"Failed to retrieve coordinates from {vars2plt[0]}")
@@ -183,39 +198,45 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     cmap_diff, norm_diff = get_cmap_norm(levels_diff, cbar_name_diff)
     
     # create plot objects
-    fig, axs = plt.subplots(1, 3, figsize=figsize, sharex=True, sharey=True,
+    fig, axs = plt.subplots(len(ds), 3, figsize=figsize, sharex=True, sharey=True,
                             subplot_kw={"projection": proj_plot})
     
     # perform plotting
-    for i, ax in enumerate(axs):
-        if i < nplots:
-            data = np.squeeze(ds[vars2plt[i]])
+    for i,ax_x in enumerate(axs):
+        for j, ax_y in enumerate(ax_x):
+            if j < nplots:
+                data = np.squeeze(ds[i][vars2plt[j]])
+                
+                plt_data = axs[i,j].pcolormesh(lon_e, lat_e, data.values, cmap=cmap, norm=norm, transform=proj_data,
+                                        **kwargs)
+
+                axs[i,j].set_title(titles[j], size=fs) 
+            else:
+                diff = np.squeeze(ds[i][vars2plt[1]] - ds[i][vars2plt[0]])
+                plt_diff = axs[i,j].pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
+                                         transform=proj_data, **kwargs)
+                axs[i,j].set_title(f"Difference between {labels[i]} and groundtruth", size=fs)
             
-            plt_data = ax.pcolormesh(lon_e, lat_e, data.values, cmap=cmap, norm=norm, transform=proj_data,
-                                    **kwargs)
-            ax.set_title(titles[i], size=fs)                
-        else:
-            diff = np.squeeze(ds[vars2plt[1]] - ds[vars2plt[0]])
-            plt_diff = ax.pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
-                                     transform=proj_data, **kwargs)
-            ax.set_title("Difference", size=fs)
-        
-        # custom plot apparance
-        ax = decorate_plot(ax, plot_ylabel= i == 0, extent=extent, fs=fs)
+            # custom plot apparance
+            axs[i,j] = decorate_plot(axs[i,j], extent=extent, fs=fs)
     
     # add colorbars
-    cbar = fig.colorbar(plt_data, ax=axs[0:2], orientation="vertical", shrink=cbar_shrink,
-                        pad=.02, ticks=lvl[1::2], fraction=0.02)
+    cbar = fig.colorbar(plt_data, ax=axs[0:len(ds),0:2], orientation="vertical", shrink=cbar_shrink,
+            pad=-0.02, ticks=lvl[1::2], fraction=0.02)
     cbar.ax.tick_params(labelsize=fs-2)
     
-    cbar_diff = fig.colorbar(plt_diff, ax=axs[-1], orientation="vertical", shrink=1.5,
-                             pad=.04, ticks=lvl_diff[1::2], fraction=0.02)
+    cbar_diff = fig.colorbar(plt_diff, ax=axs[0:len(ds)], orientation="vertical", shrink=cbar_shrink,
+                             pad=0.02, ticks=lvl_diff[1::2], fraction=0.02)
     cbar_diff.ax.tick_params(labelsize=fs-2)
 
     # save plot and close figure
-    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-    func_logger.info(f"Save comparison plot in file '{plt_fname}'")
-    fig.savefig(plt_fname, bbox_inches="tight", dpi=300)
+    if show:
+        plt.show()
+
+    if save:
+        plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+        func_logger.info(f"Save comparison plot in file '{plt_fname}'")
+        fig.savefig(plt_fname, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
     
@@ -288,7 +309,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     plt.close(fig)
 
 
-def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.DataArray, model_name: str, metric: dict,
+def plot_metric_line(data: Union[xr.DataArray,Config], data_up: Union[xr.DataArray,None], data_down: Union[xr.DataArray,None], model_name: Union[str,List[str]], metric: dict,
                      plt_fname: str, varname: str = "T2m", x_coord: str = "hour", **kwargs):
     """
     Create line plots of 2D-metric data (e.g. metric plotted against time) 
@@ -311,35 +332,54 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
                     - other valid arguments of ax.plot
     """
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_metric_line.__name__}")
-
+    uncertainty = kwargs.pop("uncertainty",False)    
+    if isinstance(data,Config):
+        data,data_up,data_down = read_all_line_plots(data,uncertainty)
+        if data_up is not None:
+            assert(len(data) == len(data_up))
+            assert(len(data_up) == len(data_down))
+    else:
+        data = [data]
+        if data_up is not None:
+            data_up = [data_up]
+            data_down = [data_down]
+        
+  
     # get some plot parameters
-    linestyle = kwargs.pop("linestyle", "k-")
-    err_col = kwargs.pop("error_color", "blue")
+    linestyle = kwargs.get("linestyle", ["k-", "b-","o-","r-"])
+    err_col = kwargs.get("error_color", ["grey", "blue","green","red"])
     val_range = kwargs.pop("value_range", (0., 4.))
     fs = kwargs.pop("fs", 16)
     ref_line = kwargs.pop("ref_line", None)
     ref_linestyle = kwargs.pop("ref_linestyle", "k--")
-    
+    show = kwargs.pop("show",True)
+    save = kwargs.pop("savefig",False)
+
     fig, (ax) = plt.subplots(1, 1)
-    ax.plot(data[x_coord].values, data.values, linestyle, label=model_name, **kwargs)
-    ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
-                    alpha=0.2)
+    for i,exp in enumerate(data):
+        ax.plot(data[i][x_coord].values, data[i].values, linestyle[i], label=model_name[i], **kwargs)
+        if data_up is not None:
+            ax.fill_between(data[i][x_coord].values, data_down[i].values, data_up[i].values, facecolor=err_col[i],
+                        alpha=0.2)
     if ref_line is not None:
-        nval = np.shape(data[x_coord].values)[0]
-        ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
+        nval = np.shape(data[0][x_coord].values)[0]
+        ax.plot(data[0][x_coord].values, np.full(nval, ref_line), ref_linestyle)
     ax.set_ylim(*val_range)
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=fs)
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+    ax.legend(fontsize=fs-2,loc="upper right")
 
-    # save plot and close figure
-    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-    func_logger.info(f"Save plot in file '{plt_fname}'")
-    fig.savefig(plt_fname, bbox_inches="tight")
-    plt.tight_layout()
-    fig.savefig(plt_fname)
+    if show:
+        plt.show()
+
+    if save:
+        # save plot and close figure
+        plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+        func_logger.info(f"Save plot in file '{plt_fname}'")
+        fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -419,6 +459,42 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     
     return True
 
+
+def plot_skills(data:Config, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)", "DeepRU", "SwinIR"], metric="RMSE",**kwargs):
+    
+    data = read_box_plot(data) 
+    fs = 16
+    # create figure
+    fig, ax = plt.subplots(1, 1)
+    # create box-plot
+    bp = ax.boxplot(data.T, labels=labels, patch_artist=True)
+    # configure plot
+    minimum = np.min(data)*0.95
+    maximum = np.max(data)*1.05
+    ax.set_ylim(minimum, maximum)
+    #all external decorartive arguments
+    title = kwargs.pop("title","")
+    colors = kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue'])
+    show = kwargs.pop("show",True)
+    savefig = kwargs.pop("savefig",False)
+
+    ax.set_title(title)
+    ax.set_ylabel(f"Skill {metric}", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+
+    for median in bp['medians']:
+        median.set_color('black')
+        median.set_linewidth(2.)
+
+    plt.rcParams['text.usetex'] = True
+    if show:
+        plt.show()
+    if savefig:
+        fig.savefig(plt_fname, bbox_inches="tight")
+    plt.close(fig)
 
 def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
     """
