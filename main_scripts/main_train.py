@@ -116,7 +116,7 @@ def main(parser_args):
         filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
     
     copy_filelist(filelist, model_savedir, filelist_new)
-    model.save_hparams_to_json(os.path.join(model_savedir, "config_{parser_args.model}.json"))
+    model.save_hparams_to_json(os.path.join(model_savedir, f"config_{parser_args.model}.json"))
 
     # train model
     steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
