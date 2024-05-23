@@ -1,0 +1,396 @@
+postprocess_sha_unet_t2m_lean_1-out.9855203
+Globally averaged rmse: 1.0283 K, standard deviation: 0.2239
+Averaged rmse for DJF: 1.0020 K, standard deviation: 0.1948
+Averaged rmse for JJA: 1.0766 K, standard deviation: 0.2333
+Averaged rmse for MAM: 1.0475 K, standard deviation: 0.2718
+Averaged rmse for SON: 0.9862 K, standard deviation: 0.1691
+Globally averaged bias: 0.1115 K, standard deviation: 0.2689
+Averaged bias for DJF: 0.0134 K, standard deviation: 0.2646
+Averaged bias for JJA: 0.2016 K, standard deviation: 0.2405
+Averaged bias for MAM: 0.0532 K, standard deviation: 0.2800
+Averaged bias for SON: 0.1762 K, standard deviation: 0.2401
+Globally averaged grad_amplitude: 0.8785 1, standard deviation: 0.0605
+Averaged grad_amplitude for DJF: 0.8825 1, standard deviation: 0.0734
+Averaged grad_amplitude for JJA: 0.8545 1, standard deviation: 0.0337
+Averaged grad_amplitude for MAM: 0.9152 1, standard deviation: 0.0546
+Averaged grad_amplitude for SON: 0.8616 1, standard deviation: 0.0543
+Globally averaged me_std: 0.2022 K, standard deviation: 0.0419
+Averaged me_std for DJF: 0.1932 K, standard deviation: 0.0416
+Averaged me_std for JJA: 0.2226 K, standard deviation: 0.0390
+Averaged me_std for MAM: 0.1937 K, standard deviation: 0.0430
+Averaged me_std for SON: 0.1988 K, standard deviation: 0.0365
+
+postprocess_sha_unet_t2m_lean_2-out.9855221
+Globally averaged rmse: 1.0269 K, standard deviation: 0.2252
+Averaged rmse for DJF: 0.9988 K, standard deviation: 0.1852
+Averaged rmse for JJA: 1.0850 K, standard deviation: 0.2410
+Averaged rmse for MAM: 1.0416 K, standard deviation: 0.2755
+Averaged rmse for SON: 0.9810 K, standard deviation: 0.1661
+Globally averaged bias: 0.0879 K, standard deviation: 0.2465
+Averaged bias for DJF: 0.0996 K, standard deviation: 0.2498
+Averaged bias for JJA: 0.0983 K, standard deviation: 0.2416
+Averaged bias for MAM: 0.0458 K, standard deviation: 0.2454
+Averaged bias for SON: 0.1084 K, standard deviation: 0.2443
+Globally averaged grad_amplitude: 0.8713 1, standard deviation: 0.0577
+Averaged grad_amplitude for DJF: 0.8759 1, standard deviation: 0.0710
+Averaged grad_amplitude for JJA: 0.8479 1, standard deviation: 0.0316
+Averaged grad_amplitude for MAM: 0.9052 1, standard deviation: 0.0514
+Averaged grad_amplitude for SON: 0.8560 1, standard deviation: 0.0518
+Globally averaged me_std: 0.2061 K, standard deviation: 0.0446
+Averaged me_std for DJF: 0.1942 K, standard deviation: 0.0418
+Averaged me_std for JJA: 0.2319 K, standard deviation: 0.0439
+Averaged me_std for MAM: 0.1964 K, standard deviation: 0.0451
+Averaged me_std for SON: 0.2018 K, standard deviation: 0.0364
+
+postprocess_sha_unet_t2m_lean-out.9843867
+Globally averaged rmse: 1.0271 K, standard deviation: 0.2354
+Averaged rmse for DJF: 1.0234 K, standard deviation: 0.2514
+Averaged rmse for JJA: 1.0721 K, standard deviation: 0.2244
+Averaged rmse for MAM: 1.0295 K, standard deviation: 0.2779
+Averaged rmse for SON: 0.9828 K, standard deviation: 0.1634
+Globally averaged bias: 0.0280 K, standard deviation: 0.2596
+Averaged bias for DJF: 0.0297 K, standard deviation: 0.2652
+Averaged bias for JJA: 0.0293 K, standard deviation: 0.2474
+Averaged bias for MAM: -0.0393 K, standard deviation: 0.2649
+Averaged bias for SON: 0.0932 K, standard deviation: 0.2429
+Globally averaged grad_amplitude: 0.8774 1, standard deviation: 0.0614
+Averaged grad_amplitude for DJF: 0.8799 1, standard deviation: 0.0817
+Averaged grad_amplitude for JJA: 0.8598 1, standard deviation: 0.0304
+Averaged grad_amplitude for MAM: 0.9098 1, standard deviation: 0.0552
+Averaged grad_amplitude for SON: 0.8601 1, standard deviation: 0.0532
+Globally averaged me_std: 0.2037 K, standard deviation: 0.0450
+Averaged me_std for DJF: 0.1991 K, standard deviation: 0.0517
+Averaged me_std for JJA: 0.2224 K, standard deviation: 0.0402
+Averaged me_std for MAM: 0.1941 K, standard deviation: 0.0447
+Averaged me_std for SON: 0.1989 K, standard deviation: 0.0366
+
+postprocess_sha_unet_t2m_lean_snow_1-out.9855201
+Globally averaged rmse: 1.0424 K, standard deviation: 0.2342
+Averaged rmse for DJF: 1.0215 K, standard deviation: 0.1864
+Averaged rmse for JJA: 1.0784 K, standard deviation: 0.2365
+Averaged rmse for MAM: 1.0891 K, standard deviation: 0.3033
+Averaged rmse for SON: 0.9797 K, standard deviation: 0.1679
+Globally averaged bias: 0.1293 K, standard deviation: 0.2610
+Averaged bias for DJF: 0.0793 K, standard deviation: 0.2660
+Averaged bias for JJA: 0.1651 K, standard deviation: 0.2449
+Averaged bias for MAM: 0.0896 K, standard deviation: 0.2770
+Averaged bias for SON: 0.1826 K, standard deviation: 0.2386
+Globally averaged grad_amplitude: 0.8747 1, standard deviation: 0.0599
+Averaged grad_amplitude for DJF: 0.8705 1, standard deviation: 0.0743
+Averaged grad_amplitude for JJA: 0.8558 1, standard deviation: 0.0328
+Averaged grad_amplitude for MAM: 0.9108 1, standard deviation: 0.0568
+Averaged grad_amplitude for SON: 0.8614 1, standard deviation: 0.0522
+Globally averaged me_std: 0.2069 K, standard deviation: 0.0436
+Averaged me_std for DJF: 0.1996 K, standard deviation: 0.0426
+Averaged me_std for JJA: 0.2255 K, standard deviation: 0.0410
+Averaged me_std for MAM: 0.2046 K, standard deviation: 0.0479
+Averaged me_std for SON: 0.1977 K, standard deviation: 0.0363
+
+postprocess_sha_unet_t2m_lean_snow_2-out.9858231
+Globally averaged rmse: 1.0493 K, standard deviation: 0.2298
+Averaged rmse for DJF: 1.0404 K, standard deviation: 0.2053
+Averaged rmse for JJA: 1.0893 K, standard deviation: 0.2357
+Averaged rmse for MAM: 1.0730 K, standard deviation: 0.2830
+Averaged rmse for SON: 0.9940 K, standard deviation: 0.1665
+Globally averaged bias: 0.1035 K, standard deviation: 0.2740
+Averaged bias for DJF: 0.0173 K, standard deviation: 0.2649
+Averaged bias for JJA: 0.1609 K, standard deviation: 0.2704
+Averaged bias for MAM: 0.0670 K, standard deviation: 0.2815
+Averaged bias for SON: 0.1675 K, standard deviation: 0.2483
+Globally averaged grad_amplitude: 0.8802 1, standard deviation: 0.0610
+Averaged grad_amplitude for DJF: 0.8821 1, standard deviation: 0.0772
+Averaged grad_amplitude for JJA: 0.8595 1, standard deviation: 0.0321
+Averaged grad_amplitude for MAM: 0.9163 1, standard deviation: 0.0562
+Averaged grad_amplitude for SON: 0.8628 1, standard deviation: 0.0523
+Globally averaged me_std: 0.2066 K, standard deviation: 0.0427
+Averaged me_std for DJF: 0.2004 K, standard deviation: 0.0432
+Averaged me_std for JJA: 0.2236 K, standard deviation: 0.0391
+Averaged me_std for MAM: 0.2040 K, standard deviation: 0.0471
+Averaged me_std for SON: 0.1981 K, standard deviation: 0.0354
+
+postprocess_sha_unet_t2m_lean_snow-out.9843865
+Globally averaged rmse: 1.0387 K, standard deviation: 0.2320
+Averaged rmse for DJF: 1.0175 K, standard deviation: 0.1860
+Averaged rmse for JJA: 1.0694 K, standard deviation: 0.2353
+Averaged rmse for MAM: 1.0827 K, standard deviation: 0.2981
+Averaged rmse for SON: 0.9843 K, standard deviation: 0.1719
+Globally averaged bias: 0.1151 K, standard deviation: 0.2732
+Averaged bias for DJF: 0.0385 K, standard deviation: 0.2846
+Averaged bias for JJA: 0.1866 K, standard deviation: 0.2404
+Averaged bias for MAM: 0.0609 K, standard deviation: 0.2918
+Averaged bias for SON: 0.1735 K, standard deviation: 0.2396
+Globally averaged grad_amplitude: 0.8767 1, standard deviation: 0.0579
+Averaged grad_amplitude for DJF: 0.8697 1, standard deviation: 0.0682
+Averaged grad_amplitude for JJA: 0.8596 1, standard deviation: 0.0323
+Averaged grad_amplitude for MAM: 0.9143 1, standard deviation: 0.0572
+Averaged grad_amplitude for SON: 0.8628 1, standard deviation: 0.0501
+Globally averaged me_std: 0.2056 K, standard deviation: 0.0418
+Averaged me_std for DJF: 0.1985 K, standard deviation: 0.0399
+Averaged me_std for JJA: 0.2219 K, standard deviation: 0.0392
+Averaged me_std for MAM: 0.2048 K, standard deviation: 0.0475
+Averaged me_std for SON: 0.1971 K, standard deviation: 0.0349
+
+postprocess_sha_unet_t2m_snow_1-out.9855198
+Globally averaged rmse: 1.0324 K, standard deviation: 0.2303
+Averaged rmse for DJF: 1.0199 K, standard deviation: 0.1860
+Averaged rmse for JJA: 1.0684 K, standard deviation: 0.2324
+Averaged rmse for MAM: 1.0738 K, standard deviation: 0.2959
+Averaged rmse for SON: 0.9666 K, standard deviation: 0.1667
+Globally averaged bias: 0.0942 K, standard deviation: 0.2714
+Averaged bias for DJF: 0.0060 K, standard deviation: 0.2657
+Averaged bias for JJA: 0.1552 K, standard deviation: 0.2478
+Averaged bias for MAM: 0.0679 K, standard deviation: 0.2963
+Averaged bias for SON: 0.1464 K, standard deviation: 0.2448
+Globally averaged grad_amplitude: 0.8900 1, standard deviation: 0.0600
+Averaged grad_amplitude for DJF: 0.8859 1, standard deviation: 0.0726
+Averaged grad_amplitude for JJA: 0.8719 1, standard deviation: 0.0324
+Averaged grad_amplitude for MAM: 0.9271 1, standard deviation: 0.0571
+Averaged grad_amplitude for SON: 0.8748 1, standard deviation: 0.0539
+Globally averaged me_std: 0.2030 K, standard deviation: 0.0427
+Averaged me_std for DJF: 0.1946 K, standard deviation: 0.0398
+Averaged me_std for JJA: 0.2224 K, standard deviation: 0.0409
+Averaged me_std for MAM: 0.2018 K, standard deviation: 0.0480
+Averaged me_std for SON: 0.1930 K, standard deviation: 0.0341
+
+postprocess_sha_unet_t2m_snow_2-out.9855217
+Globally averaged rmse: 1.0390 K, standard deviation: 0.2346
+Averaged rmse for DJF: 1.0139 K, standard deviation: 0.1831
+Averaged rmse for JJA: 1.0839 K, standard deviation: 0.2407
+Averaged rmse for MAM: 1.0839 K, standard deviation: 0.3000
+Averaged rmse for SON: 0.9730 K, standard deviation: 0.1703
+Globally averaged bias: 0.0985 K, standard deviation: 0.2699
+Averaged bias for DJF: 0.0122 K, standard deviation: 0.2626
+Averaged bias for JJA: 0.1858 K, standard deviation: 0.2462
+Averaged bias for MAM: 0.0449 K, standard deviation: 0.2846
+Averaged bias for SON: 0.1498 K, standard deviation: 0.2453
+Globally averaged grad_amplitude: 0.8794 1, standard deviation: 0.0587
+Averaged grad_amplitude for DJF: 0.8762 1, standard deviation: 0.0709
+Averaged grad_amplitude for JJA: 0.8571 1, standard deviation: 0.0333
+Averaged grad_amplitude for MAM: 0.9159 1, standard deviation: 0.0541
+Averaged grad_amplitude for SON: 0.8681 1, standard deviation: 0.0527
+Globally averaged me_std: 0.2040 K, standard deviation: 0.0422
+Averaged me_std for DJF: 0.1964 K, standard deviation: 0.0398
+Averaged me_std for JJA: 0.2241 K, standard deviation: 0.0411
+Averaged me_std for MAM: 0.2009 K, standard deviation: 0.0456
+Averaged me_std for SON: 0.1942 K, standard deviation: 0.0346
+
+postprocess_sha_unet_t2m_snow-out.9843863
+Globally averaged rmse: 1.0386 K, standard deviation: 0.2318
+Averaged rmse for DJF: 1.0282 K, standard deviation: 0.1945
+Averaged rmse for JJA: 1.0681 K, standard deviation: 0.2316
+Averaged rmse for MAM: 1.0801 K, standard deviation: 0.2990
+Averaged rmse for SON: 0.9772 K, standard deviation: 0.1644
+Globally averaged bias: 0.1471 K, standard deviation: 0.2629
+Averaged bias for DJF: 0.1380 K, standard deviation: 0.2589
+Averaged bias for JJA: 0.1915 K, standard deviation: 0.2359
+Averaged bias for MAM: 0.0384 K, standard deviation: 0.2843
+Averaged bias for SON: 0.2211 K, standard deviation: 0.2313
+Globally averaged grad_amplitude: 0.8812 1, standard deviation: 0.0597
+Averaged grad_amplitude for DJF: 0.8829 1, standard deviation: 0.0751
+Averaged grad_amplitude for JJA: 0.8592 1, standard deviation: 0.0327
+Averaged grad_amplitude for MAM: 0.9142 1, standard deviation: 0.0563
+Averaged grad_amplitude for SON: 0.8687 1, standard deviation: 0.0520
+Globally averaged me_std: 0.2037 K, standard deviation: 0.0420
+Averaged me_std for DJF: 0.1989 K, standard deviation: 0.0400
+Averaged me_std for JJA: 0.2208 K, standard deviation: 0.0405
+Averaged me_std for MAM: 0.2020 K, standard deviation: 0.0470
+Averaged me_std for SON: 0.1928 K, standard deviation: 0.0341
+
+postprocess_sha_wgan_t2m_lean_1-out.9855202
+Globally averaged rmse: 1.0368 K, standard deviation: 0.2337
+Averaged rmse for DJF: 1.0032 K, standard deviation: 0.1852
+Averaged rmse for JJA: 1.1096 K, standard deviation: 0.2515
+Averaged rmse for MAM: 1.0513 K, standard deviation: 0.2855
+Averaged rmse for SON: 0.9818 K, standard deviation: 0.1705
+Globally averaged bias: 0.1685 K, standard deviation: 0.2719
+Averaged bias for DJF: 0.1117 K, standard deviation: 0.2648
+Averaged bias for JJA: 0.2481 K, standard deviation: 0.2750
+Averaged bias for MAM: 0.1080 K, standard deviation: 0.2778
+Averaged bias for SON: 0.2053 K, standard deviation: 0.2409
+Globally averaged grad_amplitude: 0.9102 1, standard deviation: 0.0581
+Averaged grad_amplitude for DJF: 0.9122 1, standard deviation: 0.0603
+Averaged grad_amplitude for JJA: 0.8856 1, standard deviation: 0.0330
+Averaged grad_amplitude for MAM: 0.9501 1, standard deviation: 0.0619
+Averaged grad_amplitude for SON: 0.8930 1, standard deviation: 0.0493
+Globally averaged me_std: 0.1922 K, standard deviation: 0.0390
+Averaged me_std for DJF: 0.1848 K, standard deviation: 0.0337
+Averaged me_std for JJA: 0.2074 K, standard deviation: 0.0355
+Averaged me_std for MAM: 0.1928 K, standard deviation: 0.0484
+Averaged me_std for SON: 0.1837 K, standard deviation: 0.0313
+
+postprocess_sha_wgan_t2m_lean_2-out.9855220
+Globally averaged rmse: 1.0409 K, standard deviation: 0.2390
+Averaged rmse for DJF: 1.0234 K, standard deviation: 0.1959
+Averaged rmse for JJA: 1.0799 K, standard deviation: 0.2312
+Averaged rmse for MAM: 1.0815 K, standard deviation: 0.3174
+Averaged rmse for SON: 0.9777 K, standard deviation: 0.1664
+Globally averaged bias: 0.0920 K, standard deviation: 0.2639
+Averaged bias for DJF: 0.0244 K, standard deviation: 0.2723
+Averaged bias for JJA: 0.1314 K, standard deviation: 0.2396
+Averaged bias for MAM: 0.0299 K, standard deviation: 0.2753
+Averaged bias for SON: 0.1819 K, standard deviation: 0.2310
+Globally averaged grad_amplitude: 0.9478 1, standard deviation: 0.0598
+Averaged grad_amplitude for DJF: 0.9585 1, standard deviation: 0.0533
+Averaged grad_amplitude for JJA: 0.9175 1, standard deviation: 0.0358
+Averaged grad_amplitude for MAM: 0.9869 1, standard deviation: 0.0704
+Averaged grad_amplitude for SON: 0.9285 1, standard deviation: 0.0476
+Globally averaged me_std: 0.1901 K, standard deviation: 0.0416
+Averaged me_std for DJF: 0.1839 K, standard deviation: 0.0296
+Averaged me_std for JJA: 0.1986 K, standard deviation: 0.0334
+Averaged me_std for MAM: 0.1994 K, standard deviation: 0.0610
+Averaged me_std for SON: 0.1784 K, standard deviation: 0.0290
+
+postprocess_sha_wgan_t2m_lean-out.9844609
+Globally averaged rmse: 1.0476 K, standard deviation: 0.2406
+Averaged rmse for DJF: 1.0061 K, standard deviation: 0.1869
+Averaged rmse for JJA: 1.1122 K, standard deviation: 0.2578
+Averaged rmse for MAM: 1.0808 K, standard deviation: 0.2991
+Averaged rmse for SON: 0.9896 K, standard deviation: 0.1718
+Globally averaged bias: 0.1599 K, standard deviation: 0.2794
+Averaged bias for DJF: 0.0644 K, standard deviation: 0.2471
+Averaged bias for JJA: 0.2849 K, standard deviation: 0.2680
+Averaged bias for MAM: 0.0954 K, standard deviation: 0.2979
+Averaged bias for SON: 0.1933 K, standard deviation: 0.2456
+Globally averaged grad_amplitude: 0.9229 1, standard deviation: 0.0561
+Averaged grad_amplitude for DJF: 0.9301 1, standard deviation: 0.0556
+Averaged grad_amplitude for JJA: 0.8994 1, standard deviation: 0.0346
+Averaged grad_amplitude for MAM: 0.9595 1, standard deviation: 0.0594
+Averaged grad_amplitude for SON: 0.9025 1, standard deviation: 0.0493
+Globally averaged me_std: 0.1936 K, standard deviation: 0.0391
+Averaged me_std for DJF: 0.1841 K, standard deviation: 0.0327
+Averaged me_std for JJA: 0.2089 K, standard deviation: 0.0357
+Averaged me_std for MAM: 0.1956 K, standard deviation: 0.0483
+Averaged me_std for SON: 0.1855 K, standard deviation: 0.0319
+
+postprocess_sha_wgan_t2m_lean_snow_1-out.9855200
+Globally averaged rmse: 1.0641 K, standard deviation: 0.2387
+Averaged rmse for DJF: 1.0784 K, standard deviation: 0.1914
+Averaged rmse for JJA: 1.0795 K, standard deviation: 0.2442
+Averaged rmse for MAM: 1.1132 K, standard deviation: 0.3054
+Averaged rmse for SON: 0.9849 K, standard deviation: 0.1690
+Globally averaged bias: 0.0250 K, standard deviation: 0.2919
+Averaged bias for DJF: -0.1210 K, standard deviation: 0.2744
+Averaged bias for JJA: 0.1474 K, standard deviation: 0.2546
+Averaged bias for MAM: -0.0320 K, standard deviation: 0.3005
+Averaged bias for SON: 0.1032 K, standard deviation: 0.2547
+Globally averaged grad_amplitude: 0.9147 1, standard deviation: 0.0604
+Averaged grad_amplitude for DJF: 0.9216 1, standard deviation: 0.0637
+Averaged grad_amplitude for JJA: 0.8931 1, standard deviation: 0.0371
+Averaged grad_amplitude for MAM: 0.9513 1, standard deviation: 0.0640
+Averaged grad_amplitude for SON: 0.8928 1, standard deviation: 0.0522
+Globally averaged me_std: 0.1987 K, standard deviation: 0.0387
+Averaged me_std for DJF: 0.1956 K, standard deviation: 0.0330
+Averaged me_std for JJA: 0.2072 K, standard deviation: 0.0340
+Averaged me_std for MAM: 0.2043 K, standard deviation: 0.0493
+Averaged me_std for SON: 0.1877 K, standard deviation: 0.0325
+
+postprocess_sha_wgan_t2m_lean_snow_2-out.9855218
+Globally averaged rmse: 1.0534 K, standard deviation: 0.2361
+Averaged rmse for DJF: 1.0469 K, standard deviation: 0.1907
+Averaged rmse for JJA: 1.0859 K, standard deviation: 0.2336
+Averaged rmse for MAM: 1.0995 K, standard deviation: 0.3059
+Averaged rmse for SON: 0.9804 K, standard deviation: 0.1709
+Globally averaged bias: 0.0611 K, standard deviation: 0.2831
+Averaged bias for DJF: -0.0264 K, standard deviation: 0.2807
+Averaged bias for JJA: 0.1161 K, standard deviation: 0.2712
+Averaged bias for MAM: 0.0165 K, standard deviation: 0.2894
+Averaged bias for SON: 0.1373 K, standard deviation: 0.2567
+Globally averaged grad_amplitude: 0.9179 1, standard deviation: 0.0601
+Averaged grad_amplitude for DJF: 0.9157 1, standard deviation: 0.0630
+Averaged grad_amplitude for JJA: 0.8989 1, standard deviation: 0.0327
+Averaged grad_amplitude for MAM: 0.9595 1, standard deviation: 0.0646
+Averaged grad_amplitude for SON: 0.8972 1, standard deviation: 0.0521
+Globally averaged me_std: 0.1979 K, standard deviation: 0.0403
+Averaged me_std for DJF: 0.1925 K, standard deviation: 0.0340
+Averaged me_std for JJA: 0.2077 K, standard deviation: 0.0360
+Averaged me_std for MAM: 0.2037 K, standard deviation: 0.0517
+Averaged me_std for SON: 0.1874 K, standard deviation: 0.0331
+
+postprocess_sha_wgan_t2m_lean_snow-out.9844608
+Globally averaged rmse: 1.0604 K, standard deviation: 0.2331
+Averaged rmse for DJF: 1.0348 K, standard deviation: 0.1901
+Averaged rmse for JJA: 1.1048 K, standard deviation: 0.2327
+Averaged rmse for MAM: 1.1075 K, standard deviation: 0.2979
+Averaged rmse for SON: 0.9933 K, standard deviation: 0.1683
+Globally averaged bias: 0.0991 K, standard deviation: 0.2916
+Averaged bias for DJF: -0.0496 K, standard deviation: 0.2755
+Averaged bias for JJA: 0.2401 K, standard deviation: 0.2443
+Averaged bias for MAM: 0.0262 K, standard deviation: 0.3045
+Averaged bias for SON: 0.1772 K, standard deviation: 0.2419
+Globally averaged grad_amplitude: 0.9183 1, standard deviation: 0.0582
+Averaged grad_amplitude for DJF: 0.9139 1, standard deviation: 0.0589
+Averaged grad_amplitude for JJA: 0.9012 1, standard deviation: 0.0323
+Averaged grad_amplitude for MAM: 0.9599 1, standard deviation: 0.0652
+Averaged grad_amplitude for SON: 0.8978 1, standard deviation: 0.0483
+Globally averaged me_std: 0.1958 K, standard deviation: 0.0404
+Averaged me_std for DJF: 0.1895 K, standard deviation: 0.0331
+Averaged me_std for JJA: 0.2037 K, standard deviation: 0.0346
+Averaged me_std for MAM: 0.2049 K, standard deviation: 0.0540
+Averaged me_std for SON: 0.1850 K, standard deviation: 0.0318
+
+postprocess_sha_wgan_t2m_snow_1-out.9855173
+Globally averaged rmse: 1.0503 K, standard deviation: 0.2337
+Averaged rmse for DJF: 1.0290 K, standard deviation: 0.1839
+Averaged rmse for JJA: 1.0872 K, standard deviation: 0.2293
+Averaged rmse for MAM: 1.1033 K, standard deviation: 0.3069
+Averaged rmse for SON: 0.9807 K, standard deviation: 0.1663
+Globally averaged bias: 0.1246 K, standard deviation: 0.2708
+Averaged bias for DJF: 0.0170 K, standard deviation: 0.2659
+Averaged bias for JJA: 0.2229 K, standard deviation: 0.2284
+Averaged bias for MAM: 0.0639 K, standard deviation: 0.2962
+Averaged bias for SON: 0.1929 K, standard deviation: 0.2303
+Globally averaged grad_amplitude: 0.9340 1, standard deviation: 0.0590
+Averaged grad_amplitude for DJF: 0.9494 1, standard deviation: 0.0519
+Averaged grad_amplitude for JJA: 0.8972 1, standard deviation: 0.0319
+Averaged grad_amplitude for MAM: 0.9736 1, standard deviation: 0.0667
+Averaged grad_amplitude for SON: 0.9161 1, standard deviation: 0.0477
+Globally averaged me_std: 0.1939 K, standard deviation: 0.0413
+Averaged me_std for DJF: 0.1863 K, standard deviation: 0.0305
+Averaged me_std for JJA: 0.2043 K, standard deviation: 0.0361
+Averaged me_std for MAM: 0.2052 K, standard deviation: 0.0565
+Averaged me_std for SON: 0.1796 K, standard deviation: 0.0294
+
+postprocess_sha_wgan_t2m_snow_2-out.9855213
+Globally averaged rmse: 1.0508 K, standard deviation: 0.2417
+Averaged rmse for DJF: 1.0186 K, standard deviation: 0.1885
+Averaged rmse for JJA: 1.1023 K, standard deviation: 0.2389
+Averaged rmse for MAM: 1.1026 K, standard deviation: 0.3202
+Averaged rmse for SON: 0.9782 K, standard deviation: 0.1617
+Globally averaged bias: 0.0976 K, standard deviation: 0.2720
+Averaged bias for DJF: 0.0292 K, standard deviation: 0.2616
+Averaged bias for JJA: 0.1807 K, standard deviation: 0.2417
+Averaged bias for MAM: 0.0171 K, standard deviation: 0.3042
+Averaged bias for SON: 0.1625 K, standard deviation: 0.2325
+Globally averaged grad_amplitude: 0.9322 1, standard deviation: 0.0547
+Averaged grad_amplitude for DJF: 0.9311 1, standard deviation: 0.0563
+Averaged grad_amplitude for JJA: 0.9110 1, standard deviation: 0.0322
+Averaged grad_amplitude for MAM: 0.9685 1, standard deviation: 0.0599
+Averaged grad_amplitude for SON: 0.9180 1, standard deviation: 0.0468
+Globally averaged me_std: 0.1931 K, standard deviation: 0.0397
+Averaged me_std for DJF: 0.1869 K, standard deviation: 0.0319
+Averaged me_std for JJA: 0.2044 K, standard deviation: 0.0356
+Averaged me_std for MAM: 0.2004 K, standard deviation: 0.0521
+Averaged me_std for SON: 0.1804 K, standard deviation: 0.0302
+
+postprocess_sha_wgan_t2m_snow-out.9844550
+Globally averaged rmse: 1.0655 K, standard deviation: 0.2353
+Averaged rmse for DJF: 1.0507 K, standard deviation: 0.1800
+Averaged rmse for JJA: 1.1246 K, standard deviation: 0.2500
+Averaged rmse for MAM: 1.0926 K, standard deviation: 0.2948
+Averaged rmse for SON: 0.9930 K, standard deviation: 0.1708
+Globally averaged bias: 0.1125 K, standard deviation: 0.3304
+Averaged bias for DJF: -0.0973 K, standard deviation: 0.3091
+Averaged bias for JJA: 0.3461 K, standard deviation: 0.2529
+Averaged bias for MAM: 0.0296 K, standard deviation: 0.3187
+Averaged bias for SON: 0.1677 K, standard deviation: 0.2593
+Globally averaged grad_amplitude: 0.9196 1, standard deviation: 0.0579
+Averaged grad_amplitude for DJF: 0.9250 1, standard deviation: 0.0636
+Averaged grad_amplitude for JJA: 0.8901 1, standard deviation: 0.0324
+Averaged grad_amplitude for MAM: 0.9578 1, standard deviation: 0.0574
+Averaged grad_amplitude for SON: 0.9055 1, standard deviation: 0.0499
+Globally averaged me_std: 0.1948 K, standard deviation: 0.0397
+Averaged me_std for DJF: 0.1892 K, standard deviation: 0.0340
+Averaged me_std for JJA: 0.2065 K, standard deviation: 0.0367
+Averaged me_std for MAM: 0.1995 K, standard deviation: 0.0497
+Averaged me_std for SON: 0.1839 K, standard deviation: 0.0317
+
