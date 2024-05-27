@@ -428,14 +428,16 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
     coord_dict = {"wavenumber": np.arange(0, np.amin(np.array([int(nlon/2), int(nlat/2)])))}
     var_unit = f"{var_unit}**2 m"
 
-    info = {"latlon_dims": lonlat_dims, "dims": dims, "coord_dict": coord_dict, "varname": varname, "var_unit": var_unit}
+    info = {"lonlat_dims": lonlat_dims, "dims": dims, "coord_dict": coord_dict, "varname": varname, "var_unit": var_unit}
 
     # get power spectrum for complete dataset
     func_logger.info(f"Start spectral analysis for all data...")
 
     ds_ps = get_spectrum_exps(ds, ds_vars, info, lcutoff=lcutoff, re=re) 
 
-    # create plot   
+    # create plot
+    os.makedirs(plt_dir, exist_ok=True)
+
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_all.png")
     plot_power_spectra(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
                        x_coord="wavenumber")
@@ -546,7 +548,7 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
     varname = kwargs.get("vars2plt")[0].replace("_ref", "").replace("_fcst", "")
 
     # run parallelized plotting
-    nworkers = min(mp.cpu_count(), nsamples, 96)
+    nworkers = min(int(mp.cpu_count()/2), nsamples, 96)
     pool = Pool(processes=nworkers)
     func_logger.info(f"Start parallelized plotting of comparison plots for {nsamples} samples over {nworkers} workers...")
 

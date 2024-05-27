@@ -229,7 +229,7 @@ def get_spectrum_exps(ds: xr.Dataset, data_vars: List[str], data_info: dict, lcu
     Small wrapper to run spectral analysis for several experiments 
     :param ds: xarray.Dataset with input data
     :param data_vars: List of variable names from ds for spectral analysis 
-    :param data_info: Dictionary with information about data, required keys: "latlon_dims", "dims", "coord_dict", "var_name", "var_unit"
+    :param data_info: Dictionary with information about data, required keys: "lonlat_dims", "dims", "coord_dict", "varname", "var_unit"
     :param lcutoff: Flag to apply low-pass filter
     :param re: Earth radius
     :return: xarray.Dataset with power spectra for each variable
@@ -244,9 +244,9 @@ def get_spectrum_exps(ds: xr.Dataset, data_vars: List[str], data_info: dict, lcu
     nspecs = len(data_vars)
     lonlat_dims, dims = data_info["lonlat_dims"], data_info["dims"]
     coord_dict = data_info["coord_dict"]
-    var_name, var_unit = data_info["var_name"], data_info["var_unit"]
+    var_name, var_unit = data_info["varname"], data_info["var_unit"]
 
-    for i, data_var in data_vars:
+    for i, data_var in enumerate(data_vars):
         func_logger.info(f"Start spectral analysis for experiment {data_var} ({i+1}/{nspecs})...")
 
         # run spectral analysis
