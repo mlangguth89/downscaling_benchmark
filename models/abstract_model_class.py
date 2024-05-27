@@ -342,11 +342,12 @@ class AbstractModelClass(ABC):
             kwargs.update(kwargs["Padding2D"].allowed_paddings)
         self.custom_objects = kwargs
 
-    def save_hparams_to_json(self):
+    def save_hparams_to_json(self, fname: str):
         """
         Save hyperparameters to json file und savedir.
+        :param fname: filename to save hyperparameters
         """
-        with open(os.path.join(self.savedir, f"config_{self.modelname.lower()}.json"), "w") as f:
+        with open(fname, "w") as f:
             json.dump(self.hparams, f)
 
     def count_params(self):
