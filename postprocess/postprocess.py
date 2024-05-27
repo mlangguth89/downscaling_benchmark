@@ -461,7 +461,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
                            x_coord="wavenumber")
         
         # save power spectrum to netCDF
-        fname_nc = os.path.join(plt_dir, "..", f'{varname}_power_spectrum_{sea}.nc')
+        fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_{sea}.nc')
 
         func_logger.debug(f"Save power spectrum to {fname_nc}...")
         ds_ps_sea.to_netcdf(fname_nc)
