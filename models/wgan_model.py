@@ -231,8 +231,6 @@ class WGAN(AbstractModelClass):
         
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
-        self.modelname = "wgan"
-        
         # flag if horovod is used and import required modules
         self.with_horovod = with_horovod
         if self.with_horovod: 

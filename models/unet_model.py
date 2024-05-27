@@ -200,7 +200,6 @@ class Sha_UNet(AbstractModelClass):
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
         
         self.concat_out = concat_out
-        self.modelname = "unet_sha"
         self.with_horovod = with_horovod
         if self.with_horovod:
             import horovod.tensorflow.keras as hvd
@@ -392,8 +391,6 @@ class DeepRU_UNet(Sha_UNet):
         
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
-        self.modelname = "deepru"
-        
         # set hyperparmaters
         self.set_hparams(hparams)
         

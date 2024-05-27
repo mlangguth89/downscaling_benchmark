@@ -47,7 +47,7 @@ class AbstractModelClass(ABC):
         """Predefine internal attributes for model and loss."""
         make_keras_pickable()
         self.__model = None
-        self.model_name = self.__class__.__name__
+        self.modelname = self.__class__.__name__
         self.__custom_objects = {}
         self.__fit_options = {}
         self.__allowed_compile_options = {'optimizer': None,
@@ -346,7 +346,7 @@ class AbstractModelClass(ABC):
         """
         Save hyperparameters to json file und savedir.
         """
-        with open(os.path.join(self.savedir, f"config_{self.model_name.lower()}.json"), "w") as f:
+        with open(os.path.join(self.savedir, f"config_{self.modelname.lower()}.json"), "w") as f:
             json.dump(self.hparams, f)
 
     def count_params(self):
