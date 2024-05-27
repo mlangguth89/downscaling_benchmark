@@ -66,6 +66,9 @@ class ModelEngine(object):
             else:
                 submodels = model_list[1:]
                 model = target_model(*submodels, **model_args)
+
+                # Fix to ensure that correct modelname is set
+                model.modelname = self.modelname
         except Exception as e:
             err_str = str(e)
             raise RuntimeError(f"Failed to instantiate the model. The following error occured: \n {err_str}")

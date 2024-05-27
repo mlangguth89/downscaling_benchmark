@@ -8,7 +8,7 @@ Collection of statistical evaluation methods used in postprocess.py.
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__date__ = "2024-04-06"
+__date__ = "2024-04-19"
 
 from typing import Union, List
 import logging
@@ -224,6 +224,44 @@ def bootstrap_grouped_hourly(score_hourly_grouped, score_hourly_mean, block_leng
 
     return score_hourly_mean_b
 
+def get_spectrum_exps(ds: xr.Dataset, data_vars: List[str], data_info: dict, lcutoff: bool, re: float):
+    """
+    Small wrapper to run spectral analysis for several experiments 
+    :param ds: xarray.Dataset with input data
+    :param data_vars: List of variable names from ds for spectral analysis 
+    :param data_info: Dictionary with information about data, required keys: "lonlat_dims", "dims", "coord_dict", "varname", "var_unit"
+    :param lcutoff: Flag to apply low-pass filter
+    :param re: Earth radius
+    :return: xarray.Dataset with power spectra for each variable
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{get_spectrum_exps.__name__}")
+
+    # initialize dictionary for power spectra
+    ps_dict = {}
+
+    # get information about data for convenience
+    nspecs = len(data_vars)
+    lonlat_dims, dims = data_info["lonlat_dims"], data_info["dims"]
+    coord_dict = data_info["coord_dict"]
+    var_name, var_unit = data_info["varname"], data_info["var_unit"]
+
+    for i, data_var in enumerate(data_vars):
+        func_logger.info(f"Start spectral analysis for experiment {data_var} ({i+1}/{nspecs})...")
+
+        # run spectral analysis
+        ps_exp = get_spectrum(ds[data_var], lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+        # average over all time steps and create xarray.DataArray
+        da_ps_exp = xr.DataArray(ps_exp.mean(axis=0), dims=dims, coords=coord_dict, name=f"sp_{data_var}",
+                                  attrs={"long_name": f"Spectral power of {data_var}", "units": f"{var_unit}**2 m", "physical variable name": var_name})
+
+        # remove wavenumber 0 and append dictionary    
+        ps_dict[data_var] = da_ps_exp[1::]
+
+    # turn dictionary into xarray.Dataset
+    ds_ps = xr.Dataset(ps_dict)
+
+    return ds_ps
 
 def get_domain_info(da: xr.DataArray, lonlat_dims: list =["lon", "lat"], re:float = 6378*1.e+03): 
     """

@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-16"
+__update__ = "2024-04-19"
 
 import os
 import logging
@@ -83,7 +83,9 @@ def main(parser_args):
         logger.info("Start spectral analysis...")
         t0_spec = timer()
 
-        run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir, [model_info["model_longname"], "COSMO-REA6"], varname, unit)
+        plt_dir_spec = os.path.join(plt_dir, "spectral_analysis")
+
+        run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_spec, [model_info["model_longname"], "COSMO-REA6"], varname, unit)
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 

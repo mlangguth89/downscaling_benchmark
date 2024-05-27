@@ -47,7 +47,7 @@ class AbstractModelClass(ABC):
         """Predefine internal attributes for model and loss."""
         make_keras_pickable()
         self.__model = None
-        self.model_name = self.__class__.__name__
+        self.modelname = self.__class__.__name__
         self.__custom_objects = {}
         self.__fit_options = {}
         self.__allowed_compile_options = {'optimizer': None,
