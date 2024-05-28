@@ -110,7 +110,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
     return ax_plot
 
 # for creating plot
-def plot_comparison_maps(ds: Union[xr.Dataset,Config], plt_fname: str, **kwargs):
+def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str, **kwargs):
     """
     Plots two variables from a dataset and their difference next to each other, i.e. resulting in a 1x3 plot.
     :param ds: dataset either providing two variables only for comparison
@@ -153,15 +153,12 @@ def plot_comparison_maps(ds: Union[xr.Dataset,Config], plt_fname: str, **kwargs)
     
     labels = kwargs.pop("models",None)
 
-    save = kwargs.pop("save",True)
+    savefig = kwargs.pop("savefig",True)
     show = kwargs.pop("show",False)
 
-    if not isinstance(ds,Config):
+    if not isinstance(ds,list):
         ds = [ds]
         labels = ["model"]
-    else:
-        labels = ds.models
-        ds = read_files_for_model_comparison(ds) 
     
     figsize = kwargs.pop("figsize", (36, 6*len(ds)))
     # auxiliary variables
@@ -233,7 +230,7 @@ def plot_comparison_maps(ds: Union[xr.Dataset,Config], plt_fname: str, **kwargs)
     if show:
         plt.show()
 
-    if save:
+    if savefig:
         plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
         func_logger.info(f"Save comparison plot in file '{plt_fname}'")
         fig.savefig(plt_fname, bbox_inches="tight", dpi=300)
@@ -309,7 +306,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     plt.close(fig)
 
 
-def plot_metric_line(data: Union[xr.DataArray,Config], data_up: Union[xr.DataArray,None], data_down: Union[xr.DataArray,None], model_name: Union[str,List[str]], metric: dict,
+def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Union[xr.DataArray,List[xr.DataArray]], data_down: Union[xr.DataArray,List[xr.DataArray]], model_name: Union[str,List[str]], metric: dict,
                      plt_fname: str, varname: str = "T2m", x_coord: str = "hour", **kwargs):
     """
     Create line plots of 2D-metric data (e.g. metric plotted against time) 
@@ -332,9 +329,8 @@ def plot_metric_line(data: Union[xr.DataArray,Config], data_up: Union[xr.DataArr
                     - other valid arguments of ax.plot
     """
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_metric_line.__name__}")
-    uncertainty = kwargs.pop("uncertainty",False)    
-    if isinstance(data,Config):
-        data,data_up,data_down = read_all_line_plots(data,uncertainty)
+    
+    if isinstance(data,list):
         if data_up is not None:
             assert(len(data) == len(data_up))
             assert(len(data_up) == len(data_down))
@@ -409,7 +405,8 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     # get some plot parameters
     val_range = plt_kwargs.get("value_range", [None])
     widths = plt_kwargs.get("widths", None)
-    colors = plt_kwargs.get("colors", None)
+    #colors = plt_kwargs.get("colors", None)
+    colors = plt_kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue'])
     fs = plt_kwargs.get("fs", 16)
     ref_line = plt_kwargs.get("ref_line", 1.)
     ref_linestyle = plt_kwargs.get("ref_linestyle", "k-")
@@ -419,9 +416,12 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     yticks = plt_kwargs.get("yticks", None)
     labels = plt_kwargs.get("labels", None)
     
+    show = plt_kwargs.pop("show",False)
+    savefig = plt_kwargs.pop("savefig",True)
     # create box whiskers plot with matplotlib
     fig, ax = plt.subplots(figsize=(12, 8))
-
+    
+    print(labels)
     bp = plt.boxplot(data, widths=widths, labels=labels, patch_artist=True, **plt_kwargs)
     
     # modify fliers
@@ -442,7 +442,8 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
             patch.set_facecolor(color)
     
     ax.set_ylim(*val_range)
-    ax.set_yticks(yticks)    
+    if yticks is not None:
+        ax.set_yticks(yticks)
     
     ax.set_title(title, fontsize=fs + 2)
     ax.set_ylabel(ylabel, fontsize=fs, labelpad=8)
@@ -450,9 +451,13 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
     ax.yaxis.grid(True)
 
+    if show:
+        plt.show()
+
+    if savefig:
     # save plot
-    plt.tight_layout()
-    plt.savefig(plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname)
+        plt.tight_layout()
+        plt.savefig(plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname)
     plt.close(fig)
 
     func_logger.info(f"Feature importance scores saved to {plt_fname}.")
@@ -460,21 +465,20 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     return True
 
 
-def plot_skills(data:Config, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)", "DeepRU", "SwinIR"], metric="RMSE",**kwargs):
+def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)", "DeepRU", "SwinIR"], metric="RMSE",**kwargs):
     
-    data = read_box_plot(data) 
+    #data = read_box_plot(data) 
     fs = 16
     # create figure
     fig, ax = plt.subplots(1, 1)
-    # create box-plot
-    bp = ax.boxplot(data.T, labels=labels, patch_artist=True)
-    # configure plot
+    bp = ax.boxplot(data, labels=labels, patch_artist=True)
+ # configure plot
     minimum = np.min(data)*0.95
     maximum = np.max(data)*1.05
     ax.set_ylim(minimum, maximum)
     #all external decorartive arguments
     title = kwargs.pop("title","")
-    colors = kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue'])
+    colors = kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue']) 
     show = kwargs.pop("show",True)
     savefig = kwargs.pop("savefig",False)
 
