@@ -47,9 +47,8 @@ def lightning_main(parser_args):
     random_seed = 32
     seed_everything(32,workers=True)
 
-    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
-    wandb_logger = WandbLogger(project=model_savedir_last,
-                                name= parser_args.exp_name)
+
+
     # start timing
     to = timer()
     
@@ -63,6 +62,9 @@ def lightning_main(parser_args):
     # initialize checkpoint-directory path for saving the model
     model_savedir = os.path.join(outdir, parser_args.exp_name)
 
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
+    wandb_logger = WandbLogger(project="downscaling",
+                                name= parser_args.exp_name)
     # read configuration files for model and dataset
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
@@ -134,7 +136,7 @@ def lightning_main(parser_args):
                       enable_progress_bar=True,
                       max_epochs=ds_obj_train.nfiles_merged*model.swinir.hparams['nepochs'],
                       check_val_every_n_epoch=ds_obj_train.nfiles_merged,
-                      num_nodes=2,
+                      num_nodes=4,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',

@@ -678,7 +678,7 @@ class SwinIR(nn.Module):
         self.varnames_tar = varnames_tar
         self.hparams = SwinIR.get_hparams_default()
         if hparams is not None:
-            self.get_hparams_dict(hparams)
+            self.hparams = self.get_hparams_dict(hparams)
         in_chans = self.hparams["in_chans"]
         num_in_ch = in_chans
         out_chans = self.hparams["out_chans"]
