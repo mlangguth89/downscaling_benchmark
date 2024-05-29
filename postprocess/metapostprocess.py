@@ -82,18 +82,26 @@ def read_all_line_plots(config : Config, uncertainty = False,**kwargs):
     varname = config.variable
     plot_metric_line(mean_array,array_up,array_down,labels,metric_dict,plt_fname,varname,show=True,**kwargs)
 
-def read_box_plot(config,**kwargs):
+def read_box_plot(config,ref_model,**kwargs):
+
+    assert(ref_model in config.models)
+
     nc_files_mean = []
+    ref_model_path = os.path.join(config.base_folder,f"{ref_model}_benchmark_{config.variable}","metric_files")
+    ref_data = xr.open_dataset(os.path.join(ref_model_path,f"eval_{config.metric}_{config.seasons}.nc"))
+    modified_labels = []
     for model in config.models:
-        model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","metric_files")
-        nc_files_mean.append(os.path.join(model_path,f"eval_{config.metric}_{config.seasons}.nc"))
+        if model != ref_model:
+            model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","metric_files")
+            nc_files_mean.append(os.path.join(model_path,f"eval_{config.metric}_{config.seasons}.nc"))
+            modified_labels.append(model)
     mean_array_boot = []
     for nc_file_mean in nc_files_mean:
         data_array = xr.open_dataset(nc_file_mean)
-        mean_array_boot.append(np.expand_dims(np.mean(data_array[f"{config.metric}_mean_boot"],axis=0),axis=0))
+        mean_array_boot.append(np.expand_dims(np.mean(data_array[f"{config.metric}_mean_boot"]-ref_data[f"{config.metric}_mean_boot"],axis=0),axis=0))
     data = np.concatenate(mean_array_boot)
     plt_fname = kwargs.pop("plt_fname","box_plot")
-    plot_skills(data.T,plt_fname,savefig=False,show=True,labels=config.models,metric= config.metric,**kwargs)
+    plot_skills(data.T,plt_fname,savefig=False,show=True,labels=modified_labels,metric= config.metric,**kwargs)
 
 
 def read_files_for_model_comparison(config):

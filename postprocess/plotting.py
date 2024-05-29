@@ -471,10 +471,19 @@ def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)",
     fs = 16
     # create figure
     fig, ax = plt.subplots(1, 1)
-    bp = ax.boxplot(data, labels=labels, patch_artist=True)
+    bp = ax.boxplot(data, labels=labels, patch_artist=True, showfliers=False)
  # configure plot
-    minimum = np.min(data)*0.95
-    maximum = np.max(data)*1.05
+    minimum = np.min(data)
+    maximum = np.max(data)
+    if minimum < 0:
+        minimum = 1.2*minimum
+    else :
+        minimum = 0.8* minimum
+
+    if maximum  < 0:
+        maximum = 0.8*maximum
+    else :
+        maximum = 1.2* maximum
     ax.set_ylim(minimum, maximum)
     #all external decorartive arguments
     title = kwargs.pop("title","")
