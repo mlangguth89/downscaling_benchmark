@@ -195,34 +195,36 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     cmap_diff, norm_diff = get_cmap_norm(levels_diff, cbar_name_diff)
     
     # create plot objects
-    fig, axs = plt.subplots(len(ds), 3, figsize=figsize, sharex=True, sharey=True,
+    fig, axs = plt.subplots(len(ds), 4, figsize=figsize, sharex=True, sharey=True, gridspec_kw={'width_ratios':[1,3.5,3.5,3.5]},
                             subplot_kw={"projection": proj_plot})
-    
+
     # perform plotting
     for i,ax_x in enumerate(axs):
-        for j, ax_y in enumerate(ax_x):
+        axs[i,0].text(0.5,0.5,labels[i],horizontalalignment='center',verticalalignment='center',transform=axs[i,0].transAxes,fontsize=24)
+        axs[i,0].axis('off')
+        for j, ax_y in enumerate(ax_x[1:]):
             if j < nplots:
                 data = np.squeeze(ds[i][vars2plt[j]])
                 
-                plt_data = axs[i,j].pcolormesh(lon_e, lat_e, data.values, cmap=cmap, norm=norm, transform=proj_data,
+                plt_data = axs[i,j+1].pcolormesh(lon_e, lat_e, data.values, cmap=cmap, norm=norm, transform=proj_data,
                                         **kwargs)
 
-                axs[i,j].set_title(titles[j], size=fs) 
+                axs[i,j+1].set_title(titles[j], size=fs) 
             else:
                 diff = np.squeeze(ds[i][vars2plt[1]] - ds[i][vars2plt[0]])
-                plt_diff = axs[i,j].pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
+                plt_diff = axs[i,j+1].pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
                                          transform=proj_data, **kwargs)
-                axs[i,j].set_title(f"Difference between {labels[i]} and groundtruth", size=fs)
+                axs[i,j+1].set_title(f"Difference between {labels[i]} and groundtruth", size=fs)
             
             # custom plot apparance
-            axs[i,j] = decorate_plot(axs[i,j], extent=extent, fs=fs)
+            axs[i,j+1] = decorate_plot(axs[i,j+1], extent=extent, fs=fs)
     
     # add colorbars
-    cbar = fig.colorbar(plt_data, ax=axs[0:len(ds),0:2], orientation="vertical", shrink=cbar_shrink,
-            pad=-0.02, ticks=lvl[1::2], fraction=0.02)
+    cbar = fig.colorbar(plt_data, ax=axs[0:len(ds),1:3], orientation="vertical", shrink=cbar_shrink,
+            pad=-0.03, ticks=lvl[1::2], fraction=0.02)
     cbar.ax.tick_params(labelsize=fs-2)
     
-    cbar_diff = fig.colorbar(plt_diff, ax=axs[0:len(ds)], orientation="vertical", shrink=cbar_shrink,
+    cbar_diff = fig.colorbar(plt_diff, ax=axs[0:len(ds)], orientation="vertical", shrink=cbar_shrink*0.5,
                              pad=0.02, ticks=lvl_diff[1::2], fraction=0.02)
     cbar_diff.ax.tick_params(labelsize=fs-2)
 
