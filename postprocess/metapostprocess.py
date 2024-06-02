@@ -54,7 +54,7 @@ def convert_date_time_to_underscore_format(month_date_hour_dict):
 
     return strf_format,text
 
-def read_all_line_plots(config : Config, uncertainty = False,**kwargs):
+def line_plots(config : Config, uncertainty = False,**kwargs):
     nc_files_mean  = []
     for model in config.models:
         model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","metric_files")
@@ -81,7 +81,7 @@ def read_all_line_plots(config : Config, uncertainty = False,**kwargs):
     varname = config.variable
     plot_metric_line(mean_array,array_up,array_down,labels,metric_dict,plt_fname,varname,show=True,**kwargs)
 
-def read_box_plot(config,ref_model,**kwargs):
+def box_plot(config,ref_model,**kwargs):
 
     assert(ref_model in config.models)
 
@@ -103,7 +103,7 @@ def read_box_plot(config,ref_model,**kwargs):
     plot_skills(data.T,plt_fname,savefig=False,show=True,labels=modified_labels,metric= config.metric,**kwargs)
 
 
-def read_files_for_model_comparison(config):
+def model_comparison_plot(config):
     file_paths = []
     variable = config.variable
     for model in config.models:
@@ -135,7 +135,7 @@ def read_files_for_model_comparison(config):
     plot_comparison_maps(data_array,"compare_plot",savefig=False,show=True,models=config.models)
 
 
-def read_energy_plots(config,var_info,**kwargs):
+def energy_plot(config,var_info,**kwargs):
     nc_files_spectral = []
     for model in config.models:
         model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","spectral_analysis")
