@@ -511,7 +511,7 @@ def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)",
         fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
-def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
+def plot_power_spectra(ds_ps: Union[xr.Dataset,List[xr.Dataset]], var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
     """
     Plots power spectrum.
     :param ds_ps: Dataset providing power spectrum of experiments as DataArrays
@@ -527,6 +527,7 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
                      - "fs": font size of labels, default: 16
                      - other valid arguments of ax.plot
     """
+
     # auxiliary variables
     exps = list(ds_ps.data_vars)
     nexps = len(exps)
@@ -535,8 +536,10 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     # get some plot parameters
     linestyle = kwargs.pop("linestyle", "-")
     lw = kwargs.pop("linewidth", 2.)
-    cols = kwargs.pop("colors", nexps*["blue"])
+    cols = kwargs.pop("colors", nexps*["blue","red","green","brown"])
     fs = kwargs.pop("fs", 16)
+    savefig = kwargs.pop("savefig",True)
+    show = kwargs.pop("show",False)
     
     fig, (ax) = plt.subplots(1, 1)#, figsize=(12, 8))
     for i, exp in enumerate(exps):
@@ -553,11 +556,15 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
     ax.legend(fontsize=fs-2)
     
-    # save plot and close figure
-    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-    print(f"Save plot in file '{plt_fname}'")
-    plt.tight_layout()
-    fig.savefig(plt_fname)
+    if show:
+        plt.show()
+
+    if savefig:
+        # save plot and close figure
+        plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+        print(f"Save plot in file '{plt_fname}'")
+        plt.tight_layout()
+        fig.savefig(plt_fname)
     plt.close(fig)
 
 def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, opt: dict = {}):

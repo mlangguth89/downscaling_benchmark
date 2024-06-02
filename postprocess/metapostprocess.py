@@ -10,13 +10,12 @@ __author__ = "Ankit Patnala"
 __email__ = "a.patnala@fz-juelich.de"
 __date__ = "2024-05-16"
 __update__ = "2024-05-16"
-
 import xarray as xr
 import numpy as np
 
 import os
 
-from plotting import plot_metric_line,plot_skills,plot_comparison_maps
+from plotting import plot_metric_line,plot_skills,plot_comparison_maps,plot_power_spectra
 
 class Config:
     def __init__(self,base_folder,variable,models,seasons,metric,**kwargs):
@@ -134,4 +133,31 @@ def read_files_for_model_comparison(config):
         data_array.append(dataset)
 
     plot_comparison_maps(data_array,"compare_plot",savefig=False,show=True,models=config.models)
+
+
+def read_energy_plots(config,var_info,**kwargs):
+    nc_files_spectral = []
+    for model in config.models:
+        model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","spectral_analysis")
+        nc_files_spectral.append(os.path.join(model_path,f"{config.variable}_power_spectrum_{config.seasons}.nc"))
+
+    datasets_ps = []
+    for i,dataset in enumerate(nc_files_spectral):
+        ds = xr.open_dataset(dataset)
+        if i==0:
+            ds_ref = xr.Dataset(data_vars={"reference":ds[f"{config.variable}_ref"]},
+                    coords={'wavenumber':ds['wavenumber']})
+            datasets_ps.append(ds_ref)
+            del ds_ref
+        ds = xr.Dataset(data_vars={f"{config.models[i]}":ds[f"{config.variable}_fcst"]},
+                coords={'wavenumber':ds['wavenumber']})
+        datasets_ps.append(ds)
+
+    datasets_ps = xr.merge(datasets_ps)
+
+    plot_power_spectra(datasets_ps,var_info,['reference']+config.models,"spectral_energy",savefig=False,show=True,**kwargs)
+
+
+
+
 
