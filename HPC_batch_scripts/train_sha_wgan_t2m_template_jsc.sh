@@ -50,10 +50,10 @@ fi
 
 # data-directories
 # Adapt accordingly to your dataset
-indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/all_files/
+indir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/without_snow/
 outdir=${BASE_DIR}/trained_models/
-js_model_conf=${BASE_DIR}/config/config_sha_wgan.json
-js_ds_conf=${BASE_DIR}/config/config_ds_t2m.json
+js_model_conf=${BASE_DIR}/config/models/config_sha_wgan.json
+js_ds_conf=${BASE_DIR}/config/datasets/config_ds_t2m.json
 js_norm=${indir}/norm.json
 
 model=sha_wgan
