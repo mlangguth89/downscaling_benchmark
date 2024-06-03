@@ -54,7 +54,7 @@ def convert_date_time_to_underscore_format(month_date_hour_dict):
 
     return strf_format,text
 
-def line_plots(config : Config, uncertainty = False,**kwargs):
+def score_line_plots(config : Config, uncertainty = False,**kwargs):
     nc_files_mean  = []
     for model in config.models:
         model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","metric_files")
@@ -77,11 +77,11 @@ def line_plots(config : Config, uncertainty = False,**kwargs):
 
     labels = kwargs.pop("labels",config.models)
     metric_dict = kwargs.pop("metric_dict",None)
-    plt_fname = kwargs.pop("plt_fname","metric_line")
+    plt_fname = kwargs.pop("plt_fname", "metric_line")
     varname = config.variable
-    plot_metric_line(mean_array,array_up,array_down,labels,metric_dict,plt_fname,varname,show=True,**kwargs)
+    plot_metric_line(mean_array, array_up, array_down, labels,metric_dict, plt_fname,varname,show=True,**kwargs)
 
-def box_plot(config,ref_model,**kwargs):
+def skill_box_plot(config,ref_model,**kwargs):
 
     assert(ref_model in config.models)
 
@@ -97,10 +97,12 @@ def box_plot(config,ref_model,**kwargs):
     mean_array_boot = []
     for nc_file_mean in nc_files_mean:
         data_array = xr.open_dataset(nc_file_mean)
-        mean_array_boot.append(np.expand_dims(np.mean(data_array[f"{config.metric}_mean_boot"]-ref_data[f"{config.metric}_mean_boot"],axis=0),axis=0))
+        # To-Do: 
+        # Set A_perf correctly rather than assuming zero as perfect score
+        mean_array_boot.append(np.expand_dims(np.mean(1 - data_array[f"{config.metric}_mean_boot"]/ref_data[f"{config.metric}_mean_boot"]  ,axis=0),axis=0))
     data = np.concatenate(mean_array_boot)
     plt_fname = kwargs.pop("plt_fname","box_plot")
-    plot_skills(data.T,plt_fname,savefig=False,show=True,labels=modified_labels,metric= config.metric,**kwargs)
+    plot_skills(data.T,plt_fname,labels=modified_labels,metric= config.metric,**kwargs)
 
 
 def model_comparison_plot(config):
@@ -135,7 +137,7 @@ def model_comparison_plot(config):
     plot_comparison_maps(data_array,"compare_plot",savefig=False,show=True,models=config.models)
 
 
-def energy_plot(config,var_info,**kwargs):
+def spectra_plot(config,var_info,**kwargs):
     nc_files_spectral = []
     for model in config.models:
         model_path = os.path.join(config.base_folder,f"{model}_benchmark_{config.variable}","spectral_analysis")
@@ -155,7 +157,7 @@ def energy_plot(config,var_info,**kwargs):
 
     datasets_ps = xr.merge(datasets_ps)
 
-    plot_power_spectra(datasets_ps,var_info,['reference']+config.models,"spectral_energy",savefig=False,show=True,**kwargs)
+    plot_power_spectra(datasets_ps,var_info,['reference']+config.models,"spectral_energy",**kwargs)
 
 
 

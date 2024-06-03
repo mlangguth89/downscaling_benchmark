@@ -153,8 +153,8 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     
     labels = kwargs.pop("models",None)
 
-    savefig = kwargs.pop("savefig",True)
-    show = kwargs.pop("show",False)
+    savefig = kwargs.pop("savefig", True)
+    show = kwargs.pop("show", False)
 
     if not isinstance(ds,list):
         ds = [ds]
@@ -344,17 +344,17 @@ def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Unio
         
   
     # get some plot parameters
-    linestyle = kwargs.get("linestyle", ["k-", "b-","o-","r-"])
-    err_col = kwargs.get("error_color", ["grey", "blue","green","red"])
+    linestyle = kwargs.pop("linestyle", ["k-", "b-", "y-","r-"])
+    err_col = kwargs.pop("error_color", ["grey", "blue", "orange", "red"])
     val_range = kwargs.pop("value_range", (0., 4.))
     fs = kwargs.pop("fs", 16)
     ref_line = kwargs.pop("ref_line", None)
     ref_linestyle = kwargs.pop("ref_linestyle", "k--")
-    show = kwargs.pop("show",True)
-    save = kwargs.pop("savefig",False)
+    show = kwargs.pop("show", True)
+    save = kwargs.pop("savefig", True)
 
     fig, (ax) = plt.subplots(1, 1)
-    for i,exp in enumerate(data):
+    for i ,exp in enumerate(data):
         ax.plot(data[i][x_coord].values, data[i].values, linestyle[i], label=model_name[i], **kwargs)
         if data_up is not None:
             ax.fill_between(data[i][x_coord].values, data_down[i].values, data_up[i].values, facecolor=err_col[i],
@@ -368,7 +368,7 @@ def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Unio
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
-    ax.legend(fontsize=fs-2,loc="upper right")
+    ax.legend(fontsize=fs-3, loc="upper right")
 
     if show:
         plt.show()
@@ -423,7 +423,6 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     # create box whiskers plot with matplotlib
     fig, ax = plt.subplots(figsize=(12, 8))
     
-    print(labels)
     bp = plt.boxplot(data, widths=widths, labels=labels, patch_artist=True, **plt_kwargs)
     
     # modify fliers
@@ -490,11 +489,11 @@ def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)",
     #all external decorartive arguments
     title = kwargs.pop("title","")
     colors = kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue']) 
-    show = kwargs.pop("show",True)
-    savefig = kwargs.pop("savefig",False)
+    show = kwargs.pop("show", True)
+    save = kwargs.pop("savefig", True)
 
     ax.set_title(title)
-    ax.set_ylabel(f"Skill {metric}", fontsize=fs)
+    ax.set_ylabel(f"Skill {metric.upper()}", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
 
     for patch, color in zip(bp['boxes'], colors):
@@ -507,7 +506,7 @@ def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)",
     plt.rcParams['text.usetex'] = True
     if show:
         plt.show()
-    if savefig:
+    if save:
         fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
