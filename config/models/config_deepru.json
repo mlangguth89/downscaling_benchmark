@@ -1,0 +1,10 @@
+{
+  "nepochs": 50,
+  "lr": 1e-03,
+  "lr_end": 1e-06,
+  "decay_start": 7,
+  "decay_end": 30,
+  "lr_decay": true,
+  "loss_func": "mse"
+}
+
