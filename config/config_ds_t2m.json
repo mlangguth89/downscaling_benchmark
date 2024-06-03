@@ -5,5 +5,5 @@
   "var_tar2in": "hsurf_tar",
   "varname_z": "hsurf_tar",
   "predictands": ["t_2m_tar"],
-  "predictors": ["u10_in", "v10_in", "t2m_in", "blh_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in", "fr_land_tar"]
+  "predictors": ["t2m_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in", "fr_land_tar"]
 }
