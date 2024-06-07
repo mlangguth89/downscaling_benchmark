@@ -86,6 +86,8 @@ class ERA5_Data_Loader(object):
                 out = self.download_sfc_data(req_dict[req_key], data_dir, start, end, format, **kwargs)
             elif req_key == "ml":
                 out = self.download_ml_data(req_dict[req_key], data_dir, start, end, format, **kwargs)
+            elif req_key = "pres":
+                out = self.download_pres_data(req_dict[req_key], data_dir, start, end, format, **kwargs)
 
             # check if all requests were successful
             _ = self.check_request_result(out)
@@ -218,6 +220,68 @@ class ERA5_Data_Loader(object):
         func_logger.info(f"Finished downloading ERA5 model-level data.")
 
         return req_results
+    
+    def download_pres_data(self, var_dict, data_dir, start, end, format, **kwargs):
+        """
+        Download ERA5 data for multiple pressure levels.
+        To obtain the varlist, please refer to the CDS API documentation at https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-pressure-levels?tab=form
+        :param var_dict: dictionary of variables to download for each pressure level
+        :param data_dir: directory where output data files will be stored
+        :param start: start year of data request
+        :param end: end year of data request
+        :param format: format of downloaded data (netcdf or grib)
+        :param kwargs: additional keyword arguments (options: area, month_start, month_end)
+        :return: output of multiprocessing pool
+        """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.{self.download_pres_data.__name__}")
+
+        # get additional keyword arguments
+        area = kwargs.get("area", self.area)
+        month_start = kwargs.get("month_start", self.month_start)
+        month_end = kwargs.get("month_end", self.month_end)
+
+        vars = var_dict.keys()
+        # ensure that data is downloaded for all levels (All-together approach -> overhead: additional download of data for levels that are not needed)
+        collector = []
+        _ = [collector.extend(pl_list) for pl_list in var_dict.values()]
+        all_lvls = sorted([str(lvl) for lvl in set(collector)])
+
+        # create base request dictionary (None-values will be set dynamically)
+        req_dict_base = {"product_type": "reanalysis", "format": f"{format}",
+                        "variable": to_list(vars),
+                        "pressure_level": "/".join(all_lvls),
+                        "day": None, "month": None, "time": [f"{h:02d}" for h in range(24)], "year": None,
+                        "area": area}
+
+        # initialize multiprocessing pool
+        func_logger.info(f"Downloading ERA5 pressure-level data for variables {', '.join(vars)} with {self.nworkers} workers.")
+        pool = Pool(self.nworkers)
+        
+        # initialize dictionary for request results
+        req_results = {}
+
+        # create data requests for each month
+        for year in range(start, end+1):
+            for month in range(month_start, month_end+1):
+                # get last day of month
+                last_day = pd.Timestamp(year, month, 1) + pd.offsets.MonthEnd(1)
+                req_dict = req_dict_base.copy()
+                req_dict["date"] = f"{year}-{month:02d}-01/to/{year}-{month:02d}-{last_day.day}" 
+                fout = f"era5_pres_{year}-{month:02d}.{format}"
+
+                func_logger.debug(f"Downloading ERA5 pressure-level data for {year}-{month:02d} to {os.path.join(data_dir, fout)}")
+
+                req_results[fout] = pool.apply_async(self.cds.retrieve, args=("reanalysis-era5-pressure-levels", req_dict,
+                                                     os.path.join(data_dir, fout))) 
+        # run and close multiprocessing pool
+        pool.close()
+        pool.join()
+
+        func_logger.info(f"Finished downloading ERA5 pressure-level data.")
+        
+        return req_results                
+
     
     def check_request_result(self, results_dict):
         """
