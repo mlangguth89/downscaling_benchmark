@@ -140,29 +140,34 @@ class AbstractPreprocessing(ABC):
         return target_dir
 
     @staticmethod
-    def merge_two_netcdf(nc1: str, nc2: str, nc_tar: str, merge_dim: str ="time"):
+    def merge_multiple_netcdf(nc_files: list, nc_tar: str, merge_dim: str = "time"):
         """
-        Merge datasets from two netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in both
-        datasets must not coincide, but can overlap. The data will then be merged for the intersection of both datums.
-        :param nc1: path to first netCDF-file to merge; dataset must include dimension merge_dim
-        :param nc2: path to second netCDF-file to merge; dataset must include dimension merge_dim
-        :param merge_dim: name of dimension along which datsets will be merged
-        :param nc_tar: path to netCDf-file of merged dataset
+        Merge datasets from multiple netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in 
+        all datasets must not coincide, but can overlap. The data will then be merged for the intersection of all datums.
+        
+        :param nc_files: list of paths to netCDF-files to merge; each dataset must include dimension merge_dim
+        :param nc_tar: path to netCDF-file of merged dataset
+        :param merge_dim: name of dimension along which datasets will be merged
         :return stat: status if merging was successful
         """
-        ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
+        datasets = [xr.open_dataset(nc) for nc in nc_files]
+        
+        # Collect the intersection of all time dimensions
+        joint_times = set(datasets[0][merge_dim].values)
+        for ds in datasets[1:]:
+            joint_times &= set(ds[merge_dim].values)
+        
+        joint_times = sorted(list(joint_times))
 
-        times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
-        joint_times = sorted(list(set(times1) & set(times2)))
-
-        stat = True
-        #try:
-        if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
-        ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
+        if not joint_times:
+            raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
+        
+        # Select the intersection of the datasets
+        ds_merged = xr.merge([ds.sel({merge_dim: joint_times}) for ds in datasets])
+        
+        # Save the merged dataset to a new netCDF file
         ds_merged.to_netcdf(nc_tar)
-        #except:
-        #    stat = False
-
+        
         return stat
 
     @staticmethod

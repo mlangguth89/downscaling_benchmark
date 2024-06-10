@@ -410,7 +410,7 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
             predictors.append("2t")                 # to ensure subsequent renaming
 
         # merge input and target data
-        stat = PreprocessERA5toIFS.merge_two_netcdf(file_in_hres, file_tar, final_file)
+        stat = PreprocessERA5toIFS.merge_multiple_netcdf([file_in_hres, file_tar], final_file)
         # cdo.run([file_in_hres, file_tar, final_file], OrderedDict([("-merge", "")]))
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
