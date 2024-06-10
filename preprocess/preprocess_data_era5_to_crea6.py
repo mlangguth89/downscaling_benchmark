@@ -188,7 +188,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # check if all values are list of numbers
             if not all([all([isinstance(v, (int, float)) for v in mlvars[k]]) for k in mlvars.keys()]):
                 raise TypeError("All values of mlvars must be lists of numbers.")
-            
+
         if plvars:
             # plvars must be a dictionary with variable names as keys and model-levels as values
             if not isinstance(plvars, dict):
@@ -280,7 +280,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         # process multi-level variables of ERA5 (predictors)
         if self.era5_ml_vars and not lfail:
             logger.info(f"Process model level variables for {year_month_str} of ERA5.")
-            nwarn, file2merge = self.run_preproc_func(self.process_era5_ml, [era5_dir, year_month, dest_dir, "ml"],
+            nwarn, file2merge = self.run_preproc_func(self.process_era5_vl, [era5_dir, year_month, dest_dir, "ml"],
                                                       {}, logger, nwarn, max_warn)
             
             if file2merge:
@@ -288,9 +288,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             else:
                 lfail = True   # skip month if some data is missing
 
+        # process pressure-level variables of ERA5 (predictors)
         if self.era5_pl_vars and not lfail:
             logger.info(f"Process pressure level variables for {year_month_str} of ERA5.")
-            nwarn, file2merge = self.run_preproc_func(self.process_era5_ml, [era5_dir, year_month, dest_dir, "pl"],
+            nwarn, file2merge = self.run_preproc_func(self.process_era5_vl, [era5_dir, year_month, dest_dir, "pl"],
                                                       {}, logger, nwarn, max_warn)
 
         monthly_file = os.path.join(dest_dir, f"preproc_era5_{year_month_str}.nc")
@@ -302,7 +303,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 os.rename(filelist[0], monthly_file)
             else:
                 logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(monthly_file))
-                cdo.run(filelist + [monthly_file], OrderedDict([("merge", "")]))
+                #cdo.run(filelist + [monthly_file], OrderedDict([("merge", "")]))
+                _ = self.merge_multiple_netcdf(filelist, monthly_file)
         
         if os.path.isfile(monthly_file):
             remove_files(filelist, lbreak=True)
@@ -423,7 +425,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return fera5_now
     
-    def process_era5_ml(self, dirin_era5: str, year_month, tmp_dir: str, vl_type: str) -> str:
+    def process_era5_vl(self, dirin_era5: str, year_month, tmp_dir: str, vl_type: str) -> str:
         """
         Process multi-level data from ERA5 files by renaming variables
         :param dirin_era5: input directory of ERA5-dataset 
@@ -453,7 +455,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         vlvars_str = ",".join(vl_vars_dict.keys())
 
         # split levels into files
-        cdo.run([vl_file, tmp_patt], OrderedDict([("--reduce_dim", ""), ("-splitlevel", ""), ("-selname", vlvars_str)]))
+        cdo.run([vl_file, tmp_patt], OrderedDict([("-L", ""), ("--reduce_dim", ""), ("-splitlevel", ""), ("-selname", vlvars_str)]))
 
         # rename variables in each file
         ftmp_list = []
@@ -472,7 +474,8 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # merge all files
         ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_{vl_type}.nc")
-        cdo.run([f"{tmp_patt}*", ftmp_era5], OrderedDict([("-O", ""), ("merge", "")]))
+        _ = self.merge_multiple_netcdf(ftmp_list, ftmp_era5)
+        # cdo.run([f"{tmp_patt}*", ftmp_era5], OrderedDict([("-O", ""), ("merge", "")]))
 
         # remove temporary files
         remove_files(ftmp_list, lbreak=False)
@@ -577,7 +580,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         cdo.run([file_in_coa, file_in_hres], OrderedDict([("-remapbil", gdes_tar)]))
 
         # merge input and target data
-        stat = self.merge_two_netcdf(file_in_hres, file_tar, final_file)
+        stat = self.merge_multiple_netcdf([file_in_hres, file_tar], final_file)
 
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
