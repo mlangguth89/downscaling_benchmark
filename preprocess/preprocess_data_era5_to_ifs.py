@@ -10,7 +10,7 @@ __update__ = "2022-08-22"
 # doc-string
 """
 Main script to preprocess ERA5 data (provided on a 0.3°-grid) for first real downscaling application. 
-The target of the downscaling will be IFS HRES data on a 0.1°-grid as in preprocess_data_unet_tier1.py.
+The target of the downscaling will be IFS HRES data on a 0.1°-grid as in the MAELSTROM Tier-1 dataset.
 Contrarily to the previous, simplified approach, no slicing regarding daytime and season will be performed. 
 Thus, hourly input data are produced from the ERA5-dataset. For the output, hourly target data, 
 IFS forecasts with lead time 6 to 17 hours is used. 
@@ -27,7 +27,6 @@ import pandas as pd
 from collections import OrderedDict
 #from tfrecords_utils import IFS2TFRecords
 from abstract_preprocess import AbstractPreprocessing
-from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1, CDOGridDes
 from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA, NCWA
 from other_utils import to_list, last_day_of_month, flatten, remove_files
