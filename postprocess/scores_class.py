@@ -9,12 +9,13 @@ Class for calculating scores.
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-Xx-XX"
-__update__ = "2024-03-25"
+__update__ = "2024-06-11"
 
 from typing import List
 import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
+from evaluation_utils import get_spectrum
 
 class Scores:
     """
@@ -33,7 +34,7 @@ class Scores:
                              "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
                              "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
                              "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
-                             "me_std": self.calc_mestd}
+                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,}
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
@@ -449,11 +450,45 @@ class Scores:
         seeps_values = seeps_values_all.mean(dim=self.avg_dims)
 
         return seeps_values
+    
+    def calc_ralsd(self, lonlat_dims: List[str] = ["rlon", "rlat"], lcutoff: bool = True, re: float = 6371.e3):
+        """
+        Calculate radially averaged log-spectral distance (RALSD) between forecast and reference data (see Eq. 8 in Harris et al., 2022, DOI: 10.1029/2022MS003120).
+        Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
+        :param lonlat_dims: list of longitude and latitude dimensions
+        :param lcutoff: flag to apply low-pass filter to spectral data
+        :param re: radius of the spherical Earth
+        :return: RALSD values
+        """
+
+        # perform spectral analysis for reference and forecast data
+        ps_ref = get_spectrum(self.data_ref, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+        ps_fcst = get_spectrum(self.data_fcst, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+
+        # get number of bins...
+        nbins = np.shape(ps_ref)[-1]
+
+        # ...and calculate RALSD
+        ralsd = np.sqrt(np.sum(np.square(10.*np.log10(ps_ref/ps_fcst)), axis=-1)/nbins)
+
+        # convert to xarray DataArray
+        dims = [dim for dim in self.data_dims if dim not in lonlat_dims]
+        ralsd = xr.DataArray(ralsd, coords={dim: self.data_fcst[dim] for dim in dims}, dims=dims)
+
+        avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
+
+        # apply further averaging if requested
+        if len(avg_dims) > 0:
+            ralsd = ralsd.mean(dim=avg_dims)
+
+        return ralsd
+
 
     def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
+        Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
         :param scalar_field: scalar field as data array with latitude and longitude as coordinates
         :param order: order of spatial differential operator
         :param r_e: radius of the sphere
