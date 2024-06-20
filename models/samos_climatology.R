@@ -21,17 +21,22 @@ library(stars.ncdf)
 library(logger)
 library(R.utils)
 options(future.globals.maxSize = 30000 * 1024^2)
+set.seed(42)
+
 
 args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     defaults = c(
-        "in" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset",
+        "in" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/with_snow/",
         "out" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m"
     ))
 
+# load tile plan from models/samos_tiling.R
+tiles <- readRDS(file.path(args[["out"]], "climatology", "tiles.rds"))
+
 # TODO: this can easily be parallelized if RAM allows using furrr by replacing calls to `map` with `future_map` and uncommenting the lines below
-library(future)
-library(furrr)
-plan(multicore, workers = 20)
+# library(future)
+# library(furrr)
+# plan(multicore, workers = 20)
 
 # write selected datasets provided as commandline arguments to object, calculate for both ERA5 and COSMO-REA6 if none are provided
 datasets <- args[["dataset"]]
@@ -54,12 +59,12 @@ reshape_results <- function(x, dat) {
 
 # main
 
-dothis <- function(lead_time, dataset, variable = "t2m") {
+dothis <- function(lead_time, dataset, tile_idx, variable = "t2m") {
     lead_time <- hms(hours = lead_time)
     tryCatch(
     {
 
-        log_info("Start calculation for lead time {lead_time}.")
+        log_info("Start calculation for lead time {lead_time} and tile {tile_idx}.")
         suffix <- switch(dataset,
             "ERA5" = "_in",
             "COSMO-REA6" = "_tar"
@@ -67,20 +72,23 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
 
         # load data
         in_fls <- dir(args[["in"]], ".*train.*\\.nc$", full.names = TRUE)
-        dat <- read_stars(in_fls, proxy = TRUE, sub = paste0(variable, suffix)) # loaded as proxy
+        dat <- read_stars(in_fls, proxy = TRUE, sub = paste0(variable, suffix), RasterIO = tiles[tile_idx, ]) # loaded as proxy
+
+        time_coord <- st_get_dimension_values(dat,  "time")
+        time_lead_time <- time_coord[as_hms(time_coord) == lead_time]
+        time_sub <- sample(time_lead_time, length(time_lead_time) * 0.2)
 
         dat <- dat %>%
-            .[ , , , which(as_hms(time) == lead_time)] %>% # would be more elegant with dplyr::filter, but there lead_time is not found
+            .[ , , , which(time_coord %in% time_sub)] %>% # would be more elegant with dplyr::filter, but there lead_time is not found
             st_as_stars() %>% # load to memory
             units::drop_units()
         st_crs(dat) <- 4326
 
         log_info("Data loaded.")
 
-        # extract time coordinate and derive objects
-        timestamps <- st_get_dimension_values(dat, "time")
-        year <- year(timestamps)
-        yday <- yday(timestamps)
+        # derive components from timestamps 
+        year <- year(time_coord)
+        yday <- yday(time_coord)
 
         # model components
         predictors <- tibble(
@@ -100,11 +108,11 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         # fit model per pixel
         log_info("Start fit of climatology models.")
         mdls <- mdls |> 
-            mutate(mdl = future_map2(i, j, ~striptease(crch(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend | 
+            mutate(mdl = map2(i, j, ~striptease(crch(dat[[1]][.x, .y, ] ~ sin1 + cos1 + sin2 + cos2 + trend | 
                             sin1 + cos1 + sin2 + cos2 + trend, data = predictors,
                             dist = 'gaussian')), .progress = interactive()))
 
-        saveRDS(mdls, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_climatology-models.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
+        saveRDS(mdls, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_climatology-models_tile{tile_idx}.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
         log_info("Models fittet and saved to disk.")
 
         # fill predicted mu and sd to stars object
@@ -114,25 +122,25 @@ dothis <- function(lead_time, dataset, variable = "t2m") {
         prediction$sd_modeled <- reshape_results(map(mdls$mdl, ~predict(.x, newdata = predictors, type = "scale"), .progress = interactive()), dat)
 
         st_crs(prediction) <- 4326
-        write_stars_ncdf(prediction[1], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_mu-prediction.nc")))
-        write_stars_ncdf(prediction[2], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_sd-prediction.nc")))
+        write_stars_ncdf(prediction[1], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_mu-prediction_tile{tile_idx}.nc")))
+        write_stars_ncdf(prediction[2], file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_sd-prediction_tile{tile_idx}.nc")))
         log_info("Predicted mu and sd, based on climatology model, saved to disk.")
 
         
         # calculate residuals
         residuals <- (dat - prediction["mu_modeled"]) / prediction["sd_modeled"]
-        write_stars_ncdf(residuals, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_residuals.nc")))
+        write_stars_ncdf(residuals, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_residuals_tile{tile_idx}.nc")))
         log_info("Residuals saved to disk.")
 
-        log_info("Calculation for lead time {lead_time} was successful.")
+        log_info("Calculation for lead time {lead_time} and tile {tile_idx} was successful.")
     },
-        error = function(e) {log_error("Calculation of climatology and residuals for lead time {lead_time} failed: "); print(e)}
+        error = function(e) {log_error("Calculation of climatology and residuals for lead time {lead_time} and tile {tile_idx} failed: {e}")}
     )}
 
 doall_dataset <- function(dataset) {
     log_info("START iterations to calculate climatologies and residuals from {toupper(dataset)} data.")
     lead_times <- seq(0, 21, by = 3)
-    walk(lead_times, ~dothis(lead_time = .x, dataset = dataset, variable = switch(dataset, "ERA5" = "t2m", "COSMO-REA6" = "t_2m")))
+    walk(lead_times, ~dothis(lead_time = .x, dataset = dataset, tile_idx = as.integer(args[["tile"]]), variable = switch(dataset, "ERA5" = "t2m", "COSMO-REA6" = "t_2m")))
     log_info("END iterations to calculate climatologies and residuals from {toupper(dataset)} data.")
 }
 
