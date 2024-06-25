@@ -27,11 +27,12 @@ set.seed(42)
 args <- commandArgs(trailingOnly = TRUE, asValues = TRUE,
     defaults = c(
         "in" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/with_snow/",
-        "out" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m"
+        "out" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m",
+        "models" = "/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/trained_models/samos_benchmark_t2m"
     ))
 
 # load tile plan from models/samos_tiling.R
-tiles <- readRDS(file.path(args[["out"]], "climatology", "tiles.rds"))
+tiles <- readRDS(file.path(args[["models"]], "climatology", "tiles.rds"))
 
 # TODO: this can easily be parallelized if RAM allows using furrr by replacing calls to `map` with `future_map` and uncommenting the lines below
 # library(future)
@@ -111,7 +112,7 @@ dothis <- function(lead_time, dataset, tile_idx, variable = "t2m") {
                             sin1 + cos1 + sin2 + cos2 + trend, data = predictors,
                             dist = 'gaussian')), .progress = interactive()))
 
-        saveRDS(mdls, file.path(args[["out"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_climatology-models_tile{tile_idx}.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
+        saveRDS(mdls, file.path(args[["models"]], glue("climatology/t2m_{tolower(dataset)}_{lead_time}_climatology-models_tile{tile_idx}.rds"))) # TODO: this takes quite some time (and space on disk), probably its better to only store coefficients instead of whole models
         log_info("Models fittet and saved to disk.")
 
         # fill predicted mu and sd to stars object

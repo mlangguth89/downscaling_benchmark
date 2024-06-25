@@ -21,5 +21,6 @@ export R_LIBS_USER=/p/project/deepacf/maelstrom/mayer3/R:$R_LIBS_USER
 # declare directory-variables
 export source_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/with_snow
 export destination_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/results/samos_benchmark_t2m
+export models_dir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/trained_models/samos_benchmark_t2m
 
-srun Rscript $(pwd)/models/samos_climatology.R --in ${source_dir} --out ${destination_dir} --dataset "ERA5" --tile ${SLURM_ARRAY_TASK_ID} # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
+srun Rscript $(pwd)/models/samos_climatology.R --in ${source_dir} --out ${destination_dir} --models ${models_dir} --dataset "ERA5" --tile ${SLURM_ARRAY_TASK_ID} # TODO: dataset is currently hard coded for testing as calculating both in one go may exceed walltime
