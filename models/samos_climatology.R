@@ -76,10 +76,9 @@ dothis <- function(lead_time, dataset, tile_idx, variable = "t2m") {
 
         time_coord <- st_get_dimension_values(dat,  "time")
         time_lead_time <- time_coord[as_hms(time_coord) == lead_time]
-        time_sub <- sample(time_lead_time, length(time_lead_time) * 0.2)
 
         dat <- dat %>%
-            .[ , , , which(time_coord %in% time_sub)] %>% # would be more elegant with dplyr::filter, but there lead_time is not found
+            .[ , , , which(time_lead_time %in% time_coord)] %>% # would be more elegant with dplyr::filter, but there lead_time_time is not found
             st_as_stars() %>% # load to memory
             units::drop_units()
         st_crs(dat) <- 4326
@@ -87,8 +86,8 @@ dothis <- function(lead_time, dataset, tile_idx, variable = "t2m") {
         log_info("Data loaded.")
 
         # derive components from timestamps 
-        year <- year(time_coord)
-        yday <- yday(time_coord)
+        year <- year(time_lead_time)
+        yday <- yday(time_lead_time)
 
         # model components
         predictors <- tibble(
