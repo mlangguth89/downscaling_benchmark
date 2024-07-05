@@ -168,7 +168,7 @@ class AbstractPreprocessing(ABC):
         # Save the merged dataset to a new netCDF file
         ds_merged.to_netcdf(nc_tar)
         
-        return stat
+        return True
 
     @staticmethod
     def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
