@@ -347,6 +347,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if self.crea6_sfc_vars:
             for var in self.crea6_sfc_vars:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
                 dfile_in = os.path.join(dirin, "2D", var.upper(), f"{var.upper()}.2D.{date_str2}.grb")
+                # check if grib- or netcdf-file is available
+                if not os.path.isfile(dfile_in):
+                    dfile_in = dfile_in.replace(".grb", ".nc")
+
+                if not os.path.isfile(dfile_in):
                 nwarn, file2merge = self.run_preproc_func(self.process_crea6_2d, [dfile_in, dest_dir, date_str, gdes_tar],
                                                           {}, logger, nwarn, max_warn)
 
@@ -503,7 +508,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # sanity check
         if not os.path.isfile(file_2d):
-            FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+            # check if netCDF-file is alternatively available
+            file_2d = file_2d.replace(".grb", ".nc")
+            if not os.path.isfile(file_2d):
+                FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+
         # retrieve variable name back from path to file
         var = os.path.basename(os.path.dirname(file_2d))
         dfile_out = os.path.join(target_dir, f"{var}_{date_str}.nc")
