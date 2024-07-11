@@ -293,6 +293,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             logger.info(f"Process pressure level variables for {year_month_str} of ERA5.")
             nwarn, file2merge = self.run_preproc_func(self.process_era5_vl, [era5_dir, year_month, dest_dir, "pl"],
                                                       {}, logger, nwarn, max_warn)
+            if file2merge:
+                filelist.append(file2merge)
+            else:
+                lfail = True   # skip month if some data is missing
 
         monthly_file = os.path.join(dest_dir, f"preproc_era5_{year_month_str}.nc")
 
@@ -303,7 +307,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 os.rename(filelist[0], monthly_file)
             else:
                 logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(monthly_file))
-                #cdo.run(filelist + [monthly_file], OrderedDict([("merge", "")]))
                 _ = self.merge_multiple_netcdf(filelist, monthly_file)
         
         if os.path.isfile(monthly_file):
@@ -347,11 +350,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if self.crea6_sfc_vars:
             for var in self.crea6_sfc_vars:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
                 dfile_in = os.path.join(dirin, "2D", var.upper(), f"{var.upper()}.2D.{date_str2}.grb")
-                # check if grib- or netcdf-file is available
-                if not os.path.isfile(dfile_in):
-                    dfile_in = dfile_in.replace(".grb", ".nc")
+                ## check if grib- or netcdf-file is available
+                #if not os.path.isfile(dfile_in):
+                #    dfile_in = dfile_in.replace(".grb", ".nc")
 
-                if not os.path.isfile(dfile_in):
                 nwarn, file2merge = self.run_preproc_func(self.process_crea6_2d, [dfile_in, dest_dir, date_str, gdes_tar],
                                                           {}, logger, nwarn, max_warn)
 
@@ -414,6 +416,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # choose variables of interest
         cdo.run([sf_file, ftmp_era5], OrderedDict([("-selname", ",".join(sfvars_dyn))]))
+        print(sfvars_dyn)
 
         if sfvars_stat:
             ftmp_era5_2 = os.path.join(tmp_dir, "era5_invar.nc")
@@ -472,19 +475,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # choose variables of interest
             vars_now = [var for var, vl_list in vl_vars_dict.items() if vl in vl_list]
 
-            print(vars_now)
-            self.add_varname_suffix(ftmp_era5, vars_now, f"{vl_type}{vl:d}")
-            #rename_list = [("-v", f"{var},{var}_{vl_type}{vl:d}") for var in vars_now]
-            #print(rename_list)
-            #print(OrderedDict(rename_list))
-            #ncrename.run([ftmp_era5], OrderedDict(rename_list))
-
+            self.add_varname_suffix(ftmp_era5, vars_now, f"_{vl_type}{vl:d}")
             ftmp_list.append(ftmp_era5)
 
         # merge all files
         ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_{vl_type}.nc")
         _ = self.merge_multiple_netcdf(ftmp_list, ftmp_era5)
-        # cdo.run([f"{tmp_patt}*", ftmp_era5], OrderedDict([("-O", ""), ("merge", "")]))
 
         # remove temporary files
         remove_files(ftmp_list, lbreak=False)
@@ -529,11 +525,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""),
                                                    ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
 
-        # rename varibale in resulting file (must be done in hacky manner)
-        varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
-        varname = varname.lstrip("'b").split("\\n")[0].strip()
+        # rename varibale in resulting file for grib-files where they may appear as var11 or similar (must be done in hacky manner)
+        if file_2d.endswith(".grb"):
+            varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
+            varname = varname.lstrip("'b").split("\\n")[0].strip()
 
-        ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
+            ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
 
         return dfile_out
 
@@ -607,10 +604,13 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
     @staticmethod
     def get_predictor_varnames(var_dict):
         all_varnames = list(var_dict.get("sf", []))
-        mlvars = var_dict.get("ml", {})
 
-        for mlvar in mlvars:
-            levels = var_dict["ml"].get(mlvar)
-            all_varnames += [f"{mlvar}{lvl}" for lvl in levels]
+        lvl_types = ["ml", "pl"]
+        for vl in lvl_types:
+            vlvars = var_dict.get(vl, {})
+
+            for vlvar in vlvars:
+                levels = var_dict[vl].get(vlvar)
+                all_varnames += [f"{vlvar}_{vl}{lvl}" for lvl in levels]
 
         return all_varnames
