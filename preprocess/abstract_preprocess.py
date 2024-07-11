@@ -204,12 +204,11 @@ class AbstractPreprocessing(ABC):
 
         try:
             ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))
-            stat = True
         except RuntimeError as err:
             print("Could not rename all parsed variables: {0}".format(",".join(varnames)))
             raise err
 
-        return stat
+        return True
 
     @classmethod
     def print_implement_err(cls, method):

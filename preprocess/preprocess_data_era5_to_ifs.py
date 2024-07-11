@@ -26,7 +26,7 @@ import numpy as np
 import pandas as pd
 from collections import OrderedDict
 #from tfrecords_utils import IFS2TFRecords
-from abstract_preprocess import AbstractPreprocessing
+from abstract_preprocess import AbstractPreprocessing, CDOGridDes
 from pystager_utils import PyStager
 from tools_utils import CDO, NCRENAME, NCAP2, NCKS, NCEA, NCWA
 from other_utils import to_list, last_day_of_month, flatten, remove_files

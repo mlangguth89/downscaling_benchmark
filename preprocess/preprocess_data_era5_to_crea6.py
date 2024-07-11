@@ -467,8 +467,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # choose variables of interest
             vars_now = [var for var, vl_list in vl_vars_dict.items() if vl in vl_list]
 
-            rename_list = [("-v", f"{var},{var}_{vl_type}{vl:d}") for var in vars_now]
-            ncrename.run([ftmp_era5], OrderedDict(rename_list))
+            print(vars_now)
+            self.add_varname_suffix(ftmp_era5, vars_now, f"{vl_type}{vl:d}")
+            #rename_list = [("-v", f"{var},{var}_{vl_type}{vl:d}") for var in vars_now]
+            #print(rename_list)
+            #print(OrderedDict(rename_list))
+            #ncrename.run([ftmp_era5], OrderedDict(rename_list))
 
             ftmp_list.append(ftmp_era5)
 
@@ -503,7 +507,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # sanity check
         if not os.path.isfile(file_2d):
-            FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+            # check if netCDF-file is alternatively available
+            file_2d = file_2d.replace(".grb", ".nc")
+            if not os.path.isfile(file_2d):
+                FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+        
         # retrieve variable name back from path to file
         var = os.path.basename(os.path.dirname(file_2d))
         dfile_out = os.path.join(target_dir, f"{var}_{date_str}.nc")
