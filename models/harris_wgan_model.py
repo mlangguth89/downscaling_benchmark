@@ -3,8 +3,9 @@
 Class for Harris et al 2022, conditional Wasserstein GAN model (CWGAN)
 """
 import os
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Dict
 import inspect
+from collections import OrderedDict
 import numpy as np
 import h5py
 from abstract_model_class import AbstractModelClass
@@ -14,6 +15,7 @@ from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, BatchNormalization, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
+from tensorflow.keras import backend as K
 from custom_losses import get_custom_loss
 from wgan_model import LearningRateSchedulerWGAN
 
@@ -37,7 +39,7 @@ class GeneratorHarris(AbstractModelClass):
         
     def set_model(self):
         ds_steps = self.hparams["ds_steps"]
-        filters_gen = self.hparams["filters_gen"]
+        filters_gen = self.hparams["channels_start"]
         kernel = self.hparams["kernel"]
         relu_alpha = self.hparams["relu_alpha"]
         padding = self.hparams["padding"]
@@ -114,12 +116,17 @@ class GeneratorHarris(AbstractModelClass):
             filters=1, kernel_size=(1, 1), activation="softplus", name="output"
         )(generator_output)
         print(f"Output shape: {generator_output.shape}")
-
+        
         self.model = Model(
-            inputs={"lo_res_inputs": generator_input, "hi_res_inputs": const_input, "noise_input": noise_input},
+            inputs=[generator_input, const_input, noise_input],
             outputs=generator_output,
             name="gen",
         )
+        #self.model = Model(
+        #    inputs={"lo_res_inputs": generator_input, "hi_res_inputs": const_input, "noise_input": noise_input},
+         #   outputs=generator_output,
+          #  name="gen",
+        #)
                    
     def set_compile_options(self):
         raise RuntimeError(f"Generator model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
@@ -129,10 +136,10 @@ class GeneratorHarris(AbstractModelClass):
         
     def set_hparams_default(self):
         """
-        Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
+        Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "leaky_relu",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06, "ds_steps": 4, "filters_gen": 64, "padding": None, "relu_alpha": 0.2}
+        self.hparams_default = {"channels_start": 128, "activation": "leaky_relu",
+                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
 
 
 class DiscriminatorHarris(AbstractModelClass):
@@ -154,7 +161,7 @@ class DiscriminatorHarris(AbstractModelClass):
         
     def set_model(self):
         ds_steps = self.hparams["ds_steps"]
-        filters_disc = self.hparams["filters_disc"]
+        filters_disc = self.hparams["channels_start"]
         kernel = self.hparams["kernel"]
         relu_alpha = self.hparams["relu_alpha"]
         padding = self.hparams["padding"]
@@ -250,452 +257,256 @@ class DiscriminatorHarris(AbstractModelClass):
         )
                    
     def set_compile_options(self):
-        raise RuntimeError(f"Critic model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
+        raise RuntimeError(f"discriminator model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
         
     def set_fit_options(self):
-        raise RuntimeError(f"Critic model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
+        raise RuntimeError(f"discriminator model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
         
     def set_hparams_default(self):
         """
-        Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
+        Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"num_conv": 4, "channels_start": 64, "activation": "leaky_relu",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06, "ds_steps": 4, "filters_disc": 64, "padding": None, "relu_alpha": 0.2}
-
-
-
-
+        self.hparams_default = {"channels_start": 512, "activation": "leaky_relu",
+                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
 
     
-# turn this into a set_model method for HarrisWGAN
-def setup_model(*,
-    # mode=None, == "GAN"
-    # arch=None, == "forceconv"
-    downscaling_steps=None, # steps: [5,]  # list of integers that multiply to the downscaling factor; the generator will use UpSampling2D layers of these sizes, alternating with residual blocks.
-    input_channels=None, # number of predictors
-    filters_gen=128,  # 128   # generator network width
-    filters_disc=512,  # 512   # discriminator network width
-    noise_channels=4,  # 4
-    # latent_variables=None, # only in VAEGAN
-    padding="reflect", # "reflect"  # convolution padding: 'same', 'reflect', or 'symmetric'
-    # kl_weight=None, # kl_weight: 1e-8  # used for VAEGAN
-    ensemble_size=None, # ensemble_size: 8  # size of ensemble for content loss; use null to turn off
-    CLtype="ensmeanMSE",  # CL_type: "ensmeanMSE"  # type of content loss to use: 'CRPS', 'CRPS_phys', 'ensmeanMSE', 'ensmeanMSE_phys'
-    content_loss_weight=1000,  # content_loss_weight: 1000.0  # we used 1000 for ensmeanMSE, and 100 for CRPS
-    lr_disc=1e-5,  # learning_rate_disc: 1e-5  # if training blows up, decrease this
-    lr_gen=1e-5
-):   # learning_rate_gen: 1e-5  # if training blows up, decrease this
+class NoiseGenerator(object):
+    def __init__(self, noise_shapes, batch_size=32, random_seed=None):
+        self.noise_shapes = noise_shapes
+        self.batch_size = batch_size
+        self.prng = np.random.RandomState(seed=random_seed)
 
-    gen = generator(
-        downscaling_steps=downscaling_steps,
-        input_channels=input_channels,
-        noise_channels=noise_channels,
-        filters_gen=filters_gen,
-        padding=padding,
-    )
-    disc = discriminator(
-       downscaling_steps=downscaling_steps,
-       input_channels=input_channels,
-       filters_disc=filters_disc,
-       padding=padding
-    )
-    model = WGANGP(
-        gen,
-        disc,
-        # mode,
-        lr_disc=lr_disc,
-        lr_gen=lr_gen,
-        ensemble_size=ensemble_size,
-        CLtype=CLtype,
-        content_loss_weight=content_loss_weight
-    )
-    return model
-
-model = setup_model(
-    downscaling_steps=[5,],
-    input_channels=input_channels,  # len(all_fcst_fields); num of predictors
-    filters_gen=128,
-    filters_disc=512,
-    noise_channels=4,
-    padding="reflect",
-    lr_disc=1e-5,
-    lr_gen=1e-5,
-    # kl_weight=kl_weight,  # only VAEGAN
-    ensemble_size=8,
-    CLtype="ensmeanMSE",
-    content_loss_weight=1000,
-)
-
-
-
-# to be deprecated
-class Nontrainable(object):
-
-    def __init__(self, models):
-        if not isinstance(models, list):
-            models = [models]
-        self.models = models
-
-    def __enter__(self):
-        self.trainable_status = [m.trainable for m in self.models]
-        for m in self.models:
-            m.trainable = False
-        return self.models
-
-    def __exit__(self, type, value, traceback):
-        for (m, t) in zip(self.models, self.trainable_status):
-            m.trainable = t
-
-
-def save_opt_weights(model, filepath):
-    with h5py.File(filepath, 'w') as f:
-        # Save optimizer weights.
-        symbolic_weights = getattr(model.optimizer, 'weights')
-        if symbolic_weights:
-            optimizer_weights_group = f.create_group('optimizer_weights')
-            weight_values = K.batch_get_value(symbolic_weights)
-            weight_names = []
-            for i, (w, val) in enumerate(zip(symbolic_weights,
-                                             weight_values)):
-                if hasattr(w, 'name') and w.name:
-                    name = str(w.name)
-                else:
-                    name = 'param_' + str(i)
-                weight_names.append(name.encode('utf8'))
-            optimizer_weights_group.attrs['weight_names'] = weight_names
-            for name, val in zip(weight_names, weight_values):
-                param_dset = optimizer_weights_group.create_dataset(
-                    name,
-                    val.shape,
-                    dtype=val.dtype)
-                if not val.shape:
-                    # scalar
-                    param_dset[()] = val
-                else:
-                    param_dset[:] = val
-
-
-def load_opt_weights(model, filepath):
-    with h5py.File(filepath, mode='r') as f:
-        optimizer_weights_group = f['optimizer_weights']  # h5py group
-        optimizer_weight_names = optimizer_weights_group.attrs['weight_names']
-        for name in optimizer_weight_names:
-            optimizer_weight_values = optimizer_weights_group[name]
-        model.optimizer.set_weights(optimizer_weight_values)
-
-
-def ensure_list(x):
-    if type(x) != list:
-        x = [x]
-    return x
-
-
-def input_shapes(model, prefix):
-    shapes = [il.shape[1:] for il in
-              model.inputs if il.name.startswith(prefix)]
-    shapes = [tuple([d for d in dims]) for dims in shapes]
-    return shapes
-
-
-class WGANGP(object):
-
-    def __init__(self, gen, disc, gradient_penalty_weight=10,
-                 lr_disc=0.0001, lr_gen=0.0001, avg_seed=None,
-                 kl_weight=None, ensemble_size=None, CLtype=None,
-                 content_loss_weight=None):
-
-        self.gen = gen
-        self.disc = disc
-        # self.mode = mode
-        self.mode = "GAN"
-        self.gradient_penalty_weight = gradient_penalty_weight
-        self.learning_rate_disc = lr_disc
-        self.learning_rate_gen = lr_gen
-        self.kl_weight = kl_weight
-        self.ensemble_size = ensemble_size
-        self.CLtype = CLtype
-        self.content_loss_weight = content_loss_weight
-        self.build_wgan_gp()
-
-    def filenames_from_root(self, root):
-        fn = {
-            "gen_weights": root+"-gen_weights.h5",
-            "disc_weights": root+"-disc_weights.h5",
-            "gen_opt_weights": root+"-gen_opt_weights.h5",
-            "disc_opt_weights": root+"-disc_opt_weights.h5"
-        }
-        return fn
-
-    def load(self, load_files):
-        self.gen.load_weights(load_files["gen_weights"])
-        self.disc.load_weights(load_files["disc_weights"])
-
-        with Nontrainable(self.disc):
-            self.gen_trainer.make_train_function()
-            load_opt_weights(self.gen_trainer,
-                             load_files["gen_opt_weights"])
-        with Nontrainable(self.gen):
-            self.disc_trainer.make_train_function()
-            load_opt_weights(self.disc_trainer,
-                             load_files["disc_opt_weights"])
-
-    def save(self, save_fn_root):
-        paths = self.filenames_from_root(save_fn_root)
-        self.gen.save_weights(paths["gen_weights"], overwrite=True)
-        self.disc.save_weights(paths["disc_weights"], overwrite=True)
-        save_opt_weights(self.disc_trainer, paths["disc_opt_weights"])
-        save_opt_weights(self.gen_trainer, paths["gen_opt_weights"])
-
-    def build_wgan_gp(self):
-
-        # find shapes for inputs
-        # mode not needed here anymore
-        cond_shapes = input_shapes(self.gen, "lo_res_inputs")
-        const_shapes = input_shapes(self.gen, "hi_res_inputs")
-        noise_shapes = input_shapes(self.gen, "noise_input")
-        sample_shapes = input_shapes(self.disc, "output")
-
-        # Create generator training network
-        with Nontrainable(self.disc):
-            # if self.mode == 'GAN': ## mode not needed anymore
-            cond_in = [Input(shape=cond_shapes[0])]
-            const_in = [Input(shape=const_shapes[0])]
-
-            if self.ensemble_size is None:
-                noise_in = [Input(shape=noise_shapes[0])]
-            else:
-                noise_in = [Input(shape=noise_shapes[0])
-                            for ii in range(self.ensemble_size + 1)]
-            gen_in = cond_in + const_in + noise_in
-
-            gen_out = self.gen(gen_in[0:3])  # only use cond/const/noise
-            gen_out = ensure_list(gen_out)
-            disc_in_gen = cond_in + const_in + gen_out
-            disc_out_gen = self.disc(disc_in_gen)
-            full_gen_out = [disc_out_gen]
-            if self.ensemble_size is not None:
-                # generate ensemble of predictions and add mean to gen_trainer output
-                preds = [self.gen([gen_in[0], gen_in[1], gen_in[3+ii]])
-                         for ii in range(self.ensemble_size)]
-                preds = tf.stack(preds)
-                full_gen_out.append(preds)
-            self.gen_trainer = Model(inputs=gen_in,
-                                     outputs=full_gen_out,
-                                     name='gen_trainer')
-
-        # Create discriminator training network
-        with Nontrainable(self.gen):
-            cond_in = [Input(shape=s, name='lo_res_inputs') for s in cond_shapes]
-            const_in = [Input(shape=s, name='hi_res_inputs') for s in const_shapes]
-            noise_in = [Input(shape=s, name='noise_input') for s in noise_shapes]
-            sample_in = [Input(shape=s, name='output') for s in sample_shapes]
-            gen_in = cond_in + const_in + noise_in
-            disc_in_real = sample_in[0]
-            # if self.mode == 'GAN': ## mode not needed anymore
-            disc_in_fake = self.gen(gen_in)
-            disc_in_avg = RandomWeightedAverage()([disc_in_real, disc_in_fake])
-            disc_out_real = self.disc(cond_in + const_in + [disc_in_real])
-            disc_out_fake = self.disc(cond_in + const_in + [disc_in_fake])
-            disc_out_avg = self.disc(cond_in + const_in + [disc_in_avg])
-            disc_gp = GradientPenalty()([disc_out_avg, disc_in_avg])
-            self.disc_trainer = Model(inputs=cond_in + const_in + noise_in + sample_in,
-                                      outputs=[disc_out_real, disc_out_fake, disc_gp],
-                                      name='disc_trainer')
-
-        self.compile()
-
-    def compile(self, opt_disc=None, opt_gen=None):
-        # create optimizers
-        if opt_disc is None:
-            opt_disc = Adam(learning_rate=self.learning_rate_disc, beta_1=0.5, beta_2=0.9)
-        self.opt_disc = opt_disc
-        if opt_gen is None:
-            opt_gen = Adam(learning_rate=self.learning_rate_gen, beta_1=0.5, beta_2=0.9)
-        self.opt_gen = opt_gen
-
-        with Nontrainable(self.disc):
-            if self.mode == 'GAN':
-                if self.ensemble_size is not None:
-                    CLfn = CL_chooser(self.CLtype)
-                    losses = [wasserstein_loss, CLfn]
-                    loss_weights = [1.0, self.content_loss_weight]
-                else:
-                    losses = [wasserstein_loss]
-                    loss_weights = [1.0]
-                self.gen_trainer.compile(loss=losses,
-                                         loss_weights=loss_weights,
-                                         optimizer=self.opt_gen)
-            elif self.mode == 'VAEGAN':
-                self.gen_trainer.compile(optimizer=self.opt_gen)
-        with Nontrainable(self.gen):
-            self.disc_trainer.compile(
-                loss=[wasserstein_loss, wasserstein_loss, 'mse'],
-                loss_weights=[1.0, 1.0, self.gradient_penalty_weight],
-                optimizer=self.opt_disc
-            )
-            self.disc_trainer.summary()
+    def noise(self, shape, mean, std):
+        shape = (self.batch_size,) + shape
+        n = self.prng.randn(*shape).astype(np.float32)
+        # n = np.zeros(shape, dtype=np.float32)
+        if std != 1.0:
+            n *= std
+        if mean != 0.0:
+            n += mean
+        return n
     
-    # needs to be rewritten into the train_step method for the WGAN class
-    def train(self, batch_gen, noise_gen, num_gen_batches=1,
-              training_ratio=1, show_progress=True):
-
-        disc_target_real = None
-        for inputs, _ in batch_gen.take(1).as_numpy_iterator():
-            tmp_batch = inputs["lo_res_inputs"]
-            batch_size = tmp_batch.shape[0]
-        del tmp_batch
-        del inputs
-        if show_progress:
-            # Initialize progbar and batch counter
-            progbar = generic_utils.Progbar(num_gen_batches*batch_size)
-        disc_target_real = np.ones((batch_size, 1), dtype=np.float32)
-        disc_target_fake = -disc_target_real
-        gen_target = disc_target_real
-        target_gp = np.zeros((batch_size, 1), dtype=np.float32)
-        disc_target = [disc_target_real, disc_target_fake, target_gp]
-
-        batch_gen_iter = iter(batch_gen)
-
-        for kk in range(num_gen_batches):
-
-            # train discriminator
-            disc_loss = None
-            disc_loss_n = 0
-            for rep in range(training_ratio):
-                # generate some real samples
-                inputs, outputs = batch_gen_iter.get_next()
-                cond = inputs["lo_res_inputs"]
-                const = inputs["hi_res_inputs"]
-                sample = outputs["output"]
-
-                with Nontrainable(self.gen):
-                    dl = self.disc_trainer.train_on_batch(
-                        [cond, const, noise_gen(), sample], disc_target)
-
-                if disc_loss is None:
-                    disc_loss = np.array(dl)
-                else:
-                    disc_loss += np.array(dl)
-                disc_loss_n += 1
-
-                del sample, cond, const
-
-            disc_loss /= disc_loss_n
-
-            with Nontrainable(self.disc):
-                inputs, outputs = batch_gen_iter.get_next()
-                cond = inputs["lo_res_inputs"]
-                const = inputs["hi_res_inputs"]
-                sample = outputs["output"]
-
-                condconst = [cond, const]
-                if self.ensemble_size is None:
-                    gt_outputs = [gen_target]
-                    noise_list = [noise_gen()]
-                else:
-                    noise_list = [noise_gen()
-                                  for ii in range(self.ensemble_size + 1)]
-                    gt_outputs = [gen_target, sample]
-                gt_inputs = condconst + noise_list
-
-                # if self.mode == 'GAN':  ## mode not needed anymore
-                gen_loss = self.gen_trainer.train_on_batch(
-                    gt_inputs, gt_outputs)
-
-                gen_loss = ensure_list(gen_loss)
-                del sample, cond, const
-
-            if show_progress:
-                losses = []
-                for ii, dl in enumerate(disc_loss):
-                    losses.append((f"D{ii}", dl))
-                for ii, gl in enumerate(gen_loss):
-                    losses.append((f"G{ii}", gl))
-                progbar.add(batch_size,
-                            values=losses)
-
-            loss_log = {}
-            #if self.mode == "det":
-            #    raise RuntimeError("Doctor, what are you doing here? You're supposed to be on Gallifrey")
-            # elif self.mode == "GAN":  ## mode not needed anymore
-            loss_log["disc_loss"] = disc_loss[0]
-            loss_log["disc_loss_real"] = disc_loss[1]
-            loss_log["disc_loss_fake"] = disc_loss[2]
-            loss_log["disc_loss_gp"] = disc_loss[3]
-            loss_log["gen_loss_total"] = gen_loss[0]
-            if self.ensemble_size is not None:
-                loss_log["gen_loss_disc"] = gen_loss[1]
-                loss_log["gen_loss_ct"] = gen_loss[2]
-
-            gc.collect()
-
-        return loss_log
-    
-
+    def __call__(self, mean=0.0, std=1.0):
+        return self.noise(self.noise_shapes, mean, std)
     
     
-    
-    
-# TODO trainstep von wgan_model 117 kann vermutlich großteils übernommen werden, aber  data_iter muss angepasst werden, 
-# weil 
-    
-    
-    
-    
-from wgan_model import WGAN_Model
 
-# TODO: rename cwgan to wgan_harris
-class HarrisWGAN_Model(WGAN_Model):
-    def __init__(self, generator, critic, hparams):
+class HarrisWGAN_Model(keras.Model):
+    def __init__(self, generator, discriminator, hparams):
         super().__init__()
         self.generator = generator
-        self.critic = critic
-        self.hparams = hparams  
-        self._n_predictands, self._n_predictands_dyn = self._get_npredictands()
+        self.discriminator = discriminator
+        self.hparams = hparams 
+        # only sha unet has predictands_dyn
+        # self._n_predictands, self._n_predictands_dyn = self._get_npredictands()
         
-    def _get_npredictands(self):
-        """
-        Return the number of the generator's output channels, i.e. 2 if the U-Net uses an activated z_branch.
-        
-        NOTE SL: taken from wgan_model.py
-        """
-        #npredictands = 
-        return self.generator.__dict__["_n_predictands"], self.generator.__dict__["_n_predictands_dyn"] 
-
     def compile(self, optimizer, loss, **kwargs):
         """
-        NOTE SL: taken from wgan_model.py
+        NOTE SL: taken from wgan_model.py and adapted based on original compile method
         """
         super().compile(**kwargs)
         self.c_optimizer, self.g_optimizer = optimizer
         
         # losses
-        self.recon_loss = loss
-        self.critic_loss = get_custom_loss("critic")
-        self.critic_gen_loss = get_custom_loss("critic_generator")
+        if self.hparams["ensemble_size"] is not None:
+            CLfn = CL_chooser(self.hparams["CLtype"])
+            losses = [wasserstein_loss, CLfn]
+            loss_weights = [1.0, self.hparams["content_loss_weight"]]
+        else:
+            losses = [wasserstein_loss]
+            loss_weights = [1.0]
+            
+        self.generator.compile(loss=losses,
+                                 loss_weights=loss_weights,
+                                 optimizer=self.g_optimizer)
         
-    def train_step(self, data_iter: tf.data.Dataset, embed=None) -> OrderedDict:
-        pass
+        self.discriminator.compile(
+            loss=[wasserstein_loss, wasserstein_loss, 'mse'],
+            loss_weights=[1.0, 1.0, self.hparams["gradient_penalty_weight"]],
+            optimizer=self.c_optimizer
+        )
+        
+        self.noise_gen = NoiseGenerator(self.generator._input_shape["lo_res_inputs"][:2]+(self.hparams["noise_channels"],), self.hparams["batch_size"]*(self.hparams["d_steps"] + 1))
+        # self.recon_loss = loss
+        self.discriminator_loss = get_custom_loss("critic")
+        self.discriminator_gen_loss = get_custom_loss("critic_generator")
+        
+        
+    def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
+        """
+        Taken from wgan_model.py and adapted
+        """
+        # from wgan_model.py; different for Harris wgan
+        # predictors, predictands = data_iter
+        # predictors, predictands taken similar as from original dict in Harris wgan
+        inputs, outputs = data_iter
+        cond = inputs["lo_res_inputs"]
+        const = inputs["hi_res_inputs"]
+        if self.hparams["ensemble_size"] is None:
+            noise = self.noise_gen()
+        else:
+            # ensemble stacked in an additional dimension at the end
+            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+        sample = outputs["output"]
+        
+        # train discriminator
+        for i in range(self.hparams["d_steps"]):
+            with tf.GradientTape() as tape_critic:
+                
+                ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
+                cond_iter = cond[ist:ie, ...]
+                const_iter = const[ist:ie, ...]
+                sample_iter = sample[ist:ie, ...]
+                noise_iter = noise[ist:ie, ..., 0] # only take the first ensemble member
+                # print(f"{cond_iter.shape = }")
+                # print(f"{const_iter.shape = }")
+                # print(f"{noise_iter.shape = }")
+                gen_in = [cond_iter] + [const_iter] + [noise_iter]
+                gen_out = self.generator.model(gen_in, training=True)
+                disc_in_gen = [cond_iter] + [const_iter] + [gen_out]
+                disc_in_gt = [cond_iter] + [const_iter] + [sample_iter]
+                
+                #predictands_discriminator = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
+                #gen_data = self.generator.model(predictors[ist:ie, ...], training=True)
+                # calculate discriminators for both, the real and the generated data
+                discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
+                discriminator_gt = self.discriminator.model(disc_in_gt, training=True)
+                # calculate the loss (incl. gradient penalty)
+                c_loss = self.discriminator_loss(discriminator_gt, discriminator_gen)
+                gp = GradientPenalty()([sample_iter, gen_out])
+                # gp = self.gradient_penalty(sample_iter, gen_out)
+                print(gp)
+                d_loss = c_loss + self.hparams["gp_weight"] * gp
+
+            # calculate gradients and update discrimintor
+            d_gradient = tape_critic.gradient(d_loss, self.discriminator.trainable_variables)
+            self.c_optimizer.apply_gradients(zip(d_gradient, self.discriminator.trainable_variables))
+
+        # train generator
+        with tf.GradientTape() as tape_generator:
+            # generate (downscaled) data
+            cond_iter = cond[-self.hparams["batch_size"]:, ...]
+            const_iter = const[-self.hparams["batch_size"]:, ...]
+            noise_iter = noise[-self.hparams["batch_size"]:, ...]
+            sample_iter = sample[-self.hparams["batch_size"]:, ...]
+            # print(f"{cond_iter.shape = }")
+            # print(f"{const_iter.shape = }")
+            # print(f"{noise_iter.shape = }")
+
+            # train generator for each ensemble member
+            noise_iter_k = noise_iter[..., 0]
+            gen_in = [cond_iter] + [const_iter] + [noise_iter_k]
+            gen_data = self.generator.model(gen_in, training=True)
+            gen_data_list = [gen_data]
+            if self.hparams["ensemble_size"] is not None:
+                gen_iter_list = []
+                for k in range(self.hparams["ensemble_size"]):
+                    noise_iter_k = noise_iter[..., k+1]
+                    gen_in = [cond_iter] + [const_iter] + [noise_iter_k]
+                    gen_data_iter = self.generator.model(gen_in, training=True)
+                    gen_iter_list.append(gen_data_iter)
+                    
+                gen_data_list.append(tf.stack(gen_iter_list))
+            
+            disc_in_gen = [cond_iter] + [const_iter] + [gen_data]
+            discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
+
+            pass
+            # gen_data = self.generator.model(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
+            # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
+            # discriminator_gen = self.discriminator.model(gen_data[..., 0:self._n_predictands_dyn], training=True)
+            #cg_loss = self.discriminator_gen_loss(discriminator_gen)
+            cg_loss = self.discriminator_gen_loss(discriminator_gen)
+            #rloss = self.recon_loss(gen_in, gen_data)
+            # content loss term
+            # print(sample_iter.shape)
+            # print(gen_data.shape)
+            cl_loss = CL_chooser(self.hparams["CLtype"])(sample_iter, gen_data_list[-1])
+            #g_loss = cg_loss + self.hparams["recon_weight"] * rloss
+            g_loss = cg_loss + cl_loss
+
+
+        g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
+        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+
+        return OrderedDict(
+            [
+                ("c_loss", c_loss),
+                ("gp_loss", self.hparams["gp_weight"] * gp),
+                ("d_loss", d_loss),
+                ("cg_loss", cg_loss),
+                #("recon_loss", rloss * self.hparams["recon_weight"]),
+                ("g_loss", g_loss)
+            ]
+        )
+        
+        
+        
 
     def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
-        pass
+        """
+        Implement step to test trained generator on validation data
+        :param val_iter: Tensorflow Dataset with validation data
+        :return: dictionary with reconstruction loss on validation data
+        
+        NOTE SL: taken from wgan_model.py
+        """
+        inputs, outputs = val_iter
+        cond = inputs["lo_res_inputs"]
+        const = inputs["hi_res_inputs"]
+        noise = self.noise_gen()
+        sample = outputs["output"]
+
+        gen_in = [cond] + [const] + [noise]
+        gen_data = self.generator.model(gen_in, training=False)
+        cl_loss = CL_chooser(self.hparams["CLtype"])(sample, gen_data)
+        #rloss = self.recon_loss(predictands, gen_data)
+
+        return OrderedDict([
+            ("cl_loss", cl_loss),
+            #("recon_loss", rloss),
+        ])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
-
-        predictors, _ = test_iter
-
-        return self.generator.model(predictors, training=False)
+        inputs, _ = test_iter
+        cond = inputs["lo_res_inputs"]
+        const = inputs["hi_res_inputs"]
+        noise = self.noise_gen()
+        gen_in = [cond] + [const] + [noise]
+        return self.generator.model(gen_in, training=False)
 
     def gradient_penalty(self, real_data, gen_data):
-        pass
+        """
+        Calculates gradient penalty based on 'mixture' of generated and ground truth data
+        :param real_data: the ground truth data
+        :param gen_data: the generated/predicted data
+        :return: gradient penalty
         
+        NOTE SL: taken from wgan_model.py
+        """
+        # get mixture of generated and ground truth data
+        #shape_dat = (gen_data - real_data).shape
+        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        mix_data = real_data + alpha * (gen_data - real_data)
 
+        with tf.GradientTape() as gp_tape:
+            gp_tape.watch(mix_data)
+            discriminator_mix = self.discriminator.model(mix_data, training=True)
+
+        # calculate the gradient on the mixture data...
+        grads_mix = gp_tape.gradient(discriminator_mix, [mix_data])[0]
+        # ... and norm it
+        norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
+        gp = tf.reduce_mean((norm - 1.) ** 2)
+
+        return gp
+        
 
 
 class HarrisWGAN(AbstractModelClass):
     """tbd if this can instead inherit of WGAN"""
     
-    def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
+    def __init__(self, generator: AbstractModelClass, discriminator: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
         
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
@@ -704,18 +515,22 @@ class HarrisWGAN(AbstractModelClass):
         # set hyperparmaters
         self.set_hparams(hparams)
         # set submodels
-        self.generator, self.critic = self.set_model(generator, critic)
+        self.generator, self.discriminator = self.set_model(generator, discriminator)
         # set compile and fit options as well as custom objects
         self.set_compile_options()
         self.set_custom_objects(loss=self.compile_options['loss'])
         self.set_fit_options()
+        
+        # those are set via set_hparams()
+#         self.ensemble_size = ensemble_size
+#         self.CLtype = CLtype
+#         self.content_loss_weight = content_loss_weight
         
     def set_compile_options(self):
         """
         Note SL: loss function and optimiser perhaps need edits
         """
         # set optimizers
-        # check if optimizer is valid and set corresponding optimizers for generator and critic
         if self.hparams["optimizer"].lower() == "adam":
             optimizer = keras.optimizers.Adam
             kwargs_opt = {"beta_1": 0.0, "beta_2": 0.9}
@@ -725,18 +540,18 @@ class HarrisWGAN(AbstractModelClass):
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
-        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
+        self.optimizer = (optimizer(self.discriminator.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         self.loss = self.get_recon_loss()
         
     def get_fit_options(self):
-        """NOTE SL: taken from wgan_model.py and renaned vars"""
+        """NOTE SL: taken from wgan_model.py and renamed vars"""
         cwgan_callbacks = []
         
         if self.hparams["lr_decay"]:
-            cwgan_callbacks.append(LearningRateSchedulerCWGAN(self.get_lr_decay(), verbose=1))
+            cwgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
         
         if self.hparams["lcheckpointing"]:
-            cwgan_callbacks.append(ModelCheckpointCWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+            cwgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
             
         if self.hparams["learlystopping"]:
             cwgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
@@ -746,35 +561,38 @@ class HarrisWGAN(AbstractModelClass):
         else:
             return {}  
         
-    def set_model(self, generator, critic):
+    def set_model(self, generator, discriminator):
         """
-        Setting the CWGAN-model is a three-step approach:
+        Setting the HarrisWGAN-model is a three-step approach:
             1. Get the generator model
-            2. Get the critic model
-            3. Put the generator and critic model into the actual CWGAN
+            2. Get the discriminator model
+            3. Put the generator and discriminator model into the actual HarrisWGAN
             
         NOTE SL: taken from wgan_model.py; needs adaptations
+        incorporate setup_model here
         """
         # get generator model
-        add_opts = {"concat_out": True} if "concat_out" in str(inspect.signature(generator)) else {}         # generator might have a concat_out-argument to handle z_branch-outputs
-        gen_model = generator(self._input_shape, self.hparams["hparams_generator"], self._varnames_tar, self._savedir, 
-                              self._expname, **add_opts)        
+        # only used in sha unet
+        # add_opts = {"concat_out": True} if "concat_out" in str(inspect.signature(generator)) else {}         # generator might have a concat_out-argument to handle z_branch-outputs
+        gen_model = generator(self._input_shape["harris_generator"], self.hparams["hparams_generator"], self._varnames_tar)#, self._savedir, self._expname)        
+        
         # correct number of dynamic predictorst
-        self._n_predictands_dyn = gen_model.__dict__["_n_predictands_dyn"]
+        # only used in SHA UNET, not needed here
+        # self._n_predictands_dyn = gen_model.__dict__["_n_predictands_dyn"]
         
-        # get critic model
-        tar_shape = (*self._input_shape[:-1], self._n_predictands_dyn)   # critic only accounts for dynamic predictands
-        critic_model = critic(tar_shape, self.hparams["hparams_critic"], self._varnames_tar)
+        # get discriminator model
+        # tar_shape = (*self._input_shape[:-1], self._n_predictands_dyn)   # discriminator only accounts for dynamic predictands
+        discriminator_model = discriminator(self._input_shape["harris_discriminator"], self.hparams["hparams_discriminator"], self._varnames_tar)
         
-        # get hyperparamters of CWGAN only
+        # get hyperparamters of HarrisWGAN only
         hparams_wgan_only = self.hparams.copy()
-        hparams_wgan_only.pop("hparams_critic")
+        hparams_wgan_only.pop("hparams_discriminator")
         hparams_wgan_only.pop("hparams_generator")
                 
-        # ...and create CWGAN model instance
-        self.model = CWGAN_Model(gen_model, critic_model, hparams_wgan_only)
+        # ...and create HarrisWGAN model instance
+        self.model = HarrisWGAN_Model(gen_model, discriminator_model, hparams_wgan_only)
 
-        return gen_model, critic_model
+        return gen_model, discriminator_model
     
     def get_recon_loss(self):
         """
@@ -824,19 +642,19 @@ class HarrisWGAN(AbstractModelClass):
 
     def plot_model(self, save_dir, **kwargs):
         """
-        Plot generator and critic model separately.
+        Plot generator and discriminator model separately.
         :param save_dir: directory under which plots will be saved
         :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
         
         NOTE SL: taken from wgan_model.py
         """
         k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
-        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
+        k_plot_model(self.discriminator, os.path.join(save_dir, f"plot_{self._expname}_discriminator.png"), **kwargs)
 
     def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
              signatures=None, options=None, save_traces: bool = True):
         """
-        Save generator and critic seperately.
+        Save generator and discriminator seperately.
         The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
         :param filepath: path to SavedModel or H5 file to save both models
         :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
@@ -855,38 +673,154 @@ class HarrisWGAN(AbstractModelClass):
                             all custom layers/models implement a `get_config()` method.
         :return: -
         """
-        generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self._expname)), \
-                                      os.path.join(filepath, "{0}_critic_last".format(self._expname))
+        generator_path, discriminator_path = os.path.join(filepath, "{0}_generator_last".format(self._expname)), \
+                                      os.path.join(filepath, "{0}_discriminator_last".format(self._expname))
         self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-        self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        self.discriminator.save(discriminator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
 
                           
     def set_hparams_default(self):
         """
         Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
-        
-        NOTE SL: taken from wgan_model.py with slight adaptation
-        TODO: unsure still about most of the defaults /discuss
         """
-        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
-                                "l_embed": False, "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels",
-                                "hparams_generator": {}, "hparams_critic": {}}
+        self.hparams_default = {"batch_size": 32, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
+                                "l_embed": False, "ds_steps": [4,], "d_steps": 6, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels", "ensemble_size": 8, "CLtype": "ensmeanMSE", "content_loss_weight": 1000, "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {}, "gradient_penalty_weight": 10, }
 
 
             
-class LearningRateSchedulerCWGAN(LearningRateSchedulerWGAN):
-    """TODO: assume it can be taken from WGAN for now"""
+class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
+    """Note SL: taken from wgan_model.py"""
     def __init__(self, schedule, verbose=0):
-        super(LearningRateSchedulerCWGAN, self).__init__(schedule, verbose)
+        super(LearningRateSchedulerWGAN, self).__init__(schedule, verbose)
 
-class ModelCheckpointCWGAN(ModelCheckpoint):
-    """TODO: maybe also inherit from WGAN"""
-    def __init__(self):
-        pass
-    
+    def on_epoch_begin(self, epoch, logs=None):
+        if not hasattr(self.model, "g_optimizer"):
+            raise AttributeError('Model must have a "g_optimizer" for optimizing the generator.')
+
+        if not hasattr(self.model, "c_optimizer"):
+            raise AttributeError('Model must have a "c_optimizer" for optimizing the discriminator.')
+
+        if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
+            raise ValueError('Optimizer for generator and discriminator must both have a "lr" attribute.')
+        try:  # new API
+            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                         float(K.get_value(self.model.c_optimizer.lr))
+            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+        except TypeError:  # Support for old API for backward compatibility
+            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+
+        if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
+                isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
+            raise ValueError('The output of the "schedule" function '
+                             f'should be float. Got: {lr_g} (generator) and {lr_c} (discriminator)' )
+        if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
+           and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
+            raise ValueError(
+                f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
+                f'and {lr_c.dtype} (discriminator)' )
+        # set updated learning rate
+        K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
+        K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
+        if self.verbose > 0:
+            print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
+                  f'rate for generator to {lr_g}, for discriminator to {lr_c}.')
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
+        logs['lr_discriminator'] = K.get_value(self.model.c_optimizer.lr)
+
+
+class ModelCheckpointHarrisWGAN(ModelCheckpoint):
+    """Note SL: taken from wgan_model.py"""
+    def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
+                 mode='auto', save_freq='epoch', options=None, **kwargs):
+        super(ModelCheckpointHarrisWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
+                                                  save_weights_only, mode, save_freq, options=options, **kwargs)
+        self._expname = expname
+
     def _save_model(self, epoch, batch, logs):
-        pass
+        """Saves the model.
+        ML: The source-code is largely identical to Keras v2.6.0 implementation except that two models,
+            the discriminator and the generator, are saved separately in filepath_gen and filepath_discriminator (see below).
+            Modified source-code is envelopped between 'ML S' and 'ML E'-comment strings.
+
+        Args:
+            epoch: the epoch this iteration is in.
+            batch: the batch this iteration is in. `None` if the `save_freq`
+              is set to `epoch`.
+            logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
+        """
+        logs = logs or {}
+
+        if isinstance(self.save_freq, int) or self.epochs_since_last_save >= self.period:
+            # Block only when saving interval is reached.
+            logs = tf_utils.sync_to_numpy_or_python_type(logs)
+            self.epochs_since_last_save = 0
+            filepath = self._get_file_path(epoch, batch, logs)
+            # ML S
+            if self.save_best_only:
+                add_str = "best"
+            else:
+                add_str = f"epoch{epoch:05d}"
+            filepath_gen = os.path.join(filepath, f"{self._expname}_generator_{add_str}")
+            filepath_discriminator = os.path.join(filepath, f"{self._expname}_discriminator_{add_str}")
+            # ML E
+
+            try:
+                if self.save_best_only:
+                    current = logs.get(self.monitor)
+                    if current is None:
+                        logging.warning('Can save best model only with %s available, skipping.', self.monitor)
+                    else:
+                        if self.monitor_op(current, self.best):
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                      ' saving model to %s' % (epoch + 1, self.monitor,
+                                                               self.best, current, filepath))
+                            self.best = current
+                            # ML S
+                            if self.save_weights_only:
+                                self.model.generator.save_weights(
+                                    filepath_gen, overwrite=True, options=self._options)
+                                self.model.discriminator.save_weights(
+                                    filepath_discriminator, overwrite=True, options=self._options)
+                            else:
+                                self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                                self.model.discriminator.save(filepath_discriminator, overwrite=True, options=self._options)
+                            # ML E
+                        else:
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s did not improve from %0.5f' %
+                                      (epoch + 1, self.monitor, self.best))
+                else:
+                    if self.verbose > 0:
+                        print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    # ML S
+                    if self.save_weights_only:
+                        self.model.generator.save_weights(
+                            filepath_gen, overwrite=True, options=self._options)
+                        self.model.discriminator.save_weights(
+                            filepath_discriminator, overwrite=True, options=self._options)
+                    else:
+                        self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
+                        self.model.discriminator.save(filepath_discriminator, overwrite=True, options=self._options)
+                    # ML E
+                self._maybe_remove_file()
+            except IsADirectoryError as e:  # h5py 3.x
+                raise IOError('Please specify a non-directory filepath for'  
+                              'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+            except IOError as e:  # h5py 2.x
+                # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
+                if 'is a directory' in str(e.args[0]).lower():
+                    raise IOError('Please specify a non-directory filepath for '
+                                  'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+                # Re-throw the error for any other causes.
+                raise e
+               
+
+
     
     
 
@@ -1002,3 +936,61 @@ def const_upscale_block(const_input, steps, filters):
     for step in steps:
         const_output = Conv2D(filters=filters, kernel_size=(step, step), strides=step, padding="valid", activation="relu")(const_output)
     return const_output
+
+
+def ensure_list(x):
+    if type(x) != list:
+        x = [x]
+    return x
+
+
+def input_shapes(model, prefix):
+    shapes = [il.shape[1:] for il in
+              model.inputs if il.name.startswith(prefix)]
+    shapes = [tuple([d for d in dims]) for dims in shapes]
+    return shapes
+
+class GradientPenalty(Layer):
+    def __init__(self, **kwargs):
+        super(GradientPenalty, self).__init__(**kwargs)
+
+    def call(self, inputs):
+        target, wrt = inputs
+        grad = _compute_gradients(target, [wrt])[0]
+        return K.sqrt(K.sum(K.batch_flatten(K.square(grad)), axis=1, keepdims=True))-1
+
+    def compute_output_shape(self, input_shapes):
+        return (input_shapes[1][0], 1)
+    
+
+def _compute_gradients(tensor, var_list):
+    grads = tf.gradients(tensor, var_list)
+    return [grad if grad is not None else tf.zeros_like(var)
+            for var, grad in zip(var_list, grads)]
+
+
+def denormalise(y_in):
+    ten = tf.constant(10.0, dtype=tf.float32)
+    one = tf.constant(1.0, dtype=tf.float32)
+    return tf.subtract(tf.pow(ten, y_in), one)
+
+
+def wasserstein_loss(y_true, y_pred):
+    return K.mean(y_true * y_pred, axis=-1)
+
+def ensmean_MSE(y_true, y_pred):
+    pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
+    y_true_squ = tf.squeeze(y_true, axis=-1)
+    return tf.reduce_mean(tf.math.squared_difference(pred_mean, y_true_squ))
+
+def CL_chooser(CLtype):
+    if CLtype != "ensmeanMSE":
+        raise NotImplementedError(f"{CLtype = } not implemented, only CLtype = 'ensmeanMSE' is available!")
+        
+    return {
+        # "CRPS": sample_crps,
+        # "CRPS_phys": sample_crps_phys,
+        "ensmeanMSE": ensmean_MSE,
+        # "ensmeanMSE_phys": ensmean_MSE_phys#
+    }[CLtype]
+        
