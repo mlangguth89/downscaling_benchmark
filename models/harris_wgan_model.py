@@ -11,6 +11,7 @@ import h5py
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
 import tensorflow.keras as keras
+from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, BatchNormalization, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense
 from tensorflow.keras.models import Model
@@ -18,6 +19,8 @@ from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
 from custom_losses import get_custom_loss
 from wgan_model import LearningRateSchedulerWGAN
+from tensorflow.python.platform import tf_logging as logging
+
 
 list_or_tuple = Union[List, Tuple]
 
@@ -25,14 +28,9 @@ class GeneratorHarris(AbstractModelClass):
     # content based on original generator function from models.py (Harris repo)
     # structure based on Critic_Simple from wgan_model.py
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List):
-        super().__init__(shape_in, hparams, varnames_tar, "", "")       # Pass empty savedir- and expname-arguments since this is not a stand-alone model
+        # Pass empty savedir- and expname-arguments since this is not a stand-alone model
+        super().__init__(shape_in, hparams, varnames_tar, "", "")
         
-        # # shape_in as dict as follow:
-        # shape_in = {
-        #     "lo_res_inputs": (36, 32, input_channels),
-        #     "hi_res_inputs": (144, 128, constant_fields),
-        #     "noise_input": (36, 32, noise_channels),
-        # }
         # set submodels
         self.set_hparams(hparams)
         self.set_model()
@@ -122,11 +120,6 @@ class GeneratorHarris(AbstractModelClass):
             outputs=generator_output,
             name="gen",
         )
-        #self.model = Model(
-        #    inputs={"lo_res_inputs": generator_input, "hi_res_inputs": const_input, "noise_input": noise_input},
-         #   outputs=generator_output,
-          #  name="gen",
-        #)
                    
     def set_compile_options(self):
         raise RuntimeError(f"Generator model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
@@ -146,14 +139,8 @@ class DiscriminatorHarris(AbstractModelClass):
     # content based on original discriminator function from models.py (Harris repo)
     # structure based on Critic_Simple from wgan_model.py
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List):
-        super().__init__(shape_in, hparams, varnames_tar, "", "")       # Pass empty savedir- and expname-arguments since this is not a stand-alone model
-        
-        # # shape_in as dict as follow:
-        # shape_in = {
-        #     "lo_res_inputs": (36, 32, input_channels),
-        #     "hi_res_inputs": (144, 128, constant_fields),
-        #     "output": (144, 128, 1),
-        # }
+        # Pass empty savedir- and expname-arguments since this is not a stand-alone model
+        super().__init__(shape_in, hparams, varnames_tar, "", "")
         
         # set submodels
         self.set_hparams(hparams)
@@ -271,6 +258,7 @@ class DiscriminatorHarris(AbstractModelClass):
 
     
 class NoiseGenerator(object):
+    """Used for the Generator to generate the random noise input"""
     def __init__(self, noise_shapes, batch_size=32, random_seed=None):
         self.noise_shapes = noise_shapes
         self.batch_size = batch_size
@@ -297,13 +285,8 @@ class HarrisWGAN_Model(keras.Model):
         self.generator = generator
         self.discriminator = discriminator
         self.hparams = hparams 
-        # only sha unet has predictands_dyn
-        # self._n_predictands, self._n_predictands_dyn = self._get_npredictands()
         
     def compile(self, optimizer, loss, **kwargs):
-        """
-        NOTE SL: taken from wgan_model.py and adapted based on original compile method
-        """
         super().compile(**kwargs)
         self.c_optimizer, self.g_optimizer = optimizer
         
@@ -316,9 +299,11 @@ class HarrisWGAN_Model(keras.Model):
             losses = [wasserstein_loss]
             loss_weights = [1.0]
             
-        self.generator.compile(loss=losses,
-                                 loss_weights=loss_weights,
-                                 optimizer=self.g_optimizer)
+        self.generator.compile(
+            loss=losses,
+            loss_weights=loss_weights,
+            optimizer=self.g_optimizer
+        )
         
         self.discriminator.compile(
             loss=[wasserstein_loss, wasserstein_loss, 'mse'],
@@ -326,19 +311,20 @@ class HarrisWGAN_Model(keras.Model):
             optimizer=self.c_optimizer
         )
         
-        self.noise_gen = NoiseGenerator(self.generator._input_shape["lo_res_inputs"][:2]+(self.hparams["noise_channels"],), self.hparams["batch_size"]*(self.hparams["d_steps"] + 1))
+        self.noise_gen = NoiseGenerator(
+            self.generator._input_shape["lo_res_inputs"][:2]+(
+                self.hparams["noise_channels"],
+            ), self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
+        )
         # self.recon_loss = loss
+        
+        # discriminator loss looks good
         self.discriminator_loss = get_custom_loss("critic")
+        
         self.discriminator_gen_loss = get_custom_loss("critic_generator")
         
         
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
-        """
-        Taken from wgan_model.py and adapted
-        """
-        # from wgan_model.py; different for Harris wgan
-        # predictors, predictands = data_iter
-        # predictors, predictands taken similar as from original dict in Harris wgan
         inputs, outputs = data_iter
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
@@ -348,7 +334,7 @@ class HarrisWGAN_Model(keras.Model):
             # ensemble stacked in an additional dimension at the end
             noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         sample = outputs["output"]
-        
+
         # train discriminator
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
@@ -366,16 +352,14 @@ class HarrisWGAN_Model(keras.Model):
                 disc_in_gen = [cond_iter] + [const_iter] + [gen_out]
                 disc_in_gt = [cond_iter] + [const_iter] + [sample_iter]
                 
-                #predictands_discriminator = tf.expand_dims(predictands[ist:ie, :, :, 0], axis=-1)
-                #gen_data = self.generator.model(predictors[ist:ie, ...], training=True)
                 # calculate discriminators for both, the real and the generated data
                 discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
                 discriminator_gt = self.discriminator.model(disc_in_gt, training=True)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = self.discriminator_loss(discriminator_gt, discriminator_gen)
-                gp = GradientPenalty()([sample_iter, gen_out])
-                # gp = self.gradient_penalty(sample_iter, gen_out)
-                print(gp)
+                # gp = GradientPenalty()([sample_iter, gen_out])
+                gp = self.gradient_penalty(sample_iter, gen_out)
+                # print(gp)
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update discrimintor
@@ -412,15 +396,9 @@ class HarrisWGAN_Model(keras.Model):
             discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
 
             pass
-            # gen_data = self.generator.model(predictors[-self.hparams["batch_size"]:, :, :, :], training=True)
-            # get the critic and calculate corresponding generator losses (critic and reconstruction loss)
-            # discriminator_gen = self.discriminator.model(gen_data[..., 0:self._n_predictands_dyn], training=True)
-            #cg_loss = self.discriminator_gen_loss(discriminator_gen)
             cg_loss = self.discriminator_gen_loss(discriminator_gen)
             #rloss = self.recon_loss(gen_in, gen_data)
             # content loss term
-            # print(sample_iter.shape)
-            # print(gen_data.shape)
             cl_loss = CL_chooser(self.hparams["CLtype"])(sample_iter, gen_data_list[-1])
             #g_loss = cg_loss + self.hparams["recon_weight"] * rloss
             g_loss = cg_loss + cl_loss
@@ -435,6 +413,7 @@ class HarrisWGAN_Model(keras.Model):
                 ("gp_loss", self.hparams["gp_weight"] * gp),
                 ("d_loss", d_loss),
                 ("cg_loss", cg_loss),
+                ("cl_loss", cl_loss),
                 #("recon_loss", rloss * self.hparams["recon_weight"]),
                 ("g_loss", g_loss)
             ]
@@ -458,12 +437,15 @@ class HarrisWGAN_Model(keras.Model):
         sample = outputs["output"]
 
         gen_in = [cond] + [const] + [noise]
+        # Since we validate on a sample here, no need for generating an ensemble
+        # => no CL loss, only original gen loss
         gen_data = self.generator.model(gen_in, training=False)
-        cl_loss = CL_chooser(self.hparams["CLtype"])(sample, gen_data)
+        disc_in_gen = [cond_iter] + [const_iter] + [gen_data]
+        discriminator_gen = self.discriminator.model(disc_in_gen, training=False)
+        cg_loss = self.discriminator_gen_loss(discriminator_gen)
         #rloss = self.recon_loss(predictands, gen_data)
-
         return OrderedDict([
-            ("cl_loss", cl_loss),
+            ("cg_loss", cg_loss),
             #("recon_loss", rloss),
         ])
 
@@ -471,9 +453,20 @@ class HarrisWGAN_Model(keras.Model):
         inputs, _ = test_iter
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
-        noise = self.noise_gen()
-        gen_in = [cond] + [const] + [noise]
-        return self.generator.model(gen_in, training=False)
+        
+        if self.hparams["ensemble_size"] is not None:
+            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
+            gen_list = []
+            for noise_iter in noise:
+                gen_in = [cond] + [const] + [noise_iter]
+                gen_iter = self.generator.model(gen_in, training=False)
+                gen_list.append(gen_iter)
+            gen_out = tf.stack(gen_list, axis=-1)
+        else:
+            noise = self.noise_gen()
+            gen_in = [cond] + [const] + [noise]
+            gen_out = self.generator.model(gen_in, training=False)
+        return gen_out
 
     def gradient_penalty(self, real_data, gen_data):
         """
@@ -487,7 +480,7 @@ class HarrisWGAN_Model(keras.Model):
         # get mixture of generated and ground truth data
         #shape_dat = (gen_data - real_data).shape
         alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
-        mix_data = real_data + alpha * (gen_data - real_data)
+        mix_data = [real_data] + [alpha * (gen_data - real_data)]
 
         with tf.GradientTape() as gp_tape:
             gp_tape.watch(mix_data)
@@ -504,7 +497,6 @@ class HarrisWGAN_Model(keras.Model):
 
 
 class HarrisWGAN(AbstractModelClass):
-    """tbd if this can instead inherit of WGAN"""
     
     def __init__(self, generator: AbstractModelClass, discriminator: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
         
@@ -521,15 +513,7 @@ class HarrisWGAN(AbstractModelClass):
         self.set_custom_objects(loss=self.compile_options['loss'])
         self.set_fit_options()
         
-        # those are set via set_hparams()
-#         self.ensemble_size = ensemble_size
-#         self.CLtype = CLtype
-#         self.content_loss_weight = content_loss_weight
-        
     def set_compile_options(self):
-        """
-        Note SL: loss function and optimiser perhaps need edits
-        """
         # set optimizers
         if self.hparams["optimizer"].lower() == "adam":
             optimizer = keras.optimizers.Adam
@@ -544,44 +528,28 @@ class HarrisWGAN(AbstractModelClass):
         self.loss = self.get_recon_loss()
         
     def get_fit_options(self):
-        """NOTE SL: taken from wgan_model.py and renamed vars"""
-        cwgan_callbacks = []
+        harriswgan_callbacks = []
         
         if self.hparams["lr_decay"]:
-            cwgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
+            harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
         
         if self.hparams["lcheckpointing"]:
-            cwgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+            harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
             
         if self.hparams["learlystopping"]:
-            cwgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+            harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
             
-        if cwgan_callbacks is not None:
-            return {"callbacks": cwgan_callbacks}
+        if harriswgan_callbacks is not None:
+            return {"callbacks": harriswgan_callbacks}
         else:
             return {}  
         
     def set_model(self, generator, discriminator):
-        """
-        Setting the HarrisWGAN-model is a three-step approach:
-            1. Get the generator model
-            2. Get the discriminator model
-            3. Put the generator and discriminator model into the actual HarrisWGAN
-            
-        NOTE SL: taken from wgan_model.py; needs adaptations
-        incorporate setup_model here
-        """
         # get generator model
-        # only used in sha unet
-        # add_opts = {"concat_out": True} if "concat_out" in str(inspect.signature(generator)) else {}         # generator might have a concat_out-argument to handle z_branch-outputs
         gen_model = generator(self._input_shape["harris_generator"], self.hparams["hparams_generator"], self._varnames_tar)#, self._savedir, self._expname)        
         
-        # correct number of dynamic predictorst
-        # only used in SHA UNET, not needed here
-        # self._n_predictands_dyn = gen_model.__dict__["_n_predictands_dyn"]
         
         # get discriminator model
-        # tar_shape = (*self._input_shape[:-1], self._n_predictands_dyn)   # discriminator only accounts for dynamic predictands
         discriminator_model = discriminator(self._input_shape["harris_discriminator"], self.hparams["hparams_discriminator"], self._varnames_tar)
         
         # get hyperparamters of HarrisWGAN only
@@ -594,21 +562,20 @@ class HarrisWGAN(AbstractModelClass):
 
         return gen_model, discriminator_model
     
-    def get_recon_loss(self):
-        """
-        NOTE SL: taken from wgan_model.py
-        TODO: unsure if it needs adaptation
-        """
+#     def get_recon_loss(self):
+#         """
+#         Not needed
+#         """
 
-        kwargs_loss = {}
-        if "vec" in self.hparams["recon_loss"]:
-            kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self._n_predictands}
-        elif "channels" in self.hparams["recon_loss"]:
-            kwargs_loss = {"n_channels": self._n_predictands}
+#         kwargs_loss = {}
+#         if "vec" in self.hparams["recon_loss"]:
+#             kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self._n_predictands}
+#         elif "channels" in self.hparams["recon_loss"]:
+#             kwargs_loss = {"n_channels": self._n_predictands}
 
-        loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
+#         loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
 
-        return loss_fn
+#         return loss_fn
         
     def get_lr_decay(self):
         """
@@ -683,7 +650,7 @@ class HarrisWGAN(AbstractModelClass):
         """
         Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
         """
-        self.hparams_default = {"batch_size": 32, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
+        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 6, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels", "ensemble_size": 8, "CLtype": "ensmeanMSE", "content_loss_weight": 1000, "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {}, "gradient_penalty_weight": 10, }
 
@@ -818,11 +785,6 @@ class ModelCheckpointHarrisWGAN(ModelCheckpoint):
                                   'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
                 # Re-throw the error for any other causes.
                 raise e
-               
-
-
-    
-    
 
 ####################################################################################
 ####################################################################################
