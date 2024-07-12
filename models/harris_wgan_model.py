@@ -357,8 +357,8 @@ class HarrisWGAN_Model(keras.Model):
                 discriminator_gt = self.discriminator.model(disc_in_gt, training=True)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = self.discriminator_loss(discriminator_gt, discriminator_gen)
-                # gp = GradientPenalty()([sample_iter, gen_out])
-                gp = self.gradient_penalty(sample_iter, gen_out)
+                gp = GradientPenalty()([sample_iter, gen_out])
+                # gp = self.gradient_penalty(sample_iter, gen_out)
                 # print(gp)
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
