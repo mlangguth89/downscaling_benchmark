@@ -168,7 +168,7 @@ class AbstractPreprocessing(ABC):
         # Save the merged dataset to a new netCDF file
         ds_merged.to_netcdf(nc_tar)
         
-        return stat
+        return True
 
     @staticmethod
     def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
@@ -204,12 +204,11 @@ class AbstractPreprocessing(ABC):
 
         try:
             ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))
-            stat = True
         except RuntimeError as err:
             print("Could not rename all parsed variables: {0}".format(",".join(varnames)))
             raise err
 
-        return stat
+        return True
 
     @classmethod
     def print_implement_err(cls, method):

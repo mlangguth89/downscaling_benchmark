@@ -14,12 +14,10 @@ Main script to preprocess data for downscaling applications in MAELSTROM.
 import argparse
 import json as js
 import datetime as dt
-from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1
 from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 from preprocess_data_era5_to_crea6 import PreprocessERA5toCREA6
 
-known_methods = {"Unet_Tier1": Preprocess_Unet_Tier1,
-                 "ERA5_to_IFS": PreprocessERA5toIFS,
+known_methods = {"ERA5_to_IFS": PreprocessERA5toIFS,
                  "ERA5_to_CREA6": PreprocessERA5toCREA6}
 
 def main():
