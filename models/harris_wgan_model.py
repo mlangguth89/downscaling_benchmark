@@ -110,10 +110,12 @@ class GeneratorHarris(AbstractModelClass):
         print(f"Shape after third residual block: {generator_output.shape}")
 
         # Output layer
+        actv_out = "linear"
         generator_output = Conv2D(
-            filters=1, kernel_size=(1, 1), activation="softplus", name="output"
+            filters=1, kernel_size=(1, 1), activation=actv_out, name="output"
         )(generator_output)
         print(f"Output shape: {generator_output.shape}")
+        print(f"Output Conv2D activation: {actv_out}")
         
         self.model = Model(
             inputs=[generator_input, const_input, noise_input],
@@ -290,38 +292,17 @@ class HarrisWGAN_Model(keras.Model):
         super().compile(**kwargs)
         self.c_optimizer, self.g_optimizer = optimizer
         
-        # losses
-        #if self.hparams["ensemble_size"] is not None:
-        #    CLfn = CL_chooser(self.hparams["CLtype"])
-        #    losses = [wasserstein_loss, CLfn]
-        #    loss_weights = [1.0, self.hparams["content_loss_weight"]]
-        #else:
-        #    losses = [wasserstein_loss]
-        #    loss_weights = [1.0]
-            
-        #self.generator.compile(
-        #    loss=losses,
-        #    loss_weights=loss_weights,
-        #    optimizer=self.g_optimizer
-        #)
-        
-        #self.discriminator.compile(
-        #    loss=[wasserstein_loss, wasserstein_loss, 'mse'],
-        #    loss_weights=[1.0, 1.0, self.hparams["gradient_penalty_weight"]],
-        #    optimizer=self.c_optimizer
-        #)
-        
+        # losses        
         self.noise_gen = NoiseGenerator(
             self.generator._input_shape["lo_res_inputs"][:2]+(
                 self.hparams["noise_channels"],
             ), self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
         )
-        # self.recon_loss = loss
-        
-        # discriminator loss looks good
+
+        # losses
         self.discriminator_loss = self.discriminator_loss #get_custom_loss("critic")
-        
         self.discriminator_gen_loss = self.generator_loss #get_custom_loss("critic_generator")
+        self.recon_loss = CL_chooser(self.hparams["recon_loss"])
         
         
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
@@ -358,10 +339,9 @@ class HarrisWGAN_Model(keras.Model):
                 # calculate the loss (incl. gradient penalty)
                 c_loss = self.discriminator_loss(discriminator_gt, discriminator_gen)
                 #gp = GradientPenalty()([sample_iter, gen_out])
-                #gp = self.gradient_penalty(sample_iter, gen_out, cond_iter, const_iter)
-                gp = 0.
+                gp = self.gradient_penalty(sample_iter, gen_out, cond_iter, const_iter)
                 # print(gp)
-                d_loss = c_loss #+ self.hparams["gp_weight"] * gp
+                d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update discrimintor
             d_gradient = tape_critic.gradient(d_loss, self.discriminator.trainable_variables)
@@ -374,9 +354,6 @@ class HarrisWGAN_Model(keras.Model):
             const_iter = const[-self.hparams["batch_size"]:, ...]
             noise_iter = noise[-self.hparams["batch_size"]:, ...]
             sample_iter = sample[-self.hparams["batch_size"]:, ...]
-            # print(f"{cond_iter.shape = }")
-            # print(f"{const_iter.shape = }")
-            # print(f"{noise_iter.shape = }")
 
             # train generator for each ensemble member
             noise_iter_k = noise_iter[..., 0]
@@ -396,11 +373,12 @@ class HarrisWGAN_Model(keras.Model):
             disc_in_gen = [cond_iter] + [const_iter] + [gen_data]
             discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
 
+            # critic loss for generator
             cg_loss = self.discriminator_gen_loss(discriminator_gen)
-            #rloss = self.recon_loss(gen_in, gen_data)
             # content loss term
-            cl_loss = CL_chooser(self.hparams["CLtype"])(sample_iter, gen_data_list[-1])
-            #g_loss = cg_loss + self.hparams["recon_weight"] * rloss
+            tf.print(gen_data_list[-1].shape)
+            cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
+            # combined loss for generator
             g_loss = cg_loss + cl_loss #*self.hparams["recon_weight"]
 
 
@@ -413,14 +391,12 @@ class HarrisWGAN_Model(keras.Model):
                 ("gp_loss", self.hparams["gp_weight"] * gp),
                 ("d_loss", d_loss),
                 ("cg_loss", cg_loss),
-                ("cl_loss", cl_loss),
-                #("recon_loss", rloss * self.hparams["recon_weight"]),
+                ("recon_loss", cl_loss),
+                #("recon_loss", cl_loss * self.hparams["recon_weight"]),
                 ("g_loss", g_loss)
             ]
         )
-        
-        
-        
+            
 
     def test_step(self, val_iter: tf.data.Dataset) -> OrderedDict:
         """
@@ -433,20 +409,33 @@ class HarrisWGAN_Model(keras.Model):
         inputs, outputs = val_iter
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
-        noise = self.noise_gen()
         sample = outputs["output"]
+        
+        if self.hparams["ensemble_size"] is not None:
+            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
+            gen_list = []
+            for noise_iter in noise:
+                gen_in = [cond] + [const] + [noise_iter]
+                gen_iter = self.generator.model(gen_in, training=False)
+                gen_list.append(gen_iter)
+            gen_out = tf.stack(gen_list, axis=-1)
+        else:
+            noise = self.noise_gen()
+            gen_in = [cond] + [const] + [noise]
+            gen_out = self.generator.model(gen_in, training=False)
+            
+        disc_in_gen = [cond_iter] + [const_iter] + [gen_list[0]]
+        discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
 
-        gen_in = [cond] + [const] + [noise]
-        # Since we validate on a sample here, no need for generating an ensemble
-        # => no CL loss, only original gen loss
-        gen_data = self.generator.model(gen_in, training=False)
-        disc_in_gen = [cond_iter] + [const_iter] + [gen_data]
-        discriminator_gen = self.discriminator.model(disc_in_gen, training=False)
+        # critic loss for generator
         cg_loss = self.discriminator_gen_loss(discriminator_gen)
-        #rloss = self.recon_loss(predictands, gen_data)
+        # content loss term
+        tf.print(gen_data_list[-1].shape)
+        cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
+
         return OrderedDict([
             ("cg_loss", cg_loss),
-            #("recon_loss", rloss),
+            ("recon_loss", rloss),
         ])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
@@ -471,11 +460,16 @@ class HarrisWGAN_Model(keras.Model):
     def gradient_penalty(self, real_data, gen_data, cond_data, const_data):
         """
         Calculates gradient penalty based on 'mixture' of generated and ground truth data
-        :param real_data: the ground truth data
-        :param gen_data: the generated/predicted data
+        :param real_data: the ground truth (high-res) data
+        :param gen_data: the generated/predicted (high-res) data
+        :param cond_data: the conditional (low-res) input data of the generator/critic
+        :param const_data: the static (high-res) data of the generator/critic
         :return: gradient penalty
         
-        NOTE SL: taken from wgan_model.py
+        NOTE ML: This is now equivalent to the sage of the GradientPenalty-layer in the original WGAN-implementation,
+                 cf. https://github.com/ECMWFCode4Earth/tesserugged/blob/561733660f53a2d3beedc55b593ba68ec260040e/dev/gan/dsrnngan/gan.py#L129C67-L129C69
+                 and https://github.com/ECMWFCode4Earth/tesserugged/blob/561733660f53a2d3beedc55b593ba68ec260040e/dev/gan/dsrnngan/layers.py#L13
+        
         """
         # get mixture of generated and ground truth data
         #shape_dat = (gen_data - real_data).shape
@@ -538,7 +532,6 @@ class HarrisWGAN(AbstractModelClass):
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
         self.optimizer = (optimizer(self.discriminator.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
-        # self.loss = self.get_recon_loss()
         
     def get_fit_options(self):
         harriswgan_callbacks = []
@@ -575,20 +568,6 @@ class HarrisWGAN(AbstractModelClass):
 
         return gen_model, discriminator_model
     
-#     def get_recon_loss(self):
-#         """
-#         Not needed
-#         """
-
-#         kwargs_loss = {}
-#         if "vec" in self.hparams["recon_loss"]:
-#             kwargs_loss = {"nd_vec": self.hparams.get("nd_vec", 2), "n_channels": self._n_predictands}
-#         elif "channels" in self.hparams["recon_loss"]:
-#             kwargs_loss = {"n_channels": self._n_predictands}
-
-#         loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
-
-#         return loss_fn
         
     def get_lr_decay(self):
         """
@@ -665,7 +644,7 @@ class HarrisWGAN(AbstractModelClass):
         """
         self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "mae_channels", "ensemble_size": 8, "CLtype": "ensmeanMSE", "content_loss_weight": 1000, "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {}, "gradient_penalty_weight": 10, }
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {} }
 
 
             
@@ -951,7 +930,8 @@ def denormalise(y_in):
 
 
 def wasserstein_loss(y_true, y_pred):
-    return K.mean(y_true * y_pred, axis=-1)
+    return 1.
+    #return K.mean(y_true * y_pred, axis=-1)
 
 def ensmean_MSE(y_true, y_pred):
     pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
