@@ -304,7 +304,7 @@ class HarrisWGAN_Model(keras.Model):
         self.discriminator_gen_loss = self.generator_loss #get_custom_loss("critic_generator")
         self.recon_loss = CL_chooser(self.hparams["recon_loss"])
         
-        
+    @tf.function    
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
         inputs, outputs = data_iter
         cond = inputs["lo_res_inputs"]
@@ -379,7 +379,7 @@ class HarrisWGAN_Model(keras.Model):
             tf.print(gen_data_list[-1].shape)
             cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
             # combined loss for generator
-            g_loss = cg_loss + cl_loss #*self.hparams["recon_weight"]
+            g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
 
 
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
@@ -391,8 +391,8 @@ class HarrisWGAN_Model(keras.Model):
                 ("gp_loss", self.hparams["gp_weight"] * gp),
                 ("d_loss", d_loss),
                 ("cg_loss", cg_loss),
-                ("recon_loss", cl_loss),
-                #("recon_loss", cl_loss * self.hparams["recon_weight"]),
+                #("recon_loss", cl_loss),
+                ("recon_loss", cl_loss * self.hparams["recon_weight"]),
                 ("g_loss", g_loss)
             ]
         )
@@ -410,32 +410,38 @@ class HarrisWGAN_Model(keras.Model):
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
         sample = outputs["output"]
-        
-        if self.hparams["ensemble_size"] is not None:
-            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
-            gen_list = []
-            for noise_iter in noise:
-                gen_in = [cond] + [const] + [noise_iter]
-                gen_iter = self.generator.model(gen_in, training=False)
-                gen_list.append(gen_iter)
-            gen_out = tf.stack(gen_list, axis=-1)
-        else:
+        if self.hparams["ensemble_size"] is None:
             noise = self.noise_gen()
-            gen_in = [cond] + [const] + [noise]
-            gen_out = self.generator.model(gen_in, training=False)
-            
-        disc_in_gen = [cond_iter] + [const_iter] + [gen_list[0]]
+        else:
+            # ensemble stacked in an additional dimension at the end
+            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+        
+        noise_0 = noise[..., 0]
+        gen_in = [cond] + [const] + [noise_0]
+        gen_data = self.generator.model(gen_in, training=True)
+        gen_data_list = [gen_data]
+        if self.hparams["ensemble_size"] is not None:
+            gen_iter_list = []
+            for k in range(self.hparams["ensemble_size"]):
+                noise_k = noise[..., k+1]
+                gen_in = [cond] + [const] + [noise_k]
+                gen_data_k = self.generator.model(gen_in, training=True)
+                gen_iter_list.append(gen_data_k)
+
+            gen_data_list.append(tf.stack(gen_iter_list))
+
+        disc_in_gen = [cond] + [const] + [gen_data]
         discriminator_gen = self.discriminator.model(disc_in_gen, training=True)
 
         # critic loss for generator
         cg_loss = self.discriminator_gen_loss(discriminator_gen)
         # content loss term
         tf.print(gen_data_list[-1].shape)
-        cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
+        cl_loss = self.recon_loss(sample, gen_data_list[-1])
 
         return OrderedDict([
             ("cg_loss", cg_loss),
-            ("recon_loss", rloss),
+            ("recon_loss", cl_loss * self.hparams["recon_weight"]),
         ])
 
     def predict_step(self, test_iter: tf.data.Dataset) -> OrderedDict:
