@@ -591,7 +591,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             
             # Obtain number of grid points for slicing
             gdes_coa = CDOGridDes(fgdes_coarse)
-            nx, ny = gdes_coa.grid_des_dict["xsize"], gdes_coa.grid_des_dict["ysize"] 
+            nx, ny = int(gdes_coa.grid_des_dict["xsize"]), int(gdes_coa.grid_des_dict["ysize"])
 
             cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", f"2,{nx-1:d},2,{ny-1:d}")]))
             # rename dimension of ERA5-data
