@@ -48,11 +48,11 @@ class PreprocessERA5toIFS(AbstractPreprocessing):
     const_vars = ["z", "lsm"]
 
     def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, grid_des_tar: str,
-                 predictors: dict, predictands: dict, downscaling_fac: int = 8):
+                 predictors: dict, predictands: dict, upscale_source: bool = True, downscaling_fac: int = 8):
         """
         Initialize class for ERA5-to-IFS downscaling class.
         """
-        super().__init__("preprocess_ERA5_to_IFS", in_datadir, tar_datadir, predictors, predictands, out_dir)
+        super().__init__("preprocess_ERA5_to_IFS", in_datadir, tar_datadir, predictors, predictands, out_dir, upscale_source)
 
         # sanity checks
         if not os.path.isfile(grid_des_tar):

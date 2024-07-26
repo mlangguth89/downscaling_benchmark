@@ -25,7 +25,7 @@ class AbstractPreprocessing(ABC):
     Abstract class for preprocessing
     """
     def __init__(self, name_preprocess: str, source_dir_in: str, source_dir_out: str, predictors: dict,
-                 predictands: dict, target_dir: str):
+                 predictands: dict, target_dir: str, upscale_source: bool = True):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
@@ -35,6 +35,7 @@ class AbstractPreprocessing(ABC):
         :param predictors: dictionary defining predictors for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param predictands: dictionary defining predictands for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param target_dir: directory to store preprocessed data
+        :param upscale_source: boolean to upscale (bi-linearly) coarse-grained input data on target grid 
         """
         method = AbstractPreprocessing.__init__.__name__
         # sanity check
@@ -54,6 +55,7 @@ class AbstractPreprocessing(ABC):
         self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
+        self.upscale_input = upscale_source
         self.downscaling_task = "real"
         if self.source_dir_in == self.source_dir_out:
             self.downscaling_task = "pure"
