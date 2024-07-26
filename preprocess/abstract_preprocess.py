@@ -5,11 +5,11 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-04-29"
+__update__ = "2024-07-26"
 
 import os, glob
 from abc import ABC
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from collections import OrderedDict
 import logging
 import numpy as np
@@ -55,7 +55,7 @@ class AbstractPreprocessing(ABC):
         self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
-        self.upscale_input = upscale_source
+        self.upscale_source = upscale_source
         self.downscaling_task = "real"
         if self.source_dir_in == self.source_dir_out:
             self.downscaling_task = "pure"
@@ -171,6 +171,25 @@ class AbstractPreprocessing(ABC):
         ds_merged.to_netcdf(nc_tar)
         
         return True
+    
+    @staticmethod
+    def rename_variables(nc_file, rename_dict: Dict):
+        """
+        Rename variables in netCDf-file.
+        Can also be used for coordinate variables since their renaming with NCO's ncrename is notoriously buggy, 
+        see also: https://nco.sourceforge.net/nco.html#bug_nc4_rename. 
+        Note that variables can also be 
+        :param nc_file: path to netCDF-file
+        :param rename_dict: dictionary for renaming coordinates/variables (cf. xarray's rename-method)
+        """
+        # read data and rename variables/coordinates
+        ds = xr.open_dataset(nc_file)
+        ds = ds.rename(rename_dict)
+
+        # delete existing file to create updated netCDF-file
+        os.remove(nc_file)
+        ds.to_netcdf(nc_file)
+
 
     @staticmethod
     def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):

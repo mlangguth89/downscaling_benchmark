@@ -50,6 +50,8 @@ def main():
                         help="Months of data to be preprocessed.")
     parser.add_argument("--grid_description_target", "-grid_des_tar", dest="grid_des_tar", type=str, required=True,
                         help="Grid description file to define domain of interest (target domain).")
+    parser.add_argument("--upscale_source", "-up_src", dest="upscale_source", default=False, action="store_true",
+                        help="Flag to upscale coarse-grained input data onto target grid when preprocessing.")
     parser.add_argument("--preprocess_method", "-method", dest="method", type=str, required=True,
                         help="Preprocessing method to generate dataset for training, validation and testing.")
     parser.add_argument("--downscaling_factor", "-down_fac", dest="downscaling_fac", type=int, default=None, 
