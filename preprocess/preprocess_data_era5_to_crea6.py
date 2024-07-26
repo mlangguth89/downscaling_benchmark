@@ -596,9 +596,9 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             # To-Do: Dependency on lextrapolate-flag of create_coarsened_grid_des-method
             #        Slicing is only required if lextrapolate is True when creating the grid description of the coarse-grained input data
             #        So far, this is hard-coded in the parent class (cf. l.91 in preprocess_data_era5_to_ifs.py)
-            cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", "2,-2,2,-2")]))
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", "2,37,2,33")]))
             # rename dimension of ERA5-data
-            ncrename.run([file_in_merge], OrderedDict([("-d", ["rlat,rlat_in", "rlon", "rlon_in"])]))
+            ncrename.run([file_in_merge], OrderedDict([("-d", ["rlat,rlat_in", "rlon,rlon_in"]), ("-v", ["rlat,rlat_in", "rlon,rlon_in"])]))
 
 
         # merge input and target data
