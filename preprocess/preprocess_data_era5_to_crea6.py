@@ -329,8 +329,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :return: path to processed netCDF-datafile and updated number of warnings
         """
         cdo  = PreprocessERA5toCREA6.cdo
-        ncrename = PreprocessERA5toCREA6.ncrename
-        #ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
 
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
@@ -379,7 +377,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             # rename dimension of COSMO REA6-data for clarity if source data is not upscaled
             if not self.upscale_source: 
-                ncrename.run([final_file], OrderedDict([("-d", ["rlat,rlat_tar", "rlon,rlon_tar"]), ("-v", ["rlat,rlat_tar", "rlon,rlon_tar"])]))
+                self.rename_variables(final_file, {"rlat": "rlat_tar", "rlon": "rlon_tar"})
 
         return final_file, nwarn
 
@@ -573,7 +571,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :return: updated nwarn and resulting merged netCDF-file
         """
         cdo = self.cdo
-        ncrename = self.ncrename
 
         if not file_in.endswith(".nc"):
             raise ValueError(f"Input data-file '{file_in}' must be a netCDF-file.")
@@ -598,8 +595,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
             cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", f"2,{nx-1:d},2,{ny-1:d}")]))
             # rename dimension of ERA5-data
-            ncrename.run([file_in_merge], OrderedDict([("-d", ["rlat,rlat_in", "rlon,rlon_in"]), ("-v", ["rlat,rlat_in", "rlon,rlon_in"])]))
-
+            self.rename_variables(file_in_merge, {"rlat": "rlat_in", "rlon": "rlon_in"})
 
         # merge input and target data
         stat = self.merge_multiple_netcdf([file_in_merge, file_tar], final_file)
