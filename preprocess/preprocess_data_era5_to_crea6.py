@@ -51,12 +51,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
     const_vars = ["z", "lsm"]
 
     def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, tar_constfile: str,
-                 grid_des_tar: str, predictors: dict, predictands: dict, downscaling_fac: int = 4):
+                 grid_des_tar: str, predictors: dict, predictands: dict, upscale_source: bool = True, downscaling_fac: int = 4):
         """
         Initialize class for ERA5-to-COSMO REA6 downscaling class.
         """
         # initialize from ERA5-to-IFS class (parent class)
-        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands,
+        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands, upscale_source,
                          downscaling_fac)
 
         self.name_preprocess = "preprocess_ERA5_to_CREA6"
@@ -582,22 +582,34 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not file_in.endswith(".nc"):
             raise ValueError(f"Input data-file '{file_in}' must be a netCDF-file.")
         file_in_coa = file_in.replace(".nc", "_coa.nc")
-        file_in_hres = file_in.replace(".nc", "_hres.nc")
+        file_in_merge = file_in.replace(".nc", "_merge.nc")
 
         # remap coarse ERA5-data
         cdo.run([file_in, file_in_coa], OrderedDict([("-remapcon", gdes_coarse)]))
-        # bi-linear interpolation onto target grid
-        cdo.run([file_in_coa, file_in_hres], OrderedDict([("-remapbil", gdes_tar)]))
+    
+        if self.upscale_source: 
+            # bi-linear interpolation onto target grid
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("-remapbil", gdes_tar)]))
+        else: 
+            # keep coarse-grained grid, but slice data and rename dimensions
+            ncrename = self.ncrename
+            # To-Do: Dependency on lextrapolate-flag of create_coarsened_grid_des-method
+            #        Slicing is only required if lextrapolate is True when creating the grid description of the coarse-grained input data
+            #        So far, this is hard-coded in the parent class (cf. l.91 in preprocess_data_era5_to_ifs.py)
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", "2,-2,2,-2")]))
+            # rename dimension of ERA5-data
+            ncrename.run([file_in_merge], OrderedDict([("-d", ["rlat,rlat_in", "rlon", "rlon_in"])]))
+
 
         # merge input and target data
-        stat = self.merge_multiple_netcdf([file_in_hres, file_tar], final_file)
+        stat = self.merge_multiple_netcdf([file_in_merge, file_tar], final_file)
 
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
         else:
             #remove_files([file_in_coa, file_in_hres, file_tar], lbreak=True)
             # keep file with data that has not been bilinearly interpolated
-            remove_files([file_in_hres, file_tar], lbreak=True)
+            remove_files([file_in_merge, file_tar], lbreak=True)
 
         return nwarn
     
