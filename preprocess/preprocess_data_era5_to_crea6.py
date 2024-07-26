@@ -51,12 +51,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
     const_vars = ["z", "lsm"]
 
     def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, tar_constfile: str,
-                 grid_des_tar: str, predictors: dict, predictands: dict, downscaling_fac: int = 4):
+                 grid_des_tar: str, predictors: dict, predictands: dict, upscale_source: bool = True, downscaling_fac: int = 4):
         """
         Initialize class for ERA5-to-COSMO REA6 downscaling class.
         """
         # initialize from ERA5-to-IFS class (parent class)
-        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands,
+        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands, upscale_source,
                          downscaling_fac)
 
         self.name_preprocess = "preprocess_ERA5_to_CREA6"
@@ -259,8 +259,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         """
         Retrieve the predictor data from the monthly ERA5-datafiles.
         """
-        cdo = PreprocessERA5toCREA6.cdo
-
         year_month_str = year_month.strftime("%Y-%m")   
 
         lfail = False
@@ -331,8 +329,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :return: path to processed netCDF-datafile and updated number of warnings
         """
         cdo  = PreprocessERA5toCREA6.cdo
-        #ncrename = PreprocessERA5toCREA6.ncrename
-        #ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
 
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
@@ -375,15 +371,13 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         else:
             # merge the data
             cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
-            ## replicate constant data over all timesteps
-            #for const_var in const_vars:
-            #    ncap2.run([final_file, final_file], OrderedDict([("-A", ""),
-            #                                                     ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
-            #    ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
-            #    ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
             # rename variables
             self.add_varname_suffix(final_file, self.all_predictands, "_tar")
+
+            # rename dimension of COSMO REA6-data for clarity if source data is not upscaled
+            if not self.upscale_source: 
+                self.rename_variables(final_file, {"rlat": "rlat_tar", "rlon": "rlon_tar"})
 
         return final_file, nwarn
 
@@ -447,7 +441,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         vl_vars_dict = self.era5_ml_vars if vl_type == "ml" else self.era5_pl_vars
 
         cdo = self.cdo
-        ncrename = self.ncrename
 
         year_month_str = year_month.strftime("%Y-%m")   
 
@@ -564,15 +557,15 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return dfile_out
     
-    def remap_and_merge_data(self, file_in: str, file_tar: str, final_file: str, gdes_coarse: str, gdes_tar: str,
+    def remap_and_merge_data(self, file_in: str, file_tar: str, final_file: str, fgdes_coarse: str, fgdes_tar: str,
                              nwarn: int, max_warn: int) -> int:
         """
         Perform the remapping step on the predictor data and finally merge it with the predictand data
         :param file_in: netCDF-file with predictor data
         :param file_tar: netCDF-file with predictand data
         :param final_file: name of the resulting merged netCDF-file
-        :param gdes_coarse: CDO grid description file corresponding to the coarse-grained predictor data
-        :param gdes_tar: CDO grid description file corresponding to the high-resolved predictand data
+        :param fgdes_coarse: CDO grid description file corresponding to the coarse-grained predictor data
+        :param fgdes_tar: CDO grid description file corresponding to the high-resolved predictand data
         :param nwarn: current number of issued warnings
         :param max_warn: maximum allowed number of warnings
         :return: updated nwarn and resulting merged netCDF-file
@@ -582,22 +575,35 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not file_in.endswith(".nc"):
             raise ValueError(f"Input data-file '{file_in}' must be a netCDF-file.")
         file_in_coa = file_in.replace(".nc", "_coa.nc")
-        file_in_hres = file_in.replace(".nc", "_hres.nc")
+        file_in_merge = file_in.replace(".nc", "_merge.nc")
 
         # remap coarse ERA5-data
-        cdo.run([file_in, file_in_coa], OrderedDict([("-remapcon", gdes_coarse)]))
-        # bi-linear interpolation onto target grid
-        cdo.run([file_in_coa, file_in_hres], OrderedDict([("-remapbil", gdes_tar)]))
+        cdo.run([file_in, file_in_coa], OrderedDict([("-remapcon", fgdes_coarse)]))
+    
+        if self.upscale_source: 
+            # bi-linear interpolation onto target grid
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("-remapbil", fgdes_tar)]))
+        else: 
+            # keep coarse-grained grid, but slice data and rename dimensions
+            # To-Do: Dependency on lextrapolate-flag of create_coarsened_grid_des-method
+            #        Slicing is only required if lextrapolate is True when creating the grid description of the coarse-grained input data
+            #        So far, this is hard-coded in the parent class (cf. l.91 in preprocess_data_era5_to_ifs.py)
+            
+            # Obtain number of grid points for slicing
+            gdes_coa = CDOGridDes(fgdes_coarse)
+            nx, ny = int(gdes_coa.grid_des_dict["xsize"]), int(gdes_coa.grid_des_dict["ysize"])
+
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", f"2,{nx-1:d},2,{ny-1:d}")]))
+            # rename dimension of ERA5-data
+            self.rename_variables(file_in_merge, {"rlat": "rlat_in", "rlon": "rlon_in"})
 
         # merge input and target data
-        stat = self.merge_multiple_netcdf([file_in_hres, file_tar], final_file)
+        stat = self.merge_multiple_netcdf([file_in_merge, file_tar], final_file)
 
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
         else:
-            #remove_files([file_in_coa, file_in_hres, file_tar], lbreak=True)
-            # keep file with data that has not been bilinearly interpolated
-            remove_files([file_in_hres, file_tar], lbreak=True)
+            remove_files([file_in_coa, file_in_merge, file_tar], lbreak=True)
 
         return nwarn
     

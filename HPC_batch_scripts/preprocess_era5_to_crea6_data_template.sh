@@ -10,7 +10,7 @@
 #SBATCH --gres=gpu:0
 #SBATCH --partition=devel
 #SBATCH --mail-type=ALL
-#SBATCH --mail-user=m.langguth@fz-juelich.de
+#SBATCH --mail-user=my_email
 ##jutil env activate -p cjjsc42
 
 ######### Template identifier (don't remove) #########
@@ -44,6 +44,9 @@ out_dir=/path/to/output/directory/
 # selection of predictors and predictands
 predictors='{"fc_sf": {"2t": "", "10u": "", "10v": "", "blh": "", "z": "", "sshf": "", "slhf": ""}, "fc_pl": {"t": ["p85000","p92500"]}}'
 predictands='{"sf": {"t_2m": ""}, "invar": {"hsurf": ""}}'
+# flag to either get upscaled coarse data or coarse data on native resolution
+#upscale_src=-up_src
+upscale_src=""
 
 # time request
 years=( 2016 2017 2018 )

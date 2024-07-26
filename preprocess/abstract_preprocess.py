@@ -5,11 +5,11 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-04-29"
+__update__ = "2024-07-26"
 
 import os, glob
 from abc import ABC
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from collections import OrderedDict
 import logging
 import numpy as np
@@ -25,7 +25,7 @@ class AbstractPreprocessing(ABC):
     Abstract class for preprocessing
     """
     def __init__(self, name_preprocess: str, source_dir_in: str, source_dir_out: str, predictors: dict,
-                 predictands: dict, target_dir: str):
+                 predictands: dict, target_dir: str, upscale_source: bool = True):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
@@ -35,6 +35,7 @@ class AbstractPreprocessing(ABC):
         :param predictors: dictionary defining predictors for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param predictands: dictionary defining predictands for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param target_dir: directory to store preprocessed data
+        :param upscale_source: boolean to upscale (bi-linearly) coarse-grained input data on target grid 
         """
         method = AbstractPreprocessing.__init__.__name__
         # sanity check
@@ -54,6 +55,7 @@ class AbstractPreprocessing(ABC):
         self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
+        self.upscale_source = upscale_source
         self.downscaling_task = "real"
         if self.source_dir_in == self.source_dir_out:
             self.downscaling_task = "pure"
@@ -169,6 +171,25 @@ class AbstractPreprocessing(ABC):
         ds_merged.to_netcdf(nc_tar)
         
         return True
+    
+    @staticmethod
+    def rename_variables(nc_file, rename_dict: Dict):
+        """
+        Rename variables in netCDf-file.
+        Can also be used for coordinate variables since their renaming with NCO's ncrename is notoriously buggy, 
+        see also: https://nco.sourceforge.net/nco.html#bug_nc4_rename. 
+        Note that variables can also be 
+        :param nc_file: path to netCDF-file
+        :param rename_dict: dictionary for renaming coordinates/variables (cf. xarray's rename-method)
+        """
+        # read data and rename variables/coordinates
+        ds = xr.open_dataset(nc_file)
+        ds = ds.rename(rename_dict)
+
+        # delete existing file to create updated netCDF-file
+        os.remove(nc_file)
+        ds.to_netcdf(nc_file)
+
 
     @staticmethod
     def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
@@ -314,9 +335,9 @@ class CDOGridDes(ABC):
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n, prefac_first = 2, -(downscaling_fac+1)/2
+            add_n, prefac_first = 2, -(downscaling_fac+1)/2.
         else:
-            add_n, prefac_first = 0, (downscaling_fac-1)/2
+            add_n, prefac_first = 0, (downscaling_fac-1)/2.
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 
