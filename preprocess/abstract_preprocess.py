@@ -334,11 +334,10 @@ class CDOGridDes(ABC):
                              .format(method, ", ".join(map(str, nxy_in)), downscaling_fac))
 
         # get parameters for auxiliary grid description files
-        prefac_first = (downscaling_fac-1)/2
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n, prefac_first = 2, -prefac_first
+            add_n, prefac_first = 2, -(downscaling_fac+1)/2.
         else:
-            add_n = 0
+            add_n, prefac_first = 0, (downscaling_fac-1)/2.
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 
