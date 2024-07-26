@@ -184,7 +184,7 @@ class AbstractPreprocessing(ABC):
         """
         # read data and rename variables/coordinates
         ds = xr.open_dataset(nc_file)
-        ds.rename(rename_dict)
+        ds = ds.rename(rename_dict)
 
         # delete existing file to create updated netCDF-file
         os.remove(nc_file)
