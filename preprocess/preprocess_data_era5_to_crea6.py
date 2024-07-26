@@ -603,9 +603,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
         else:
-            #remove_files([file_in_coa, file_in_hres, file_tar], lbreak=True)
-            # keep file with data that has not been bilinearly interpolated
-            remove_files([file_in_merge, file_tar], lbreak=True)
+            remove_files([file_in_coa, file_in_merge, file_tar], lbreak=True)
 
         return nwarn
     
