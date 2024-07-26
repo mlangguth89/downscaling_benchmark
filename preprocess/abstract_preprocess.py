@@ -55,7 +55,7 @@ class AbstractPreprocessing(ABC):
         self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
-        self.upscale_input = upscale_source
+        self.upscale_source = upscale_source
         self.downscaling_task = "real"
         if self.source_dir_in == self.source_dir_out:
             self.downscaling_task = "pure"
