@@ -12,7 +12,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-03-08"
+__update__ = "2024-07-28"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -398,9 +398,9 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     return tfds
 
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
-                           lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
-                           var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
-                           with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
+                           mode: str = "hi_input", static_predictors: List = None, lshuffle: bool = True, 
+                           shuffle_samples: int = 20000, named_targets: bool = False, var_tar2in: str = None,
+                           lrepeat: bool = True, drop_remainder: bool = True, with_horovod: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
@@ -411,6 +411,8 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+    :param mode: choices: ['hi_input', 'hi_input_named_target', 'lo_input']
+    :param static_predictors: List of static (high-resolved) variables serving as predictors (only with coarse_input = True)
     :param lshuffle: flag if shuffling should be applied to dataset
     :param shuffle_samples: number of samples to load before applying shuffling
     :param named_targets: flag if target of TF dataset should be dictionary with named target variables
@@ -419,8 +421,13 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     :param lrepeat: flag if dataset should be repeated
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :param with_horovod: flag to trigger horovod-based distributed dataset creation
-    :param lembed: flag to trigger temporal embedding (not implemented yet!)
     """
+    if mode == "lo_input":
+        assert static_predictors is not None, "Provide high-resolved static input predictors for mode 'lo_input'"
+    else:
+        predictors = predictors + to_list(static_predictors)
+        static_predictors = None
+        print(f"Static predictors added to predictors for data pipeline mode '{mode}'")
 
     if with_horovod:
         import horovod.tensorflow as hvd
@@ -434,20 +441,22 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         if "time" not in ds[var].dims:
             ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
 
-    ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
+    ds_in, ds_tar, ds_stat = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors,
+                                                          static_predictors=static_predictors)    
+    
+    ds_list = [ds_in, ds_tar, ds_stat] if static_predictors is not None else [ds_in, ds_tar]
 
     # convert dataset to data arrays and load into memory
-    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True), \
-                    HandleDataClass.reshape_ds(ds_tar).astype("float32", copy=True)
+    da_list = [HandleDataClass.reshape_ds(ds).astype("float32", copy=True) for ds in ds_list]
 
     if var_tar2in is not None:
         # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
         #       * The following operation order must concatenate var_tar2in by da_in to ensure
         #         that the variable appears at first place. This is required to avoid
         #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-        da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
+        da_list[0] = xr.concat([da_list[1].sel({"variables": var_tar2in}), da_list[0]], "variables")
 
-    varnames_tar = da_tar["variables"].values
+    varnames_tar = da_list[1]["variables"].values
 
     def gen_named(darr_in, darr_tar):
         # darr_in, darr_tar = darr_in.load(), darr_tar.load()
@@ -463,25 +472,55 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         for t in range(ntimes):
             yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
 
-    if named_targets is True:
-        gen_now = gen_named
-    else:
+    def gen_dict(darr_in, darr_tar, darr_stat):
+        ntimes = len(darr_in["time"])
+        for t in range(ntimes):
+            yield tuple(
+                (
+                    {
+                        "lo_res_inputs": darr_in.isel({"time": t}).values,
+                        "hi_res_inputs": darr_stat.isel({"time": t}).values,
+                    },
+                    {"output": darr_tar.isel({"time": t}).values},
+                )
+            )
+
+    if mode == "hi_input":
         gen_now = gen_unnamed
+    elif mode == "hi_input_named_target":
+        gen_now = gen_named
+    elif mode == "lo_input":
+        gen_now = gen_dict
+    else: 
+        raise ValueError(f"Mode {mode} is not supported. Possible choices: 'hi_input', 'hi_input_named_target' and 'lo_input'")
 
     # create output signatures from first sample
-    s0 = next(iter(gen_now(da_in, da_tar)))
-    sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
-    if named_targets is True:
-        sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
+    s0 = next(iter(gen_now(*da_list)))
+    if mode == "lo_input":
+        sample_spec_in = {
+            "lo_res_inputs": tf.TensorSpec(
+                s0[0]["lo_res_inputs"].shape, dtype=s0[0]["lo_res_inputs"].dtype
+            ),
+            "hi_res_inputs": tf.TensorSpec(
+                s0[0]["hi_res_inputs"].shape, dtype=s0[0]["hi_res_inputs"].dtype
+            ),
+        }
+
+        sample_spec_tar = {
+            "output": tf.TensorSpec(s0[1]["output"].shape, dtype=s0[1]["output"].dtype)
+        }
     else:
-        sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
+        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
+        if mode == "hi_input_named_target":
+            sample_spec_tar = {
+                var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype)
+                for var in varnames_tar
+            }
+        else: 
+            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
 
     # re-instantiate the generator and build TF dataset
-    gen_train = gen_now(da_in, da_tar)
-
-    #if lembed is True:
-    #    raise ValueError("Time embedding is not supported yet.")
-    #else:
+    gen_train = gen_now(*da_list)
     data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=(sample_spec_in, sample_spec_tar))
 
     # Notes:
@@ -500,12 +539,9 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     # clean-up to free some memory
     # free_mem([da, da_in, da_tar, varnames_tar])
     del ds
-    del ds_in
-    del ds_tar
-    del da_in
-    del da_tar
+    del ds_list
+    del da_list
     gc.collect()
-
 
     return data_iter
 
