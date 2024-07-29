@@ -350,12 +350,11 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     return tfds, tfds_info
 
 
-def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
+def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, mode: str = "hi_input",
                         lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
     """
     Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
     To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
-    TO-DO: Add flags for repeat and drop_remainder (cf. make_tf_dataset_allmem-method)
     :param ds_obj: StreamMonthlyNetCDF-object
     :param batch_size: desired mini-batch size
     :param nepochs: (effective) number of epochs for training
@@ -384,7 +383,6 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     else:
         tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
 
-    tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
     tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
     tfds = tfds.flat_map(
         lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
@@ -399,35 +397,35 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
 def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
                            mode: str = "hi_input", static_predictors: List = None, lshuffle: bool = True, 
-                           shuffle_samples: int = 20000, named_targets: bool = False, var_tar2in: str = None,
-                           lrepeat: bool = True, drop_remainder: bool = True, with_horovod: bool = False) -> tf.data.Dataset:
+                           shuffle_samples: int = 20000, lrepeat: bool = True, drop_remainder: bool = True,
+                           with_horovod: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
-
-    TO-DO: 
-
     :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
     :param mode: choices: ['hi_input', 'hi_input_named_target', 'lo_input']
-    :param static_predictors: List of static (high-resolved) variables serving as predictors (only with coarse_input = True)
+                 'hi_input': (bilinearly) upscaled input data available from data file
+                 'hi_input_named_target': as 'hi_input', but with named target (output as dictionary with variable names as key)
+                 'lo_input': input data on coarse grid, but high-resolved static predictors available
+                             data pipeline yield a dictionary with 'lo_input', 'static' and 'output' as keys
+    :param static_predictors: List of static (high-resolved) variables serving as predictors 
     :param lshuffle: flag if shuffling should be applied to dataset
     :param shuffle_samples: number of samples to load before applying shuffling
-    :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-    :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
-                                                                        to the input)
     :param lrepeat: flag if dataset should be repeated
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :param with_horovod: flag to trigger horovod-based distributed dataset creation
     """
+    # add static predictors to predictors-list unless lo_input-mode is chosen
     if mode == "lo_input":
         assert static_predictors is not None, "Provide high-resolved static input predictors for mode 'lo_input'"
     else:
-        predictors = predictors + to_list(static_predictors)
-        static_predictors = None
-        print(f"Static predictors added to predictors for data pipeline mode '{mode}'")
+        if static_predictors:
+            predictors = to_list(static_predictors) + predictors
+            static_predictors = None
+            print(f"Static predictors added to predictors for data pipeline mode '{mode}'")
 
     if with_horovod:
         import horovod.tensorflow as hvd
@@ -448,13 +446,6 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
 
     # convert dataset to data arrays and load into memory
     da_list = [HandleDataClass.reshape_ds(ds).astype("float32", copy=True) for ds in ds_list]
-
-    if var_tar2in is not None:
-        # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
-        #       * The following operation order must concatenate var_tar2in by da_in to ensure
-        #         that the variable appears at first place. This is required to avoid
-        #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-        da_list[0] = xr.concat([da_list[1].sel({"variables": var_tar2in}), da_list[0]], "variables")
 
     varnames_tar = da_list[1]["variables"].values
 
@@ -604,10 +595,6 @@ class StreamMonthlyNetCDF(object):
         self.var_tar2in = var_tar2in
         if self.var_tar2in is not None:
             self.n_predictors += len(to_list(self.var_tar2in))
-        # split variables into constant and dynamic variables
-        self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
-        # not required currently, since constant data get automatically broadcasted with xr.open_mfdataset and _read_mfdataset-methods
-        # self.ds_const = self.get_const_vars()
         # get normalization object
         t0 = timer()
         # check if normalization object is provided
@@ -827,39 +814,6 @@ class StreamMonthlyNetCDF(object):
                 raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
 
         return selected_vars
-    
-    def split_const_dyn_vars(self):
-        """
-        Split variables into constant and dynamic variables. Constant variables are those that do not vary over
-        the sample dimension, e.g. the topography. Dynamic variables are those that vary over the sample dimension,
-        e.g. the temperature.
-        :return: tuple of lists of constant and dynamic variables
-        """
-        const_vars, dyn_vars = [], []
-        
-        # only load one file, since open_mfdatset and _read_mfdatset already broadcast const variables
-        # over sample dimension (usually 'time')
-        ds_exp = xr.open_dataset(self.file_list[0])
-        
-        for var in self.all_vars:
-            if self.sample_dim in ds_exp[var].dims:
-                const_vars.append(var)
-            else:
-                dyn_vars.append(var)
-
-        return const_vars, dyn_vars
-    
-    def get_const_vars(self):
-        """
-        Return a copy of the constant variables from first netCDF-file.
-        :return: xarray dataset containing constant variables
-        """
-        ds_exp = xr.open_dataset(self.file_list[0])
-        
-        if self.const_vars:
-            return ds_exp[self.const_vars].copy(deep=True)
-        else:
-            return None
 
     @staticmethod
     def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
