@@ -12,7 +12,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-07-29"
+__update__ = "2024-07-30"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
