@@ -301,23 +301,37 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
 
+    # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict
+    if ds_dict.hasattr("var_tar2in"):
+        static_predictors = list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
+        print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
+              +f"List of updated static predictors: {','.join(static_predictors)}")
+    else:
+        static_predictors = ds_dict.get("static_predictors", None)
+    
+    if ds_dict.hasattr("named_targets"):
+        stream_mode = "hi_input_named_target"
+        print("Warning: The usage of 'named_targets' is deprecated. Use 'stream_mode=hi_input_named_target' instead.")
+    else:
+        stream_mode = hparams_dict.get("stream_mode", "hi_input")
+
     if "*" in fname_or_pattern:                                             # do not load all data into memory
-        ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
-                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
-                                     var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
-                                     norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
+        ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
+                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None)
+                                     static_predictors=static_predictors, sample_dim=ds_dict.get("sample_dim", "time"),
+                                     norm_obj=norm_obj, norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
         if shuffle:
             nshuffle = ds_obj.samples_merged
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
-                                   lrepeat=lrepeat, drop_remainder=drop_remainder)
+        tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
-                     "effective_dataset_size": ds_obj.effective_dataset_size, "all_predictors": ds_obj.predictor_list}
+                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list, 
+                     "static_predictors": static_predictors, "stream_mode": stream_mode}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -335,18 +349,15 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
             predictors = [var for var in ds.data_vars if var.endswith("_in")]
 
         # create TensorFlow dataset
-        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=predictors,
-                                      var_tar2in=ds_dict.get("var_tar2in", None), lrepeat=lrepeat, drop_remainder=drop_remainder,
-                                      lshuffle=shuffle, named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
-        
-        # append predictors if required. Order must be the same as in make_tf_dataset_allmem-method
-        if ds_dict.get("var_tar2in", None):
-            predictors = [ds_dict["var_tar2in"]] + predictors
-
+        tfds = make_tf_dataset_allmem(stream_mode, ds, bs_train, varnames_tar_all, predictors=predictors, 
+                                      static_predictors=static_predictors, lrepeat=lrepeat, drop_remainder=drop_remainder,
+                                      lshuffle=shuffle, with_horovod=with_horovod)
+    
         # provide dict for later use
         tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
                      "dataset_size": ds.nbytes, "all_predictands": varnames_tar_all, "file": fname_or_pattern, 
-                     "effective_dataset_size": ds.nbytes, "all_predictors": predictors}
+                     "effective_dataset_size": ds.nbytes, "predictors": predictors, "static_predictors": static_predictors,
+                     "stream_mode": stream_mode}
         
     return tfds, tfds_info
 
@@ -403,22 +414,21 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, lr
 
     return tfds
 
-def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
-                           mode: str = "hi_input", static_predictors: List = None, lshuffle: bool = True, 
-                           shuffle_samples: int = 20000, lrepeat: bool = True, drop_remainder: bool = True,
-                           with_horovod: bool = False) -> tf.data.Dataset:
+def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
+                           static_predictors: List = None, lshuffle: bool = True, shuffle_samples: int = 20000,
+                           lrepeat: bool = True, drop_remainder: bool = True, with_horovod: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
+    :param stream_mode: choices: ['hi_input', 'hi_input_named_target', 'lo_input']
+                'hi_input': (bilinearly) upscaled input data available from data file
+                'hi_input_named_target': as 'hi_input', but with named target (output as dictionary with variable names as key)
+                'lo_input': input data on coarse grid, but high-resolved static predictors available
+                            data pipeline yield a dictionary with 'lo_input', 'static' and 'output' as keys
     :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-    :param mode: choices: ['hi_input', 'hi_input_named_target', 'lo_input']
-                 'hi_input': (bilinearly) upscaled input data available from data file
-                 'hi_input_named_target': as 'hi_input', but with named target (output as dictionary with variable names as key)
-                 'lo_input': input data on coarse grid, but high-resolved static predictors available
-                             data pipeline yield a dictionary with 'lo_input', 'static' and 'output' as keys
     :param static_predictors: List of static (high-resolved) variables serving as predictors 
     :param lshuffle: flag if shuffling should be applied to dataset
     :param shuffle_samples: number of samples to load before applying shuffling
@@ -426,14 +436,14 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :param with_horovod: flag to trigger horovod-based distributed dataset creation
     """
-    # add static predictors to predictors-list unless lo_input-mode is chosen
-    if mode == "lo_input":
-        assert static_predictors is not None, "Provide high-resolved static input predictors for mode 'lo_input'"
+    # add static predictors to predictors-list unless lo_input-streaming mode is chosen
+    if stream_mode == "lo_input":
+        assert static_predictors is not None, "Provide high-resolved static input predictors for stream_mode 'lo_input'"
     else:
         if static_predictors:
             predictors = to_list(static_predictors) + predictors
             static_predictors = None
-            print(f"Static predictors added to predictors for data pipeline mode '{mode}'")
+            print(f"Static predictors added to predictors for data pipeline mode '{stream_mode}'")
 
     if with_horovod:
         import horovod.tensorflow as hvd
@@ -484,18 +494,18 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
                 )
             )
 
-    if mode == "hi_input":
+    if stream_mode == "hi_input":
         gen_now = gen_unnamed
-    elif mode == "hi_input_named_target":
+    elif stream_mode == "hi_input_named_target":
         gen_now = gen_named
-    elif mode == "lo_input":
+    elif stream_mode == "lo_input":
         gen_now = gen_dict
     else: 
-        raise ValueError(f"Mode {mode} is not supported. Possible choices: 'hi_input', 'hi_input_named_target' and 'lo_input'")
+        raise ValueError(f"Mode {stream_mode} is not supported. Possible choices: 'hi_input', 'hi_input_named_target' and 'lo_input'")
 
     # create output signatures from first sample
     s0 = next(iter(gen_now(*da_list)))
-    if mode == "lo_input":
+    if stream_mode == "lo_input":
         sample_spec_in = {
             "lo_res_inputs": tf.TensorSpec(
                 s0[0]["lo_res_inputs"].shape, dtype=s0[0]["lo_res_inputs"].dtype
@@ -510,7 +520,7 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         }
     else:
         sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
-        if mode == "hi_input_named_target":
+        if stream_mode == "hi_input_named_target":
             sample_spec_tar = {
                 var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype)
                 for var in varnames_tar
