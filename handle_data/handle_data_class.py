@@ -301,7 +301,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
 
-    # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict
+    # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
     if ds_dict.hasattr("var_tar2in"):
         static_predictors = list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
         print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
@@ -309,11 +309,13 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     else:
         static_predictors = ds_dict.get("static_predictors", None)
     
-    if ds_dict.hasattr("named_targets"):
+    if hparams_dict.get("named_targets", False):
         stream_mode = "hi_input_named_target"
-        print("Warning: The usage of 'named_targets' is deprecated. Use 'stream_mode=hi_input_named_target' instead.")
     else:
-        stream_mode = hparams_dict.get("stream_mode", "hi_input")
+        stream_mode = ds_dict.get("stream_mode", "hi_input")
+
+    if not ds_dict.hasattr("stream_mode"):
+        print(f"Warning: stream_mode not provided in ds_dict. Autmotically set to '{stream_mode}'.")
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
