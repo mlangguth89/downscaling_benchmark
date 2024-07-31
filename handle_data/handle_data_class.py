@@ -319,7 +319,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
-                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
+                                     predictands=varnames_tar_all, predictors=ds_dict.get("predictors", None),
                                      static_predictors=static_predictors, sample_dim=ds_dict.get("sample_dim", "time"),
                                      norm_obj=norm_obj, norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
