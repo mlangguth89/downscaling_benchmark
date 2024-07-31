@@ -136,34 +136,46 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
+    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_vars: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
         """
         Split data array with variables-dimension into input and target data for downscaling
-        :param da: The unsplitted data array
-        :param target_var: Name of target variable which should consttute the first channel
+        :param ds: The unsplitted dataset
         :param predictands: List of selected predictand variables; parse None to use
                             all predictands (vars with suffix _tar)
         :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :return: The split data array.
+        :param static_predictors: List of selected static (high-resolved) predictors, the corresponding splitted dataset ds_stat will be None of None is parsed
+        :return: Tuple of splitted datasets.
         """
         varnames = list(ds.data_vars)
 
         if predictors is None:
             invars = [var for var in varnames if var.endswith("_in")]
         else:
-            assert all([predictor in varnames for predictor in
-                        predictors]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+            assert all(
+                [predictor in varnames for predictor in predictors]
+            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             invars = list(predictors)
         if predictands is None:
             tarvars = [var for var in varnames if var.endswith("_tar")]
         else:
-            assert all([predictand in varnames for predictand in
-                        predictands]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+            assert all(
+                [predictand in varnames for predictand in predictands]
+            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             tarvars = list(predictands)
 
         ds_in, ds_tar = ds[invars], ds[tarvars]
 
-        return ds_in, ds_tar
+        if static_vars is None:
+            ds_stat = None
+        else:
+            assert all(
+                [static_var in varnames for static_var in static_vars]
+            ), f"At least ostatic high-res is not a data variable. Available variables are {*varnames,}"
+            statvars = list(static_vars)
+
+            ds_stat = ds[statvars]
+
+        return ds_in, ds_tar, ds_stat
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):
