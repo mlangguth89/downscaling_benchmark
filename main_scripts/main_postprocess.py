@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-19"
+__update__ = "2024-08-30"
 
 import os
 import logging
@@ -130,18 +130,18 @@ def main(parser_args):
         # load test dataset
         ds_test = xr.open_dataset(test_info["file"])
         conf_fi = conf_postprocess["config_feature_importance"]
-        ds_dict = test_info["ds_dict"]
 
-        # To-Do: allow for multiple target variables, e.g. for wind downscaling
+        # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
         varname_tar = test_info["all_predictands"][0]
         # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
-        #       ds_test is directly parsed to the make_tf_dataset_allmem-method and thus, the list of predictors and predictands 
-        #       must be complete here, i.e. we deduce them from test_info (therefore var_tar2in must be None in any case)
-        data_loader_opts = {"batch_size": 32, "predictands": test_info["all_predictands"], "predictors": test_info["all_predictors"],
-                            "var_tar2in": None, "lrepeat": False, "drop_remainder": False,"lshuffle": False, 
-                            "named_targets": test_info["hparams_dict"].get("named_targets", None)}
+        #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
+        data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
+                            "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
+                            "lrepeat": False, "drop_remainder": False,"lshuffle": False}
                              
-        _ = run_feature_importance(ds_test, conf_fi.get("predictors", test_info["all_predictors"]), varname_tar, test_info["trained_model"], 
+        all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
+
+        _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
                                    test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir, conf_fi.get("patch_size", (8, 8)))
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
