@@ -620,7 +620,7 @@ class HarrisWGAN(AbstractModelClass):
         """
         Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
         """
-        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
+        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, stream_mode: "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {} }

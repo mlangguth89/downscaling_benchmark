@@ -312,7 +312,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     if hparams_dict.get("named_targets", False):
         stream_mode = "hi_input_named_target"
     else:
-        stream_mode = ds_dict.get("stream_mode", "hi_input")
+        stream_mode = hparams_dict.get("stream_mode", "hi_input")
 
     if not ds_dict.hasattr("stream_mode"):
         print(f"Warning: stream_mode not provided in ds_dict. Autmotically set to '{stream_mode}'.")
