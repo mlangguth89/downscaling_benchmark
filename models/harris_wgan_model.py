@@ -44,24 +44,19 @@ class GeneratorHarris(AbstractModelClass):
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
-        print(f"generator_input shape: {generator_input.shape}")
         # constant fields
         const_input = Input(shape=self._input_shape["hi_res_inputs"], name="hi_res_inputs")
-        print(f"constants_input shape: {const_input.shape}")
 
         # Convolve constant fields down to match other input dimensions
         upscaled_const_input = const_upscale_block(
             const_input, steps=ds_steps, filters=filters_gen
         )
-        print(f"upscaled constants shape: {upscaled_const_input.shape}")
         # noise
         noise_input = Input(shape=self._input_shape["noise_input"], name="noise_input")
-        print(f"noise_input shape: {noise_input.shape}")
         # Concatenate all inputs together
         generator_output = concatenate(
             [generator_input, upscaled_const_input, noise_input]
         )
-        print(f"Shape after first concatenate: {generator_output.shape}")
 
         # Pass through 3 residual blocks
         for ii in range(3):
@@ -73,8 +68,7 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
             )
-        print("End of first residual block")
-        print(f"Shape after first residual block: {generator_output.shape}")
+
         # Upsampling from low-res to high-res with alternating residual blocks
         # In the paper, this was [2*filters_gen, filters_gen] for steps of 5 and 2
         block_channels = [2 * filters_gen] * (len(ds_steps) - 1) + [filters_gen]
@@ -82,7 +76,7 @@ class GeneratorHarris(AbstractModelClass):
             generator_output = UpSampling2D(size=(step, step), interpolation="bilinear")(
                 generator_output
             )
-            print(f"Shape after upsampling step {ii+1}: {generator_output.shape}")
+
             generator_output = residual_block(
                 generator_output,
                 filters=block_channels[ii],
@@ -91,11 +85,9 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
             )
-            print(f"Shape after residual block: {generator_output.shape}")
 
         # Concatenate with original size constants field
         generator_output = concatenate([generator_output, const_input])
-        print(f"Shape after second concatenate: {generator_output.shape}")
 
         # Pass through 3 residual blocks
         for ii in range(3):
@@ -107,15 +99,12 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
             )
-        print(f"Shape after third residual block: {generator_output.shape}")
 
         # Output layer
         actv_out = "linear"
         generator_output = Conv2D(
             filters=1, kernel_size=(1, 1), activation=actv_out, name="output"
         )(generator_output)
-        print(f"Output shape: {generator_output.shape}")
-        print(f"Output Conv2D activation: {actv_out}")
         
         self.model = Model(
             inputs=[generator_input, const_input, noise_input],
@@ -133,8 +122,8 @@ class GeneratorHarris(AbstractModelClass):
         """
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"channels_start": 128, "activation": "leaky_relu",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 5.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
+        self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, 
+                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
 
 
 class DiscriminatorHarris(AbstractModelClass):
@@ -157,27 +146,22 @@ class DiscriminatorHarris(AbstractModelClass):
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
-        print(f"generator_input shape: {generator_input.shape}")
         # constant fields
         const_input = Input(shape=self._input_shape["hi_res_inputs"], name="hi_res_inputs")
         print(f"constants_input shape: {const_input.shape}")
         # target image
         generator_output = Input(shape=self._input_shape["output"], name="output")
-        print(f"generator_output shape: {generator_output.shape}")
 
         # convolve down constant fields to match ERA
         lo_res_const_input = const_upscale_block(
             const_input, steps=ds_steps, filters=filters_disc
         )
-        print(f"upscaled constants shape: {lo_res_const_input.shape}")
 
         # concatenate constants to lo-res input
         lo_res_input = concatenate([generator_input, lo_res_const_input])
-        print(f"Shape after lo-res concatenate: {lo_res_input.shape}")
 
         # concatenate constants to hi-res input
         hi_res_input = concatenate([generator_output, const_input])
-        print(f"Shape after hi-res concatenate: {hi_res_input.shape}")
 
         # encode inputs using residual blocks
         # In the paper, this was [filters_disc, 2*filters_disc] for steps of 5 and 2
@@ -192,7 +176,6 @@ class DiscriminatorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
             )
-            print(f"Shape of lo-res input after residual block: {lo_res_input.shape}")
             hi_res_input = Conv2D(
                 filters=block_channels[ii],
                 kernel_size=(step, step),
@@ -200,9 +183,7 @@ class DiscriminatorHarris(AbstractModelClass):
                 padding="valid",
                 activation="relu",
             )(hi_res_input)
-            print(
-                f"Shape of hi_res_input after upsampling step {ii+1}: {hi_res_input.shape}"
-            )
+
             hi_res_input = residual_block(
                 hi_res_input,
                 filters=block_channels[ii],
@@ -211,13 +192,9 @@ class DiscriminatorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
             )
-            print(f"Shape of hi-res input after residual block: {hi_res_input.shape}")
 
         # concatenate hi- and lo-res inputs channel-wise before passing through discriminator
         disc_input = concatenate([lo_res_input, hi_res_input])
-        print(
-            f"Shape after concatenating lo-res input and hi-res input: {disc_input.shape}"
-        )
 
         # encode in residual blocks
         disc_input = residual_block(
@@ -228,16 +205,11 @@ class DiscriminatorHarris(AbstractModelClass):
             relu_alpha=relu_alpha,
             padding=padding,
         )
-        print(f"Shape after residual block: {disc_input.shape}")
-        print("End of second residual block")
 
         # discriminator output
         disc_output = GlobalAveragePooling2D()(disc_input)
-        print(f"discriminator output shape after pooling: {disc_output.shape}")
         disc_output = Dense(64, activation="relu")(disc_output)
-        print(f"discriminator output shape: {disc_output.shape}")
         disc_output = Dense(1, name="disc_output")(disc_output)
-        print(f"discriminator output shape: {disc_output.shape}")
 
         self.model = Model(
             inputs=[generator_input, const_input, generator_output],
@@ -255,8 +227,8 @@ class DiscriminatorHarris(AbstractModelClass):
         """
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"channels_start": 512, "activation": "leaky_relu",
-                                "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-6, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
+        self.hparams_default = {"channels_start": 512, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), 
+                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
 
     
 class NoiseGenerator(object):
@@ -650,7 +622,8 @@ class HarrisWGAN(AbstractModelClass):
         """
         self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, 
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {} }
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
+                                "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {} }
 
 
             
@@ -786,7 +759,7 @@ class ModelCheckpointHarrisWGAN(ModelCheckpoint):
 
 ####################################################################################
 ####################################################################################
-# some classes and function  that are used in the original harris gan implementation
+# some classes and methods that are used in the original Harris GAN implementation
 ####################################################################################
 ####################################################################################
 class ReflectionPadding2D(Layer):
