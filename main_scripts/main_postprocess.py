@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,233 +9,183 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2023-08-21"
+__update__ = "2024-08-30"
 
-import os, sys, glob
+import os
 import logging
 import argparse
 from timeit import default_timer as timer
 import json as js
-from datetime import datetime as dt
 #import datetime as dt
 import gc
-import numpy as np
 import xarray as xr
-import tensorflow.keras as keras
-import matplotlib as mpl
 import cartopy.crs as ccrs
-from handle_data_unet import *
-from handle_data_class import HandleDataClass, get_dataset_filename
-from all_normalizations import ZScore
-from statistical_evaluation import Scores
-from postprocess import get_model_info, run_evaluation_time, run_evaluation_spatial, run_feature_importance
-from model_utils import convert_to_xarray
+from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
+                        run_feature_importance, run_spectral_analysis, run_comparison_plots
+from other_utils import config_logger
 #from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
-
-
+logger.setLevel(logging.DEBUG)
 
 def main(parser_args):
 
+    ### Preparation ###
     t0 = timer()
-    # construct model directory path and infer model type
-    model_base = os.path.join(parser_args.model_base_dir, parser_args.exp_name)
+    plt_dir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
 
-    model_dir, plt_dir, norm_dir, model_type = get_model_info(model_base, parser_args.output_base_dir,
-                                                              parser_args.exp_name, parser_args.last,
-                                                              parser_args.model_type)
+    # load configuration for postprocessing
+    conf_postprocess = js.load(parser_args.conf_postprocess)    
 
-    # create output-directory and set name of netCDF-file to store inference data
+    # get some variables for convenience
+    varname = conf_postprocess["varname"]
+    unit = conf_postprocess["unit"]
+
+    # create output-directory and initialze logger
     os.makedirs(plt_dir, exist_ok=True)
-    ncfile_out = os.path.join(plt_dir, "postprocessed_ds_test.nc")
-    # create logger handlers
-    logfile = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
-    if os.path.isfile(logfile): os.remove(logfile)
-    fh = logging.FileHandler(logfile)
-    ch = logging.StreamHandler(sys.stdout)
-    ch.setLevel(logging.DEBUG)
-    fh.setLevel(logging.INFO)
-
-    fh.setFormatter(formatter)
-    ch.setFormatter(formatter)
-
-    logger.addHandler(fh), logger.addHandler(ch)
     
-    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    logger.info(f"Start postprocessing at...")
+    log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
+    logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
+    logger = config_logger(logger, log_file)    
 
-    # read configuration files
-    md_config_pattern, ds_config_pattern = f"config_{model_type}.json", f"config_ds_{parser_args.dataset}.json"
-    md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
-                                     glob.glob(os.path.join(model_base, ds_config_pattern))
-    if not ds_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
-                                f"under '{model_base}'")
-    else:
-        with open(ds_config_file[0]) as dsf:
-            logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
-            ds_dict = js.load(dsf)
-            logger.debug(ds_dict)
+    # get data from inference or from data file
+    if parser_args.mode == "inference":
+        ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
+                                                    varname, parser_args.model_type, parser_args.last, parser_args.dataset)
+        model_info = test_info["model_info"]
+    elif parser_args.mode == "provided_results":
+        ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
 
-    if not md_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
-                                f"under '{model_base}'")
-    else:
-        with open(md_config_file[0]) as mdf:
-            logger.info(f"Read model configuration file '{md_config_file[0]}'.")
-            hparams_dict = js.load(mdf)
-            logger.debug(hparams_dict)
+    # run temporal evaluation if specified
+    if conf_postprocess.get("do_evaluation_time", False):
+        logger.info("Start temporal evaluation...")
+        t0_tplot = timer()
 
-    named_targets = hparams_dict.get("named_targets", False)
+        temp_eval = TemporalEvaluation(varname, plt_dir, model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
+        temp_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
+        
+        logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
+        
+    # run spatial evaluation if specified
+    if conf_postprocess.get("do_evaluation_spatial", False):
+        logger.info("Start spatial evaluation...")
+        t0_splot = timer()
 
-    # Load checkpointed model
-    logger.info(f"Load model '{parser_args.exp_name}' from {model_dir}")
-    trained_model = keras.models.load_model(model_dir, compile=False)
-    logger.info(f"Model was loaded successfully.")
+        spat_eval = SpatialEvaluation(varname, plt_dir, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
+                                      eval_dict=conf_postprocess.get("config_evaluation_spatial", None))
+        spat_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
 
-    # get datafile and read netCDF
-    fdata_test = get_dataset_filename(parser_args.data_dir, parser_args.dataset, "test",
-                                      ds_dict.get("laugmented", False))
+        logger.info(f"Spatial evalutaion finished in {timer() - t0_splot:.2f}s.")
 
-    logger.info(f"Start opening datafile {fdata_test}...")
-    # prepare normalization
-    js_norm = os.path.join(norm_dir, "norm.json")
-    logger.debug("Read normalization file for subsequent data transformation.")
-    norm = ZScore(ds_dict["norm_dims"])
-    norm.read_norm_from_file(js_norm)
+    # run spectral analysis if specified
+    if conf_postprocess.get("do_spectral_analysis", False):
+        logger.info("Start spectral analysis...")
+        t0_spec = timer()
 
-    tar_varname = ds_dict["predictands"][0]
-    logger.info(f"Variable {tar_varname} serves as ground truth data.")
+        plt_dir_spec = os.path.join(plt_dir, "spectral_analysis")
 
-    with xr.open_dataset(fdata_test) as ds_test:
-        ground_truth = ds_test[tar_varname].astype("float32", copy=True)
-        ds_test = norm.normalize(ds_test)
+        run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_spec, [model_info["model_longname"], "COSMO-REA6"], varname, unit)
 
-    # prepare training and validation data
-    logger.info(f"Start preparing test dataset...")
-    t0_preproc = timer()
+        logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 
-    da_test = HandleDataClass.reshape_ds(ds_test).astype("float32", copy=True)
+    # create comparison plots if specified
+    if conf_postprocess.get("do_comparison_plots", False):
+        logger.info("Start creating comparison plots...")
+        t0_cplot = timer()
+
+        plt_dir_comp = os.path.join(plt_dir, "comparison_plots")
+
+        # access configuration for comparison plots for convenience and set arguments for run_comparison_plots
+        conf_cp = conf_postprocess["config_comparison_plots"]
+        nsamples = conf_cp.pop("nsamples", 200)
+        score_name = conf_cp.pop("score_name", "rmse")
+        offset = conf_cp.pop("offset", 0.)
+
+        # Note that conf_cp is parsed to the plot_comparison_maps in run_comparison_plots
+        conf_cp["titles"] = [f"{varname.capitalize()} COSMO-REA6", f"{varname.capitalize()} {model_info['model_longname']}"]
+        conf_cp["vars2plt"] = [f"{varname}_ref", f"{varname}_fcst"] 
+
+        run_comparison_plots(ds_out, plt_dir_comp, score_name, model_info["model_type"], nsamples, offset, **conf_cp)
+
+        logger.info(f"Comparison plots finished in {timer() - t0_cplot:.2f}s.")
+
+    # create conditional quantile plots if specified
+    if conf_postprocess.get("do_cond_quantile_analysis", False):
+        logger.info("Start conditional quantile plots...")
+        t0_cq = timer()
     
-    # clean-up to reduce memory footprint
-    del ds_test
-    gc.collect()
-    #free_mem([ds_test])
+        labels = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
+        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
+                                          **conf_postprocess.get("config_cond_quantile_analysis", {}))      
 
-    tfds_opts = {"batch_size": ds_dict["batch_size"], "predictands": ds_dict["predictands"], "predictors": ds_dict.get("predictors", None),
-                "lshuffle": False, "var_tar2in": ds_dict["var_tar2in"], "named_targets": named_targets, "lrepeat": False, "drop_remainder": False}    
+        logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
 
-    tfds_test = HandleDataClass.make_tf_dataset_allmem(da_test, **tfds_opts)
-    
-    predictors = ds_dict.get("predictors", None)
-    if predictors is None:
-        predictors = [var for var in list(da_test["variables"].values) if var.endswith("_in")]
-        if ds_dict.get("var_tar2in", False): predictors.append(ds_dict["var_tar2in"])
+    # run feature importance analysis if specified
+    if conf_postprocess.get("do_feature_importance", False) and parser_args.mode == "inference":
+        # To-DO: make executable
+        logger.info("Start feature importance analysis...")
+        t0_fi = timer()
+        
+        # load test dataset
+        ds_test = xr.open_dataset(test_info["file"])
+        conf_fi = conf_postprocess["config_feature_importance"]
 
-    # start inference
-    logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
-                 "Start inference on trained model...")
-    t0_train = timer()
-    y_pred = trained_model.predict(tfds_test, verbose=2)
+        # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
+        varname_tar = test_info["all_predictands"][0]
+        # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
+        #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
+        data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
+                            "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
+                            "lrepeat": False, "drop_remainder": False,"lshuffle": False}
+                             
+        all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
-    logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
-    
-    # clean-up to reduce memory footprint
-    del tfds_test
-    gc.collect()
-    #free_mem([tfds_test])
-
-    # convert to xarray
-    y_pred = convert_to_xarray(y_pred, norm, tar_varname, da_test.sel({"variables": tar_varname}).squeeze().coords,
-                               da_test.sel({"variables": tar_varname}).squeeze().dims, hparams_dict["z_branch"])
-
-    # write inference data to netCDf
-    logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
-    ground_truth.name, y_pred.name = f"{tar_varname}_ref", f"{tar_varname}_fcst"
-    ds = xr.Dataset(xr.Dataset.merge(y_pred.to_dataset(), ground_truth.to_dataset()))
-    ds.to_netcdf(ncfile_out)
-
-    # start evaluation
-    logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
-
-    # instantiate score engine for time evaluation (i.e. hourly time series of evalutaion metrics)
-    score_engine = Scores(y_pred, ground_truth, ds_dict["norm_dims"][1:])
-
-    logger.info("Start temporal evaluation...")
-    t0_tplot = timer()
-    rmse_all = run_evaluation_time(score_engine, "rmse", "K", plt_dir, value_range=(0., 3.), model_type=model_type)
-    _ = run_evaluation_time(score_engine, "bias", "K", plt_dir, value_range=(-1., 1.), ref_line=0.,
-                            model_type=model_type)
-    _ = run_evaluation_time(score_engine, "grad_amplitude", "1", plt_dir, value_range=(0.7, 1.1),
-                            ref_line=1., model_type=model_type)
-
-    logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
-
-    # run feature importance analysis for RMSE
-    logger.info("Start feature importance analysis...")
-    t0_fi = timer()
-
-    rmse_ref = rmse_all.mean().values
-
-    _ = run_feature_importance(da_test, predictors, tar_varname, trained_model, norm, "rmse", rmse_ref,
-                               tfds_opts, plt_dir, patch_size=(6, 6), variable_dim="variables")
-    
-    logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
+        _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir, conf_fi.get("patch_size", (8, 8)))
+        
+        logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
     # clean-up to reduce memory footprint
-    del da_test
+    del ds_out
     gc.collect()
     #free_mem([da_test])
-
-    # instantiate score engine with retained spatial dimensions
-    score_engine = Scores(y_pred, ground_truth, [])
-
-    # ad-hoc adaption to projection basaed on norm_dims
-    if "rlat" in ds_dict["norm_dims"]:
-        proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25)
-    else:
-        proj=ccrs.PlateCarree()
-
-    logger.info("Start spatial evaluation...")
-    lvl_rmse = np.arange(0., 3.1, 0.2)
-    cmap_rmse = mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))
-    _ = run_evaluation_spatial(score_engine, "rmse", os.path.join(plt_dir, "rmse_spatial"), 
-                               dims=ds_dict["norm_dims"][1::], cmap=cmap_rmse, levels=lvl_rmse,
-                               projection=proj)
-
-    lvl_bias = np.arange(-2., 2.1, 0.1)
-    cmap_bias = mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))
-    _ = run_evaluation_spatial(score_engine, "bias", os.path.join(plt_dir, "bias_spatial"), 
-                               dims=ds_dict["norm_dims"][1::], cmap=cmap_bias, levels=lvl_bias,
-                               projection=proj)
-
-    logger.info(f"Spatial evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
     logger.info(f"Postprocessing of experiment '{parser_args.exp_name}' finished. " +
                 f"Elapsed total time: {timer() - t0:.1f}s.")
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data_directory", "-data_dir", dest="data_dir", type=str, required=True,
-                        help="Directory where test dataset (netCDF-file) is stored.")
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
                         help="Directory where results in form of plots are stored.")
-    parser.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
-                        help="Base directory where trained models are saved.")
+    parser.add_argument("--configuration_postprocess", "--conf_postprocess", dest="conf_postprocess", type=argparse.FileType("r"), required=True,
+                        help="JSON-file to configure postprocessing.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
-                        help="Name of the experiment/trained model to postprocess.")
-    parser.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
-                        help="Name of dataset to be used for downscaling model.")
-    parser.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
-                        help="Flag for evaluating last instead of best checkpointed model")
-    parser.add_argument("--model_type", "-model_type", dest="model_type", default=None,
-                        help="Name of model architecture. Only required if custom model architecture is not" +
-                             "implemented in get_model_info-function (see postprocess.py)")
+                                  help="Name of the experiment/trained model to postprocess.")
+    
+    # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
+    subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
 
+    parser_inference = subparsers.add_parser("inference", help="Perform inference on trained model.")
+    parser_inference.add_argument("--data_directory", "-data_dir", dest="data_dir", type=str, required=True,
+                                  help="Directory where test dataset (netCDF-file) is stored.")
+    parser_inference.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
+                                  help="Base directory where trained models are saved.")
+    parser_inference.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
+                                  help="Name of dataset to be used for downscaling model.")
+    parser_inference.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
+                                  help="Flag for evaluating last instead of best checkpointed model")
+    parser_inference.add_argument("--model_type", "-model_type", dest="model_type", default=None,
+                                  help="Name of model architecture. Only required if custom model architecture is not" +
+                                   "implemented in get_model_info-function (see postprocess.py)")
+
+    parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
+    parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
+                            help="NetCDF-file containing results to be evaluated.")
+    parser_results.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
+                                help="Name of the model for which results are provided.")
+    
     args = parser.parse_args()
     main(args)

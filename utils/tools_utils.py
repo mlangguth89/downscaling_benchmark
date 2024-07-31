@@ -162,7 +162,7 @@ class CDO(RunTool):
         if not known_operators[-1]:
             known_operators = known_operators[:-1]
 
-        known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
+        known_operators.extend(["-L", "-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
 

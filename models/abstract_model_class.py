@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-11"
-__update__ = "2023-12-15"
+__update__ = "2024-04-11"
 
 # import modules
 import os
@@ -13,11 +13,14 @@ import inspect
 from abc import ABC
 from typing import Any, Dict
 
+import numpy as np
 import tensorflow.keras as keras
 import tensorflow as tf
+from tensorflow.keras import backend as K
 
 from model_utils import TimeHistory, handle_opt_utils, make_keras_pickable
-from other_utils import merge_dicts, remove_items
+from other_utils import merge_dicts, remove_items, to_list
+import json
 
 
 class AbstractModelClass(ABC):
@@ -44,7 +47,7 @@ class AbstractModelClass(ABC):
         """Predefine internal attributes for model and loss."""
         make_keras_pickable()
         self.__model = None
-        self.model_name = self.__class__.__name__
+        self.modelname = self.__class__.__name__
         self.__custom_objects = {}
         self.__fit_options = {}
         self.__allowed_compile_options = {'optimizer': None,
@@ -59,7 +62,7 @@ class AbstractModelClass(ABC):
         self.__compile_options_is_set = False
         self._input_shape = input_shape
         self.__hparams = hparams
-        self._varnames_tar = varnames_tar
+        self._varnames_tar = to_list(varnames_tar)
         self._savedir = savedir
         self._expname = expname
         self._n_predictands = len(self._varnames_tar)
@@ -278,18 +281,6 @@ class AbstractModelClass(ABC):
     def get_settings(self) -> Dict:
         """
         Get all class attributes that are not protected in the AbstractModelClass as dictionary.
-
-    def super_args(cls):
-        args = []
-        for super_cls in cls.__mro__:
-            if super_cls == cls:
-                continue
-            if hasattr(super_cls, "own_args"):
-                # args.extend(super_cls.own_args())
-                args.extend(getattr(super_cls, "own_args")())
-        return list(set(args))
-
-        :return: all class attributes
         """
         return dict((k, v) for (k, v) in self.__dict__.items() if not k.startswith("_AbstractModelClass__"))
 
@@ -329,7 +320,6 @@ class AbstractModelClass(ABC):
         def get_fit_opts(self):
             return {'callbacks': [EarlyStopping(monitor='val_loss', patience=10)]}
         """
-        print("Hallo")
         fit_opts = {'callbacks': [TimeHistory()]}
 
         add_opts = handle_opt_utils(self, "get_fit_options")
@@ -351,6 +341,24 @@ class AbstractModelClass(ABC):
         if "Padding2D" in kwargs.keys():
             kwargs.update(kwargs["Padding2D"].allowed_paddings)
         self.custom_objects = kwargs
+
+    def save_hparams_to_json(self, fname: str):
+        """
+        Save hyperparameters to json file und savedir.
+        :param fname: filename to save hyperparameters
+        """
+        with open(fname, "w") as f:
+            json.dump(self.hparams, f)
+
+    def count_params(self):
+        """
+        Count trainable and untrainable parameters of model.
+        :return: (trainable_param, untrainable_param)
+        """
+        trainable_param = int(np.sum([K.count_params(p) for p in self.model.trainable_weights]))
+        untrainable_param = int(np.sum([K.count_params(p) for p in self.model.non_trainable_weights]))
+
+        return trainable_param, untrainable_param
 
     @classmethod
     def requirements(cls):
