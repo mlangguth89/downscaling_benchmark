@@ -4,6 +4,6 @@
   "batch_size": 32,
   "varname_z": "hsurf_tar",
   "predictands": ["t_2m_tar"],
-  "predictors": ["t2m_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in", "fr_land_tar"],
+  "predictors": ["t2m_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "t_ml115_in", "t_ml122_in", "t_ml127_in", "t_ml131_in", "t_ml135_in"],
   "static_predictors": ["hsurf_tar", "fr_land_tar"]
 }
