@@ -136,7 +136,7 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_vars: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
+    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
         """
         Split data array with variables-dimension into input and target data for downscaling
         :param ds: The unsplitted dataset
@@ -165,13 +165,12 @@ class HandleDataClass(object):
 
         ds_in, ds_tar = ds[invars], ds[tarvars]
 
-        if static_vars is None:
+        if static_predictors is None:
             ds_stat = None
         else:
-            assert all(
-                [static_var in varnames for static_var in static_vars]
-            ), f"At least ostatic high-res is not a data variable. Available variables are {*varnames,}"
-            statvars = list(static_vars)
+            assert all([static_predictor in varnames for static_predictor in static_predictors]), \
+                   f"At least one static high-res predictor is not a data variable. Available variables are {*varnames,}"
+            statvars = list(static_predictors)
 
             ds_stat = ds[statvars]
 
