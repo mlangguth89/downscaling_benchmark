@@ -483,8 +483,20 @@ class HarrisWGAN_Model(keras.Model):
 
 class HarrisWGAN(AbstractModelClass):
     
-    def __init__(self, generator: AbstractModelClass, discriminator: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
-        
+    def __init__(self, generator: AbstractModelClass, discriminator: AbstractModelClass, shape_in: List, hparams: dict,
+                 varnames_tar: List, savedir: str, expname: str):
+        """
+        Initialize the HarrisWGANModel class.
+
+        :param generator: The generator model.
+        :param discriminator: The discriminator model.
+        :param shape_in: The input shape of the model. Note: The last two dimensions must denote the number of coarse-grained predictors 
+                         and the number of static high-resolution predictors, respectively.
+        :param hparams: Dictionary of custom hyperparameters.
+        :param varnames_tar: List of target variable names.
+        :param savedir: Drectory to save the model.
+        :param expname: The name of the experiment.
+        """        
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "harriswgan"
@@ -529,12 +541,21 @@ class HarrisWGAN(AbstractModelClass):
             return {}  
         
     def set_model(self, generator, discriminator):
+
+        # get relevant shapes for input and output of generator and discriminator
+        lo_res_in_shp = self._input_shape[:-2] 
+        hi_res_in_shp = list(np.array(lo_res_in_shp[:2])*int(np.prod(np.array([4,])))) + [self._input_shape[-1]]
+        in_noise_shp = lo_res_in_shp[:2] + [self.hparams["noise_channels"]]    
+        out_shp = hi_res_in_shp[:2] + [len(self._varnames_tar)]            
+        
+        shp_gen = {"lo_res_inputs": lo_res_in_shp, " hi_res_inputs": hi_res_in_shp, "noise_input": in_noise_shp}
         # get generator model
-        gen_model = generator(self._input_shape["harris_generator"], self.hparams["hparams_generator"], self._varnames_tar)#, self._savedir, self._expname)        
+        gen_model = generator(shp_gen, self.hparams["hparams_generator"], self._varnames_tar)      
         
         
         # get discriminator model
-        discriminator_model = discriminator(self._input_shape["harris_discriminator"], self.hparams["hparams_discriminator"], self._varnames_tar)
+        shp_disc = {"lo_res_inputs": lo_res_in_shp, " hi_res_inputs": hi_res_in_shp, "output": out_shp}
+        discriminator_model = discriminator(shp_disc, self.hparams["hparams_discriminator"], self._varnames_tar)
         
         # get hyperparamters of HarrisWGAN only
         hparams_wgan_only = self.hparams.copy()
@@ -620,7 +641,7 @@ class HarrisWGAN(AbstractModelClass):
         """
         Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
         """
-        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, stream_mode: "lo_input",
+        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_discriminator": {} }
