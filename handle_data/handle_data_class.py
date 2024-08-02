@@ -342,12 +342,14 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
         tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, lrepeat=lrepeat, drop_remainder=drop_remainder)
 
-        shape_in = list()
+        # get input shape depending on streaming mode and processed data
         if stream_mode == "lo_input":
-            shape_in = 
+            shape_in = [*ds_obj.data_xy_dim["input"], len(ds_obj.predictor_list), len(ds_obj.static_predictor_list)]
+        else:
+            shape_in = [*ds_obj.data_xy_dim["input"], len(ds_obj.predictor_list + ds_obj.static_predictor_list)]
         
         
-        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
+        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": tuple(shape_in),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
                      "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list, 
                      "static_predictors": static_predictors, "stream_mode": stream_mode}
@@ -371,9 +373,15 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         tfds = make_tf_dataset_allmem(stream_mode, ds, bs_train, varnames_tar_all, predictors=predictors, 
                                       static_predictors=static_predictors, lrepeat=lrepeat, drop_remainder=drop_remainder,
                                       lshuffle=shuffle, with_horovod=with_horovod)
+        
+        # get input shape depending on streaming mode and processed data
+        if stream_mode == "lo_input":
+            shape_in = tfds.element_spec[0]["lo_res_inputs"].shape[1:].as_list() + [len(ds_obj.static_predictor_list)]
+        else:
+            shape_in = tfds.element_spec[0].shape[1:].as_list()
     
         # provide dict for later use
-        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
+        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tuple(shape_in),
                      "dataset_size": ds.nbytes, "all_predictands": varnames_tar_all, "file": fname_or_pattern, 
                      "effective_dataset_size": ds.nbytes, "predictors": predictors, "static_predictors": static_predictors,
                      "stream_mode": stream_mode}
