@@ -328,7 +328,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     if not "stream_mode" in hparams_dict:
         print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
     else:
-        print("Selected stream mode: {stream_mode}")
+        print(f"Selected stream mode for {mode} dataset: {stream_mode}")
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],

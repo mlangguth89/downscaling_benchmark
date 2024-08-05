@@ -148,7 +148,6 @@ class DiscriminatorHarris(AbstractModelClass):
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
         # constant fields
         const_input = Input(shape=self._input_shape["hi_res_inputs"], name="hi_res_inputs")
-        print(f"constants_input shape: {const_input.shape}")
         # target image
         generator_output = Input(shape=self._input_shape["output"], name="output")
 
@@ -296,9 +295,7 @@ class HarrisWGAN_Model(keras.Model):
                 const_iter = const[ist:ie, ...]
                 sample_iter = sample[ist:ie, ...]
                 noise_iter = noise[ist:ie, ..., 0] # only take the first ensemble member
-                # print(f"{cond_iter.shape = }")
-                # print(f"{const_iter.shape = }")
-                # print(f"{noise_iter.shape = }")
+
                 gen_in = [cond_iter] + [const_iter] + [noise_iter]
                 gen_out = self.generator.model(gen_in, training=True)
                 disc_in_gen = [cond_iter] + [const_iter] + [gen_out]
@@ -311,7 +308,6 @@ class HarrisWGAN_Model(keras.Model):
                 c_loss = self.discriminator_loss(discriminator_gt, discriminator_gen)
                 #gp = GradientPenalty()([sample_iter, gen_out])
                 gp = self.gradient_penalty(sample_iter, gen_out, cond_iter, const_iter)
-                # print(gp)
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update discrimintor
@@ -347,7 +343,6 @@ class HarrisWGAN_Model(keras.Model):
             # critic loss for generator
             cg_loss = self.discriminator_gen_loss(discriminator_gen)
             # content loss term
-            tf.print(gen_data_list[-1].shape)
             cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
             # combined loss for generator
             g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
@@ -407,7 +402,6 @@ class HarrisWGAN_Model(keras.Model):
         # critic loss for generator
         cg_loss = self.discriminator_gen_loss(discriminator_gen)
         # content loss term
-        tf.print(gen_data_list[-1].shape)
         cl_loss = self.recon_loss(sample, gen_data_list[-1])
 
         return OrderedDict([
