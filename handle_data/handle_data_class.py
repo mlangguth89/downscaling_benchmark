@@ -327,6 +327,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
     if not "stream_mode" in hparams_dict:
         print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
+    else:
+        print("Selected stream mode: {stream_mode}")
 
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
@@ -375,7 +377,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         
         # get input shape depending on streaming mode and processed data
         if stream_mode == "lo_input":
-            shape_in = tfds.element_spec[0]["lo_res_inputs"].shape[1:].as_list() + [len(ds_obj.static_predictor_list)]
+            shape_in = tfds.element_spec[0]["lo_res_inputs"].shape[1:].as_list() + [len(static_predictors)]
         else:
             shape_in = tfds.element_spec[0].shape[1:].as_list()
     
@@ -415,7 +417,7 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, lr
                                     {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
     else: 
         def make_dict(darr_in, darr_stat, darr_out):
-            return {"lo_res_inputs": darr_in, "hi_res_inputs": darr_stat, "output": darr_out}
+            return ({"lo_res_inputs": darr_in, "hi_res_inputs": darr_stat}, {"output": darr_out})
                                          
         tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], [tf.float32, tf.float32, tf.float32])
         tf_split = lambda arr_in, arr_stat, arr_out: make_dict(arr_in, arr_stat, arr_out)
@@ -607,10 +609,9 @@ class StreamMonthlyNetCDF(object):
         self.nfiles = len(self.file_list)
         # get relevant data dimensions
         ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
-        self.all_dims = list(ds_all.dims)
+        self.all_dims = ds_all.dims
         self.sample_dim = sample_dim
         self.nsamples = ds_all.dims[sample_dim]
-        self.data_dim = self.get_data_dim()
         self.dataset_size = self.get_dataset_size()
         # sampling of datafiles
         self.file_list_random = random.sample(self.file_list, self.nfiles)
@@ -644,7 +645,7 @@ class StreamMonthlyNetCDF(object):
         if norm_obj is None:
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            self.norm_params = self.data_norm.get_required_stats(ds_all)
             self.normalization_time = timer() - t0
         else:
             self.data_norm = norm_obj
@@ -758,7 +759,7 @@ class StreamMonthlyNetCDF(object):
 
     @sample_dim.setter
     def sample_dim(self, sample_dim):
-        if not sample_dim in self.all_dims:
+        if not sample_dim in list(self.all_dims):
             raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
 
         self._sample_dim = sample_dim
