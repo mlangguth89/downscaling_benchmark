@@ -382,14 +382,15 @@ class HarrisWGAN_Model(keras.Model):
             # ensemble stacked in an additional dimension at the end
             noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
-        noise_0 = noise[..., 0]
+        noise_iter = noise[0:self.hparams["batch_size"]:, ...]
+        noise_0 = noise_iter[..., 0]
         gen_in = [cond] + [const] + [noise_0]
         gen_data = self.generator.model(gen_in, training=True)
         gen_data_list = [gen_data]
         if self.hparams["ensemble_size"] is not None:
             gen_iter_list = []
             for k in range(self.hparams["ensemble_size"]):
-                noise_k = noise[..., k+1]
+                noise_k = noise_iter[..., k+1]
                 gen_in = [cond] + [const] + [noise_k]
                 gen_data_k = self.generator.model(gen_in, training=True)
                 gen_iter_list.append(gen_data_k)
