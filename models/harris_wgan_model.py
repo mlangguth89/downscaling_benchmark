@@ -123,7 +123,7 @@ class GeneratorHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, 
-                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05}
+                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05}
 
 
 class DiscriminatorHarris(AbstractModelClass):
@@ -228,7 +228,7 @@ class DiscriminatorHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 512, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), 
-                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06}
+                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06}
 
     
 class NoiseGenerator(object):
@@ -266,8 +266,7 @@ class HarrisWGAN_Model(keras.Model):
         
         # losses        
         self.noise_gen = NoiseGenerator(
-            self.generator._input_shape["lo_res_inputs"][:2]+[
-                self.hparams["noise_channels"]], 
+            self.generator._input_shape["lo_res_inputs"][:2]+[self.hparams["noise_channels"]],
             self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
         )
 
@@ -511,6 +510,9 @@ class HarrisWGAN(AbstractModelClass):
         self.set_fit_options()
         
     def set_compile_options(self):
+        """
+        Set compile options for the HarrisWGAN model.
+        """
         # set optimizers
         if self.hparams["optimizer"].lower() == "adam":
             optimizer = keras.optimizers.Adam
@@ -524,13 +526,17 @@ class HarrisWGAN(AbstractModelClass):
         self.optimizer = (optimizer(self.discriminator.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         
     def get_fit_options(self):
+        """
+        Get options that will be parsed to the fit-method of the Keras model.
+        """
         harriswgan_callbacks = []
         
         if self.hparams["lr_decay"]:
             harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
         
         if self.hparams["lcheckpointing"]:
-            harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+            harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
+                                                                  monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
             
         if self.hparams["learlystopping"]:
             harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
@@ -541,7 +547,11 @@ class HarrisWGAN(AbstractModelClass):
             return {}  
         
     def set_model(self, generator, discriminator):
-
+        """
+        Instantiate the generator and discriminator models and create the HarrisWGAN model instance.
+        :param generator: The generator model.
+        :param discriminator: The discriminator model.
+        """
         # get relevant shapes for input and output of generator and discriminator
         lo_res_in_shp = list(self._input_shape[:-1] )
         hi_res_in_shp = list(np.array(lo_res_in_shp[:2])*int(np.prod(np.array([4,])))) + [self._input_shape[-1]]
@@ -551,7 +561,6 @@ class HarrisWGAN(AbstractModelClass):
         shp_gen = {"lo_res_inputs": lo_res_in_shp, "hi_res_inputs": hi_res_in_shp, "noise_input": in_noise_shp}
         # get generator model
         gen_model = generator(shp_gen, self.hparams["hparams_generator"], self._varnames_tar)      
-        
         
         # get discriminator model
         shp_disc = {"lo_res_inputs": lo_res_in_shp, "hi_res_inputs": hi_res_in_shp, "output": out_shp}
@@ -948,4 +957,3 @@ def CL_chooser(CLtype):
         "ensmeanMSE": ensmean_MSE,
         # "ensmeanMSE_phys": ensmean_MSE_phys#
     }[CLtype]
-        
