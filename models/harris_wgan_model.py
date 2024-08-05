@@ -123,7 +123,7 @@ class GeneratorHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, 
-                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
+                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05}
 
 
 class DiscriminatorHarris(AbstractModelClass):
@@ -228,7 +228,7 @@ class DiscriminatorHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and discriminator model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 512, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), 
-                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2}
+                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06}
 
     
 class NoiseGenerator(object):
@@ -239,7 +239,7 @@ class NoiseGenerator(object):
         self.prng = np.random.RandomState(seed=random_seed)
 
     def noise(self, shape, mean, std):
-        shape = (self.batch_size,) + shape
+        shape = [self.batch_size] + shape
         n = self.prng.randn(*shape).astype(np.float32)
         # n = np.zeros(shape, dtype=np.float32)
         if std != 1.0:
@@ -266,9 +266,9 @@ class HarrisWGAN_Model(keras.Model):
         
         # losses        
         self.noise_gen = NoiseGenerator(
-            self.generator._input_shape["lo_res_inputs"][:2]+(
-                self.hparams["noise_channels"],
-            ), self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
+            self.generator._input_shape["lo_res_inputs"][:2]+[
+                self.hparams["noise_channels"]], 
+            self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
         )
 
         # losses
@@ -543,18 +543,18 @@ class HarrisWGAN(AbstractModelClass):
     def set_model(self, generator, discriminator):
 
         # get relevant shapes for input and output of generator and discriminator
-        lo_res_in_shp = self._input_shape[:-2] 
+        lo_res_in_shp = list(self._input_shape[:-1] )
         hi_res_in_shp = list(np.array(lo_res_in_shp[:2])*int(np.prod(np.array([4,])))) + [self._input_shape[-1]]
         in_noise_shp = lo_res_in_shp[:2] + [self.hparams["noise_channels"]]    
         out_shp = hi_res_in_shp[:2] + [len(self._varnames_tar)]            
         
-        shp_gen = {"lo_res_inputs": lo_res_in_shp, " hi_res_inputs": hi_res_in_shp, "noise_input": in_noise_shp}
+        shp_gen = {"lo_res_inputs": lo_res_in_shp, "hi_res_inputs": hi_res_in_shp, "noise_input": in_noise_shp}
         # get generator model
         gen_model = generator(shp_gen, self.hparams["hparams_generator"], self._varnames_tar)      
         
         
         # get discriminator model
-        shp_disc = {"lo_res_inputs": lo_res_in_shp, " hi_res_inputs": hi_res_in_shp, "output": out_shp}
+        shp_disc = {"lo_res_inputs": lo_res_in_shp, "hi_res_inputs": hi_res_in_shp, "output": out_shp}
         discriminator_model = discriminator(shp_disc, self.hparams["hparams_discriminator"], self._varnames_tar)
         
         # get hyperparamters of HarrisWGAN only
