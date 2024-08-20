@@ -152,3 +152,5 @@ downscaling_ap5/jube/ap5_dataloader/*
 # Checkpoint
 HPC_batch_scripts/downscaling/
 
+#wandb_zipped_files
+HPC_batch_scripts/wandb_*.tar.gz
