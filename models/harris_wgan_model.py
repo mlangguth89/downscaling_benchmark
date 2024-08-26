@@ -698,7 +698,7 @@ class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
 class ModelCheckpointHarrisWGAN(ModelCheckpoint):
     """Note SL: taken from wgan_model.py"""
     def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
-                 mode='auto', save_freq=10000, options=None, **kwargs):
+                 mode='auto', save_freq="epoch", options=None, **kwargs):
         super(ModelCheckpointHarrisWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
         self._expname = expname
@@ -934,8 +934,8 @@ def denormalise(y_in):
 
 
 def wasserstein_loss(y_true, y_pred):
-    return 1.
-    #return K.mean(y_true * y_pred, axis=-1)
+    #return 1.
+    return K.mean(y_true * y_pred, axis=-1)
 
 def ensmean_MSE(y_true, y_pred):
     pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
