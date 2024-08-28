@@ -531,7 +531,7 @@ class HarrisWGAN(AbstractModelClass):
         
         if self.hparams["lcheckpointing"]:
             harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
-                                                                  monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min"))
+                                                                  monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
             
         if self.hparams["learlystopping"]:
             harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
@@ -894,43 +894,6 @@ def const_upscale_block(const_input, steps, filters):
     for step in steps:
         const_output = Conv2D(filters=filters, kernel_size=(step, step), strides=step, padding="valid", activation="relu")(const_output)
     return const_output
-
-
-def ensure_list(x):
-    if type(x) != list:
-        x = [x]
-    return x
-
-
-def input_shapes(model, prefix):
-    shapes = [il.shape[1:] for il in
-              model.inputs if il.name.startswith(prefix)]
-    shapes = [tuple([d for d in dims]) for dims in shapes]
-    return shapes
-
-class GradientPenalty(Layer):
-    def __init__(self, **kwargs):
-        super(GradientPenalty, self).__init__(**kwargs)
-
-    def call(self, inputs):
-        target, wrt = inputs
-        grad = _compute_gradients(target, [wrt])[0]
-        return K.sqrt(K.sum(K.batch_flatten(K.square(grad)), axis=1, keepdims=True))-1
-
-    def compute_output_shape(self, input_shapes):
-        return (input_shapes[1][0], 1)
-    
-
-def _compute_gradients(tensor, var_list):
-    grads = tf.gradients(tensor, var_list)
-    return [grad if grad is not None else tf.zeros_like(var)
-            for var, grad in zip(var_list, grads)]
-
-
-def denormalise(y_in):
-    ten = tf.constant(10.0, dtype=tf.float32)
-    one = tf.constant(1.0, dtype=tf.float32)
-    return tf.subtract(tf.pow(ten, y_in), one)
 
 
 def wasserstein_loss(y_true, y_pred):
