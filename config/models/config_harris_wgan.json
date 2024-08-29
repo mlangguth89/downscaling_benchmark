@@ -4,7 +4,6 @@
   "lr_decay": true,
   "stream_mode": "lo_input",
   "batch_size": 16,
-  "steps_per_epoch": 4012,
   "decay_start": 2,
   "decay_end": 5,
   "hparams_generator": {"lr": 1e-05, "lr_end": 1e-06, "channels_start": 128},
