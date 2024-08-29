@@ -120,7 +120,7 @@ def main(parser_args):
 
     # train model
     # Note: smaller number of steps_per_epoch may enable more fine-grained control on learning rate schedule and checkpointing
-    steps_per_epoch = hparams_dict.get("steps_per_epoch", int(np.ceil(nsamples / ds_dict["batch_size"])))
+    steps_per_epoch = ds_dict.get("steps_per_epoch", int(np.ceil(nsamples / ds_dict["batch_size"])))
     if "steps_per_epoch" in hparams_dict:
         print(f"Steps per epoch changed from {int(np.ceil(nsamples / ds_dict['batch_size']))} to {hparams_dict['steps_per_epoch']} for training.")
 
