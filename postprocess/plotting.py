@@ -124,9 +124,9 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
                   - fs: basic font size of labels
                   - figsize: figure size in inch
                   - levels: levels for plotting both variables
-                  - cbar_name: colorbar name used for plotting both variables
+                  - cmap_name: colormap name used for plotting both variables
                   - levels_diff: levels for the difference plot 
-                  - cbar_name_diff: colorbar name for the difference plots
+                  - cmap_name_diff: colormap name for the difference plots
                   - cbar_shrink: shrink-factor for the vertically aligned colorbar
                   - further valid arguments of ax.pcolormesh           
     """
@@ -144,9 +144,9 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     figsize = kwargs.pop("figsize", (24, 6))
     # get levels and colorbars for 'normal' data plots and difference plots
     levels = kwargs.pop("levels", np.arange(-22., 42.1, 2))
-    cbar_name = kwargs.pop("cbar_name", "jet")
+    cmap_name = kwargs.pop("cmap_name", "jet")
     levels_diff = kwargs.pop("levels_diff", np.arange(-5.25, 5.01, 0.5))
-    cbar_name_diff = kwargs.pop("cbar_name_diff", "PuOr_r")
+    cmap_name_diff = kwargs.pop("cmap_name_diff", "PuOr_r")
     cbar_shrink = .8
     
     # auxiliary variables
@@ -179,8 +179,8 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)
 
     # get colormap
-    cmap, norm = get_cmap_norm(levels, cbar_name)
-    cmap_diff, norm_diff = get_cmap_norm(levels_diff, cbar_name_diff)
+    cmap, norm = get_cmap_norm(levels, cmap_name)
+    cmap_diff, norm_diff = get_cmap_norm(levels_diff, cmap_name_diff)
     
     # create plot objects
     fig, axs = plt.subplots(1, 3, figsize=figsize, sharex=True, sharey=True,
@@ -233,7 +233,7 @@ def plot_score_map(score, plt_fname, **kwargs):
                   - fs: basic font size of labels
                   - figsize: figure size in inch
                   - levels: levels for plotting the score
-                  - cbar_name: colorbar name used for plotting the score
+                  - cmap_name: colormap name used for plotting the score
                   - further valid arguments of ax.pcolormesh
     """
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_score_map.__name__}")
@@ -248,7 +248,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     figsize = kwargs.pop("figsize", (12, 8))
     # get levels and colorbars 
     levels = kwargs.pop("levels", np.arange(-5.25, 5.01, 0.5))
-    cbar_name = kwargs.pop("cbar_name", "PuOr_r")
+    cmap_name = kwargs.pop("cmap_name", "PuOr_r")
 
     # auxiliary variables
     lvl = np.asarray(levels)
@@ -264,7 +264,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)  
 
     # get colormap
-    cmap, norm = get_cmap_norm(levels, cbar_name)
+    cmap, norm = get_cmap_norm(levels, cmap_name)
     # create plot objects
     fig, ax = plt.subplots(1, 1, figsize=figsize, subplot_kw={"projection": proj_plot})
 

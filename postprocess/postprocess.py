@@ -636,8 +636,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         if self.varname == "t2m":
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
-            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap": mpl.cm.afmhot_r(np.linspace(0., 1., len(lvl_rmse)))}, 
-                         "bias": {"levels": lvl_bias, "cmap": mpl.cm.seismic(np.linspace(0., 1., len(lvl_bias)))}}
+            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r"}, 
+                         "bias": {"levels": lvl_bias, "cmap_name": "seismic"}}
             
         else:
             if eval_dict is None:
@@ -647,4 +647,4 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         return eval_dict
     
     def required_config_keys(self):
-        return ["levels", "cmap"]
+        return ["levels", "cmap_name"]
