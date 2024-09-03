@@ -1,0 +1,10 @@
+{
+  "num_files": 22,
+  "norm_dims": ["time", "rlat_in", "rlon_in", "rlat_tar", "rlon_tar"],
+  "batch_size": 16,
+  "steps_per_epoch": 4012,
+  "varname_z": "hsurf_tar",
+  "predictands": ["t_2m_tar"],
+  "predictors": ["t2m_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "blh_in", "u10_in", "v10_in", "t_ml115_in", "t_ml122_in", "t_ml127_in", "t_ml131_in", "t_ml135_in"],
+  "static_predictors": ["hsurf_tar", "fr_land_tar"]
+}

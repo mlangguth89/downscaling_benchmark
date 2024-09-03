@@ -119,12 +119,15 @@ def main(parser_args):
     model.save_hparams_to_json(os.path.join(model_savedir, f"config_{parser_args.model}.json"))
 
     # train model
-    steps_per_epoch = int(np.ceil(nsamples / ds_dict["batch_size"]))
+    # Note: smaller number of steps_per_epoch may enable more fine-grained control on learning rate schedule and checkpointing
+    steps_per_epoch = ds_dict.get("steps_per_epoch", int(np.ceil(nsamples / ds_dict["batch_size"])))
+    if "steps_per_epoch" in hparams_dict:
+        print(f"Steps per epoch changed from {int(np.ceil(nsamples / ds_dict['batch_size']))} to {hparams_dict['steps_per_epoch']} for training.")
 
     # run training (note that callbacks are part of the fit_options by default)
     print(f"Start training of {parser_args.model.capitalize()}...")
     history = model.fit(x=tfds_train, epochs=model.hparams["nepochs"],
-                        steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=300,
+                        steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=int(8640/ds_dict["batch_size"]),
                         verbose=2, **model.fit_options)
 
     # get some parameters from tracked training times and put to dictionary

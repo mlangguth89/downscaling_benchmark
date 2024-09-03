@@ -2,8 +2,8 @@
   "num_files": 22,
   "norm_dims": ["time", "rlat", "rlon"],
   "batch_size": 32,
-  "var_tar2in": "hsurf_tar",
   "varname_z": "hsurf_tar",
   "predictands": ["t_2m_tar"],
-  "predictors": ["t2m_in", "slhf_in", "sshf_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in", "fr_land_tar"]
+  "predictors": ["t2m_in", "slhf_in", "sshf_in", "10u_in", "10v_in", "blh_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in"],
+  "static_predictors": ["hsurf_tar", "fr_land_tar"]
 }

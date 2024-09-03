@@ -123,6 +123,9 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
 
     # get ground truth data
     ds_test = xr.open_dataset(test_info["file"])
+    # rename coordinates and dimensions of target data for consistency
+    dims_new = [dim.replace("_tar", "") for dim in ds_test[tar_varname].dims]
+    ds_test_new = ds_test.rename({old: new for old, new in zip(ds_test.dims, dims_new) if old != new}).copy()
     coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
 
     # start inference

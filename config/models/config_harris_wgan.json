@@ -1,0 +1,11 @@
+{
+  "nepochs": 10,
+  "d_steps": 5,
+  "lr_decay": true,
+  "stream_mode": "lo_input",
+  "batch_size": 16,
+  "decay_start": 2,
+  "decay_end": 5,
+  "hparams_generator": {"lr": 1e-05, "lr_end": 1e-06, "channels_start": 128},
+  "hparams_discriminator": {"lr": 5e-07}
+}

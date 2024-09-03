@@ -12,10 +12,11 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-03-08"
+__update__ = "2024-07-30"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
+from pathlib import Path
 import re
 from operator import itemgetter
 from functools import partial
@@ -135,34 +136,45 @@ class HandleDataClass(object):
         return da
 
     @staticmethod
-    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
+    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
         """
         Split data array with variables-dimension into input and target data for downscaling
-        :param da: The unsplitted data array
-        :param target_var: Name of target variable which should consttute the first channel
+        :param ds: The unsplitted dataset
         :param predictands: List of selected predictand variables; parse None to use
                             all predictands (vars with suffix _tar)
         :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :return: The split data array.
+        :param static_predictors: List of selected static (high-resolved) predictors, the corresponding splitted dataset ds_stat will be None of None is parsed
+        :return: Tuple of splitted datasets.
         """
         varnames = list(ds.data_vars)
 
         if predictors is None:
             invars = [var for var in varnames if var.endswith("_in")]
         else:
-            assert all([predictor in varnames for predictor in
-                        predictors]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+            assert all(
+                [predictor in varnames for predictor in predictors]
+            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             invars = list(predictors)
         if predictands is None:
             tarvars = [var for var in varnames if var.endswith("_tar")]
         else:
-            assert all([predictand in varnames for predictand in
-                        predictands]), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+            assert all(
+                [predictand in varnames for predictand in predictands]
+            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
             tarvars = list(predictands)
 
         ds_in, ds_tar = ds[invars], ds[tarvars]
 
-        return ds_in, ds_tar
+        if static_predictors is None:
+            ds_stat = None
+        else:
+            assert all([static_predictor in varnames for static_predictor in static_predictors]), \
+                   f"At least one static high-res predictor is not a data variable. Available variables are {*varnames,}"
+            statvars = list(static_predictors)
+
+            ds_stat = ds[statvars]
+
+        return ds_in, ds_tar, ds_stat
 
     @staticmethod
     def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):
@@ -300,23 +312,48 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     
     fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
 
+    # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
+    if "var_tar2in" in ds_dict:
+        static_predictors = list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
+        print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
+              +f"List of updated static predictors: {','.join(static_predictors)}")
+    else:
+        static_predictors = ds_dict.get("static_predictors", None)
+    
+    if hparams_dict.get("named_targets", False):
+        stream_mode = "hi_input_named_target"
+    else:
+        stream_mode = hparams_dict.get("stream_mode", "hi_input")
+
+    if not "stream_mode" in hparams_dict:
+        print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
+    else:
+        print(f"Selected stream mode for {mode} dataset: {stream_mode}")
+
     if "*" in fname_or_pattern:                                             # do not load all data into memory
-        ds_obj = StreamMonthlyNetCDF(datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
-                                     selected_predictands=varnames_tar_all, selected_predictors=ds_dict.get("predictors", None),
-                                     var_tar2in=ds_dict.get("var_tar2in", None), norm_obj=norm_obj, 
-                                     norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
+        ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
+                                     predictands=varnames_tar_all, predictors=ds_dict.get("predictors", None),
+                                     static_predictors=static_predictors, sample_dim=ds_dict.get("sample_dim", "time"),
+                                     norm_obj=norm_obj, norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
         if shuffle:
             nshuffle = ds_obj.samples_merged
         else:
             nshuffle = 1          # equivalent to no shuffling
 
-        tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
-                                   lrepeat=lrepeat, drop_remainder=drop_remainder)
+        tfds = make_tf_dataset_dyn(ds_obj, bs_train, nepochs, nshuffle=nshuffle, lrepeat=lrepeat, drop_remainder=drop_remainder)
+
+        # get input shape depending on streaming mode and processed data
+        if stream_mode == "lo_input":
+            shape_in = [*ds_obj.data_xy_dim["input"], len(ds_obj.predictor_list), len(ds_obj.static_predictor_list)]
+        else:
+            shape_in = [*ds_obj.data_xy_dim["input"], len(ds_obj.predictor_list + ds_obj.static_predictor_list)]
         
-        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": (*ds_obj.data_dim[::-1], ds_obj.n_predictors),
+        
+        tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": tuple(shape_in),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
-                     "effective_dataset_size": ds_obj.effective_dataset_size, "all_predictors": ds_obj.predictor_list}
+                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list, 
+                     "static_predictors": static_predictors, "stream_mode": stream_mode}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
@@ -334,33 +371,32 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
             predictors = [var for var in ds.data_vars if var.endswith("_in")]
 
         # create TensorFlow dataset
-        tfds = make_tf_dataset_allmem(ds, bs_train, varnames_tar_all, predictors=predictors,
-                                      var_tar2in=ds_dict.get("var_tar2in", None), lrepeat=lrepeat, drop_remainder=drop_remainder,
-                                      lshuffle=shuffle, named_targets=hparams_dict.get("named_targets", False), with_horovod=with_horovod)
+        tfds = make_tf_dataset_allmem(stream_mode, ds, bs_train, varnames_tar_all, predictors=predictors, 
+                                      static_predictors=static_predictors, lrepeat=lrepeat, drop_remainder=drop_remainder,
+                                      lshuffle=shuffle, with_horovod=with_horovod)
         
-        # append predictors if required. Order must be the same as in make_tf_dataset_allmem-method
-        if ds_dict.get("var_tar2in", None):
-            predictors = [ds_dict["var_tar2in"]] + predictors
-
+        # get input shape depending on streaming mode and processed data
+        if stream_mode == "lo_input":
+            shape_in = tfds.element_spec[0]["lo_res_inputs"].shape[1:].as_list() + [len(static_predictors)]
+        else:
+            shape_in = tfds.element_spec[0].shape[1:].as_list()
+    
         # provide dict for later use
-        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tfds.element_spec[0].shape[1:].as_list(),
+        tfds_info = {"nsamples": nsamples, "data_norm": norm_obj, "shape_in": tuple(shape_in),
                      "dataset_size": ds.nbytes, "all_predictands": varnames_tar_all, "file": fname_or_pattern, 
-                     "effective_dataset_size": ds.nbytes, "all_predictors": predictors}
+                     "effective_dataset_size": ds.nbytes, "predictors": predictors, "static_predictors": static_predictors,
+                     "stream_mode": stream_mode}
         
     return tfds, tfds_info
 
-
-def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
-                        lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
+def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, lrepeat: bool = True, drop_remainder: bool = True) -> tf.data.Dataset:
     """
     Build TensorFlow dataset by streaming from netCDF using xarray's open_mfdatset-method.
     To fit into memory, only a subset of all netCDF-files is processed at once (nfiles2merge-parameter).
-    TO-DO: Add flags for repeat and drop_remainder (cf. make_tf_dataset_allmem-method)
     :param ds_obj: StreamMonthlyNetCDF-object
     :param batch_size: desired mini-batch size
     :param nepochs: (effective) number of epochs for training
     :param nshuffle: number of samples to shuffle (set to 1 to disable shuffling)
-    :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
     :param lrepeat: flag if dataset should be repeated
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :return: TensorFlow dataset object that streams data from subset of many netCDF-files
@@ -369,12 +405,22 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     tf_choose_data = lambda il: tf.py_function(ds_obj.choose_data, [il], tf.bool)
     tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
     
-    if named_targets:
-        varnames = ds_obj.predictand_list
-        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands],
-                                {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
-    else:
-        tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+    mode = ds_obj.stream_mode
+    
+    if mode in ["hi_input", "hi_input_named_target"]:
+        tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], tf.float32)
+        if mode == "hi_input":
+            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands], arr[..., -ds_obj.n_predictands:])
+        else:
+            varnames = ds_obj.predictand_list
+            tf_split = lambda arr: (arr[..., 0:-ds_obj.n_predictands],
+                                    {var: arr[..., -ds_obj.n_predictands + i] for i, var in enumerate(varnames)})
+    else: 
+        def make_dict(darr_in, darr_stat, darr_out):
+            return ({"lo_res_inputs": darr_in, "hi_res_inputs": darr_stat}, {"output": darr_out})
+                                         
+        tf_getdata = lambda i: tf.numpy_function(ds_obj.getitems, [i], [tf.float32, tf.float32, tf.float32])
+        tf_split = lambda arr_in, arr_stat, arr_out: make_dict(arr_in, arr_stat, arr_out)
 
     # enable flexibility in factor for range
     n_reads = int(ds_obj.nfiles_merged*nepochs)
@@ -384,7 +430,6 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
     else:
         tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
 
-    tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
     tfds = tfds.flat_map(lambda x: tf.data.Dataset.from_tensors(x).map(tf_choose_data))
     tfds = tfds.flat_map(
         lambda x: tf.data.Dataset.range(ds_obj.samples_merged).shuffle(nshuffle)
@@ -397,30 +442,36 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     return tfds
 
-def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
-                           lshuffle: bool = True, shuffle_samples: int = 20000, named_targets: bool = False,
-                           var_tar2in: str = None, lrepeat: bool = True, drop_remainder: bool = True,
-                           with_horovod: bool = False, lembed: bool = False) -> tf.data.Dataset:
+def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, predictands: List, predictors: List = None,
+                           static_predictors: List = None, lshuffle: bool = True, shuffle_samples: int = 20000,
+                           lrepeat: bool = True, drop_remainder: bool = True, with_horovod: bool = False) -> tf.data.Dataset:
     """
     Build-up TensorFlow dataset from a generator based on the xarray-data array.
     NOTE: All data is loaded into memory
-
-    TO-DO: 
-
+    :param stream_mode: choices: ['hi_input', 'hi_input_named_target', 'lo_input']
+                'hi_input': (bilinearly) upscaled input data available from data file
+                'hi_input_named_target': as 'hi_input', but with named target (output as dictionary with variable names as key)
+                'lo_input': input data on coarse grid, but high-resolved static predictors available
+                            data pipeline yield a dictionary with 'lo_input', 'static' and 'output' as keys
     :param ds: the xarray dataset. Input variable names must carry the suffix '_in', whereas it must be '_tar' for target variables
     :param batch_size: number of samples per mini-batch
     :param predictands: List of selected predictand variables
     :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+    :param static_predictors: List of static (high-resolved) variables serving as predictors 
     :param lshuffle: flag if shuffling should be applied to dataset
     :param shuffle_samples: number of samples to load before applying shuffling
-    :param named_targets: flag if target of TF dataset should be dictionary with named target variables
-    :param var_tar2in: name of target variable to be added to input (used e.g. for adding high-resolved topography
-                                                                        to the input)
     :param lrepeat: flag if dataset should be repeated
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :param with_horovod: flag to trigger horovod-based distributed dataset creation
-    :param lembed: flag to trigger temporal embedding (not implemented yet!)
     """
+    # add static predictors to predictors-list unless lo_input-streaming mode is chosen
+    if stream_mode == "lo_input":
+        assert static_predictors is not None, "Provide high-resolved static input predictors for stream_mode 'lo_input'"
+    else:
+        if static_predictors:
+            predictors = to_list(static_predictors) + predictors
+            static_predictors = None
+            print(f"Static predictors added to predictors for data pipeline mode '{stream_mode}'")
 
     if with_horovod:
         import horovod.tensorflow as hvd
@@ -434,20 +485,15 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         if "time" not in ds[var].dims:
             ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
 
-    ds_in, ds_tar = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors)    
+    ds_in, ds_tar, ds_stat = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors,
+                                                          static_predictors=static_predictors)    
+    
+    ds_list = [ds_in, ds_tar, ds_stat] if static_predictors is not None else [ds_in, ds_tar]
 
     # convert dataset to data arrays and load into memory
-    da_in, da_tar = HandleDataClass.reshape_ds(ds_in).astype("float32", copy=True), \
-                    HandleDataClass.reshape_ds(ds_tar).astype("float32", copy=True)
+    da_list = [HandleDataClass.reshape_ds(ds).astype("float32", copy=True) for ds in ds_list]
 
-    if var_tar2in is not None:
-        # NOTE: * The order of the following operation must be the same as in StreamMonthlyNetCDF.getitems
-        #       * The following operation order must concatenate var_tar2in by da_in to ensure
-        #         that the variable appears at first place. This is required to avoid
-        #         that var_tar2in becomes a predeictand when slicing takes place in tf_split
-        da_in = xr.concat([da_tar.sel({"variables": var_tar2in}), da_in], "variables")
-
-    varnames_tar = da_tar["variables"].values
+    varnames_tar = da_list[1]["variables"].values
 
     def gen_named(darr_in, darr_tar):
         # darr_in, darr_tar = darr_in.load(), darr_tar.load()
@@ -463,25 +509,49 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
         for t in range(ntimes):
             yield tuple((darr_in.isel({"time": t}).values, darr_tar.isel({"time": t}).values))
 
-    if named_targets is True:
-        gen_now = gen_named
-    else:
+    def gen_dict(darr_in, darr_tar, darr_stat):
+        ntimes = len(darr_in["time"])
+        for t in range(ntimes):
+            yield tuple(({"lo_res_inputs": darr_in.isel({"time": t}).values,
+                          "hi_res_inputs": darr_stat.isel({"time": t}).values},
+                         {"output": darr_tar.isel({"time": t}).values}))
+
+    if stream_mode == "hi_input":
         gen_now = gen_unnamed
+    elif stream_mode == "hi_input_named_target":
+        gen_now = gen_named
+    elif stream_mode == "lo_input":
+        gen_now = gen_dict
+    else: 
+        raise ValueError(f"Mode {stream_mode} is not supported. Possible choices: 'hi_input', 'hi_input_named_target' and 'lo_input'")
 
     # create output signatures from first sample
-    s0 = next(iter(gen_now(da_in, da_tar)))
-    sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
-    if named_targets is True:
-        sample_spec_tar = {var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype) for var in varnames_tar}
+    s0 = next(iter(gen_now(*da_list)))
+    if stream_mode == "lo_input":
+        sample_spec_in = {
+            "lo_res_inputs": tf.TensorSpec(
+                s0[0]["lo_res_inputs"].shape, dtype=s0[0]["lo_res_inputs"].dtype
+            ),
+            "hi_res_inputs": tf.TensorSpec(
+                s0[0]["hi_res_inputs"].shape, dtype=s0[0]["hi_res_inputs"].dtype
+            ),
+        }
+
+        sample_spec_tar = {
+            "output": tf.TensorSpec(s0[1]["output"].shape, dtype=s0[1]["output"].dtype)
+        }
     else:
-        sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
+        sample_spec_in = tf.TensorSpec(s0[0].shape, dtype=s0[0].dtype)
+        if stream_mode == "hi_input_named_target":
+            sample_spec_tar = {
+                var: tf.TensorSpec(s0[1][var].shape, dtype=s0[1][var].dtype)
+                for var in varnames_tar
+            }
+        else: 
+            sample_spec_tar = tf.TensorSpec(s0[1].shape, dtype=s0[1].dtype)
 
     # re-instantiate the generator and build TF dataset
-    gen_train = gen_now(da_in, da_tar)
-
-    #if lembed is True:
-    #    raise ValueError("Time embedding is not supported yet.")
-    #else:
+    gen_train = gen_now(*da_list)
     data_iter = tf.data.Dataset.from_generator(lambda: gen_train, output_signature=(sample_spec_in, sample_spec_tar))
 
     # Notes:
@@ -500,21 +570,16 @@ def make_tf_dataset_allmem(ds: xr.Dataset, batch_size: int, predictands: List, p
     # clean-up to free some memory
     # free_mem([da, da_in, da_tar, varnames_tar])
     del ds
-    del ds_in
-    del ds_tar
-    del da_in
-    del da_tar
+    del ds_list
+    del da_list
     gc.collect()
-
 
     return data_iter
 
-
-
 class StreamMonthlyNetCDF(object):
-    def __init__(self, datadir, patt, nfiles_merge: Union[int, Dict], selected_predictands: List, sample_dim: str = "time",
-                 selected_predictors: List = None, var_tar2in: str = None, norm_dims: List = None, norm_obj=None,
-                 with_horovod: bool = False, seed: int = None, nworkers: int = 10):
+    def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: List,
+                 predictors: List = None, static_predictors: List = None, sample_dim: str = "time", norm_dims: List = None,
+                 norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
         rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
@@ -522,12 +587,11 @@ class StreamMonthlyNetCDF(object):
         :param datadir: directory where set of netCDF-files are located
         :param patt: filename pattern to allow globbing for netCDF-files
         :param nfiles_merge: number of files per data subset loaded into memory (can be an integer or a dictionary like {"#GPUS=1": 33})
-        :param selected_predictands: list of predictand variables names to be obtained
+        :param predictands: list of predictand variables names to be obtained
+        :param predictors: list of predictor variable names to be obtained, pass None
+                           if all vars with suffix _in should be chosen
+        :param static_predictors: list of static predictor variable names to be obtained
         :param sample_dim: name of dimension in the data over which sampling should be performed
-        :param selected_predictors: list of predictor variable names to be obtained, pass None
-                                    if all vars with suffix _in should be chosen
-        :param var_tar2in: predictand (target) variable that can be inputted as well
-                          (e.g. static variables known a priori such as the surface topography)
         :param norm_dims: list of dimensions over which data will be normalized
         :param norm_obj: normalization object providing parameters for (de-)normalization
         :param with_horovod: flag to trigger horovod-based distributed dataset creation
@@ -538,15 +602,16 @@ class StreamMonthlyNetCDF(object):
         if self.with_horovod:
             import horovod.tensorflow as hvd
         self.seed = seed
+        self.stream_mode = mode
         self.data_dir = datadir
         # get file list and number of files to be merged for data subse
         self.file_list = patt
         self.nfiles = len(self.file_list)
         # get relevant data dimensions
-        self.ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
+        ds_all = xr.open_mfdataset(list(self.file_list), decode_cf=False, cache=False)  # , parallel=True)
+        self.all_dims = ds_all.dims
         self.sample_dim = sample_dim
-        self.nsamples = self.ds_all.dims[sample_dim]
-        self.data_dim = self.get_data_dim()
+        self.nsamples = ds_all.dims[sample_dim]
         self.dataset_size = self.get_dataset_size()
         # sampling of datafiles
         self.file_list_random = random.sample(self.file_list, self.nfiles)
@@ -561,17 +626,18 @@ class StreamMonthlyNetCDF(object):
             self.effective_dataset_size = self.dataset_size
         # handle selected variables
         self.varnames_list = self.get_all_varnames()
-        self.predictor_list = selected_predictors
-        self.predictand_list = selected_predictands
+        self.predictor_list = predictors
+        self.static_predictor_list = static_predictors
+        self.predictand_list = predictands
         self.n_predictands, self.n_predictors = len(self.predictand_list), len(self.predictor_list)
-        self.all_vars = self.predictor_list + self.predictand_list       # ordering important to ensure that predictors come first!
-        self.var_tar2in = var_tar2in
-        if self.var_tar2in is not None:
-            self.n_predictors += len(to_list(self.var_tar2in))
-        # split variables into constant and dynamic variables
-        self.const_vars, self.dyn_vars = self.split_const_dyn_vars()
-        # not required currently, since constant data get automatically broadcasted with xr.open_mfdataset and _read_mfdataset-methods
-        # self.ds_const = self.get_const_vars()
+        self.all_vars = self.predictor_list + self.predictand_list 
+        if self.static_predictor_list is not None:
+            self.all_vars = self.static_predictor_list + self.all_vars     # ordering important to ensure that predictors come first (cf. make_tf_dataset_allmem-method)!
+            self.n_predictors += len(self.static_predictor_list) 
+
+        self.data_xy_dim = self.get_nxy_dim(ds_all) 
+        # sanity check on shapes of predictors, predictands and static predictors depending on stream_mode
+        self.check_data_shapes()    
         # get normalization object
         t0 = timer()
         # check if normalization object is provided
@@ -579,14 +645,14 @@ class StreamMonthlyNetCDF(object):
         if norm_obj is None:
             print("Start computing normalization parameters.")
             self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            self.norm_params = self.data_norm.get_required_stats(self.ds_all)
+            self.norm_params = self.data_norm.get_required_stats(ds_all)
             self.normalization_time = timer() - t0
         else:
             self.data_norm = norm_obj
             self.norm_params = norm_obj.norm_stats
 
         # initialize data loading
-        self.data_loaded = [xr.Dataset, xr.Dataset]
+        self.data_loaded = [xr.Dataset, xr.Dataset]        # two datasets will be cached
         self.iload_next, self.iuse_next = 0, 0
         self.reading_times = []
         self.ds_proc_size = 0.
@@ -595,6 +661,18 @@ class StreamMonthlyNetCDF(object):
             nworkers = min((multiprocessing.cpu_count(), self.nfiles2merge))
         self.pool = ThreadPool(nworkers)
 
+    @property
+    def stream_mode(self):
+        return self._stream_mode
+    
+    @stream_mode.setter
+    def stream_mode(self, mode):
+        known_modes = ["hi_input", "hi_input_named_target", "lo_input"]
+        if mode not in known_modes:
+            raise ValueError(f"Streaming mode {mode} is not supported. Known modes are {', '.join(known_modes)}")
+        
+        self._stream_mode = mode
+        
     @property
     def data_dir(self):
         return self._data_dir
@@ -681,7 +759,7 @@ class StreamMonthlyNetCDF(object):
 
     @sample_dim.setter
     def sample_dim(self, sample_dim):
-        if not sample_dim in self.ds_all.dims:
+        if not sample_dim in list(self.all_dims):
             raise KeyError(f"Could not find dimension '{sample_dim}' in data.")
 
         self._sample_dim = sample_dim
@@ -699,6 +777,18 @@ class StreamMonthlyNetCDF(object):
         :param selected_predictors: list of predictor variables or None
         """
         self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
+        
+    @property
+    def static_predictor_list(self):
+        return self._static_predictor_list
+    
+    @static_predictor_list.setter
+    def static_predictor_list(self, selected_static_predictors: List):
+        if selected_static_predictors is None:
+            # if no static, high-res predictors are added, set to None
+            self._static_predictor_list = None
+        else:
+            self._static_predictor_list = self.check_and_choose_vars(selected_static_predictors)
 
     @property
     def predictand_list(self):
@@ -716,15 +806,40 @@ class StreamMonthlyNetCDF(object):
         return self.nsamples
 
     def getitems(self, indices):
+        """
+        Return samples from loaded dataset, either as single array (mode: 'hi_input' and 'hi_input_named_target')
+        or as tuple of arrays (mode: 'lo_input')
+        :param indices: sample indices 
+        """
+        if self.stream_mode == "lo_input":
+            da_now = self.getitems_as_tuple(indices)
+        else:
+            da_now = self.getitems_as_array(indices)
+        
+        return da_now
+    
+    def getitems_as_array(self, indices):
+        """
+        Retrieves samples from dataset and returns an ordered array for later data handling.
+        :param indices: sample indices 
+        :return: Ordered array of variables with variables as last dimension. Order is: [static_predictors], predictors, predictands
+        """
         da_now = self.data_now.isel({self.sample_dim: indices}).to_array("variables").sel({"variables": self.all_vars})
-        if self.var_tar2in is not None:
-            # NOTE: * The order of the following operation must be the same as in make_tf_dataset_allmem
-            #       * The following operation order must concatenate var_tar2in by da_in to ensure
-            #         that the variable appears at first place. This is required to avoid
-            #         that var_tar2in becomes a predictand when slicing takes place in tf_split
-            da_now = xr.concat([da_now.sel({"variables": self.var_tar2in}), da_now], dim="variables")
-
-        return da_now.transpose(..., "variables")
+        
+        return da_now.transpose(..., "variables")        
+        
+    def getitems_as_tuple(self, indices):
+        """
+        Retrieves samples from dataset and returns an ordered tuple of arrays for later data handling.
+        :param indices: sample indices 
+        :return: Ordered tuple of arrays with variables as last dimension. Order is: static_predictors, predictors, predictands
+        """
+        da_in_coa, da_in_static, da_out = self.data_now[self.predictor_list].isel({self.sample_dim: indices}).to_array("variables"), \
+                                          self.data_now[self.static_predictor_list].isel({self.sample_dim: indices}).to_array("variables"), \
+                                          self.data_now[self.predictand_list].isel({self.sample_dim: indices}).to_array("variables")
+        
+        da_tuple = (da_in_coa.transpose(..., "variables"), da_in_static.transpose(..., "variables"), da_out.transpose(..., "variables"))
+        return da_tuple
 
     def get_dataset_size(self, random_list: bool = False):
         """
@@ -741,21 +856,27 @@ class StreamMonthlyNetCDF(object):
 
         return dataset_size
 
-    def get_data_dim(self):
+    def get_nxy_dim(self, ds):
         """
-        Retrieve the dimensionality of the data to be handled, i.e. without sample_dim which will be batched in a
-        data stream.
-        :return: tuple of data dimensions
+        Retrieve the spatial dimensionality of the input and target data.
+        :return: Dictionary of spatial dimensions of the predictands, predictors and, if available, static predictors
         """
-        # get existing dimension names and remove sample_dim
-        dimnames = list(self.ds_all.coords)
-        dimnames.remove(self.sample_dim)
+        data_dims_keys = ["output", "input",]
+        infer_vars = [self.predictand_list[0], self.predictor_list[0]]
+        
+        if self.static_predictor_list is not None:
+            data_dims_keys += ["input_static"]
+            infer_vars += [self.static_predictor_list[0]]
 
-        # get the dimensionality of the data of interest
-        all_dims = dict(self.ds_all.dims)
-        data_dim = itemgetter(*dimnames)(all_dims)
+        dim_dict = {}
+        for key, var in zip(data_dims_keys, infer_vars):
+            dimnames = list(ds[var].dims)
+            dimnames.remove(self.sample_dim)
 
-        return data_dim
+            data_dim = itemgetter(*dimnames)(self.all_dims)
+            dim_dict[key] = data_dim
+            
+        return dim_dict
 
     def get_samples_per_merged_file(self):
         nsamples_merged = []
@@ -792,38 +913,25 @@ class StreamMonthlyNetCDF(object):
 
         return selected_vars
     
-    def split_const_dyn_vars(self):
+    def check_data_shapes(self):
         """
-        Split variables into constant and dynamic variables. Constant variables are those that do not vary over
-        the sample dimension, e.g. the topography. Dynamic variables are those that vary over the sample dimension,
-        e.g. the temperature.
-        :return: tuple of lists of constant and dynamic variables
+        Check if the spatial data dimensions are consistent w.r.t. to the streaming mode.
         """
-        const_vars, dyn_vars = [], []
+        nxy_in_str, nxy_stat_str = [str(n) for n in self.data_xy_dim['input']], [str(n) for n in self.data_xy_dim['input_static']]
+        nxy_out_str = [str(n) for n in self.data_xy_dim['output']]
         
-        # only load one file, since open_mfdatset and _read_mfdatset already broadcast const variables
-        # over sample dimension (usually 'time')
-        ds_exp = xr.open_dataset(self.file_list[0])
-        
-        for var in self.all_vars:
-            if self.sample_dim in ds_exp[var].dims:
-                const_vars.append(var)
-            else:
-                dyn_vars.append(var)
-
-        return const_vars, dyn_vars
-    
-    def get_const_vars(self):
-        """
-        Return a copy of the constant variables from first netCDF-file.
-        :return: xarray dataset containing constant variables
-        """
-        ds_exp = xr.open_dataset(self.file_list[0])
-        
-        if self.const_vars:
-            return ds_exp[self.const_vars].copy(deep=True)
+        if self.stream_mode == "lo_input":
+            assert self.data_xy_dim["input"] != self.data_xy_dim["input_static"], f"Predictors and static predictors must have different spatial shapes. " + \
+                                                                                      f"predictors: [{','.join(nxy_in_str)}], " + \
+                                                                                      f"static_predictors: [{','.join(nxy_stat_str)}]"
+            assert self.data_xy_dim["output"] == self.data_xy_dim["input_static"], f"Predictands and static predictors must have the same spatial shapes. " + \
+                                                                                      f"predictands: [{','.join(nxy_out_str)}], " + \
+                                                                                      f"static_predictors: [{','.join(nxy_stat_str)}]"
         else:
-            return None
+            mess = f"The spatial shapes of all variables must be the same. predictands: [{','.join(nxy_out_str)}], predictors: [{','.join(nxy_in_str)}]"
+            if self.static_predictor_list is not None:
+                mess += f" static_predictors: [{','.join(nxy_stat_str)}]"
+            assert self.data_xy_dim["input"] == self.data_xy_dim["input_static"] == self.data_xy_dim["output"], mess        
 
     @staticmethod
     def _process_one_netcdf(fname, data_norm, engine: str = "netcdf4", var_list: List = None, **kwargs):
@@ -855,13 +963,9 @@ class StreamMonthlyNetCDF(object):
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
         il = int(self.iload_next % 2)
         # read the normalized data into memory
-        # ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False, data_vars=self.all_vars,
-        #                           preprocess=partial(self._preprocess_ds, data_norm=self.data_norm),
-        #                           parallel=True).load()
         t0 = timer()
         # Restriction to read dynamic variables is not required currently,
         # since constant data get automatically broadcasted with the _read_mfdataset-method
-        #data_now = self._read_mfdataset(file_list_now, var_list=self.dyn_vars).copy()
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
         nsamples = data_now.sizes[self.sample_dim]
 
