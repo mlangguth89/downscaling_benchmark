@@ -15,7 +15,9 @@ import logging
 import numpy as np
 import xarray as xr
 from skimage.util.shape import view_as_blocks
-from other_utils import convert_to_xarray, to_list
+from handle_data_class import make_tf_dataset_allmem
+from scores_class import Scores
+from other_utils import check_str_in_list, convert_to_xarray, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -222,10 +224,11 @@ def bootstrap_grouped_hourly(score_hourly_grouped, score_hourly_mean, block_leng
 
     return score_hourly_mean_b
 
-def get_spectrum_exps(ds: xr.Dataset, data_info: dict, lcutoff: bool, re: float):
+def get_spectrum_exps(ds: xr.Dataset, data_vars: List[str], data_info: dict, lcutoff: bool, re: float):
     """
     Small wrapper to run spectral analysis for several experiments 
-    :param ds: xarray.Dataset with input data for spectral analysis 
+    :param ds: xarray.Dataset with input data
+    :param data_vars: List of variable names from ds for spectral analysis 
     :param data_info: Dictionary with information about data, required keys: "lonlat_dims", "dims", "coord_dict", "varname", "var_unit"
     :param lcutoff: Flag to apply low-pass filter
     :param re: Earth radius
@@ -238,7 +241,6 @@ def get_spectrum_exps(ds: xr.Dataset, data_info: dict, lcutoff: bool, re: float)
     ps_dict = {}
 
     # get information about data for convenience
-    data_vars = to_list(ds.variables)
     nspecs = len(data_vars)
     lonlat_dims, dims = data_info["lonlat_dims"], data_info["dims"]
     coord_dict = data_info["coord_dict"]
@@ -251,7 +253,7 @@ def get_spectrum_exps(ds: xr.Dataset, data_info: dict, lcutoff: bool, re: float)
         ps_exp = get_spectrum(ds[data_var], lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
         # average over all time steps and create xarray.DataArray
         da_ps_exp = xr.DataArray(ps_exp.mean(axis=0), dims=dims, coords=coord_dict, name=f"sp_{data_var}",
-                                  attrs={"long_name": f"Spectral power of {data_var}", "units": f"{var_unit}", "physical variable name": var_name})
+                                  attrs={"long_name": f"Spectral power of {data_var}", "units": f"{var_unit}**2 m", "physical variable name": var_name})
 
         # remove wavenumber 0 and append dictionary    
         ps_dict[data_var] = da_ps_exp[1::]
@@ -261,13 +263,13 @@ def get_spectrum_exps(ds: xr.Dataset, data_info: dict, lcutoff: bool, re: float)
 
     return ds_ps
 
-def get_domain_info(da: xr.DataArray, lonlat_dims: list =["lon", "lat"], re:float = 6371*1.e+03): 
+def get_domain_info(da: xr.DataArray, lonlat_dims: list =["lon", "lat"], re:float = 6378*1.e+03): 
     """
     Get information about the underlying grid of a DataArray.
     Assumes a regular, spherical grid (can also be a rotated one of lonlat_dims are adapted accordingly)
     :param da: The xrray DataArray given on a regular, spherical grid (i.e. providing latitude and longitude coordinates)
     :param lonlat_dims: Names of the longutude and latitude coordinates
-    :param re: radius of spherical Earth in m or km (domain length Lx and Ly inherit the unit of re)
+    :param re: radius of spherical Earth 
     :return grid_dict: dictionary providing dx (grid spacing), nx (#gridpoints) and Lx(domain length) (same for y) as well as lat0 (central latitude)
     """
     # get local logger
@@ -365,13 +367,13 @@ def angular_integration(da_fft, grid_dict: dict, lcutoff: bool = True):
     return np.squeeze(spec_radial)
 
 
-def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool = True, re: float = 6371*1e+03):
+def get_spectrum(da: xr.DataArray, lonlat_dims = ["lon", "lat"], lcutoff: bool = True, re: float = 6378*1e+03):
     """
     Compute power spectrum in terms of total wavenumber from numpy-array.
     Note: Assumes a regular, spherical grid with dx=dy.
     :param da: DataArray with (lon, lat)-like dimensions
     :param lcutoff: flag if spectrum should be truncated to cutoff frequency or if full spectrum should be returned (False)
-    :param re: radius of spherical Earth in m or km (domain length Lx and Ly inherit the unit of re)
+    :param re: (spherical) Earth radius
     :return var_rad: power spectrum in terms of wavenumber
     """
     # get local logger
@@ -462,5 +464,72 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
 
     return da_permute
 
+
+def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                       data_loader_opt: dict, patch_size = (8, 8)):
+    """
+    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
+    :param ds: The unnormalized (test-)dataset
+    :param predictors: List of predictor variables for which feature importance analysis should be run
+    :param varname_tar: Name of target variable
+    :param model: Trained model for inference
+    :param norm: Normalization object
+    :param score_name: Name of metric-score to be calculated
+    :param data_loader_opt: Dictionary providing options for the make_tf_dataset_allmem-method
+    :param patch_size: Tuple for patch size during spatio-temporal permutation
+    :return score_all: DataArray with scores for all predictor variables
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
+
+    # sanity checks
+    _ = check_str_in_list(list(ds.data_vars), predictors)
+    #try:
+    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
+    #except AssertionError as e:
+    #    func_logger.error(e, stack_info=True, exc_info=True)
+    #    raise e
+
+    ntimes = len(ds["time"])
+
+    # get ground truth data and underlying metadata
+    ground_truth = ds[varname_tar].copy() 
+    # normalize dataset
+    ds = norm.normalize(ds)   
+
+    # initialize score-array
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
+                             dims=["predictor", "time"])
+
+    for var in predictors:
+        func_logger.info(f"Run sample importance analysis for {var}...")
+        # get copy of sample array
+        ds_copy = ds.copy(deep=True)
+        # permute sample
+        da_now = ds[var].copy()
+        if "time" not in da_now.dims:
+            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
+        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
+        ds_copy[var] = da_permut
+        
+        # get TF dataset
+        func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
+        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+
+        # predict
+        func_logger.info(f"Run inference with permuted sample for {var}...")
+        y_pred = model.predict(tfds_test, verbose=2)
+
+        # convert to xarray
+        y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
+
+        # calculate score
+        func_logger.info(f"Calculate score for permuted samples of {var}...")
+        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
+        score_all.loc[{"predictor": var}] = score_engine(score_name)
+
+        #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
+
+    return score_all
                                     
 
