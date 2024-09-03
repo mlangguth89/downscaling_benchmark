@@ -26,15 +26,15 @@ import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
-from handle_data_class import prepare_dataset
+from handle_data_class import prepare_dataset, make_tf_dataset_allmem
 from all_normalizations import ZScore
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum_exps, calculate_cond_quantiles
+from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, get_season_t2m_levels
-from other_utils import convert_to_xarray, finditem, to_list
+from other_utils import convert_to_xarray, check_str_in_list, finditem, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -516,6 +516,73 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
                                                  "yticks": range(1, max_rel_change), "colors": "b"})
 
     return feature_scores
+
+def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                       data_loader_opt: dict, patch_size = (8, 8)):
+    """
+    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
+    :param ds: The unnormalized (test-)dataset
+    :param predictors: List of predictor variables for which feature importance analysis should be run
+    :param varname_tar: Name of target variable
+    :param model: Trained model for inference
+    :param norm: Normalization object
+    :param score_name: Name of metric-score to be calculated
+    :param data_loader_opt: Dictionary providing options for the make_tf_dataset_allmem-method
+    :param patch_size: Tuple for patch size during spatio-temporal permutation
+    :return score_all: DataArray with scores for all predictor variables
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
+
+    # sanity checks
+    _ = check_str_in_list(list(ds.data_vars), predictors)
+    #try:
+    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
+    #except AssertionError as e:
+    #    func_logger.error(e, stack_info=True, exc_info=True)
+    #    raise e
+
+    ntimes = len(ds["time"])
+
+    # get ground truth data and underlying metadata
+    ground_truth = ds[varname_tar].copy() 
+    # normalize dataset
+    ds = norm.normalize(ds)   
+
+    # initialize score-array
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
+                             dims=["predictor", "time"])
+
+    for var in predictors:
+        func_logger.info(f"Run sample importance analysis for {var}...")
+        # get copy of sample array
+        ds_copy = ds.copy(deep=True)
+        # permute sample
+        da_now = ds[var].copy()
+        if "time" not in da_now.dims:
+            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
+        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
+        ds_copy[var] = da_permut
+        
+        # get TF dataset
+        func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
+        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+
+        # predict
+        func_logger.info(f"Run inference with permuted sample for {var}...")
+        y_pred = model.predict(tfds_test, verbose=2)
+
+        # convert to xarray
+        y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
+
+        # calculate score
+        func_logger.info(f"Calculate score for permuted samples of {var}...")
+        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
+        score_all.loc[{"predictor": var}] = score_engine(score_name)
+
+        #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
+
+    return score_all
 
 def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
     """
