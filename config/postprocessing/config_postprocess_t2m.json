@@ -10,7 +10,7 @@
   "do_cond_quantile_analysis": true,
   "config_cond_quantile_analysis": {"factorization": "calibration_refinement"},
   "do_comparison_plots": true,
-  "config_comparison_plots": {"nsamples": 100, "offset": -273.15},
+  "config_comparison_plots": {"nsamples": 100, "offset": -273.15, "cmap_name": "PuOr_r", "cmap_name_diff": "bwr"},
   "do_feature_importance": false,
   "config_feature_importance": {"score_name": "rmse"}
 }
