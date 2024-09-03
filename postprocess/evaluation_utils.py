@@ -253,7 +253,7 @@ def get_spectrum_exps(ds: xr.Dataset, data_vars: List[str], data_info: dict, lcu
         ps_exp = get_spectrum(ds[data_var], lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
         # average over all time steps and create xarray.DataArray
         da_ps_exp = xr.DataArray(ps_exp.mean(axis=0), dims=dims, coords=coord_dict, name=f"sp_{data_var}",
-                                  attrs={"long_name": f"Spectral power of {data_var}", "units": f"{var_unit}**2 m", "physical variable name": var_name})
+                                  attrs={"long_name": f"Spectral power of {data_var}", "units": var_unit, "physical variable name": var_name})
 
         # remove wavenumber 0 and append dictionary    
         ps_dict[data_var] = da_ps_exp[1::]

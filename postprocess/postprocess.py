@@ -125,7 +125,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     ds_test = xr.open_dataset(test_info["file"])
     # rename coordinates and dimensions of target data for consistency
     dims_new = [dim.replace("_tar", "") for dim in ds_test[tar_varname].dims]
-    ds_test_new = ds_test.rename({old: new for old, new in zip(ds_test.dims, dims_new) if old != new}).copy()
+    ds_test = ds_test.rename({old: new for old, new in zip(ds_test.dims, dims_new) if old != new}).copy()
     coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
 
     # start inference
@@ -401,18 +401,19 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
         plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
                            
 
-def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, labels: List[str], varname: str, var_unit: str,
+def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
                           lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371., **plt_kwargs):
     """
     Run spectral analysis, create power spectrum plot and save results into a netCDF-file.
     Spectral analysis is done for all samples and for each season separately, i.e. assimung that the input data provides samples over a complete year.
     The dataset can provide multiple experiments for spectral analysis, but varname and var_unit must be the same for all experiments.
     Example: Spectral analysis for 2m temperature from downscaling and reference (ground truth) data.
-    :param ds: xarray.Dataset with input data for spectral analysis
-    :param plt_dir: Directory to save plot and netCDF files
-    :param labels: List of labels for each variable/experiment in the dataset
-    :param varname: Physical name of quantity 
-    :param var_unit: Physical unit of quantity 
+    :param ds: xarray.Dataset with input data
+    :param data_vars: List of variable names from ds for spectral analysis 
+    :param plt_dir: Directory to save plot files
+    :param labels: List of labels for each variable
+    :param varname: Physical name of quantity
+    :param var_unit: Physical unit of quantity
     :param lonlat_dims: Name of longitude and latitude dimensions
     :param lcutoff: Flag to apply low-pass filter in spectral analysis
     :param re: Earth radius used for wavenumber calculation in spectral analysis
@@ -421,10 +422,10 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, labels: List[str], varna
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
 
     # check if number of vairables for spectral analysis and labels are equal
-    data_vars = list(ds.variables)
     ds_vars, labels = to_list(data_vars), to_list(labels)
     nexps = len(ds_vars)    
     assert nexps== len(labels), f"Number of variables ({nexps}) and labels ({len(labels)}) must be equal."
+    assert all([var in ds.variables for var in ds_vars]), f"Some variables from {', '.join(ds_vars)} are not in dataset."
 
     # compute wave numbers based on size of input data
     nlon, nlat = ds[lonlat_dims[0]].size, ds[lonlat_dims[1]].size
@@ -438,14 +439,15 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, labels: List[str], varna
     # get power spectrum for complete dataset
     func_logger.info(f"Start spectral analysis for all data...")
 
-    ds_ps = get_spectrum_exps(ds, info, lcutoff=lcutoff, re=re) 
+    ds_ps = get_spectrum_exps(ds, ds_vars, info, lcutoff=lcutoff, re=re) 
 
     # create plot
     os.makedirs(plt_dir, exist_ok=True)
     colors = plt_kwargs.pop("colors", ["navy", "green"])
 
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_all.png")
-    plot_power_spectra(ds_ps, {varname: var_unit_spec}, labels, plt_fname, colors=colors, x_coord="wavenumber", **plt_kwargs)
+    plot_power_spectra(ds_ps, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
+                       x_coord="wavenumber", **plt_kwargs)
     
     # save power spectrum to netCDF
     fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_all.nc')
@@ -462,7 +464,7 @@ def run_spectral_analysis(ds: xr.Dataset, plt_dir: str, labels: List[str], varna
         ds_ps_sea = get_spectrum_exps(ds_sea, ds_vars, info, lcutoff=lcutoff, re=re)
 
         plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_{sea}.png")
-        plot_power_spectra(ds_ps_sea, {varname: var_unit}, labels, plt_fname, colors=colors,
+        plot_power_spectra(ds_ps_sea, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
                            x_coord="wavenumber", **plt_kwargs)
         
         # save power spectrum to netCDF
