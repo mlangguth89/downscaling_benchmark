@@ -34,7 +34,8 @@ class Scores:
                              "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
                              "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
                              "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
-                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,}
+                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
+                             "iqd": self.calc_iqd}
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
@@ -482,6 +483,33 @@ class Scores:
             ralsd = ralsd.mean(dim=avg_dims)
 
         return ralsd
+    
+    def calculate_iqd(forecast: xr.DataArray, observation: xr.DataArray, dim=None) -> xr.DataArray:
+        """
+        Calculate the Integrated Quadratic Distance (IQD) between the forecast and observation in CDF space.
+        
+        Parameters:
+        - forecast (xr.DataArray): The forecast data.
+        - observation (xr.DataArray): The observation data.
+        - dim (str or list of str, optional): Dimension(s) over which to compute the IQD. If None, uses all dimensions.
+        
+        Returns:
+        - iqd (float): The Integrated Quadratic Distance.
+        """
+        # Align the datasets
+        forecast, observation = xr.align(forecast, observation)
+        
+        # Calculate the empirical CDFs
+        forecast_cdf = empirical_cdf(forecast, dim=dim)
+        observation_cdf = empirical_cdf(observation, dim=dim)
+        
+        # Compute the squared difference between the CDFs
+        squared_diff = (forecast_cdf - observation_cdf) ** 2
+        
+        # Integrate the squared difference over the data range
+        iqd = squared_diff.integrate(dim=dim).sum()
+        
+        return iqd
 
 
     def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
@@ -553,4 +581,21 @@ class Scores:
         :return: lambda function converting arbitrary input values to corresponding CDF value
         """
         return lambda xin: np.interp(xin, sample_in, prob_in)
+    
+    @staticmethod
+    def empirical_cdf(data: xr.DataArray, dim=None) -> xr.DataArray:
+        """
+        Calculate the empirical cumulative distribution function (CDF) of a DataArray.
+        
+        Parameters:
+        - data (xr.DataArray): The data for which to calculate the CDF.
+        - dim (str or list of str, optional): Dimension(s) over which to calculate the CDF.
+        
+        Returns:
+        - cdf (xr.DataArray): The empirical CDF.
+        """
+        sorted_data = data.sortby(data)
+        cdf = sorted_data.rank(dim=dim) / sorted_data.count(dim=dim)
+        
+        return cdf
 
