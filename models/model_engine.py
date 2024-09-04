@@ -14,6 +14,7 @@ __update__ = "2024-03-21"
 # import modules
 from unet_model import Sha_UNet, DeepRU_UNet
 from wgan_model import WGAN, Critic_Simple
+from harris_wgan_model import HarrisWGAN, GeneratorHarris, DiscriminatorHarris
 from other_utils import to_list
 
 class ModelEngine(object):
@@ -34,9 +35,10 @@ class ModelEngine(object):
 
     known_models = {"sha_unet": (Sha_UNet,),
                     "deepru": (DeepRU_UNet,),
-                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple)}
+                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple),
+                    "harris_wgan": (HarrisWGAN, GeneratorHarris, DiscriminatorHarris)}
     
-    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN"]
+    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN"]
     
     assert len(known_models) == len(long_names), f"Conflicting number of known_models ({len(known_models)})" + \
                                                  f" and long_names ({len(long_names)})."

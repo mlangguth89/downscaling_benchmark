@@ -26,15 +26,15 @@ import xarray as xr
 import tensorflow.keras as keras
 import matplotlib as mpl
 import cartopy.crs as ccrs
-from handle_data_class import prepare_dataset
+from handle_data_class import prepare_dataset, make_tf_dataset_allmem
 from all_normalizations import ZScore
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, feature_importance, get_spectrum_exps, calculate_cond_quantiles
+from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, get_season_t2m_levels
-from other_utils import convert_to_xarray, finditem, to_list
+from other_utils import convert_to_xarray, check_str_in_list, finditem, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -123,6 +123,9 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
 
     # get ground truth data
     ds_test = xr.open_dataset(test_info["file"])
+    # rename coordinates and dimensions of target data for consistency
+    dims_new = [dim.replace("_tar", "") for dim in ds_test[tar_varname].dims]
+    ds_test = ds_test.rename({old: new for old, new in zip(ds_test.dims, dims_new) if old != new}).copy()
     coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
 
     # start inference
@@ -399,19 +402,22 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
                            
 
 def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
-                          lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371.):
+                          lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371., **plt_kwargs):
     """
-    Run spectral analysis for chosen variables, create power spectrum plot and save results into a netCDF-file.
-    Spectral analysis is done for all data and each season.
+    Run spectral analysis, create power spectrum plot and save results into a netCDF-file.
+    Spectral analysis is done for all samples and for each season separately, i.e. assimung that the input data provides samples over a complete year.
+    The dataset can provide multiple experiments for spectral analysis, but varname and var_unit must be the same for all experiments.
+    Example: Spectral analysis for 2m temperature from downscaling and reference (ground truth) data.
     :param ds: xarray.Dataset with input data
     :param data_vars: List of variable names from ds for spectral analysis 
     :param plt_dir: Directory to save plot files
     :param labels: List of labels for each variable
-    :param varname: Name of variable
-    :param var_unit: Unit of variable
+    :param varname: Physical name of quantity
+    :param var_unit: Physical unit of quantity
     :param lonlat_dims: Name of longitude and latitude dimensions
-    :param lcutoff: Flag to apply low-pass filter
-    :param re: Earth radius
+    :param lcutoff: Flag to apply low-pass filter in spectral analysis
+    :param re: Earth radius used for wavenumber calculation in spectral analysis
+    :param plt_kwargs: Additional keyword arguments for plotting that are parsed to the plot_power_spectra-method
     """
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
 
@@ -426,9 +432,9 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
 
     dims = ["wavenumber"]
     coord_dict = {"wavenumber": np.arange(0, np.amin(np.array([int(nlon/2), int(nlat/2)])))}
-    var_unit = f"{var_unit}**2 m"
+    var_unit_spec = f"{var_unit}**2 m"
 
-    info = {"lonlat_dims": lonlat_dims, "dims": dims, "coord_dict": coord_dict, "varname": varname, "var_unit": var_unit}
+    info = {"lonlat_dims": lonlat_dims, "dims": dims, "coord_dict": coord_dict, "varname": varname, "var_unit": var_unit_spec}
 
     # get power spectrum for complete dataset
     func_logger.info(f"Start spectral analysis for all data...")
@@ -437,10 +443,11 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
 
     # create plot
     os.makedirs(plt_dir, exist_ok=True)
+    colors = plt_kwargs.pop("colors", ["navy", "green"])
 
     plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_all.png")
-    plot_power_spectra(ds_ps, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
-                       x_coord="wavenumber")
+    plot_power_spectra(ds_ps, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
+                       x_coord="wavenumber", **plt_kwargs)
     
     # save power spectrum to netCDF
     fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_all.nc')
@@ -457,8 +464,8 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
         ds_ps_sea = get_spectrum_exps(ds_sea, ds_vars, info, lcutoff=lcutoff, re=re)
 
         plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_{sea}.png")
-        plot_power_spectra(ds_ps_sea, {varname: f"{var_unit}**2 m"}, labels, plt_fname, colors= ["navy", "green"],
-                           x_coord="wavenumber")
+        plot_power_spectra(ds_ps_sea, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
+                           x_coord="wavenumber", **plt_kwargs)
         
         # save power spectrum to netCDF
         fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_{sea}.nc')
@@ -509,6 +516,73 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
                                                  "yticks": range(1, max_rel_change), "colors": "b"})
 
     return feature_scores
+
+def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
+                       data_loader_opt: dict, patch_size = (8, 8)):
+    """
+    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
+    :param ds: The unnormalized (test-)dataset
+    :param predictors: List of predictor variables for which feature importance analysis should be run
+    :param varname_tar: Name of target variable
+    :param model: Trained model for inference
+    :param norm: Normalization object
+    :param score_name: Name of metric-score to be calculated
+    :param data_loader_opt: Dictionary providing options for the make_tf_dataset_allmem-method
+    :param patch_size: Tuple for patch size during spatio-temporal permutation
+    :return score_all: DataArray with scores for all predictor variables
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
+
+    # sanity checks
+    _ = check_str_in_list(list(ds.data_vars), predictors)
+    #try:
+    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
+    #except AssertionError as e:
+    #    func_logger.error(e, stack_info=True, exc_info=True)
+    #    raise e
+
+    ntimes = len(ds["time"])
+
+    # get ground truth data and underlying metadata
+    ground_truth = ds[varname_tar].copy() 
+    # normalize dataset
+    ds = norm.normalize(ds)   
+
+    # initialize score-array
+    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
+                             dims=["predictor", "time"])
+
+    for var in predictors:
+        func_logger.info(f"Run sample importance analysis for {var}...")
+        # get copy of sample array
+        ds_copy = ds.copy(deep=True)
+        # permute sample
+        da_now = ds[var].copy()
+        if "time" not in da_now.dims:
+            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
+        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
+        ds_copy[var] = da_permut
+        
+        # get TF dataset
+        func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
+        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+
+        # predict
+        func_logger.info(f"Run inference with permuted sample for {var}...")
+        y_pred = model.predict(tfds_test, verbose=2)
+
+        # convert to xarray
+        y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
+
+        # calculate score
+        func_logger.info(f"Calculate score for permuted samples of {var}...")
+        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
+        score_all.loc[{"predictor": var}] = score_engine(score_name)
+
+        #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
+
+    return score_all
 
 def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
     """
@@ -594,7 +668,8 @@ class TemporalEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None}, 
                          "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None}}
+                         "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \

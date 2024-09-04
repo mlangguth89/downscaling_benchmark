@@ -76,12 +76,12 @@ else
 fi
 
 ## check integratability of operating system
-if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* ]]; then
+if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* || "${HOST_NAME}" == jrlogin* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set
   unset PYTHONPATH
   modules_file="modules_jsc.sh"
 else
-  echo "${SCR_SETUP}ERROR: Model only runs on HDF-ML and Juwels (Booster) so far."
+  echo "${SCR_SETUP}ERROR: Model only runs on HDF-ML, Juwels (Booster) and JURECA."
   return
 fi
 
@@ -132,6 +132,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
 
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
+  deactivate
 elif [[ "$ENV_EXIST" == 1 ]]; then
   # simply activate virtual environment
   info_str="Virtual environment ${VENV_DIR} has already been set up before. Nothing to be done."

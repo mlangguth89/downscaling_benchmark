@@ -60,7 +60,7 @@ class Normalize(ABC):
         # if not isinstance(data, xr.DataArray):
         #    raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
 
-        _ = self._check_norm_dims(data)
+        #_ = self._check_norm_dims(data)
         # do the computation
         norm_stats = self.get_required_stats(data, **stats)
         norm_stats = Normalize.match_datatype(data, *norm_stats)
