@@ -86,7 +86,7 @@ def main(parser_args):
         plt_dir_spec = os.path.join(plt_dir, "spectral_analysis")
 
         run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_spec, [model_info["model_longname"], "COSMO-REA6"], varname, unit, 
-                              spec_dict=conf_postprocess.get("config_spectral_analysis", None))
+                              **conf_postprocess.get("config_spectral_analysis", {}))
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 
