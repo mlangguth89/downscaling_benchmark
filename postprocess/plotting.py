@@ -9,7 +9,7 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-04-16"
+__update__ = "2024-09-06"
 
 # for processing data
 import os
@@ -421,6 +421,97 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     return True
 
 
+def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, labels: List[str] = ["Sha WGAN", "COSMO REA6"], iqd: float = None, **kwargs):
+    """
+    Plot histograms of two data arrays side-by-side, e.g. the forecast/downscaled data and the ground truth.
+    :param ds: Dataset containing the data arrays to plot (must have two data arrays if vars2plt is not provided)
+    :param plt_fname: File name of plot
+    :param labels: List of labels for the two data arrays
+    :param iqd: Interquartile distance to be printed in the plot
+    :param kwargs: Keyword arguments for plotting
+                     Valid keys are:
+                        - "title": title of plot, default: None
+                        - "bin_width": width of bins, default: 1
+                        - "bin_range": range of bins, default: None
+                        - "fs": font size of labels, default: 16
+                        - "figsize": figure size in inch, default: (9, 6)
+                        - "xlabel": label of x-axis, default: "data"
+                        - "colors": list of colors for each data array, default: ["navy", "green"]
+                        - "yscale": scale of y-axis, default: "log"
+                        - other valid arguments of ax.bar
+    """
+
+    func_logger = logging.getLogger(f"postpess.{module_name}.{plot_histograms.__name__}")
+    
+    # get keyword parameters
+    title = kwargs.pop("title", None)
+    bin_width = kwargs.pop("bin_width", 1)
+    bin_range = kwargs.pop("bin_width", None)  # will be deduced automatically by default
+    fs = kwargs.pop("fs", 16)
+    figsize = kwargs.pop("figsize", (9, 6))
+    xlabel = kwargs.pop("xlabel", "data")
+    colors = kwargs.pop("colors", ["navy", "green"])
+    yscale = kwargs.pop("yscale", "log")     
+    
+    if not bin_range:
+        min_val, max_val = int(min(data1.min(), data2.min())), int(max(data1.max(), data2.max())) + bin_width + 1
+        bin_range = (min_val, max_val)
+        
+    bin_ranges = np.arange(*bin_range, bin_width)
+    
+    das = [data1, data2]
+    counts, edges = [], []
+    
+    # generate histogram data
+    for da in das:
+        counts_now, edges_now = np.histogram(da, bins=bin_ranges)
+        counts.append(counts_now), edges.append(edges_now)
+        
+    # make plot object
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    
+    # define width of bars and get their positions
+    edges_ref = edges[0]
+    bar_width = (edges_ref[1] - edges_ref[0]) / 2.5
+     
+    positions = [edges_ref[:-1], edges_ref[:-1] + bar_width]  # Left edge of each bin for first bar and shifted second bar to the right
+    
+    # Plot the histograms side-by-side
+    for i, _ in enumerate(das):
+        ax.bar(positions[i], counts[i], width=bar_width, color=colors[i], alpha=0.7, label=labels[i], **kwargs)
+        
+    # configure axis and add labels 
+    ax.set_xlabel(xlabel, fontsize=fs)
+    ax.set_ylabel('Counts', fontsize=fs)
+    ax.set_yscale(yscale)
+    ax.tick_params(axis='both', which='major', labelsize=fs-2)
+    # add title if desired
+    if title:
+        ax.title(title)
+        
+    ax.legend(fontsize=fs-2, loc="upper right")
+    
+    # adjust yscale to ensure that enough space for legend is available
+    if yscale == "log":
+        ymax_auto = int(np.log10(ax.get_ylim()[1])) 
+        ymax = np.power(10, ymax_auto + 2)
+    else:
+        ymax = ax.get_ylim()[1]*1.2
+    
+    ax.set_ylim(None, ymax)
+        
+    # add IQD-value
+    if iqd:
+        ax.text(0.12, 0.93, f"IQD = {iqd:.2e}", horizontalalignment="center", fontsize=fs-2, transform=ax.transAxes)
+        
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
+    fig.savefig(plt_fname, bbox_inches="tight")
+    plt.close(fig)
+
+
+
 def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
     """
     Plots power spectrum.
@@ -437,6 +528,8 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
                      - "fs": font size of labels, default: 16
                      - other valid arguments of ax.plot
     """
+    func_logger = logging.getLogger(f"postpess.{module_name}.{plot_power_spectra.__name__}")
+
     # auxiliary variables
     exps = list(ds_ps.data_vars)
     nexps = len(exps)
@@ -465,7 +558,7 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-    print(f"Save plot in file '{plt_fname}'")
+    func_logger.info(f"Save plot in file '{plt_fname}'")
     plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close(fig)
