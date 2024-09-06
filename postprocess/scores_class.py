@@ -9,13 +9,18 @@ Class for calculating scores.
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-Xx-XX"
-__update__ = "2024-06-11"
+__update__ = "2024-09-06"
 
 from typing import List
+import logging
 import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
 from evaluation_utils import get_spectrum
+
+# auxiliary variable for logger
+logger_module_name = f"__main__.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 
 class Scores:
     """
@@ -163,8 +168,11 @@ class Scores:
         Similar to MAE, but provides just a number divided by number of samples along average dimensions.
         :return: L1-error 
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
+        
         if kwargs:
-            print("Passed keyword arguments to calc_l1 are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_l1 are without effect.")   
 
         l1 = np.sum(np.abs(self.data_fcst - self.data_ref))
 
@@ -179,8 +187,11 @@ class Scores:
         Similar to RMSE, but provides just a number divided by number of samples along average dimensions.
         :return: L2-error 
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
+        
         if kwargs:
-            print("Passed keyword arguments to calc_l2 are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_l2 are without effect.")    
 
         l2 = np.sum(np.square(self.data_fcst - self.data_ref))
 
@@ -194,8 +205,11 @@ class Scores:
         Calculate mean absolute error (MAE) of forecast data w.r.t. reference data
         :return: MAE averaged over provided dimensions
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.mae.__name__}")
+
         if kwargs:
-            print("Passed keyword arguments to calc_mae are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_mae are without effect.")    
 
         mae = np.abs(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
@@ -204,18 +218,30 @@ class Scores:
     def calc_mse(self, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
-        :return: averaged mse for each batch example, [batch,fore_hours]
+        :return: MSE
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mse.__name__}")
+
         if kwargs:
-            print("Passed keyword arguments to calc_mse are without effect.")
+            func_logger.debug("Passed keyword arguments to calc_mse are without effect.")
 
         mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
         return mse
 
     def calc_rmse(self, **kwargs):
+        """
+        Calculate mse of forecast data w.r.t. reference data
+        :return: RMSE
+        """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
 
-        rmse = np.sqrt(self.calc_mse(**kwargs))
+        if kwargs:
+            func_logger.debug("Passed keyword arguments to calc_rmse are without effect.")
+
+        rmse = np.sqrt(self.calc_mse())
 
         return rmse
     
@@ -240,8 +266,11 @@ class Scores:
 
     def calc_bias(self, **kwargs):
 
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_bias.__name__}")
+
         if kwargs:
-            print("Passed keyword arguments to calc_bias are without effect.")
+            func_logger.debug("Passed keyword arguments to calc_bias are without effect.")
 
         bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
@@ -326,77 +355,6 @@ class Scores:
             ratio_spat_variability = ratio_spat_variability.mean(dim=avg_dims)
 
         return ratio_spat_variability
-    
-    def calc_iqd(self, xnodes=None, nh=0, lfilter_zero=True):
-        """
-        Calculates squared integrated distance between simulation and observational data.
-        Method: Retrieves the empirical CDF, calculates CDF(xnodes) for both data sets and
-                then uses the squared differences at xnodes for trapezodial integration.
-                Note, that xnodes should be selected in a way, that CDF(xvalues) increases
-                more or less continuously by ~0.01 - 0.05 for increasing xnodes-elements
-                to ensure accurate integration.
-
-        :param data_simu : 1D-array of simulation data
-        :param data_obs  : 1D-array of (corresponding) observational data
-        :param xnodes    : x-values used as nodes for integration (optional, automatically set if not given
-                           according to stochastic properties of precipitation data)
-        :param nh        : accumulation period (affects setting of xnodes)
-        :param lfilter_zero: Flag to filter out zero values from CDF calculation
-        :return: integrated quadrated distance between CDF of data_simu and data_obs
-        """
-
-        data_simu = self.data_fcst.values.flatten()
-        data_obs = self.data_ref.values.flatten() 
-
-        # Scarlet: because data_simu and data_obs are flattened anyway this is not needed
-        #if np.ndim(data_simu) != 1 or np.ndim(data_obs) != 1:
-        #    raise ValueError("Input data arrays must be 1D-arrays.")
-
-        if xnodes is None:
-            if nh == 1:
-                xnodes = [0., 0.005, 0.01, 0.015, 0.025, 0.04, 0.06, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6,
-                          0.8, 1., 1.25, 1.5, 1.8, 2.4, 3., 3.75, 4.5, 5.25, 6., 7., 9., 12., 20., 30., 50.]
-            elif 1 < nh <= 6:
-                ### obtained manually based on observational data between May and July 2017
-                ### except for the first step and the highest node-values,
-                ### CDF is increased by 0.03 - 0.05 with every step ensuring accurate integration
-                xnodes = [0.00, 0.005, 0.01, 0.02, 0.04, 0.07, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.15, 1.5, 1.9, 2.4,
-                         3., 4., 5., 6., 7.5, 10., 15., 25., 40., 60.]
-            else:
-                xnodes = [0.00, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1., 1.3, 1.7, 2.1, 2.5,
-                          3., 3.5, 4., 4.75, 5.5, 6.3, 7.1, 8., 9., 10., 12.5, 15., 20., 25., 35., 50., 70., 100.]
-
-        data_simu_filt = data_simu[~np.isnan(data_simu)]
-        data_obs_filt = data_obs[~np.isnan(data_obs)]
-        if lfilter_zero:
-            data_simu_filt = np.sort(data_simu_filt[data_simu_filt > 0.])
-            data_obs_filt  = np.sort(data_obs_filt[data_obs_filt > 0.])
-        else:
-            data_simu_filt = np.sort(data_simu_filt)
-            data_obs_filt  = np.sort(data_obs_filt)
-
-        nd_points_simu = np.shape(data_simu_filt)[0]
-        nd_points_obs  = np.shape(data_obs_filt)[0]
-
-        prob_simu = 1. * np.arange(nd_points_simu)/ (nd_points_simu - 1)
-        prob_obs  = 1. * np.arange(nd_points_obs)/ (nd_points_obs -1)
-
-        cdf_simu = self.get_cdf_of_x(data_simu_filt,prob_simu)
-        cdf_obs  = self.get_cdf_of_x(data_obs_filt,prob_obs)
-
-        yvals_simu = cdf_simu(xnodes)
-        yvals_obs  = cdf_obs(xnodes)
-
-        if yvals_obs[-1] < 0.999:
-            print("CDF of last xnodes {0:5.2f} for observation data is smaller than 99.9%." +
-                  "Consider setting xnodes manually!")
-
-        if yvals_simu[-1] < 0.999:
-            print("CDF of last xnodes {0:5.2f} for simulation data is smaller than 99.9%." +
-                  "Consider setting xnodes manually!")
-
-        # finally, perform trapezodial integration
-        return np.trapz(np.square(yvals_obs - yvals_simu), xnodes)
 
     def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List):
         """
@@ -461,6 +419,8 @@ class Scores:
         :param re: radius of the spherical Earth
         :return: RALSD values
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
 
         # perform spectral analysis for reference and forecast data
         ps_ref = get_spectrum(self.data_ref, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
@@ -478,37 +438,55 @@ class Scores:
 
         avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
 
+        if avg_dims != self.avg_dims:
+            func_logger.debug(f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}")
+
+
         # apply further averaging if requested
         if len(avg_dims) > 0:
             ralsd = ralsd.mean(dim=avg_dims)
 
         return ralsd
     
-    def calculate_iqd(forecast: xr.DataArray, observation: xr.DataArray, dim=None) -> xr.DataArray:
+    def calc_iqd(self, align_join: str = "exact", steps: int = 1000) -> xr.DataArray:
         """
-        Calculate the Integrated Quadratic Distance (IQD) between the forecast and observation in CDF space.
-        
-        Parameters:
-        - forecast (xr.DataArray): The forecast data.
-        - observation (xr.DataArray): The observation data.
-        - dim (str or list of str, optional): Dimension(s) over which to compute the IQD. If None, uses all dimensions.
-        
-        Returns:
-        - iqd (float): The Integrated Quadratic Distance.
+        Calculate the Integrated Quadratic Distance (IQD) between the forecast and reference data in CDF space.
+
+        :param align_join (str, optional): How to align the datasets, cf. join-parameter of xarray.align-method
+        :return: The Integrated Quadratic Distance.
         """
-        # Align the datasets
-        forecast, observation = xr.align(forecast, observation)
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_iqd.__name__}")
+
+        # IQD evaluates the marginal distribution of the data and thus collapes existing dimensions
+        # There, averaging is not meaningful here
+        if self.avg_dims and self.avg_dims != []:
+            func_logger.debug(f"Pasred averaging dimensions ({', '.join(self.avg_dims)}) are ignored.")
+
+        # Align the arrays and sort the data incl. falttening
+        forecast, reference = xr.align(self.data_fcst, self.data_ref, join=align_join)
         
-        # Calculate the empirical CDFs
-        forecast_cdf = empirical_cdf(forecast, dim=dim)
-        observation_cdf = empirical_cdf(observation, dim=dim)
+        forecast, reference = np.sort(forecast, axis=None), np.sort(reference, axis=None)
+
+        # get empirical CDF-functions for forecast and reference data
+        npoints = len(forecast)
+        cdf_val = 1. * np.arange(npoints)/ (npoints - 1)
+
+        cdf_fcst = self.get_cdf_of_x(forecast, cdf_val)
+        cdf_ref = self.get_cdf_of_x(reference, cdf_val)
+
+        # get integration points        
+        min_val, max_val = min(reference[0], forecast[0]), max(reference[-1], forecast[-1])
         
-        # Compute the squared difference between the CDFs
-        squared_diff = (forecast_cdf - observation_cdf) ** 2
+        xnodes = np.linspace(min_val, max_val, num=steps)
         
-        # Integrate the squared difference over the data range
-        iqd = squared_diff.integrate(dim=dim).sum()
-        
+        # calculate CDF at integration ponts...
+        cdf_fcst_x = cdf_fcst(xnodes)
+        cdf_ref_x = cdf_ref(xnodes)  
+
+        # ...and integrate squared difference for IQD
+        iqd = np.trapz(np.square(cdf_ref_x - cdf_fcst_x), xnodes)
+
         return iqd
 
 
@@ -582,20 +560,4 @@ class Scores:
         """
         return lambda xin: np.interp(xin, sample_in, prob_in)
     
-    @staticmethod
-    def empirical_cdf(data: xr.DataArray, dim=None) -> xr.DataArray:
-        """
-        Calculate the empirical cumulative distribution function (CDF) of a DataArray.
-        
-        Parameters:
-        - data (xr.DataArray): The data for which to calculate the CDF.
-        - dim (str or list of str, optional): Dimension(s) over which to calculate the CDF.
-        
-        Returns:
-        - cdf (xr.DataArray): The empirical CDF.
-        """
-        sorted_data = data.sortby(data)
-        cdf = sorted_data.rank(dim=dim) / sorted_data.count(dim=dim)
-        
-        return cdf
 
