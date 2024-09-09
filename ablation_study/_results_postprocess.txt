@@ -1,0 +1,484 @@
+postprocess_deepru_wind_1-out.10182071
+Globally averaged rmse: 1.2889 ms, standard deviation: 0.2588
+Averaged rmse for DJF: 1.3015 ms, standard deviation: 0.2965
+Averaged rmse for JJA: 1.2642 ms, standard deviation: 0.1895
+Averaged rmse for MAM: 1.3435 ms, standard deviation: 0.2303
+Averaged rmse for SON: 1.2464 ms, standard deviation: 0.2936
+Globally averaged bias: -0.0165 ms, standard deviation: 0.1848
+Averaged bias for DJF: 0.0273 ms, standard deviation: 0.1927
+Averaged bias for JJA: -0.0232 ms, standard deviation: 0.1703
+Averaged bias for MAM: -0.0306 ms, standard deviation: 0.1911
+Averaged bias for SON: -0.0386 ms, standard deviation: 0.1771
+Globally averaged grad_amplitude: 0.6535 1, standard deviation: 0.1256
+Averaged grad_amplitude for DJF: 0.7534 1, standard deviation: 0.0727
+Averaged grad_amplitude for JJA: 0.5419 1, standard deviation: 0.0989
+Averaged grad_amplitude for MAM: 0.6450 1, standard deviation: 0.1110
+Averaged grad_amplitude for SON: 0.6760 1, standard deviation: 0.1126
+Globally averaged me_std: 0.3113 ms, standard deviation: 0.0525
+Averaged me_std for DJF: 0.3035 ms, standard deviation: 0.0553
+Averaged me_std for JJA: 0.3230 ms, standard deviation: 0.0497
+Averaged me_std for MAM: 0.3213 ms, standard deviation: 0.0496
+Averaged me_std for SON: 0.2969 ms, standard deviation: 0.0505
+
+postprocess_deepru_wind_2-out.10182072
+Globally averaged rmse: 1.2883 ms, standard deviation: 0.2615
+Averaged rmse for DJF: 1.3198 ms, standard deviation: 0.2936
+Averaged rmse for JJA: 1.2409 ms, standard deviation: 0.1897
+Averaged rmse for MAM: 1.3392 ms, standard deviation: 0.2281
+Averaged rmse for SON: 1.2534 ms, standard deviation: 0.3050
+Globally averaged bias: -0.0778 ms, standard deviation: 0.1829
+Averaged bias for DJF: -0.0829 ms, standard deviation: 0.1861
+Averaged bias for JJA: -0.0421 ms, standard deviation: 0.1643
+Averaged bias for MAM: -0.0903 ms, standard deviation: 0.1867
+Averaged bias for SON: -0.0963 ms, standard deviation: 0.1885
+Globally averaged grad_amplitude: 0.6455 1, standard deviation: 0.1239
+Averaged grad_amplitude for DJF: 0.7463 1, standard deviation: 0.0686
+Averaged grad_amplitude for JJA: 0.5360 1, standard deviation: 0.0990
+Averaged grad_amplitude for MAM: 0.6399 1, standard deviation: 0.1112
+Averaged grad_amplitude for SON: 0.6622 1, standard deviation: 0.1098
+Globally averaged me_std: 0.3140 ms, standard deviation: 0.0523
+Averaged me_std for DJF: 0.3073 ms, standard deviation: 0.0569
+Averaged me_std for JJA: 0.3238 ms, standard deviation: 0.0472
+Averaged me_std for MAM: 0.3229 ms, standard deviation: 0.0484
+Averaged me_std for SON: 0.3016 ms, standard deviation: 0.0526
+
+postprocess_deepru_wind_3-out.10182074
+Globally averaged rmse: 1.3015 ms, standard deviation: 0.2696
+Averaged rmse for DJF: 1.3339 ms, standard deviation: 0.3180
+Averaged rmse for JJA: 1.2645 ms, standard deviation: 0.1846
+Averaged rmse for MAM: 1.3446 ms, standard deviation: 0.2368
+Averaged rmse for SON: 1.2634 ms, standard deviation: 0.3078
+Globally averaged bias: -0.0629 ms, standard deviation: 0.1854
+Averaged bias for DJF: -0.0687 ms, standard deviation: 0.1900
+Averaged bias for JJA: -0.0294 ms, standard deviation: 0.1777
+Averaged bias for MAM: -0.0782 ms, standard deviation: 0.1833
+Averaged bias for SON: -0.0755 ms, standard deviation: 0.1865
+Globally averaged grad_amplitude: 0.6436 1, standard deviation: 0.1217
+Averaged grad_amplitude for DJF: 0.7373 1, standard deviation: 0.0710
+Averaged grad_amplitude for JJA: 0.5373 1, standard deviation: 0.0977
+Averaged grad_amplitude for MAM: 0.6369 1, standard deviation: 0.1083
+Averaged grad_amplitude for SON: 0.6653 1, standard deviation: 0.1109
+Globally averaged me_std: 0.3149 ms, standard deviation: 0.0539
+Averaged me_std for DJF: 0.3098 ms, standard deviation: 0.0594
+Averaged me_std for JJA: 0.3247 ms, standard deviation: 0.0485
+Averaged me_std for MAM: 0.3237 ms, standard deviation: 0.0512
+Averaged me_std for SON: 0.3009 ms, standard deviation: 0.0525
+
+postprocess_deepru_wind_extended_1-out.10267055
+Globally averaged rmse: 1.2688 ms, standard deviation: 0.2500
+Averaged rmse for DJF: 1.3007 ms, standard deviation: 0.2946
+Averaged rmse for JJA: 1.2313 ms, standard deviation: 0.1733
+Averaged rmse for MAM: 1.3136 ms, standard deviation: 0.2150
+Averaged rmse for SON: 1.2299 ms, standard deviation: 0.2860
+Globally averaged bias: 0.0091 ms, standard deviation: 0.1792
+Averaged bias for DJF: -0.0167 ms, standard deviation: 0.1943
+Averaged bias for JJA: 0.0571 ms, standard deviation: 0.1583
+Averaged bias for MAM: -0.0053 ms, standard deviation: 0.1808
+Averaged bias for SON: 0.0006 ms, standard deviation: 0.1725
+Globally averaged grad_amplitude: 0.6115 1, standard deviation: 0.1262
+Averaged grad_amplitude for DJF: 0.7131 1, standard deviation: 0.0660
+Averaged grad_amplitude for JJA: 0.4922 1, standard deviation: 0.0963
+Averaged grad_amplitude for MAM: 0.6063 1, standard deviation: 0.1094
+Averaged grad_amplitude for SON: 0.6368 1, standard deviation: 0.1131
+Globally averaged me_std: 0.3295 ms, standard deviation: 0.0540
+Averaged me_std for DJF: 0.3214 ms, standard deviation: 0.0615
+Averaged me_std for JJA: 0.3441 ms, standard deviation: 0.0458
+Averaged me_std for MAM: 0.3385 ms, standard deviation: 0.0492
+Averaged me_std for SON: 0.3137 ms, standard deviation: 0.0528
+
+postprocess_deepru_wind_extended_2-out.10267057
+Globally averaged rmse: 1.2711 ms, standard deviation: 0.2535
+Averaged rmse for DJF: 1.3031 ms, standard deviation: 0.3000
+Averaged rmse for JJA: 1.2376 ms, standard deviation: 0.1732
+Averaged rmse for MAM: 1.3129 ms, standard deviation: 0.2196
+Averaged rmse for SON: 1.2310 ms, standard deviation: 0.2902
+Globally averaged bias: 0.0180 ms, standard deviation: 0.1804
+Averaged bias for DJF: 0.0038 ms, standard deviation: 0.1908
+Averaged bias for JJA: 0.0651 ms, standard deviation: 0.1639
+Averaged bias for MAM: -0.0023 ms, standard deviation: 0.1837
+Averaged bias for SON: 0.0051 ms, standard deviation: 0.1739
+Globally averaged grad_amplitude: 0.6063 1, standard deviation: 0.1226
+Averaged grad_amplitude for DJF: 0.7029 1, standard deviation: 0.0637
+Averaged grad_amplitude for JJA: 0.4908 1, standard deviation: 0.0944
+Averaged grad_amplitude for MAM: 0.6016 1, standard deviation: 0.1084
+Averaged grad_amplitude for SON: 0.6321 1, standard deviation: 0.1095
+Globally averaged me_std: 0.3311 ms, standard deviation: 0.0546
+Averaged me_std for DJF: 0.3250 ms, standard deviation: 0.0639
+Averaged me_std for JJA: 0.3443 ms, standard deviation: 0.0449
+Averaged me_std for MAM: 0.3397 ms, standard deviation: 0.0490
+Averaged me_std for SON: 0.3151 ms, standard deviation: 0.0541
+
+postprocess_deepru_wind_extended_3-out.10267059
+Globally averaged rmse: 1.2700 ms, standard deviation: 0.2521
+Averaged rmse for DJF: 1.2991 ms, standard deviation: 0.2962
+Averaged rmse for JJA: 1.2343 ms, standard deviation: 0.1765
+Averaged rmse for MAM: 1.3143 ms, standard deviation: 0.2183
+Averaged rmse for SON: 1.2324 ms, standard deviation: 0.2881
+Globally averaged bias: -0.0175 ms, standard deviation: 0.1780
+Averaged bias for DJF: -0.0293 ms, standard deviation: 0.1926
+Averaged bias for JJA: 0.0166 ms, standard deviation: 0.1584
+Averaged bias for MAM: -0.0358 ms, standard deviation: 0.1833
+Averaged bias for SON: -0.0217 ms, standard deviation: 0.1712
+Globally averaged grad_amplitude: 0.6122 1, standard deviation: 0.1279
+Averaged grad_amplitude for DJF: 0.7154 1, standard deviation: 0.0645
+Averaged grad_amplitude for JJA: 0.4893 1, standard deviation: 0.0955
+Averaged grad_amplitude for MAM: 0.6083 1, standard deviation: 0.1123
+Averaged grad_amplitude for SON: 0.6383 1, standard deviation: 0.1141
+Globally averaged me_std: 0.3294 ms, standard deviation: 0.0544
+Averaged me_std for DJF: 0.3209 ms, standard deviation: 0.0619
+Averaged me_std for JJA: 0.3452 ms, standard deviation: 0.0453
+Averaged me_std for MAM: 0.3379 ms, standard deviation: 0.0493
+Averaged me_std for SON: 0.3131 ms, standard deviation: 0.0536
+
+postprocess_sha_unet_wind_1-out.10161366
+Globally averaged rmse: 1.2759 ms, standard deviation: 0.2674
+Averaged rmse for DJF: 1.3023 ms, standard deviation: 0.3047
+Averaged rmse for JJA: 1.2370 ms, standard deviation: 0.1861
+Averaged rmse for MAM: 1.3275 ms, standard deviation: 0.2314
+Averaged rmse for SON: 1.2369 ms, standard deviation: 0.3154
+Globally averaged bias: -0.0727 ms, standard deviation: 0.1773
+Averaged bias for DJF: -0.0796 ms, standard deviation: 0.1858
+Averaged bias for JJA: -0.0356 ms, standard deviation: 0.1691
+Averaged bias for MAM: -0.0953 ms, standard deviation: 0.1776
+Averaged bias for SON: -0.0806 ms, standard deviation: 0.1707
+Globally averaged grad_amplitude: 0.6449 1, standard deviation: 0.1149
+Averaged grad_amplitude for DJF: 0.7362 1, standard deviation: 0.0653
+Averaged grad_amplitude for JJA: 0.5397 1, standard deviation: 0.0853
+Averaged grad_amplitude for MAM: 0.6382 1, standard deviation: 0.1013
+Averaged grad_amplitude for SON: 0.6678 1, standard deviation: 0.1048
+Globally averaged me_std: 0.3146 ms, standard deviation: 0.0532
+Averaged me_std for DJF: 0.3111 ms, standard deviation: 0.0607
+Averaged me_std for JJA: 0.3227 ms, standard deviation: 0.0442
+Averaged me_std for MAM: 0.3241 ms, standard deviation: 0.0484
+Averaged me_std for SON: 0.3005 ms, standard deviation: 0.0547
+
+postprocess_sha_unet_wind_1-out.10182077
+Globally averaged rmse: 1.2759 ms, standard deviation: 0.2674
+Averaged rmse for DJF: 1.3023 ms, standard deviation: 0.3047
+Averaged rmse for JJA: 1.2370 ms, standard deviation: 0.1861
+Averaged rmse for MAM: 1.3275 ms, standard deviation: 0.2314
+Averaged rmse for SON: 1.2369 ms, standard deviation: 0.3154
+Globally averaged bias: -0.0727 ms, standard deviation: 0.1773
+Averaged bias for DJF: -0.0796 ms, standard deviation: 0.1858
+Averaged bias for JJA: -0.0356 ms, standard deviation: 0.1691
+Averaged bias for MAM: -0.0953 ms, standard deviation: 0.1776
+Averaged bias for SON: -0.0806 ms, standard deviation: 0.1707
+Globally averaged grad_amplitude: 0.6449 1, standard deviation: 0.1149
+Averaged grad_amplitude for DJF: 0.7362 1, standard deviation: 0.0653
+Averaged grad_amplitude for JJA: 0.5397 1, standard deviation: 0.0853
+Averaged grad_amplitude for MAM: 0.6382 1, standard deviation: 0.1013
+Averaged grad_amplitude for SON: 0.6678 1, standard deviation: 0.1048
+Globally averaged me_std: 0.3146 ms, standard deviation: 0.0532
+Averaged me_std for DJF: 0.3111 ms, standard deviation: 0.0607
+Averaged me_std for JJA: 0.3227 ms, standard deviation: 0.0442
+Averaged me_std for MAM: 0.3241 ms, standard deviation: 0.0484
+Averaged me_std for SON: 0.3005 ms, standard deviation: 0.0547
+
+postprocess_sha_unet_wind_2-out.10182079
+Globally averaged rmse: 1.2806 ms, standard deviation: 0.2668
+Averaged rmse for DJF: 1.3067 ms, standard deviation: 0.3026
+Averaged rmse for JJA: 1.2423 ms, standard deviation: 0.1842
+Averaged rmse for MAM: 1.3323 ms, standard deviation: 0.2313
+Averaged rmse for SON: 1.2414 ms, standard deviation: 0.3165
+Globally averaged bias: -0.0430 ms, standard deviation: 0.1761
+Averaged bias for DJF: -0.0528 ms, standard deviation: 0.1840
+Averaged bias for JJA: -0.0061 ms, standard deviation: 0.1658
+Averaged bias for MAM: -0.0605 ms, standard deviation: 0.1789
+Averaged bias for SON: -0.0531 ms, standard deviation: 0.1698
+Globally averaged grad_amplitude: 0.6432 1, standard deviation: 0.1128
+Averaged grad_amplitude for DJF: 0.7334 1, standard deviation: 0.0636
+Averaged grad_amplitude for JJA: 0.5386 1, standard deviation: 0.0839
+Averaged grad_amplitude for MAM: 0.6365 1, standard deviation: 0.0986
+Averaged grad_amplitude for SON: 0.6663 1, standard deviation: 0.1020
+Globally averaged me_std: 0.3150 ms, standard deviation: 0.0540
+Averaged me_std for DJF: 0.3118 ms, standard deviation: 0.0618
+Averaged me_std for JJA: 0.3227 ms, standard deviation: 0.0442
+Averaged me_std for MAM: 0.3245 ms, standard deviation: 0.0489
+Averaged me_std for SON: 0.3007 ms, standard deviation: 0.0562
+
+postprocess_sha_unet_wind_3-out.10182081
+Globally averaged rmse: 1.2774 ms, standard deviation: 0.2646
+Averaged rmse for DJF: 1.3071 ms, standard deviation: 0.3005
+Averaged rmse for JJA: 1.2361 ms, standard deviation: 0.1861
+Averaged rmse for MAM: 1.3285 ms, standard deviation: 0.2282
+Averaged rmse for SON: 1.2383 ms, standard deviation: 0.3116
+Globally averaged bias: -0.0661 ms, standard deviation: 0.1735
+Averaged bias for DJF: -0.0706 ms, standard deviation: 0.1831
+Averaged bias for JJA: -0.0346 ms, standard deviation: 0.1662
+Averaged bias for MAM: -0.0853 ms, standard deviation: 0.1762
+Averaged bias for SON: -0.0740 ms, standard deviation: 0.1639
+Globally averaged grad_amplitude: 0.6494 1, standard deviation: 0.1146
+Averaged grad_amplitude for DJF: 0.7403 1, standard deviation: 0.0647
+Averaged grad_amplitude for JJA: 0.5441 1, standard deviation: 0.0853
+Averaged grad_amplitude for MAM: 0.6435 1, standard deviation: 0.1012
+Averaged grad_amplitude for SON: 0.6721 1, standard deviation: 0.1044
+Globally averaged me_std: 0.3130 ms, standard deviation: 0.0532
+Averaged me_std for DJF: 0.3099 ms, standard deviation: 0.0609
+Averaged me_std for JJA: 0.3207 ms, standard deviation: 0.0440
+Averaged me_std for MAM: 0.3224 ms, standard deviation: 0.0486
+Averaged me_std for SON: 0.2989 ms, standard deviation: 0.0545
+
+postprocess_sha_unet_wind_extended_1-out.10182091
+Globally averaged rmse: 1.2687 ms, standard deviation: 0.2646
+Averaged rmse for DJF: 1.2991 ms, standard deviation: 0.3043
+Averaged rmse for JJA: 1.2267 ms, standard deviation: 0.1846
+Averaged rmse for MAM: 1.3188 ms, standard deviation: 0.2264
+Averaged rmse for SON: 1.2305 ms, standard deviation: 0.3103
+Globally averaged bias: -0.0631 ms, standard deviation: 0.1710
+Averaged bias for DJF: -0.0655 ms, standard deviation: 0.1820
+Averaged bias for JJA: -0.0349 ms, standard deviation: 0.1586
+Averaged bias for MAM: -0.0840 ms, standard deviation: 0.1750
+Averaged bias for SON: -0.0681 ms, standard deviation: 0.1640
+Globally averaged grad_amplitude: 0.6423 1, standard deviation: 0.1174
+Averaged grad_amplitude for DJF: 0.7362 1, standard deviation: 0.0660
+Averaged grad_amplitude for JJA: 0.5333 1, standard deviation: 0.0877
+Averaged grad_amplitude for MAM: 0.6355 1, standard deviation: 0.1033
+Averaged grad_amplitude for SON: 0.6665 1, standard deviation: 0.1051
+Globally averaged me_std: 0.3153 ms, standard deviation: 0.0534
+Averaged me_std for DJF: 0.3111 ms, standard deviation: 0.0610
+Averaged me_std for JJA: 0.3248 ms, standard deviation: 0.0449
+Averaged me_std for MAM: 0.3247 ms, standard deviation: 0.0487
+Averaged me_std for SON: 0.3004 ms, standard deviation: 0.0541
+
+postprocess_sha_unet_wind_extended_2-out.10182093
+Globally averaged rmse: 1.2742 ms, standard deviation: 0.2644
+Averaged rmse for DJF: 1.3010 ms, standard deviation: 0.3039
+Averaged rmse for JJA: 1.2358 ms, standard deviation: 0.1834
+Averaged rmse for MAM: 1.3250 ms, standard deviation: 0.2262
+Averaged rmse for SON: 1.2353 ms, standard deviation: 0.3114
+Globally averaged bias: -0.0380 ms, standard deviation: 0.1731
+Averaged bias for DJF: -0.0443 ms, standard deviation: 0.1877
+Averaged bias for JJA: -0.0119 ms, standard deviation: 0.1603
+Averaged bias for MAM: -0.0469 ms, standard deviation: 0.1749
+Averaged bias for SON: -0.0491 ms, standard deviation: 0.1659
+Globally averaged grad_amplitude: 0.6468 1, standard deviation: 0.1168
+Averaged grad_amplitude for DJF: 0.7426 1, standard deviation: 0.0628
+Averaged grad_amplitude for JJA: 0.5365 1, standard deviation: 0.0845
+Averaged grad_amplitude for MAM: 0.6391 1, standard deviation: 0.1035
+Averaged grad_amplitude for SON: 0.6713 1, standard deviation: 0.1035
+Globally averaged me_std: 0.3131 ms, standard deviation: 0.0541
+Averaged me_std for DJF: 0.3081 ms, standard deviation: 0.0617
+Averaged me_std for JJA: 0.3233 ms, standard deviation: 0.0451
+Averaged me_std for MAM: 0.3229 ms, standard deviation: 0.0492
+Averaged me_std for SON: 0.2981 ms, standard deviation: 0.0550
+
+postprocess_sha_unet_wind_extended_3-out.10182094
+Globally averaged rmse: 1.2759 ms, standard deviation: 0.2630
+Averaged rmse for DJF: 1.3063 ms, standard deviation: 0.3022
+Averaged rmse for JJA: 1.2366 ms, standard deviation: 0.1826
+Averaged rmse for MAM: 1.3237 ms, standard deviation: 0.2257
+Averaged rmse for SON: 1.2372 ms, standard deviation: 0.3093
+Globally averaged bias: -0.0401 ms, standard deviation: 0.1776
+Averaged bias for DJF: -0.0578 ms, standard deviation: 0.1867
+Averaged bias for JJA: 0.0076 ms, standard deviation: 0.1655
+Averaged bias for MAM: -0.0560 ms, standard deviation: 0.1783
+Averaged bias for SON: -0.0546 ms, standard deviation: 0.1707
+Globally averaged grad_amplitude: 0.6543 1, standard deviation: 0.1126
+Averaged grad_amplitude for DJF: 0.7450 1, standard deviation: 0.0607
+Averaged grad_amplitude for JJA: 0.5511 1, standard deviation: 0.0856
+Averaged grad_amplitude for MAM: 0.6448 1, standard deviation: 0.1009
+Averaged grad_amplitude for SON: 0.6787 1, standard deviation: 0.0998
+Globally averaged me_std: 0.3100 ms, standard deviation: 0.0541
+Averaged me_std for DJF: 0.3071 ms, standard deviation: 0.0622
+Averaged me_std for JJA: 0.3170 ms, standard deviation: 0.0442
+Averaged me_std for MAM: 0.3204 ms, standard deviation: 0.0493
+Averaged me_std for SON: 0.2954 ms, standard deviation: 0.0555
+
+postprocess_sha_wgan_wind_1-out.10182097
+Globally averaged rmse: 1.3658 ms, standard deviation: 0.2761
+Averaged rmse for DJF: 1.4081 ms, standard deviation: 0.3391
+Averaged rmse for JJA: 1.3279 ms, standard deviation: 0.1796
+Averaged rmse for MAM: 1.4112 ms, standard deviation: 0.2285
+Averaged rmse for SON: 1.3162 ms, standard deviation: 0.3146
+Globally averaged bias: -0.0237 ms, standard deviation: 0.2142
+Averaged bias for DJF: -0.0994 ms, standard deviation: 0.2560
+Averaged bias for JJA: 0.0626 ms, standard deviation: 0.1612
+Averaged bias for MAM: -0.0368 ms, standard deviation: 0.1991
+Averaged bias for SON: -0.0230 ms, standard deviation: 0.1985
+Globally averaged grad_amplitude: 0.8790 1, standard deviation: 0.0634
+Averaged grad_amplitude for DJF: 0.9154 1, standard deviation: 0.0485
+Averaged grad_amplitude for JJA: 0.8340 1, standard deviation: 0.0598
+Averaged grad_amplitude for MAM: 0.8755 1, standard deviation: 0.0631
+Averaged grad_amplitude for SON: 0.8922 1, standard deviation: 0.0508
+Globally averaged me_std: 0.2720 ms, standard deviation: 0.0508
+Averaged me_std for DJF: 0.2858 ms, standard deviation: 0.0618
+Averaged me_std for JJA: 0.2608 ms, standard deviation: 0.0348
+Averaged me_std for MAM: 0.2793 ms, standard deviation: 0.0428
+Averaged me_std for SON: 0.2624 ms, standard deviation: 0.0551
+
+postprocess_sha_wgan_wind_2-out.10182100
+Globally averaged rmse: 1.3732 ms, standard deviation: 0.2783
+Averaged rmse for DJF: 1.4176 ms, standard deviation: 0.3440
+Averaged rmse for JJA: 1.3438 ms, standard deviation: 0.1778
+Averaged rmse for MAM: 1.4103 ms, standard deviation: 0.2310
+Averaged rmse for SON: 1.3216 ms, standard deviation: 0.3176
+Globally averaged bias: 0.0175 ms, standard deviation: 0.2281
+Averaged bias for DJF: -0.0702 ms, standard deviation: 0.2717
+Averaged bias for JJA: 0.1196 ms, standard deviation: 0.1683
+Averaged bias for MAM: 0.0032 ms, standard deviation: 0.2091
+Averaged bias for SON: 0.0154 ms, standard deviation: 0.2110
+Globally averaged grad_amplitude: 0.9027 1, standard deviation: 0.0588
+Averaged grad_amplitude for DJF: 0.9306 1, standard deviation: 0.0485
+Averaged grad_amplitude for JJA: 0.8726 1, standard deviation: 0.0619
+Averaged grad_amplitude for MAM: 0.8922 1, standard deviation: 0.0597
+Averaged grad_amplitude for SON: 0.9159 1, standard deviation: 0.0458
+Globally averaged me_std: 0.2660 ms, standard deviation: 0.0511
+Averaged me_std for DJF: 0.2798 ms, standard deviation: 0.0629
+Averaged me_std for JJA: 0.2552 ms, standard deviation: 0.0329
+Averaged me_std for MAM: 0.2722 ms, standard deviation: 0.0421
+Averaged me_std for SON: 0.2571 ms, standard deviation: 0.0569
+
+postprocess_sha_wgan_wind_3-out.10182102
+Globally averaged rmse: 1.3616 ms, standard deviation: 0.2687
+Averaged rmse for DJF: 1.3937 ms, standard deviation: 0.3242
+Averaged rmse for JJA: 1.3330 ms, standard deviation: 0.1744
+Averaged rmse for MAM: 1.4032 ms, standard deviation: 0.2293
+Averaged rmse for SON: 1.3168 ms, standard deviation: 0.3102
+Globally averaged bias: 0.0045 ms, standard deviation: 0.2244
+Averaged bias for DJF: -0.0762 ms, standard deviation: 0.2563
+Averaged bias for JJA: 0.1039 ms, standard deviation: 0.1681
+Averaged bias for MAM: -0.0204 ms, standard deviation: 0.2164
+Averaged bias for SON: 0.0089 ms, standard deviation: 0.2099
+Globally averaged grad_amplitude: 0.8996 1, standard deviation: 0.0630
+Averaged grad_amplitude for DJF: 0.9279 1, standard deviation: 0.0487
+Averaged grad_amplitude for JJA: 0.8632 1, standard deviation: 0.0656
+Averaged grad_amplitude for MAM: 0.8913 1, standard deviation: 0.0655
+Averaged grad_amplitude for SON: 0.9167 1, standard deviation: 0.0491
+Globally averaged me_std: 0.2634 ms, standard deviation: 0.0512
+Averaged me_std for DJF: 0.2791 ms, standard deviation: 0.0615
+Averaged me_std for JJA: 0.2494 ms, standard deviation: 0.0335
+Averaged me_std for MAM: 0.2702 ms, standard deviation: 0.0428
+Averaged me_std for SON: 0.2553 ms, standard deviation: 0.0568
+
+postprocess_sha_wgan_wind_extended_1-out.10267065
+Globally averaged rmse: 1.3885 ms, standard deviation: 0.2824
+Averaged rmse for DJF: 1.4271 ms, standard deviation: 0.3485
+Averaged rmse for JJA: 1.3546 ms, standard deviation: 0.1839
+Averaged rmse for MAM: 1.4286 ms, standard deviation: 0.2369
+Averaged rmse for SON: 1.3440 ms, standard deviation: 0.3205
+Globally averaged bias: -0.0372 ms, standard deviation: 0.2363
+Averaged bias for DJF: -0.1329 ms, standard deviation: 0.2836
+Averaged bias for JJA: 0.0705 ms, standard deviation: 0.1711
+Averaged bias for MAM: -0.0513 ms, standard deviation: 0.2113
+Averaged bias for SON: -0.0369 ms, standard deviation: 0.2207
+Globally averaged grad_amplitude: 0.9055 1, standard deviation: 0.0567
+Averaged grad_amplitude for DJF: 0.9316 1, standard deviation: 0.0473
+Averaged grad_amplitude for JJA: 0.8767 1, standard deviation: 0.0557
+Averaged grad_amplitude for MAM: 0.8951 1, standard deviation: 0.0585
+Averaged grad_amplitude for SON: 0.9191 1, standard deviation: 0.0480
+Globally averaged me_std: 0.2662 ms, standard deviation: 0.0512
+Averaged me_std for DJF: 0.2811 ms, standard deviation: 0.0626
+Averaged me_std for JJA: 0.2533 ms, standard deviation: 0.0334
+Averaged me_std for MAM: 0.2723 ms, standard deviation: 0.0425
+Averaged me_std for SON: 0.2582 ms, standard deviation: 0.0564
+
+postprocess_sha_wgan_wind_extended_2-out.10267078
+Globally averaged rmse: 1.3837 ms, standard deviation: 0.2754
+Averaged rmse for DJF: 1.4196 ms, standard deviation: 0.3260
+Averaged rmse for JJA: 1.3558 ms, standard deviation: 0.1799
+Averaged rmse for MAM: 1.4226 ms, standard deviation: 0.2334
+Averaged rmse for SON: 1.3371 ms, standard deviation: 0.3248
+Globally averaged bias: 0.0080 ms, standard deviation: 0.2185
+Averaged bias for DJF: -0.0866 ms, standard deviation: 0.2345
+Averaged bias for JJA: 0.1263 ms, standard deviation: 0.1726
+Averaged bias for MAM: -0.0047 ms, standard deviation: 0.2026
+Averaged bias for SON: -0.0051 ms, standard deviation: 0.2051
+Globally averaged grad_amplitude: 0.9126 1, standard deviation: 0.0557
+Averaged grad_amplitude for DJF: 0.9374 1, standard deviation: 0.0491
+Averaged grad_amplitude for JJA: 0.8874 1, standard deviation: 0.0573
+Averaged grad_amplitude for MAM: 0.9056 1, standard deviation: 0.0565
+Averaged grad_amplitude for SON: 0.9205 1, standard deviation: 0.0464
+Globally averaged me_std: 0.2661 ms, standard deviation: 0.0518
+Averaged me_std for DJF: 0.2822 ms, standard deviation: 0.0621
+Averaged me_std for JJA: 0.2526 ms, standard deviation: 0.0328
+Averaged me_std for MAM: 0.2719 ms, standard deviation: 0.0430
+Averaged me_std for SON: 0.2579 ms, standard deviation: 0.0588
+
+postprocess_sha_wgan_wind_extended_3-out.10267084
+Globally averaged rmse: 1.3481 ms, standard deviation: 0.2749
+Averaged rmse for DJF: 1.3871 ms, standard deviation: 0.3274
+Averaged rmse for JJA: 1.3104 ms, standard deviation: 0.1842
+Averaged rmse for MAM: 1.3926 ms, standard deviation: 0.2332
+Averaged rmse for SON: 1.3027 ms, standard deviation: 0.3175
+Globally averaged bias: -0.0271 ms, standard deviation: 0.2058
+Averaged bias for DJF: -0.0956 ms, standard deviation: 0.2377
+Averaged bias for JJA: 0.0562 ms, standard deviation: 0.1626
+Averaged bias for MAM: -0.0358 ms, standard deviation: 0.1944
+Averaged bias for SON: -0.0350 ms, standard deviation: 0.1929
+Globally averaged grad_amplitude: 0.8916 1, standard deviation: 0.0702
+Averaged grad_amplitude for DJF: 0.9412 1, standard deviation: 0.0529
+Averaged grad_amplitude for JJA: 0.8381 1, standard deviation: 0.0606
+Averaged grad_amplitude for MAM: 0.8831 1, standard deviation: 0.0682
+Averaged grad_amplitude for SON: 0.9051 1, standard deviation: 0.0551
+Globally averaged me_std: 0.2612 ms, standard deviation: 0.0496
+Averaged me_std for DJF: 0.2750 ms, standard deviation: 0.0585
+Averaged me_std for JJA: 0.2500 ms, standard deviation: 0.0342
+Averaged me_std for MAM: 0.2679 ms, standard deviation: 0.0417
+Averaged me_std for SON: 0.2521 ms, standard deviation: 0.0556
+
+postprocess_swinir_wind_extended_128-out.10284752
+Globally averaged rmse: 1.3288 ms, standard deviation: 0.2731
+Averaged rmse for DJF: 1.3751 ms, standard deviation: 0.3315
+Averaged rmse for JJA: 1.2810 ms, standard deviation: 0.1829
+Averaged rmse for MAM: 1.3736 ms, standard deviation: 0.2273
+Averaged rmse for SON: 1.2862 ms, standard deviation: 0.3101
+Globally averaged bias: -0.0628 ms, standard deviation: 0.1930
+Averaged bias for DJF: -0.0469 ms, standard deviation: 0.2208
+Averaged bias for JJA: -0.0457 ms, standard deviation: 0.1623
+Averaged bias for MAM: -0.0880 ms, standard deviation: 0.1966
+Averaged bias for SON: -0.0701 ms, standard deviation: 0.1850
+Globally averaged grad_amplitude: 0.6294 1, standard deviation: 0.1211
+Averaged grad_amplitude for DJF: 0.7290 1, standard deviation: 0.0636
+Averaged grad_amplitude for JJA: 0.5128 1, standard deviation: 0.0870
+Averaged grad_amplitude for MAM: 0.6209 1, standard deviation: 0.1056
+Averaged grad_amplitude for SON: 0.6573 1, standard deviation: 0.1071
+Globally averaged me_std: 0.3281 ms, standard deviation: 0.0548
+Averaged me_std for DJF: 0.3241 ms, standard deviation: 0.0642
+Averaged me_std for JJA: 0.3380 ms, standard deviation: 0.0444
+Averaged me_std for MAM: 0.3380 ms, standard deviation: 0.0488
+Averaged me_std for SON: 0.3121 ms, standard deviation: 0.0555
+
+postprocess_swinir_wind_extended_32-out.10284814
+Globally averaged rmse: 1.3320 ms, standard deviation: 0.2776
+Averaged rmse for DJF: 1.3888 ms, standard deviation: 0.3379
+Averaged rmse for JJA: 1.2783 ms, standard deviation: 0.1806
+Averaged rmse for MAM: 1.3754 ms, standard deviation: 0.2330
+Averaged rmse for SON: 1.2864 ms, standard deviation: 0.3134
+Globally averaged bias: -0.0646 ms, standard deviation: 0.2209
+Averaged bias for DJF: -0.1644 ms, standard deviation: 0.2288
+Averaged bias for JJA: 0.0503 ms, standard deviation: 0.1948
+Averaged bias for MAM: -0.0771 ms, standard deviation: 0.2127
+Averaged bias for SON: -0.0694 ms, standard deviation: 0.1910
+Globally averaged grad_amplitude: 0.6259 1, standard deviation: 0.1112
+Averaged grad_amplitude for DJF: 0.7048 1, standard deviation: 0.0627
+Averaged grad_amplitude for JJA: 0.5267 1, standard deviation: 0.0901
+Averaged grad_amplitude for MAM: 0.6231 1, standard deviation: 0.1017
+Averaged grad_amplitude for SON: 0.6510 1, standard deviation: 0.1016
+Globally averaged me_std: 0.3295 ms, standard deviation: 0.0570
+Averaged me_std for DJF: 0.3348 ms, standard deviation: 0.0696
+Averaged me_std for JJA: 0.3313 ms, standard deviation: 0.0435
+Averaged me_std for MAM: 0.3368 ms, standard deviation: 0.0490
+Averaged me_std for SON: 0.3150 ms, standard deviation: 0.0600
+
+postprocess_swinir_wind_extended_64-out.10284813
+Globally averaged rmse: 1.3271 ms, standard deviation: 0.2719
+Averaged rmse for DJF: 1.3649 ms, standard deviation: 0.3316
+Averaged rmse for JJA: 1.2856 ms, standard deviation: 0.1798
+Averaged rmse for MAM: 1.3753 ms, standard deviation: 0.2258
+Averaged rmse for SON: 1.2829 ms, standard deviation: 0.3100
+Globally averaged bias: 0.0042 ms, standard deviation: 0.2094
+Averaged bias for DJF: -0.0547 ms, standard deviation: 0.2241
+Averaged bias for JJA: 0.0917 ms, standard deviation: 0.1913
+Averaged bias for MAM: 0.0005 ms, standard deviation: 0.2077
+Averaged bias for SON: -0.0221 ms, standard deviation: 0.1837
+Globally averaged grad_amplitude: 0.6274 1, standard deviation: 0.1219
+Averaged grad_amplitude for DJF: 0.7237 1, standard deviation: 0.0633
+Averaged grad_amplitude for JJA: 0.5078 1, standard deviation: 0.0839
+Averaged grad_amplitude for MAM: 0.6285 1, standard deviation: 0.1099
+Averaged grad_amplitude for SON: 0.6520 1, standard deviation: 0.1101
+Globally averaged me_std: 0.3293 ms, standard deviation: 0.0549
+Averaged me_std for DJF: 0.3267 ms, standard deviation: 0.0659
+Averaged me_std for JJA: 0.3393 ms, standard deviation: 0.0446
+Averaged me_std for MAM: 0.3361 ms, standard deviation: 0.0481
+Averaged me_std for SON: 0.3149 ms, standard deviation: 0.0556
+

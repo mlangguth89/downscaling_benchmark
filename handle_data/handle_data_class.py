@@ -231,6 +231,11 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for benchmark_t2m.")
+    elif dataset_name == "benchmark_wind":
+        fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
+        if subset == "train":
+            fname_suffix = f"{fname_suffix}*"
+        if laugmented: raise ValueError("No augmented dataset available for benchmark_wind.")
     else:
         raise ValueError(f"Unknown dataset '{dataset_name}' passed.")
 
