@@ -461,7 +461,7 @@ class Scores:
         # IQD evaluates the marginal distribution of the data and thus collapes existing dimensions
         # There, averaging is not meaningful here
         if self.avg_dims and self.avg_dims != []:
-            func_logger.debug(f"Pasred averaging dimensions ({', '.join(self.avg_dims)}) are ignored.")
+            func_logger.debug(f"Parsed averaging dimensions ({', '.join(self.avg_dims)}) are ignored.")
 
         # Align the arrays and sort the data incl. falttening
         forecast, reference = xr.align(self.data_fcst, self.data_ref, join=align_join)

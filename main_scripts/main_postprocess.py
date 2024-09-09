@@ -96,7 +96,7 @@ def main(parser_args):
         t0_marg = timer()
 
         plt_dir_marg = os.path.join(plt_dir, "marginal_analysis")
-        run_marginal_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_marg, [model_info["model_longname"], "COSMO-REA6"], varname, unit,
+        run_marginal_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_marg, [model_info["model_longname"], "COSMO-REA6"], varname, unit,
                               **conf_postprocess.get("config_marginal_analysis", {}))
         
         logger.info(f"Marginal distribution analysis finished in {timer() - t0_marg:.2f}s.")
