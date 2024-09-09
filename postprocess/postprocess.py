@@ -421,6 +421,11 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_d
     score_engine = Scores(data_fcst, data_ref, [])      # no avergaing possible for IQD, i.e. pass empty list
     iqd = score_engine("iqd")
 
+    func_logger.info(f"IQD for all {varname} data: {iqd: .2e}")
+
+    # create output-directories if necessary
+    os.makedirs(plt_dir, exist_ok=True)
+
     # create histogram plot for all data
     plt_fname = os.path.join(plt_dir, f"histogram_{varname}_all.png")
     plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **opts)
@@ -435,8 +440,10 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_d
         score_engine = Scores(data_fcst_sea, data_ref_sea, [])      # no avergaing possible for IQD, i.e. pass empty list
         iqd_sea = score_engine("iqd")
 
+        func_logger.info(f"IQD for {varname} data from season {sea}: {iqd_sea: .2e}")
+
         plt_fname = os.path.join(plt_dir, f"histogram_{varname}_{sea}.png")
-        plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **opts)
+        plot_histograms(data_fcst, data_ref, plt_fname, labels, iqdi_sea, xlabel=f"{varname} [{unit}]", **opts)
                            
 
 def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
