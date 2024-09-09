@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-08-30"
+__update__ = "2024-09-06"
 
 import os
 import logging
@@ -21,7 +21,7 @@ import gc
 import xarray as xr
 import cartopy.crs as ccrs
 from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
-                        run_feature_importance, run_spectral_analysis, run_comparison_plots
+                        run_feature_importance, run_spectral_analysis, run_marginal_analysis, run_comparison_plots
 from other_utils import config_logger
 #from other_utils import free_mem
 
@@ -89,6 +89,17 @@ def main(parser_args):
                               **conf_postprocess.get("config_spectral_analysis", {}))
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
+
+    # run analysis of marginal distributions if specified
+    if conf_postprocess.get("do_marginal_analysis", False):
+        logger.info("Start analysis of marginal distribution...")
+        t0_marg = timer()
+
+        plt_dir_marg = os.path.join(plt_dir, "marginal_analysis")
+        run_marginal_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_marg, [model_info["model_longname"], "COSMO-REA6"], varname, unit,
+                              **conf_postprocess.get("config_marginal_analysis", {}))
+        
+        logger.info(f"Marginal distribution analysis finished in {timer() - t0_marg:.2f}s.")
 
     # create comparison plots if specified
     if conf_postprocess.get("do_comparison_plots", False):

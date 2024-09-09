@@ -9,6 +9,8 @@
   "config_spectral_analysis": {},
   "do_cond_quantile_analysis": true,
   "config_cond_quantile_analysis": {"factorization": "calibration_refinement"},
+  "do_marginal_analysis": true,
+  "config_marginal_analysis": {},
   "do_comparison_plots": true,
   "config_comparison_plots": {"nsamples": 100, "offset": -273.15, "cmap_name": "PuOr_r", "cmap_name_diff": "bwr"},
   "do_feature_importance": false,

@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-04-19"
+__update__ = "2024-09-06"
 
 import os
 import glob
@@ -33,7 +33,7 @@ from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
-                     plot_comparison_maps, get_season_t2m_levels
+                     plot_comparison_maps, plot_histograms, get_season_t2m_levels
 from other_utils import convert_to_xarray, check_str_in_list, finditem, to_list
 
 # basic data types
@@ -399,6 +399,51 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
 
         plt_fname = os.path.join(plt_dir, f"conditional_quantile_plot_{factorization}_{sea}.png")
         plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
+
+def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_dir: str, labels: List[str], varname: str, unit: str, **opts: dict):
+    """
+    Perform marginal analysis for forecast (downscaled) and reference data
+    which includes calculation of the Interquartile Distance (IQD) score and plotting both histograms.
+    :param data_fcst: xarray.DataArray with forecast (downscaled) data
+    :param data_ref: xarray.DataArray with reference (ground truth) data
+    :param plt_dir: Directory to save plot files
+    :param labels: List of labels for forecast and reference data
+    :param varname: Physical name of variable
+    :param unit: Physical unit of variable
+    :param opts: Additional keyword arguments for plotting
+    :return: None
+    """ 
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_marginal_analysis.__name__}")
+
+    # calculate IQD-score
+    func_logger.info(f"Start marginal analysis for {varname}...")
+
+    score_engine = Scores(data_fcst, data_ref, [])      # no avergaing possible for IQD, i.e. pass empty list
+    iqd = score_engine("iqd")
+
+    func_logger.info(f"IQD for all {varname} data: {iqd: .2e}")
+
+    # create output-directories if necessary
+    os.makedirs(plt_dir, exist_ok=True)
+
+    # create histogram plot for all data
+    plt_fname = os.path.join(plt_dir, f"histogram_{varname}_all.png")
+    plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **opts)
+
+    # conditional quantile analysis for each season
+    data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
+
+    for sea, data_fcst_sea in data_fcst_seas:
+        func_logger.info(f"Start marginal analysis for season '{sea}'...")
+        data_ref_sea = data_ref_seas[sea]
+
+        score_engine = Scores(data_fcst_sea, data_ref_sea, [])      # no avergaing possible for IQD, i.e. pass empty list
+        iqd_sea = score_engine("iqd")
+
+        func_logger.info(f"IQD for {varname} data from season {sea}: {iqd_sea: .2e}")
+
+        plt_fname = os.path.join(plt_dir, f"histogram_{varname}_{sea}.png")
+        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **opts)
                            
 
 def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
