@@ -443,7 +443,7 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_d
         func_logger.info(f"IQD for {varname} data from season {sea}: {iqd_sea: .2e}")
 
         plt_fname = os.path.join(plt_dir, f"histogram_{varname}_{sea}.png")
-        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqdi_sea, xlabel=f"{varname} [{unit}]", **opts)
+        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **opts)
                            
 
 def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
