@@ -822,14 +822,15 @@ class SymmetricPadding2D(Layer):
         i_pad, j_pad = self.padding
         return tf.pad(x, [[0, 0], [i_pad, i_pad], [j_pad, j_pad], [0, 0]], 'SYMMETRIC')
 
+@keras.utils.register_keras_serializable(package="Custom", name="Conv2DPadding_2") 
 class Conv2DPadding(Layer):
-    def __init__(self, filters, kernel_size, stride, padding, dilations):
-        super(Conv2DPadding, self).__init__()
+    def __init__(self, filters, kernel_size, stride, padding, dilations, **kwargs):
+        super(Conv2DPadding, self).__init__(**kwargs)
         self.filters = filters
         self.kernel_size = kernel_size
         self.stride = stride
         self.padding = padding
-        self.dilation = dilations
+        self.dilations = dilations
         if not isinstance(dilations, int):
             # padding calculation in build() would need to be adjusted to handle a tuple/list
             raise NotImplementedError("Only integer dilation is supported.")
@@ -838,7 +839,7 @@ class Conv2DPadding(Layer):
 
     def build(self, x):
         if self.padding in ('reflect', 'symmetric'):
-            pad = tuple((self.dilation*(s-1))//2 for s in self.kernel_size)  # only works if s is odd, or dilation is even
+            pad = tuple((self.dilations*(s-1))//2 for s in self.kernel_size)  # only works if s is odd, or dilation is even
             if self.padding == 'reflect':
                 self.padref = ReflectionPadding2D(padding=pad)
             elif self.padding == 'symmetric':
@@ -847,13 +848,13 @@ class Conv2DPadding(Layer):
                                   kernel_size=self.kernel_size,
                                   strides=(self.stride, self.stride),
                                   padding='valid',
-                                  dilation_rate=self.dilation)
+                                  dilation_rate=self.dilations)
         else:
             self.convsam = Conv2D(filters=self.filters,
                                   kernel_size=self.kernel_size,
                                   strides=(self.stride, self.stride),
                                   padding='same',
-                                  dilation_rate=self.dilation)
+                                  dilation_rate=self.dilations)
 
     def call(self, x):
         if self.padding in ('reflect', 'symmetric'):
@@ -864,6 +865,16 @@ class Conv2DPadding(Layer):
             return self.convval(x)
         else:  # same
             return self.convsam(x)
+        
+    def get_config(self):
+        config = super().get_config()
+        config.update({"filters": self.filters,
+                  "kernel_size": self.kernel_size,
+                  "stride": self.stride, 
+                  "padding": self.padding, 
+                  "dilations": self.dilations})
+        
+        return config
         
 def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None):
     in_channels = int(x.shape[-1])
