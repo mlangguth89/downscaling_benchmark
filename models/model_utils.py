@@ -9,13 +9,15 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2024-03-07"
+__update__ = "2024-09-13"
 
 # import modules
 import os
 from timeit import default_timer as timer
+import pickle
 import tensorflow as tf
 import tensorflow.keras as keras
+from tensorflow.keras import backend as K
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
 from tensorflow.keras.models import Model
@@ -86,6 +88,15 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
 
     return opt_dict
 
+def save_opt_weights(optimizer, filepath):
+    symbolic_weights = getattr(optimizer, 'weights')
+    if symbolic_weights:
+        weight_values = K.batch_get_value(symbolic_weights)
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(weight_values, f)
+    else:
+        raise ValueError(f"Failed to deduce weight from optimizer")
 
 # Helpers from MLAir, see:
 # https://gitlab.jsc.fz-juelich.de/esde/machine-learning/mlair/-/blob/master/mlair/helpers/helpers.py?ref_type=heads (MIT License)
