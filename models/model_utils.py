@@ -9,11 +9,14 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2024-09-13"
+__update__ = "2024-09-14"
 
 # import modules
 import os
+import glob
 from timeit import default_timer as timer
+from pathlib import Path
+import json as js
 import pickle
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -89,6 +92,11 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
     return opt_dict
 
 def save_opt_weights(optimizer, filepath):
+    """
+    Save optimizer weights to file.
+    :param optimizer: Keras optimizer instance
+    :param filepath: path to file where weights should be saved
+    """
     symbolic_weights = getattr(optimizer, 'weights')
     if symbolic_weights:
         weight_values = K.batch_get_value(symbolic_weights)
@@ -97,6 +105,41 @@ def save_opt_weights(optimizer, filepath):
             pickle.dump(weight_values, f)
     else:
         raise ValueError(f"Failed to deduce weight from optimizer")
+    
+def check_config_ckpt(ckpt_path, ds_dict, hparams_dict):
+    """
+    Check if configuration files of checkpoint match the parsed ones.
+    :param ckpt_path: path to checkpoint directory or path
+    :param ds_dict: dictionary of dataset configuration
+    :param hparams_dict: dictionary of model configuration
+    """
+    ckpt_path = Path(ckpt_path)
+
+    i = 0 if ckpt_path.suffix == ".h5" else 1
+    model_basedir = ckpt_path.parents[i]
+
+    # load configuration files from checkpoint
+    fconfig_ds = glob.glob(model_basedir.joinpath("config_ds*.json"))
+    fconfig_md = glob.glob(model_basedir.joinpath("custom_config_*.json"))
+
+    if fconfig_ds:
+        with open(fconfig_ds[0], "r") as f:
+            ds_dict_ckpt = js.load(f)
+    else:
+        raise FileNotFoundError(f"Dataset configuration file not found in checkpoint directory '{model_basedir}'.")
+
+    if fconfig_md:
+        with open(fconfig_md[0], "r") as f:
+            hparams_dict_ckpt = js.load(f)
+    else:
+        raise FileNotFoundError(f"Model configuration file not found in checkpoint directory '{model_basedir}'.")
+
+    # compare configurations 
+    if ds_dict != ds_dict_ckpt:
+        raise ValueError(f"Dataset configuration file of checkpoint ('{ds_dict_ckpt}') and the parsed one do not match.")
+    
+    if hparams_dict != hparams_dict_ckpt:
+        raise ValueError(f"Model configuration file of checkpoint ('{hparams_dict_ckpt}') and the parsed one do not match.")
 
 # Helpers from MLAir, see:
 # https://gitlab.jsc.fz-juelich.de/esde/machine-learning/mlair/-/blob/master/mlair/helpers/helpers.py?ref_type=heads (MIT License)
