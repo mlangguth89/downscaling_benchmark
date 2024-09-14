@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2024-03-08"
+__update__ = "2024-09-14"
 
 import os
 import argparse
@@ -23,6 +23,7 @@ import tensorflow as tf
 from tensorflow.keras.utils import plot_model
 from all_normalizations import ZScore
 from model_engine import ModelEngine
+from model_utils import check_config_ckpt
 from handle_data_class import prepare_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
 
@@ -109,14 +110,24 @@ def main(parser_args):
     # ... compile
     model.compile(**model.compile_options)
 
-    # copy configuration and normalization JSON-file to model-directory (incl. renaming)
-    os.makedirs(model_savedir, exist_ok=True)
-    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"custom_config_{parser_args.model}.json"]
-    if not write_norm:
-        filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
+    # load checkpoint if provided and model has load_checkpoint method
+    # if training starts from scratch, copy configuration files to model directory
+    if parser_args.ckpt_path and callable(getattr(model, "load_checkpoint", None)):
+        # sanity check on checkpoint configuration
+        check_config_ckpt(parser_args.ckpt_path, ds_dict, hparams_dict)
+        # get model state from checkpoint
+        model.load_checkpoint(parser_args.ckpt_path, "h5" if parser_args.ckpt_path.endswith(".h5") else "tf")
+    elif parser_args.ckpt_path:
+        print(f"Checkpoint path provided but model {parser_args.model} does not support loading checkpoints.")
+    else:    # copy configuration files 
+        os.makedirs(model_savedir, exist_ok=True)
+        filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], \
+                                 [f"config_ds_{dataset}.json", f"custom_config_{parser_args.model}.json"]
+        if not write_norm:
+            filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
     
-    copy_filelist(filelist, model_savedir, filelist_new)
-    model.save_hparams_to_json(os.path.join(model_savedir, f"config_{parser_args.model}.json"))
+        copy_filelist(filelist, model_savedir, filelist_new)
+        model.save_hparams_to_json(os.path.join(model_savedir, f"config_{parser_args.model}.json"))
 
     # train model
     # Note: smaller number of steps_per_epoch may enable more fine-grained control on learning rate schedule and checkpointing
@@ -190,6 +201,8 @@ if __name__ == "__main__":
     parser.add_argument("--json_norm_file", "-js_norm", dest="js_norm", type=str, default=None,
                         help="JSON-file providing normalization parameters.")
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
+    parser.add_argument("--checkpoint_path", "-ckpt_path", dest="ckpt_path", type=str, default=None,
+                        help="Filepath to the checkpoint to resume training")
 
     args = parser.parse_args()
     main(args)
