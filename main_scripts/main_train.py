@@ -110,13 +110,22 @@ def main(parser_args):
     # ... compile
     model.compile(**model.compile_options)
 
+    # prepare training
+    init_epoch = 0
+
+    # Note: smaller number of steps_per_epoch may enable more fine-grained control on learning rate schedule and checkpointing
+    steps_per_epoch = ds_dict.get("steps_per_epoch", int(np.ceil(nsamples / ds_dict["batch_size"])))
+    if "steps_per_epoch" in hparams_dict:
+        print(f"Steps per epoch changed from {int(np.ceil(nsamples / ds_dict['batch_size']))} to {hparams_dict['steps_per_epoch']} for training.")
+
     # load checkpoint if provided and model has load_checkpoint method
     # if training starts from scratch, copy configuration files to model directory
     if parser_args.ckpt_path and callable(getattr(model, "load_checkpoint", None)):
         # sanity check on checkpoint configuration
         check_config_ckpt(parser_args.ckpt_path, ds_dict, hparams_dict)
         # get model state from checkpoint
-        model.load_checkpoint(parser_args.ckpt_path, "h5" if parser_args.ckpt_path.endswith(".h5") else "tf")
+        step_ckpt = model.load_checkpoint(parser_args.ckpt_path, "h5" if parser_args.ckpt_path.endswith(".h5") else "tf")
+        init_epoch = int(step_ckpt/steps_per_epoch)
     elif parser_args.ckpt_path:
         print(f"Checkpoint path provided but model {parser_args.model} does not support loading checkpoints.")
     else:    # copy configuration files 
@@ -130,14 +139,9 @@ def main(parser_args):
         model.save_hparams_to_json(os.path.join(model_savedir, f"config_{parser_args.model}.json"))
 
     # train model
-    # Note: smaller number of steps_per_epoch may enable more fine-grained control on learning rate schedule and checkpointing
-    steps_per_epoch = ds_dict.get("steps_per_epoch", int(np.ceil(nsamples / ds_dict["batch_size"])))
-    if "steps_per_epoch" in hparams_dict:
-        print(f"Steps per epoch changed from {int(np.ceil(nsamples / ds_dict['batch_size']))} to {hparams_dict['steps_per_epoch']} for training.")
-
     # run training (note that callbacks are part of the fit_options by default)
     print(f"Start training of {parser_args.model.capitalize()}...")
-    history = model.fit(x=tfds_train, epochs=model.hparams["nepochs"],
+    history = model.fit(x=tfds_train, epochs=model.hparams["nepochs"], initial_epoch=init_epoch,
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=int(8640/ds_dict["batch_size"]),
                         verbose=2, **model.fit_options)
 

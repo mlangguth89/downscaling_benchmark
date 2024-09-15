@@ -673,6 +673,7 @@ class HarrisWGAN(AbstractModelClass):
         Requires that the model is compiled!
         :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
         :param checkpoint_format: format of checkpoint, must match the format used for saving.
+        :return: iteration step of checkpointed model
         """
         generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
                                       Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
@@ -711,6 +712,11 @@ class HarrisWGAN(AbstractModelClass):
         # set state for c_optimizer
         self.c_optimizer._create_all_weights(self.critic.trainable_variables)
         self.c_optimizer.set_weights(optimizer_weights_critic)
+
+        # retrieve iteration step of checkpointed model
+        iter_step = (self.g_optimizer.variables()[0]).numpy()
+
+        return iter_step
         
                           
     def set_hparams_default(self):
