@@ -74,6 +74,19 @@ class AbstractModelClass(ABC):
         if compile is True:
             self.model.compile(**self.compile_options)
 
+    def load_inference_model(self, model_dir: str, compile: bool = False) -> keras.Model:
+        """
+        Load a model from a given directory.
+
+        :param model_dir: directory where the model is saved
+        :param compile: if True, the model will be compiled with the compile options
+        :return: the loaded model
+        """
+        model = keras.models.load_model(model_dir, custom_objects=self.custom_objects)
+        if compile is True:
+            model.compile(**self.compile_options)
+        return model
+
     def __getattr__(self, name: str) -> Any:
         """
         Is called if __getattribute__ is not able to find requested attribute.
