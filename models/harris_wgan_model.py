@@ -6,7 +6,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2024-09-13"
+__update__ = "2024-09-16"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -261,22 +261,26 @@ class NoiseGenerator(object):
     
 
 class HarrisWGAN_Model(keras.Model):
-    def __init__(self, generator, critic, hparams, expname):
+    def __init__(self, generator, critic, hparams, expname, noise_gen=None):
         super().__init__()
         self.generator = generator
         self.critic = critic
         self.hparams = hparams
         self._expname = expname
+        self.noise_gen = noise_gen
+        if noise_gen:
+            assert isinstance(noise_gen, NoiseGenerator), "Parsed noise_gen must be an instance of the NoiseGenerator-class"
         
     def compile(self, optimizer, loss, **kwargs):
         super().compile(**kwargs)
         self.c_optimizer, self.g_optimizer = optimizer
         
-        # losses        
-        self.noise_gen = NoiseGenerator(
-            self.generator._input_shape["lo_res_inputs"][:2]+[self.hparams["noise_channels"]],
-            self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
-        )
+        # losses
+        if not self.noise_gen:        
+            self.noise_gen = NoiseGenerator(
+                self.generator._input_shape["lo_res_inputs"][:2]+[self.hparams["noise_channels"]],
+                self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
+            )
 
         # losses
         self.critic_loss = self.critic_loss #get_custom_loss("critic")
@@ -727,6 +731,34 @@ class HarrisWGAN(AbstractModelClass):
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
+        
+    def load_inference_model(self, model_dir, format="tf"):
+            
+        # construct directories to generator- and critic model from model directory
+        model_dir = Path(model_dir)
+
+        expname = model_dir.name
+        suffix = expname.split("_")[-1]
+
+        fname_suffix = ".h5" if format == "h5" else ""
+
+        gen_dir = model_dir.joinpath(expname.replace(suffix, f"generator_{suffix}{fname_suffix}"))
+
+        # load saved models
+        generator = keras.models.load_model(gen_dir, compile=False)
+        
+        # construct noise genartor required for ensemble 
+        noise_gen = NoiseGenerator(list(generator.get_layer(name='noise_input').input_shape[0][1:]), self.hparams["batch_size"])
+
+        hparams_wgan_only = self.hparams.copy()
+        hparams_wgan_only.pop("hparams_discriminator")
+        hparams_wgan_only.pop("hparams_generator")
+        
+        # get construct model for inference exposing predict-method
+        # Note the predict-step makes use of the generator only. Thus, the critic model is not needed here
+        wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, noise_gen=noise_gen)
+        
+        return wgan_model
 
 
 class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
