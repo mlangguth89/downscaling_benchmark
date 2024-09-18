@@ -13,12 +13,13 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2024-03-08"
+__update__ = "2024-09-16"
 
 import os
 from typing import List, Tuple, Union
 import inspect
 from collections import OrderedDict
+from pathlib import Path
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -411,6 +412,23 @@ class WGAN(AbstractModelClass):
         else:
             self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
             self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+
+    def load_inference_model(self, model_dir, format="tf"):
+            
+        # construct directories to generator- and critic model from model directory
+        model_dir = Path(model_dir)
+
+        expname = model_dir.name
+        suffix = expname.split("_")[-1]
+
+        fname_suffix = ".h5" if format == "h5" else ""
+
+        gen_dir = model_dir.joinpath(expname.replace(suffix, f"generator_{suffix}{fname_suffix}"))
+
+        # load saved models
+        generator = keras.models.load_model(gen_dir, compile=False)
+
+        return generator
 
     def count_params(self):
         """
