@@ -722,15 +722,6 @@ class HarrisWGAN(AbstractModelClass):
 
         return iter_step
         
-                          
-    def set_hparams_default(self):
-        """
-        Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
-        """
-        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
-                                "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
-                                "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
         
     def load_inference_model(self, model_dir, format="tf"):
             
@@ -759,6 +750,27 @@ class HarrisWGAN(AbstractModelClass):
         wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, noise_gen=noise_gen)
         
         return wgan_model
+
+    def count_params(self):
+        """
+        Count number of trainable and untrainable parameters
+        """
+        trainable_param = int(np.sum([K.count_params(p) for p in self.generator.trainable_weights]))
+        untrainable_param = int(np.sum([K.count_params(p) for p in self.generator.non_trainable_weights]))
+
+        trainable_param += int(np.sum([K.count_params(p) for p in self.critic.trainable_weights]))
+        untrainable_param += int(np.sum([K.count_params(p) for p in self.critic.non_trainable_weights]))
+        
+        return trainable_param, untrainable_param
+    
+    def set_hparams_default(self):
+        """
+        Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
+        """
+        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
+                                "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
+                                "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
 
 
 class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
