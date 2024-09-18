@@ -9,7 +9,7 @@ Class for building blocks of U-Net as well as model classes for Sha U-Net and De
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2024-03-08"
+__update__ = "2024-09-18"
 
 # import modules
 import os
@@ -197,6 +197,8 @@ class Sha_UNet(AbstractModelClass):
     
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False, with_horovod: bool = False):
         
+        if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
+            shape_in = [8, 8, 8]
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
         
         self.concat_out = concat_out

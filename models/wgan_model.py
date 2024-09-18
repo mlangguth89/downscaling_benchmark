@@ -13,7 +13,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2024-09-16"
+__update__ = "2024-09-18"
 
 import os
 from typing import List, Tuple, Union
@@ -229,7 +229,8 @@ class WGAN(AbstractModelClass):
         :param expname: name of the experiment
         :param with_horovod: whether to use horovod for distributed training
         """
-        
+        if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
+            shape_in = [8, 8, 8]
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         # flag if horovod is used and import required modules

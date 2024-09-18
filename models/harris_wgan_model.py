@@ -6,7 +6,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2024-09-16"
+__update__ = "2024-09-18"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -548,6 +548,8 @@ class HarrisWGAN(AbstractModelClass):
         :param savedir: Drectory to save the model.
         :param expname: The name of the experiment.
         """        
+        if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
+            shape_in = [1, 1, 1, 1]
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "harriswgan"
