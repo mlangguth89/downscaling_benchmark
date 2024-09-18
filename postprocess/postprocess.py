@@ -63,7 +63,11 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     model_base = os.path.join(model_base_dir, exp_name)
 
     # get trained model for inference
-    trained_model, model_info = get_trained_model(model_base, out_dir, exp_name, last, model_type)
+    trained_model, model_info = get_trained_model(model_base, exp_name, last, model_type)
+
+    # get directory for saving netcdf output
+    model_name = os.path.basename(model_base)
+    nc_dir = os.path.join(out_dir, model_name) 
 
     # read configuration files
     ds_config_pattern = f"config_ds_{dataset}.json"
@@ -86,7 +90,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     func_logger.info(f"Start preparing test dataset...")
 
     # prepare normalization
-    js_norm = os.path.join(model_info["norm_dir"], "norm.json")
+    js_norm = os.path.join(model_base, "norm.json")
     func_logger.debug("Read normalization file for subsequent data transformation.")
     # To-Do: Enable handling of multiple normalizations
     data_norm = ZScore(ds_dict["norm_dims"])
@@ -131,7 +135,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(model_info["plot_dir"], f"downscaled_{varname}_{model_info['model_type']}.nc")
+    ncfile_out = os.path.join(nc_dir, f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
@@ -169,11 +173,10 @@ def results_from_file(nc_file, varname, model_name):
 
     return ds_out, model_info
 
-def get_trained_model(model_base, output_base: str, exp_name: str, hparams_dict: dict, bool_last: bool = False, model_type: str = None):
+def get_trained_model(model_base, exp_name: str, hparams_dict: dict, bool_last: bool = False, model_type: str = None):
     """
     Get trained model from model base directory and output base directory
     :param model_base: Base directory of model
-    :param output_base: Base directory of output
     :param exp_name: Experiment name
     :param hparams_dict: dictionary of hyperparameter of trained model
     :param bool_last: Flag to use last checkpointed model
@@ -184,11 +187,10 @@ def get_trained_model(model_base, output_base: str, exp_name: str, hparams_dict:
     func_logger = logging.getLogger(f"{logger_module_name}.{get_trained_model.__name__}")
 
     model_name = os.path.basename(model_base)
-    norm_dir = model_base
 
     add_str = "_last" if bool_last else "_best"
 
-    model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name) 
+    model_dir = os.path.join(model_base, f"{exp_name}{add_str}")
 
     def modelinfo_from_expname(expname: str):
         model_type = None
@@ -231,15 +233,16 @@ def get_trained_model(model_base, output_base: str, exp_name: str, hparams_dict:
             func_logger.debug(hparams_dict)
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
-                  "nsubmodels": nsubmodels, "plot_dir": plt_dir, "norm_dir": norm_dir,
-                  "hparams_dict": hparams_dict}
+                  "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
 
-    # initialize model with dummy data as most parameters are irrelevant for inference only...
-    trained_model = model_instance([1, 1, 1, 1], "dummy", hparams_dict, "dummy", "dummy")
+    # initialize model with dummy-values for shape_in and varnames_tar as they are obtained when loading saved model
+    # Note: shape_in = None triggers dummy-values of shape_in in model classes
+    vars_tar_dummy = ["dummy1", "dummy2"] if finditem(model_info["hparams_dict"], "z_branch", False) else "dummy"
+    trained_model = model_instance(None, vars_tar_dummy, hparams_dict, model_base, exp_name)
 
     # ...and load checkpointed model
     func_logger.info(f"Load model '{exp_name}' from {model_dir}")
-    trained_model = trained_model.load_inference_model(model_dir, compile=False)
+    trained_model = trained_model.load_inference_model(model_dir)
     func_logger.info(f"Model was loaded successfully.")
 
     return trained_model, model_info      
@@ -267,7 +270,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = kwargs.pop(key, None)
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
@@ -336,7 +339,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
 
     score_all = score_engine(score_name)
@@ -618,7 +621,8 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+        stream_mode = data_loader_opt.pop("stream_mode")
+        tfds_test = make_tf_dataset_allmem(stream_mode, ds_copy, **data_loader_opt)
 
         # predict
         func_logger.info(f"Run inference with permuted sample for {var}...")
