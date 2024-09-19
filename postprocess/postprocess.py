@@ -9,11 +9,12 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-16"
+__update__ = "2024-09-19"
 
 import os
 import glob
 from typing import Union, List, Dict
+from pathlib import Path
 import json as js
 from timeit import default_timer as timer
 import logging
@@ -23,8 +24,6 @@ from multiprocessing.pool import Pool
 import numpy as np
 import pandas as pd
 import xarray as xr
-import tensorflow.keras as keras
-import matplotlib as mpl
 import cartopy.crs as ccrs
 from handle_data_class import prepare_dataset, make_tf_dataset_allmem
 from all_normalizations import ZScore
@@ -44,7 +43,8 @@ list_or_str = Union[List[str], str]
 logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
-def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname, model_type, last, dataset):
+def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data_dir: Union[Path, str], out_dir: Union[Path, str],
+                           varname: str, model_type: str, last_or_epoch: Union[str, int], dataset: str, ens_member: Union[str, int] = None):
     """
     Run inference on trained model, convert output to xarray.DataArray and save results to disc.
     :param model_base_dir: Base directory where trained models are stored
@@ -53,21 +53,21 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     :param out_dir: Output directory
     :param varname: Name of variable that was downscaled
     :param model_type: Type of model (if None, model type is inferred from experiment name)
-    :param last: Flag to use last checkpointed model
+    :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
     :param dataset: Name of dataset
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{results_from_inference.__name__}")
 
     # construct model directory path and infer model type
-    model_base = os.path.join(model_base_dir, exp_name)
+    model_base = Path(model_base_dir).joinpath(exp_name)
 
     # get trained model for inference
-    trained_model, model_info = get_trained_model(model_base, exp_name, last, model_type)
+    trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type)
 
     # get directory for saving netcdf output
-    model_name = os.path.basename(model_base)
-    nc_dir = os.path.join(out_dir, model_name) 
+    model_name = model_base.parents[0].name
+    nc_dir = Path(out_dir).joinpath(model_name) 
 
     # read configuration files
     ds_config_pattern = f"config_ds_{dataset}.json"
@@ -120,7 +120,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     # start inference
     func_logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
                       "Start inference on trained model...")
-    t0_train = timer()
+    t0_infer = timer()
     y_pred = trained_model.predict(tfds_test, verbose=2)
 
     func_logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
@@ -131,21 +131,35 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     #free_mem([tfds_test])
 
     ### Post-process results from test dataset
+    # average over ensemble members or select specific member
+    if np.ndim(y_pred) == 5:
+        ens_out = True
+        if ens_member == "mean":
+            y_pred = np.mean(y_pred, axis=-1)
+        else:
+            assert isinstance(ens_member, int), f"Invalid value '{ens_member}' for ens_member. Must be 'mean' or integer."
+            y_pred = y_pred[..., ens_member]
+
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(nc_dir, f"downscaled_{varname}_{model_info['model_type']}.nc")
-    func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
+    ncfile_out = nc_dir.joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
+    func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
                         coords=coords) 
     # add attributes such as model_type and from which model the data was generated and used ds_dict
     # This is also relevant for later processing (e,g. when doing feature importance analysis)
     ds_out.attrs["model_path"] = model_info["model_dir"]
-    ds_out.to_netcdf(ncfile_out)
 
-    func_logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
+    # add ensemble member information for probabilistic models
+    if ens_out:
+        ds_out.attrs["ensemble_output"] = ens_member if ens_member == "mean" else f"member {ens_member}"
+        
+    ds_out.to_netcdf(str(ncfile_out))
+
+    func_logger.info(f"Output data on test dataset successfully processed in {timer()-t0_infer:.2f}s. Start evaluation...")
 
     return ds_out, test_info
 
@@ -173,24 +187,28 @@ def results_from_file(nc_file, varname, model_name):
 
     return ds_out, model_info
 
-def get_trained_model(model_base, exp_name: str, hparams_dict: dict, bool_last: bool = False, model_type: str = None):
+def get_trained_model(model_base: Union[Path, str], exp_name: str, hparams_dict: dict, last_or_epoch: Union[str, int], model_type: str = None):
     """
     Get trained model from model base directory and output base directory
     :param model_base: Base directory of model
     :param exp_name: Experiment name
     :param hparams_dict: dictionary of hyperparameter of trained model
-    :param bool_last: Flag to use last checkpointed model
+    :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
     :param model_type: Model type
     :return: Trained model for inference and model information as dictionary
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{get_trained_model.__name__}")
 
-    model_name = os.path.basename(model_base)
+    if isinstance(last_or_epoch, str):
+        assert last_or_epoch in ["best", "last"], f"Invalid value '{last_or_epoch}' for last_or_epoch. Must be 'best' or 'last'."
+        add_str = f"_{last_or_epoch}"
+    elif isinstance(last_or_epoch, int):
+        add_str = f"_epoch{last_or_epoch:05d}"
+    else:
+        raise ValueError(f"Invalid type '{type(last_or_epoch)}' for last_or_epoch. Must be str or int.")
 
-    add_str = "_last" if bool_last else "_best"
-
-    model_dir = os.path.join(model_base, f"{exp_name}{add_str}")
+    model_dir = Path(model_base).joinpath(f"{exp_name}{add_str}")
 
     def modelinfo_from_expname(expname: str):
         model_type = None
@@ -221,7 +239,7 @@ def get_trained_model(model_base, exp_name: str, hparams_dict: dict, bool_last: 
 
     # read configuration files
     md_config_pattern = f"config_{model_type}.json"
-    md_config_file = glob.glob(os.path.join(model_base, md_config_pattern))
+    md_config_file = glob.glob(str(model_base.joinpath(md_config_pattern)))
 
     if not md_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +

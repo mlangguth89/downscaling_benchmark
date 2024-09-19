@@ -9,7 +9,7 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-06"
+__update__ = "2024-09-19"
 
 import os
 import logging
@@ -51,8 +51,15 @@ def main(parser_args):
 
     # get data from inference or from data file
     if parser_args.mode == "inference":
+        if parser_args.last:
+            last_or_epoch = "last"
+        elif parser_args.epoch:
+            last_or_epoch = parser_args.epoch
+        else:
+            last_or_epoch = "best"
+
         ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
-                                                    varname, parser_args.model_type, parser_args.last, parser_args.dataset)
+                                                    varname, parser_args.model_type, last_or_epoch, parser_args.dataset, parser_args.ens_mem)
         model_info = test_info["model_info"]
     elif parser_args.mode == "provided_results":
         ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
@@ -186,12 +193,17 @@ if __name__ == "__main__":
     parser_inference.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
                                   help="Base directory where trained models are saved.")
     parser_inference.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
-                                  help="Name of dataset to be used for downscaling model.")
-    parser_inference.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
-                                  help="Flag for evaluating last instead of best checkpointed model")
+                                help="Name of dataset to be used for downscaling model.")
     parser_inference.add_argument("--model_type", "-model_type", dest="model_type", default=None,
-                                  help="Name of model architecture. Only required if custom model architecture is not" +
-                                   "implemented in get_model_info-function (see postprocess.py)")
+                                help="Name of model architecture. Only required if custom model architecture is not" +
+                                "implemented in get_model_info-function (see postprocess.py)")
+    parser_inference.add_argument("--ensemble_member", "-ens_mem", dest="ens_mem", default=None,
+                                help="Ensemble member to evaluate. Only required for models with ensemble output during inference.")
+    group = parser_inference.add_mutually_exclusive_group()
+    group.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
+                       help="Flag for evaluating last instead of best checkpointed model")
+    group.add_argument("--epoch", "-epoch", dest="epoch", type=int,
+                       help="Epoch number to evaluate a specific checkpointed model")
 
     parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
     parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
