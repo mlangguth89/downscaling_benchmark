@@ -5,7 +5,7 @@
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-11"
-__update__ = "2024-04-11"
+__update__ = "2024-09-16"
 
 # import modules
 import os
@@ -73,6 +73,19 @@ class AbstractModelClass(ABC):
         self.model.history = hist
         if compile is True:
             self.model.compile(**self.compile_options)
+
+    def load_inference_model(self, model_dir: str, compile: bool = False) -> keras.Model:
+        """
+        Load a model from a given directory.
+
+        :param model_dir: directory where the model is saved
+        :param compile: if True, the model will be compiled with the compile options
+        :return: the loaded model
+        """
+        model = keras.models.load_model(model_dir, custom_objects=self.custom_objects)
+        if compile is True:
+            model.compile(**self.compile_options)
+        return model
 
     def __getattr__(self, name: str) -> Any:
         """

@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-06"
+__update__ = "2024-09-16"
 
 import os
 import glob
@@ -62,15 +62,16 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     # construct model directory path and infer model type
     model_base = os.path.join(model_base_dir, exp_name)
 
-    model_dir, plt_dir, norm_dir, model_info = get_model_info(model_base, out_dir, exp_name, last, model_type)
+    # get trained model for inference
+    trained_model, model_info = get_trained_model(model_base, exp_name, last, model_type)
 
-    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    func_logger.info(f"Start postprocessing at...")
+    # get directory for saving netcdf output
+    model_name = os.path.basename(model_base)
+    nc_dir = os.path.join(out_dir, model_name) 
 
     # read configuration files
-    md_config_pattern, ds_config_pattern = f"config_{model_info['model_type']}.json", f"config_ds_{dataset}.json"
-    md_config_file, ds_config_file = glob.glob(os.path.join(model_base, md_config_pattern)), \
-                                     glob.glob(os.path.join(model_base, ds_config_pattern))
+    ds_config_pattern = f"config_ds_{dataset}.json"
+    ds_config_file = glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
         raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
                                 f"under '{model_base}'")
@@ -80,39 +81,27 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
             ds_dict = js.load(dsf)
             func_logger.debug(ds_dict)
 
-    if not md_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
-                                f"under '{model_base}'")
-    else:
-        with open(md_config_file[0]) as mdf:
-            func_logger.info(f"Read model configuration file '{md_config_file[0]}'.")
-            hparams_dict = js.load(mdf)
-            func_logger.debug(hparams_dict)
+    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    func_logger.info(f"Start postprocessing at...")
 
     ### Run inference on trained model
-    # Load checkpointed model
-    func_logger.info(f"Load model '{exp_name}' from {model_dir}")
-    trained_model = keras.models.load_model(model_dir, compile=False)
-    func_logger.info(f"Model was loaded successfully.")
-
     # get normalization object and preprare test dataset
     t0_preproc = timer()
     func_logger.info(f"Start preparing test dataset...")
 
     # prepare normalization
-    js_norm = os.path.join(norm_dir, "norm.json")
+    js_norm = os.path.join(model_base, "norm.json")
     func_logger.debug("Read normalization file for subsequent data transformation.")
     # To-Do: Enable handling of multiple normalizations
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
     
     # get dataset pipeline for inference    
-    tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, hparams_dict, "test", norm_obj=data_norm, 
+    tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
                                            shuffle=False, lrepeat=False, drop_remainder=False) 
     
     # add further information to test_info (for later processing)
     test_info["ds_dict"] = ds_dict
-    test_info["hparams_dict"] = hparams_dict
     test_info["trained_model"] = trained_model
     test_info["model_info"] = model_info
 
@@ -125,7 +114,7 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
     ds_test = xr.open_dataset(test_info["file"])
     # rename coordinates and dimensions of target data for consistency
     dims_new = [dim.replace("_tar", "") for dim in ds_test[tar_varname].dims]
-    ds_test = ds_test.rename({old: new for old, new in zip(ds_test.dims, dims_new) if old != new}).copy()
+    ds_test = ds_test.rename({old: new for old, new in zip(ds_test[tar_varname].dims, dims_new) if old != new})
     coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
 
     # start inference
@@ -143,17 +132,17 @@ def results_from_inference(model_base_dir, exp_name, data_dir, out_dir, varname,
 
     ### Post-process results from test dataset
     # convert to xarray
-    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(hparams_dict, "z_branch", False))
+    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = os.path.join(plt_dir, f"downscaled_{varname}_{model_info['model_type']}.nc")
+    ncfile_out = os.path.join(nc_dir, f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{ncfile_out}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
                         coords=coords) 
     # add attributes such as model_type and from which model the data was generated and used ds_dict
     # This is also relevant for later processing (e,g. when doing feature importance analysis)
-    ds_out.attrs["model_path"] = model_dir
+    ds_out.attrs["model_path"] = model_info["model_dir"]
     ds_out.to_netcdf(ncfile_out)
 
     func_logger.info(f"Output data on test dataset successfully processed in {timer()-t0_train:.2f}s. Start evaluation...")
@@ -184,58 +173,79 @@ def results_from_file(nc_file, varname, model_name):
 
     return ds_out, model_info
 
-def get_model_info(model_base, output_base: str, exp_name: str, bool_last: bool = False, model_type: str = None):
+def get_trained_model(model_base, exp_name: str, hparams_dict: dict, bool_last: bool = False, model_type: str = None):
     """
-    Get model information from model base directory and output base directory
+    Get trained model from model base directory and output base directory
     :param model_base: Base directory of model
-    :param output_base: Base directory of output
     :param exp_name: Experiment name
+    :param hparams_dict: dictionary of hyperparameter of trained model
     :param bool_last: Flag to use last checkpointed model
     :param model_type: Model type
+    :return: Trained model for inference and model information as dictionary
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{get_model_info.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{get_trained_model.__name__}")
 
     model_name = os.path.basename(model_base)
-    norm_dir = model_base
 
     add_str = "_last" if bool_last else "_best"
 
-    def modelinfo_from_expname(expname):
-        found_model = None
+    model_dir = os.path.join(model_base, f"{exp_name}{add_str}")
+
+    def modelinfo_from_expname(expname: str):
+        model_type = None
 
         for known_model in ModelEngine.known_models:
             if known_model in expname:
-                found_model = known_model
+                model_type = known_model
 
-        if not found_model: raise ValueError(f"Could not infer known model from experiment name '{expname}'")
+        if not model_type: raise ValueError(f"Could not infer known model from experiment name '{expname}'")
         
-        model_dummy = ModelEngine(found_model)
-
-        nsubmodels = len(model_dummy.model) - 1
+        model_instance = ModelEngine(model_type)
+        nsubmodels = len(model_instance.model) - 1
         
-        return (found_model, model_dummy.model_longname, nsubmodels)
+        return (model_instance, model_type, model_instance.model_longname, nsubmodels)
 
     if model_type:
         func_logger.debug(f"Get model info from parsed model type '{model_type}'")
 
-        model_dummy = ModelEngine(model_type)
-        model_info = {"model_type": model_type, "model_longname": model_dummy.model_longname,
-                      "nsubmodels": len(model_dummy.model) - 1}
+        model_instance = ModelEngine(model_type)
+        model_longname = model_instance.model_longname
+        nsubmodels = len(model_instance.model) - 1 
+        model_info = {"model_type": model_type, "model_longname": model_instance.model_longname,
+                      "nsubmodels": len(model_instance.model) - 1}
     else:
         func_logger.debug(f"Try to infer model info from parsed experiment name '{exp_name}'")
 
-        model_type, model_longname, nsubmodels = modelinfo_from_expname(exp_name)
-        model_info = {"model_type": model_type, "model_longname": model_longname,
-                      "nsubmodels": nsubmodels}
-        
-    if nsubmodels == 0:
-        model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}"), os.path.join(output_base, model_name)
-    else: 
-        model_dir, plt_dir = os.path.join(model_base, f"{exp_name}{add_str}", f"{exp_name}_generator{add_str}"), \
-                             os.path.join(output_base, model_name)
+        model_instance, model_type, model_longname, nsubmodels = modelinfo_from_expname(exp_name)
 
-    return model_dir, plt_dir, norm_dir, model_info      
+    # read configuration files
+    md_config_pattern = f"config_{model_type}.json"
+    md_config_file = glob.glob(os.path.join(model_base, md_config_pattern))
+
+    if not md_config_file:
+        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
+                                f"under '{model_base}'")
+    else:
+        with open(md_config_file[0]) as mdf:
+            func_logger.info(f"Read model configuration file '{md_config_file[0]}'.")
+            hparams_dict = js.load(mdf)
+            func_logger.debug(hparams_dict)
+
+    model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
+                  "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
+
+    # initialize model with dummy-values for shape_in and varnames_tar as they are obtained when loading saved model
+    # Note: shape_in = None triggers dummy-values of shape_in in model classes
+    vars_tar_dummy = ["dummy1", "dummy2"] if finditem(model_info["hparams_dict"], "z_branch", False) else "dummy"
+    trained_model = model_instance(None, vars_tar_dummy, hparams_dict, model_base, exp_name)
+
+    # ...and load checkpointed model
+    func_logger.info(f"Load model '{exp_name}' from {model_dir}")
+    trained_model = trained_model.load_inference_model(model_dir)
+    func_logger.info(f"Model was loaded successfully.")
+
+    return trained_model, model_info      
         
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str,**kwargs):
@@ -260,7 +270,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = kwargs.pop(key, None)
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
@@ -329,7 +339,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
 
     score_all = score_engine(score_name)
@@ -611,7 +621,8 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        tfds_test = make_tf_dataset_allmem(ds_copy, **data_loader_opt)
+        stream_mode = data_loader_opt.pop("stream_mode")
+        tfds_test = make_tf_dataset_allmem(stream_mode, ds_copy, **data_loader_opt)
 
         # predict
         func_logger.info(f"Run inference with permuted sample for {var}...")

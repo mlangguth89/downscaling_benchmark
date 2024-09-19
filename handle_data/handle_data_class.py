@@ -314,7 +314,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
 
     # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
     if "var_tar2in" in ds_dict:
-        static_predictors = list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
+        static_predictors = to_list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
         print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
               +f"List of updated static predictors: {','.join(static_predictors)}")
     else:
