@@ -486,7 +486,7 @@ class HarrisWGAN_Model(keras.Model):
         return -tf.reduce_mean(fake_img)
     
     
-    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "h5",
+    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
              signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
         """
         Save generator and critic seperately.
@@ -495,8 +495,7 @@ class HarrisWGAN_Model(keras.Model):
         :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
                           with a manual prompt.
         :param include_optimizer: If True, save optimizer's state together.
-        :param save_format: Either `'tf'` or `'h5'`, indicating whether to save the model to Tensorflow SavedModel or
-                            HDF5. Defaults to 'tf' in TF 2.X, and 'h5' in TF 1.X.
+        :param save_format: Currently, only the 'tf' format is supported.
         :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
                            Please see the `signatures` argument in `tf.saved_model.save` for details.
         :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
@@ -507,7 +506,9 @@ class HarrisWGAN_Model(keras.Model):
                             serialization time and reduce file size, but it requires that
                             all custom layers/models implement a `get_config()` method.
         :return: -
-        """                   
+        """       
+        assert save_format != "h5", f"h5 is not supported as save format for this model"            
+
         # save generator and critic seperately
         generator_path, critic_path = Path(filepath).joinpath(f"{self._expname}_generator{suffix}"), \
                                       Path(filepath).joinpath(f"{self._expname}_critic{suffix}")
@@ -515,19 +516,29 @@ class HarrisWGAN_Model(keras.Model):
         os.makedirs(generator_path, exist_ok =True)
         os.makedirs(critic_path, exist_ok =True)
         
+        if tf.__version__ >= "2.12.0":
+            self.generator.save(generator_path, overwrite, save_format)
+            self.critic.save(critic_path, overwrite, save_format)
+        else:
+            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        
         # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
         # https://github.com/keras-team/tf-keras/issues/504
-        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions)
-        fname_suffix = ".h5" if save_format == "h5" else "" 
+        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
+        if include_optimizer:    # required to resume training    
+            self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}"), overwrite=overwrite,
+                                        save_format=save_format, options=options)
+            self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}"), overwrite=overwrite,
+                                     save_format=save_format, options=options)
         
-        self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}{fname_suffix}"), overwrite=overwrite, save_format=save_format, options=options)
-        self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}{fname_suffix}"), overwrite=overwrite, save_format=save_format, options=options)
-        
-        if include_optimizer:    # required to resume training            
+            
             generator_opt = generator_path.joinpath(f"{self._expname}_generator_opt{suffix}.pkl")
             critic_opt = critic_path.joinpath(f"{self._expname}_critic_opt{suffix}.pkl")
             
+            print(f"Save generator optimiter state to {generator_opt}...")
             save_opt_weights(self.g_optimizer, generator_opt)
+            print(f"Save critic optimiter state to {critic_opt}...")
             save_opt_weights(self.c_optimizer, critic_opt)
         
 
@@ -697,11 +708,9 @@ class HarrisWGAN(AbstractModelClass):
             suffix_critic = str(critic_path).split("_critic")[-1]
         else:
             raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
-            
-        fname_suffix = ".h5" if checkpoint_format == "h5" else ""
         
-        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}{fname_suffix}"))
-        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}{fname_suffix}"))
+        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
+        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
 
         opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
                                         critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
@@ -825,7 +834,6 @@ class ModelCheckpointHarrisWGAN(ModelCheckpoint):
         super(ModelCheckpointHarrisWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
         self._expname = expname
-        self._save_format = kwargs.pop("save_format", "tf")
 
     def _save_model(self, epoch, batch, logs):
         """Saves the model.
@@ -868,7 +876,7 @@ class ModelCheckpointHarrisWGAN(ModelCheckpoint):
                             self.best = current
                             
                             # ML S
-                            self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format=self._save_format, 
+                            self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
                                             suffix=add_str)#, options=self._options)
                             # ML E
                         else:
@@ -879,7 +887,7 @@ class ModelCheckpointHarrisWGAN(ModelCheckpoint):
                     if self.verbose > 0:
                         print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
                     # ML S
-                    self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format=self._save_format, 
+                    self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
                                     suffix=add_str)#, options=self._options)
                     # ML E
                 self._maybe_remove_file()
