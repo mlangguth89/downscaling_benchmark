@@ -115,12 +115,11 @@ def check_config_ckpt(ckpt_path, ds_dict, hparams_dict):
     """
     ckpt_path = Path(ckpt_path)
 
-    i = 0 if ckpt_path.suffix == ".h5" else 1
-    model_basedir = ckpt_path.parents[i]
+    model_basedir = ckpt_path if ckpt_path.suffix == ".h5" else ckpt_path.parents[0] 
 
     # load configuration files from checkpoint
-    fconfig_ds = glob.glob(model_basedir.joinpath("config_ds*.json"))
-    fconfig_md = glob.glob(model_basedir.joinpath("custom_config_*.json"))
+    fconfig_ds = glob.glob(str(model_basedir.joinpath("config_ds*.json")))
+    fconfig_md = glob.glob(str(model_basedir.joinpath("custom_config_*.json")))
 
     if fconfig_ds:
         with open(fconfig_ds[0], "r") as f:
