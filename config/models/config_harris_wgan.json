@@ -1,5 +1,5 @@
 {
-  "nepochs": 10,
+  "nepochs": 20,
   "d_steps": 5,
   "lr_decay": true,
   "stream_mode": "lo_input",
