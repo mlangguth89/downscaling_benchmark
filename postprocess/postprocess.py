@@ -66,8 +66,8 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type)
 
     # get directory for saving netcdf output
-    model_name = model_base.parents[0].name
-    nc_dir = Path(out_dir).joinpath(model_name) 
+    #model_name = str(model_base.parents[0])
+    nc_dir = Path(out_dir).joinpath(exp_name)
 
     # read configuration files
     ds_config_pattern = f"config_ds_{dataset}.json"
@@ -95,6 +95,8 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # To-Do: Enable handling of multiple normalizations
     data_norm = ZScore(ds_dict["norm_dims"])
     data_norm.read_norm_from_file(js_norm)
+
+    #ds_dict["batch_size"] = 36
     
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
@@ -151,7 +153,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
                         coords=coords) 
     # add attributes such as model_type and from which model the data was generated and used ds_dict
     # This is also relevant for later processing (e,g. when doing feature importance analysis)
-    ds_out.attrs["model_path"] = model_info["model_dir"]
+    ds_out.attrs["model_path"] = str(model_info["model_dir"])
 
     # add ensemble member information for probabilistic models
     if ens_out:
@@ -187,12 +189,11 @@ def results_from_file(nc_file, varname, model_name):
 
     return ds_out, model_info
 
-def get_trained_model(model_base: Union[Path, str], exp_name: str, hparams_dict: dict, last_or_epoch: Union[str, int], model_type: str = None):
+def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch: Union[str, int], model_type: str = None):
     """
     Get trained model from model base directory and output base directory
     :param model_base: Base directory of model
     :param exp_name: Experiment name
-    :param hparams_dict: dictionary of hyperparameter of trained model
     :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
     :param model_type: Model type
     :return: Trained model for inference and model information as dictionary
@@ -249,6 +250,8 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, hparams_dict:
             func_logger.info(f"Read model configuration file '{md_config_file[0]}'.")
             hparams_dict = js.load(mdf)
             func_logger.debug(hparams_dict)
+    
+    #hparams_dict["batch_size"] = 36
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
