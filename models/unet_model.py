@@ -6,10 +6,10 @@
 Class for building blocks of U-Net as well as model classes for Sha U-Net and DeepRu.
 """
 
-__author__ = "Michael Langguth"
+__author__ = "Michael Langguth, Erik Pavel"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2024-09-18"
+__update__ = "2025-01-02"
 
 # import modules
 import os
@@ -20,7 +20,8 @@ import tensorflow.keras as keras
 import keras.backend as K
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
-                                     Activation, AveragePooling2D, Add, UpSampling2D)
+                                     Activation, AveragePooling2D, Add, UpSampling2D, SpatialDropout2D)
+from tensorflow.keras import regularizers
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, EarlyStopping
 
@@ -37,7 +38,7 @@ class UNetModelBase:
     @staticmethod
     def conv_block(inputs, num_filters: int, kernel: tuple = (3, 3), strides: tuple = (1, 1), padding: str = "same",
                activation: str = "swish", activation_args={}, kernel_init: str = "he_normal",
-               l_batch_normalization: bool = True):
+               l_batch_normalization: bool = True, weight_decay=0.):
         """
         A convolutional layer with optional batch normalization
         :param inputs: the input data with dimensions nx, ny and nc
@@ -49,8 +50,10 @@ class UNetModelBase:
         :param activation_args: arguments for activation function given that advanced layers are applied
         :param kernel_init: initialization technique (e.g. "he_normal" or "glorot_uniform")
         :param l_batch_normalization: flag if batch normalization should be applied
+        :param weight_decay: L2-norm weight deacy as additional regularizer to conv-layer
         """
-        x = Conv2D(num_filters, kernel, strides=strides, padding=padding, kernel_initializer=kernel_init)(inputs)
+        l2_reg = regularizers.L2(weight_decay)
+        x = Conv2D(num_filters, kernel, strides=strides, padding=padding, kernel_initializer=kernel_init, kernel_regularizer=l2_reg)(inputs)
         if l_batch_normalization:
             x = BatchNormalization()(x)
 
@@ -143,37 +146,40 @@ class UNetModelBase:
         return x
     
     def encoder_block_deepru(self, inputs, channels, strides, kernel: tuple = (3, 3), nconv_res: int = 3, padding: str = "same",
-                             activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
+                             activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True, dropout=.1, 
+                             weight_decay=.0001):
         # save the input for the residual connection
         skip_features = inputs
 
         x = self.conv_block(inputs, channels, kernel, strides, padding=padding, activation=activation, kernel_init=kernel_init,
-                            l_batch_normalization=l_batch_normalization)
+                            l_batch_normalization=l_batch_normalization, weight_decay=weight_decay)
 
-        x = self.residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization)
+        x = self.residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization, weight_decay=weight_decay)
+        x = SpatialDropout2D(dropout, data_format=None, seed=None, name=None, dtype=None)(x)
 
         return skip_features, x
 
 
     def decoder_block_deepru(self, inputs, skip_features, channels, size, interpolation: str = "bilinear", nconv_res: int = 3,
                              kernel: tuple = (3, 3), padding: str = "same", activation="LeakyReLU", kernel_init="he_normal",
-                             l_batch_normalization: bool = True):
+                             l_batch_normalization: bool = True, dropout=.1, weight_decay=.0001):
         x = UpSampling2D(size, interpolation=interpolation)(inputs)
 
         x = Concatenate()([x, skip_features])
         x = self.conv_block(x, channels, kernel, padding=padding, activation=activation, kernel_init=kernel_init,
-                            l_batch_normalization=l_batch_normalization)
-        x = self.residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization)
+                            l_batch_normalization=l_batch_normalization, weight_decay=weight_decay)
+        x = self.residual_block(x, channels, kernel, nconv_res, padding, activation, kernel_init, l_batch_normalization, weight_decay=weight_decay)
+        x = SpatialDropout2D(dropout, data_format=None, seed=None, name=None, dtype=None)(x)
 
         return x
 
     
     def residual_block(self, inputs, channels, kernel: tuple = (3,3), nconv_res: int = 3, padding: str = "same",
-                       activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True):
+                       activation="LeakyReLU", kernel_init="he_normal", l_batch_normalization: bool = True, weight_decay=0.):
 
         # process the input with convolutional layers (incl. non-linear activation and optional batch normalization)
         x = self.conv_block_n(inputs, channels, nconv_res, kernel=kernel, padding=padding, activation=activation, kernel_init=kernel_init,
-                              l_batch_normalization=l_batch_normalization)
+                              l_batch_normalization=l_batch_normalization, weight_decay=weight_decay)
 
         # the actual residual connection: adding inpput and processed data
         x = Add()([x, inputs])
@@ -418,7 +424,7 @@ class DeepRU_UNet(Sha_UNet):
                f"Length of channels-list ({len(channels)}) must contain one element more than strides_list ({len(strides_list)})."
         
         encoder_decoder_args = {key: hparams_deepru[key] for key in ["kernel", "padding", "nconv_res", "activation",
-                                                                     "kernel_init", "l_batch_normalization"]}
+                                                                     "kernel_init", "l_batch_normalization", "dropout", "weight_decay"]}
         
         # build the DeepRU-network
         inputs = Input(self._input_shape)
@@ -443,7 +449,7 @@ class DeepRU_UNet(Sha_UNet):
         d2 = self.decoder_block_dru(d3, s2, channels[1], size=strides_list[1], interpolation = hparams_deepru["interpolation"], **encoder_decoder_args)
         d1 = self.decoder_block_dru(d2, s1, channels[0], size=strides_list[0], interpolation = hparams_deepru["interpolation"], **encoder_decoder_args)
 
-        output_dyn = Conv2D(self._n_predictands, (3, 3), kernel_initializer = hparams_deepru["kernel_init"],
+        output_dyn = Conv2D(self._n_predictands, (3, 3), kernel_initializer = hparams_deepru["kernel_init"], kernel_regularizer=regularizers.L2(hparams_deepru["weight_decay"]),
                             padding = hparams_deepru["padding"], name="output_dyn")(d1)
 
         self.model = Model(inputs, output_dyn, name="downscaling_deepru")
@@ -453,7 +459,7 @@ class DeepRU_UNet(Sha_UNet):
         Note: Hyperparameters whose default is None must be parsed in any case.
         """
         self.hparams_default = {"nepochs": 50, "kernel": (3, 3), "nconv_res": 3, "padding": "same", "activation": "LeakyReLU", "kernel_init": "he_normal",
-                                "l_batch_normalization": True, "interpolation": "bilinear", "channels_start": 64, "dchannels": 64,
+                                "l_batch_normalization": True, "dropout": 0.0, "weight_decay":0.0, "interpolation": "bilinear", "channels_start": 64, "dchannels": 64,
                                 "strides_list": [(2, 1), (1, 3), (2, 1), (2, 3), (2, 2), (2, 2)],               # for domain size of 128x144 grid points
                                 "batch_size": 32, "lr": 5.e-05, "loss_func": "mae",                             # training parameters
                                 "lr_decay": False, "decay_start": 3, "decay_end": 20, "lr_end": 1.e-06, "l_embed": False, 
