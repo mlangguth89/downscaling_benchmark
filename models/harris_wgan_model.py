@@ -432,13 +432,13 @@ class HarrisWGAN_Model(keras.Model):
             gen_list = []
             for noise_iter in noise:
                 gen_in = [cond] + [const] + [noise_iter]
-                gen_iter = self.generator.model(gen_in, training=False)
+                gen_iter = self.generator(gen_in, training=False)
                 gen_list.append(gen_iter)
             gen_out = tf.stack(gen_list, axis=-1)
         else:
             noise = self.noise_gen()
             gen_in = [cond] + [const] + [noise]
-            gen_out = self.generator.model(gen_in, training=False)
+            gen_out = self.generator(gen_in, training=False)
         return gen_out
 
     def gradient_penalty(self, real_data, gen_data, cond_data, const_data):
@@ -753,12 +753,12 @@ class HarrisWGAN(AbstractModelClass):
         noise_gen = NoiseGenerator(list(generator.get_layer(name='noise_input').input_shape[0][1:]), self.hparams["batch_size"])
 
         hparams_wgan_only = self.hparams.copy()
-        hparams_wgan_only.pop("hparams_discriminator")
+        hparams_wgan_only.pop("hparams_critic")
         hparams_wgan_only.pop("hparams_generator")
         
         # get construct model for inference exposing predict-method
         # Note the predict-step makes use of the generator only. Thus, the critic model is not needed here
-        wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, noise_gen=noise_gen)
+        wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
         
         return wgan_model
 
