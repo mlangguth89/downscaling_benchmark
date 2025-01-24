@@ -1,0 +1,9 @@
+{
+  "num_files": 22,
+  "norm_dims": ["time", "rlat", "rlon"],
+  "batch_size": 32,
+  "varname_z": "hsurf_tar",
+  "predictands": ["ws_100m_tar"],
+  "predictors": ["msl_in", "blh_in", "z_in", "lsm_in", "z_pl700_in", "z_pl850_in", "z_pl500_in", "ws100m_in", "ws_ml137_in", "ws_ml135_in", "ws_ml131_in", "ws_ml127_in", "ws_ml122_in", "ws_ml115_in"],
+  "static_predictors": ["hsurf_tar", "fr_land_tar"]
+}

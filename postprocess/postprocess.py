@@ -747,6 +747,11 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}}
+        elif self.varname == "wind":
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -785,12 +790,11 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         If the variable for evaluation is unknown, eval_dict cannot be None.
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
-        if self.varname == "t2m":
+        if self.varname in ["t2m", "wind"]:
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r"}, 
                          "bias": {"levels": lvl_bias, "cmap_name": "seismic"}}
-            
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \

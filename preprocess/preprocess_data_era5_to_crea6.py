@@ -303,6 +303,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 # just rename file
                 logger.info("Rename temporary ERA5-file to monthly netCDF-file '{0}'".format(monthly_file))
                 os.rename(filelist[0], monthly_file)
+                filelist.pop(0)
             else:
                 logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(monthly_file))
                 _ = self.merge_multiple_netcdf(filelist, monthly_file)
