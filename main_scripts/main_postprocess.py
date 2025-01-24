@@ -9,9 +9,10 @@ Driver-script to perform inference on trained downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-19"
+__update__ = "2025-01-24"
 
 import os
+from typing import Any
 import logging
 import argparse
 from timeit import default_timer as timer
@@ -47,7 +48,7 @@ def main(parser_args):
     
     log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
     logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
-    logger = config_logger(logger, log_file)    
+    logger = config_logger(logger, log_file)   
 
     # get data from inference or from data file
     if parser_args.mode == "inference":
@@ -176,6 +177,19 @@ def main(parser_args):
 
 
 if __name__ == "__main__":
+    
+    def ens_mem_type(val: Any):
+        """
+        Check if parsed value is either None, a 'mean'-string or parseable as an integer.
+        """
+        if val is None or val == "mean":
+            return val
+        try:
+            return int(val)
+        except:
+            raise argparse.ArgumentTypeError(
+                f"Invalid value: {value}. Expected None, 'mean', or an integer.")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
                         help="Directory where results in form of plots are stored.")
@@ -197,7 +211,7 @@ if __name__ == "__main__":
     parser_inference.add_argument("--model_type", "-model_type", dest="model_type", default=None,
                                 help="Name of model architecture. Only required if custom model architecture is not" +
                                 "implemented in get_model_info-function (see postprocess.py)")
-    parser_inference.add_argument("--ensemble_member", "-ens_mem", dest="ens_mem", default=None,
+    parser_inference.add_argument("--ensemble_member", "-ens_mem", dest="ens_mem", default=None, type=ens_mem_type,
                                 help="Ensemble member to evaluate. Only required for models with ensemble output during inference.")
     group = parser_inference.add_mutually_exclusive_group()
     group.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
