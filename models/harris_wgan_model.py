@@ -204,14 +204,15 @@ class CriticHarris(AbstractModelClass):
         critic_input = concatenate([lo_res_input, hi_res_input])
 
         # encode in residual blocks
-        critic_input = residual_block(
-            critic_input,
-            filters=filters_critic,
-            conv_size=kernel,
-            stride=1,
-            relu_alpha=relu_alpha,
-            padding=padding,
-        )
+        for _ in range(2):
+            critic_input = residual_block(
+                critic_input,
+                filters=filters_critic,
+                conv_size=kernel,
+                stride=1,
+                relu_alpha=relu_alpha,
+                padding=padding,
+            )
 
         # critic output
         critic_output = GlobalAveragePooling2D()(critic_input)
@@ -996,13 +997,13 @@ class Conv2DPadding(Layer):
         
         return config
         
-def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None):
+def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None, force_conv: bool = True):
     in_channels = int(x.shape[-1])
     x_in = x
 
     if stride > 1:
         x_in = AveragePooling2D(pool_size=(stride, stride))(x_in)
-    if (filters != in_channels):
+    if (filters != in_channels) or force_conv:
         x_in = Conv2D(filters=filters, kernel_size=(1, 1))(x_in)
 
     # first block of activation and 3x3 convolution (possibly strided, although we don't use this)
