@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
+#
+# SPDX-License-Identifier: MIT
+
 # Harris et al 2022, WGAN model implementation
 """
 Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
@@ -6,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2024-09-18"
+__update__ = "2025-02-17"
 
 import os
 from typing import List, Tuple, Union, Dict
