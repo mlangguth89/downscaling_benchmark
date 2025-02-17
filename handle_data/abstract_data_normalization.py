@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -8,7 +8,7 @@ Abstract class to perform normalization on data
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__update__ = "2023-01-31"
+__update__ = "2025-02-17"
 
 from abc import ABC, abstractmethod
 from typing import Union, List
@@ -207,4 +207,5 @@ class Normalize(ABC):
         Function to denormalize data.
         """
         pass
+
 

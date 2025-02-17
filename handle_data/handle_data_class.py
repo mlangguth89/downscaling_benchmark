@@ -5,6 +5,9 @@
 """
 Methods to handle data for the neural networks.
 
+Provides:
+    - get_dataset_filenames: 
+
 To-Dos:
     - Shuffle indices for sharding in make_tf_dataset_all-method
 """
@@ -12,7 +15,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-07-30"
+__update__ = "2025-02-17"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -20,9 +23,7 @@ from pathlib import Path
 import re
 from operator import itemgetter
 from functools import partial
-import socket
 import gc
-from collections import OrderedDict
 from timeit import default_timer as timer
 import random
 import numpy as np
@@ -38,183 +39,16 @@ from all_normalizations import ZScore
 from other_utils import to_list, find_closest_divisor, finditem
 
 
-class HandleDataClass(object):
-
-    def __init__(self, datadir: str, application: str, query: str, purpose: str = None, **kwargs) -> None:
-        """
-        Initialize Input data object by reading data from netCDF-files
-        :param datadir: the directory from where netCDF-files are located (or should be located if downloaded)
-        :param application: name of application (must coincide with name in s3-bucket)
-        :param query: query string which can be used to load data from the s3-bucket of the application
-        :param purpose: optional name to indicate the purpose of queried data (used as key for the data-dictionary)
-        """
-        self.host = os.getenv("HOSTNAME") if os.getenv("HOSTNAME") is not None else "unknown"
-        purpose = query if purpose is None else purpose
-        self.application = application
-        self.datadir = datadir
-        if not os.path.isdir(datadir):
-            os.makedirs(datadir)
-        self.ldownload_last = None
-
-        self.data, self.timing, self.data_info = self.handle_data_req(query, purpose, **kwargs)
-
-    def handle_data_req(self, query: str, purpose, **kwargs):
-        """
-        Handles a data-query by parsing it to the get_data function
-        :param query: the query-string to submit to the climetlab-API of the application
-        :param purpose: the name/purpose of the retireved data (used to append the data-dictionary)
-        :return: the xr.Dataset retireved from get_data and dictionaries for the loading time and the memory consumption
-        """
-        method = HandleDataClass.handle_data_req.__name__
-
-        datafile = os.path.join(self.datadir, "{0}_{1}.nc".format(self.application, purpose))
-        self.ldownload_last = self.set_download_flag(datafile)
-        # time data retrieval
-        t0_load = timer()
-        ds = self.get_data(query, datafile, **kwargs)
-        load_time = timer() - t0_load
-        if self.ldownload_last:
-            print("%{0}: Downloading took {1:.2f}s.".format(method, load_time))
-            _ = HandleDataClass.ds_to_netcdf(ds, datafile)
-
-        data = OrderedDict({purpose: ds})
-        timing = {"loading_times": {purpose: load_time}}
-        data_info = {"memory_datasets": {purpose: ds.nbytes}}
-
-        return data, timing, data_info
-
-    def append_data(self, query: str, purpose: str = None, **kwargs):
-        """
-        Appends data-dictionary of the class and also tracks basic benchmark parameters
-        :param query: the query-string to submit to the climetlab-API of the application
-        :param purpose: the name/purpose of the retireved data (used to append the data-dictionary)
-        :return: appended self.data-dictionary with {purpose: xr.Dataset}
-        """
-        purpose = query if purpose is None else purpose
-        ds_app, timing_app, data_info_app = self.handle_data_req(query, purpose, **kwargs)
-
-        self.data.update(ds_app)
-        self.timing["loading_times"].update(timing_app["loading_times"])
-        self.data_info["memory_datasets"].update(data_info_app["memory_datasets"])
-
-    def set_download_flag(self, datafile):
-        """
-        Depending on the hosting system and on the availability of the dataset on the filesystem
-        (stored under self.datadir), the download flag is set to False or True. Also returns a dictionary for the
-        respective netCDF-filenames.
-        :return: Boolean flag for downloading and dictionary of data-filenames
-        """
-        method = HandleDataClass.set_download_flag.__name__
-
-        ldownload = True if "login" in self.host else False
-        stat_file = os.path.isfile(datafile)
-
-        if stat_file and ldownload:
-            print("%{0}: Datafiles are already available under '{1}'".format(method, self.datadir))
-            ldownload = False
-        elif not stat_file and not ldownload:
-            raise ValueError("%{0}: Data is not available under '{1}',".format(method, self.datadir) +
-                             "but downloading on computing node '{0}' is not possible.".format(self.host))
-
-        return ldownload
-
-    def get_data(self, *args):
-        """
-        Function to either downlaod data from the s3-bucket or to read from file.
-        """
-        raise NotImplementedError("Please set-up a customized get_data-function.")
-
-    @staticmethod
-    def reshape_ds(ds):
-        """
-        Convert a xarray dataset to a data-array where the variables will constitute the last dimension (channel last)
-        :param ds: the xarray dataset with dimensions (dims)
-        :return da: the data-array with dimensions (dims, variables)
-        """
-        da = ds.to_array(dim="variables")
-        da = da.transpose(..., "variables")
-        return da
-
-    @staticmethod
-    def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
-        """
-        Split data array with variables-dimension into input and target data for downscaling
-        :param ds: The unsplitted dataset
-        :param predictands: List of selected predictand variables; parse None to use
-                            all predictands (vars with suffix _tar)
-        :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
-        :param static_predictors: List of selected static (high-resolved) predictors, the corresponding splitted dataset ds_stat will be None of None is parsed
-        :return: Tuple of splitted datasets.
-        """
-        varnames = list(ds.data_vars)
-
-        if predictors is None:
-            invars = [var for var in varnames if var.endswith("_in")]
-        else:
-            assert all(
-                [predictor in varnames for predictor in predictors]
-            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
-            invars = list(predictors)
-        if predictands is None:
-            tarvars = [var for var in varnames if var.endswith("_tar")]
-        else:
-            assert all(
-                [predictand in varnames for predictand in predictands]
-            ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
-            tarvars = list(predictands)
-
-        ds_in, ds_tar = ds[invars], ds[tarvars]
-
-        if static_predictors is None:
-            ds_stat = None
-        else:
-            assert all([static_predictor in varnames for static_predictor in static_predictors]), \
-                   f"At least one static high-res predictor is not a data variable. Available variables are {*varnames,}"
-            statvars = list(static_predictors)
-
-            ds_stat = ds[statvars]
-
-        return ds_in, ds_tar, ds_stat
-
-    @staticmethod
-    def ds_to_netcdf(ds: xr.Dataset, fname: str, comp_lvl=5):
-        """
-        Create dictionary for compressing all variables of dataset in netCDF-files
-        :param ds: the xarray-dataset
-        :param fname: name of the target netCDF-file
-        :param comp_lvl: the compression level
-        :return: True in case of success
-        """
-        method = HandleDataClass.ds_to_netcdf.__name__
-
-        comp = dict(zlib=True, complevel=comp_lvl)
-        try:
-            encoding_ds = {var: comp for var in ds.data_vars}
-            print("%{0}: Save dataset to netCDF-file '{1}'".format(method, fname))
-            ds.to_netcdf(path=fname, encoding=encoding_ds)  # , engine="scipy")
-        except Exception as err:
-            print("%{0}: Failed to handle and save input dataset.".format(method))
-            raise err
-
-        return True
-
-    @staticmethod
-    def has_internet():
-        """
-        Checks if Internet connection is available.
-        :return: True if connected, False else.
-        """
-        try:
-            # connect to the host -- tells us if the host is actually
-            # reachable
-            socket.create_connection(("1.1.1.1", 53), timeout=5)
-            return True
-        except OSError:
-            pass
-        return False
-
 
 def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmented: bool = False):
+    """
+    Get files in directory corresponding to known known dataset (e.g. "benchmark_t2m") and its subset (e.g. "train", "val", "test").
+    :param datadir: data directory under which files are expected
+    :param dataset_name: known dataset name. Valid choices are: 'tier1', 'tier2', 'atmorep', 'benchmark_t2m', 'benchmark_wind'
+    :param subset: dataset subset for training ML models. Valid choices are 'train', 'val', 'test'
+    :param laugmented: boolean if augmented dataset should be used (if available)
+    :return: filename or list of filenames corresponding to desired dataset and its subset
+    """
 
     allowed_subsets = ("train", "val", "test")
 
@@ -485,13 +319,13 @@ def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, pr
         if "time" not in ds[var].dims:
             ds[var] = ds[var].expand_dims({"time": ds["time"]}, axis=0)
 
-    ds_in, ds_tar, ds_stat = HandleDataClass.split_in_tar(ds, predictands=predictands, predictors=predictors,
+    ds_in, ds_tar, ds_stat = split_in_tar(ds, predictands=predictands, predictors=predictors,
                                                           static_predictors=static_predictors)    
     
     ds_list = [ds_in, ds_tar, ds_stat] if static_predictors is not None else [ds_in, ds_tar]
 
     # convert dataset to data arrays and load into memory
-    da_list = [HandleDataClass.reshape_ds(ds).astype("float32", copy=True) for ds in ds_list]
+    da_list = [reshape_ds(ds).astype("float32", copy=True) for ds in ds_list]
 
     varnames_tar = da_list[1]["variables"].values
 
@@ -575,6 +409,57 @@ def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, pr
     gc.collect()
 
     return data_iter
+
+def reshape_ds(ds):
+    """
+    Convert a xarray dataset to a data-array where the variables will constitute the last dimension (channel last)
+    :param ds: the xarray dataset with dimensions (dims)
+    :return da: the data-array with dimensions (dims, variables)
+    """
+    da = ds.to_array(dim="variables")
+    da = da.transpose(..., "variables")
+    return da
+
+
+def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = None, static_predictors: List = None) -> Tuple[xr.Dataset, xr.Dataset]:
+    """
+    Split data array with variables-dimension into input and target data for downscaling
+    :param ds: The unsplitted dataset
+    :param predictands: List of selected predictand variables; parse None to use
+                        all predictands (vars with suffix _tar)
+    :param predictors: List of selected predictor variables; parse None to use all predictors (vars with suffix _in)
+    :param static_predictors: List of selected static (high-resolved) predictors, the corresponding splitted dataset ds_stat will be None of None is parsed
+    :return: Tuple of splitted datasets.
+    """
+    varnames = list(ds.data_vars)
+
+    if predictors is None:
+        invars = [var for var in varnames if var.endswith("_in")]
+    else:
+        assert all(
+            [predictor in varnames for predictor in predictors]
+        ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+        invars = list(predictors)
+    if predictands is None:
+        tarvars = [var for var in varnames if var.endswith("_tar")]
+    else:
+        assert all(
+            [predictand in varnames for predictand in predictands]
+        ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
+        tarvars = list(predictands)
+
+    ds_in, ds_tar = ds[invars], ds[tarvars]
+
+    if static_predictors is None:
+        ds_stat = None
+    else:
+        assert all([static_predictor in varnames for static_predictor in static_predictors]), \
+                f"At least one static high-res predictor is not a data variable. Available variables are {*varnames,}"
+        statvars = list(static_predictors)
+
+        ds_stat = ds[statvars]
+
+    return ds_in, ds_tar, ds_stat
 
 class StreamMonthlyNetCDF(object):
     def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: List,
