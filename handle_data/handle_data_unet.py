@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
+#
+# SPDX-License-Identifier: MIT
+
 __author__ =  "Michael Langguth"
 __date__ = "2022-01-20"
 __update__ = "2022-02-01"
