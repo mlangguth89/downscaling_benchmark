@@ -6,7 +6,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2024-09-18"
+__update__ = "2025-02-07"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -20,7 +20,7 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense
+from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense, BatchNormalization
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
@@ -49,6 +49,7 @@ class GeneratorHarris(AbstractModelClass):
         kernel = self.hparams["kernel"]
         relu_alpha = self.hparams["relu_alpha"]
         padding = self.hparams["padding"]
+        norm = self.hparams["norm"] 
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
@@ -75,6 +76,7 @@ class GeneratorHarris(AbstractModelClass):
                 stride=1,
                 relu_alpha=relu_alpha,
                 padding=padding,
+                norm=norm,
             )
 
         # Upsampling from low-res to high-res with alternating residual blocks
@@ -92,6 +94,7 @@ class GeneratorHarris(AbstractModelClass):
                 stride=1,
                 relu_alpha=relu_alpha,
                 padding=padding,
+                norm=norm,
             )
 
         # Concatenate with original size constants field
@@ -106,6 +109,7 @@ class GeneratorHarris(AbstractModelClass):
                 stride=1,
                 relu_alpha=relu_alpha,
                 padding=padding,
+                norm=norm,
             )
 
         # Output layer
@@ -131,7 +135,7 @@ class GeneratorHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, 
-                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05}
+                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05, "norm": None}
 
 
 class CriticHarris(AbstractModelClass):
@@ -151,6 +155,8 @@ class CriticHarris(AbstractModelClass):
         kernel = self.hparams["kernel"]
         relu_alpha = self.hparams["relu_alpha"]
         padding = self.hparams["padding"]
+        norm = self.hparams["norm"]
+        nres_blocks = self.hparams["nres_blocks"]
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
@@ -182,6 +188,7 @@ class CriticHarris(AbstractModelClass):
                 stride=1,
                 relu_alpha=relu_alpha,
                 padding=padding,
+                norm = norm,
             )
             hi_res_input = Conv2D(
                 filters=block_channels[ii],
@@ -198,20 +205,23 @@ class CriticHarris(AbstractModelClass):
                 stride=1,
                 relu_alpha=relu_alpha,
                 padding=padding,
+                norm = norm,
             )
 
         # concatenate hi- and lo-res inputs channel-wise before passing through critic
         critic_input = concatenate([lo_res_input, hi_res_input])
 
         # encode in residual blocks
-        critic_input = residual_block(
-            critic_input,
-            filters=filters_critic,
-            conv_size=kernel,
-            stride=1,
-            relu_alpha=relu_alpha,
-            padding=padding,
-        )
+        for _ in range(nres_blocks):
+            critic_input = residual_block(
+                critic_input,
+                filters=filters_critic,
+                conv_size=kernel,
+                stride=1,
+                relu_alpha=relu_alpha,
+                padding=padding,
+                norm = norm,
+            )
 
         # critic output
         critic_output = GlobalAveragePooling2D()(critic_input)
@@ -235,7 +245,8 @@ class CriticHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 512, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), 
-                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06}
+                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06, 
+                                "norm": None, "nres_blocks": 1}
 
     
 class NoiseGenerator(object):
@@ -356,10 +367,11 @@ class HarrisWGAN_Model(keras.Model):
             # critic loss for generator
             cg_loss = self.critic_gen_loss(critic_gen)
             # content loss term
-            cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
+            data_ens = gen_data_list[-1]
+            cl_loss = self.recon_loss(sample_iter, data_ens)
+            #cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
             # combined loss for generator
             g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
-
 
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
@@ -407,6 +419,7 @@ class HarrisWGAN_Model(keras.Model):
                 gen_data_k = self.generator.model(gen_in, training=True)
                 gen_iter_list.append(gen_data_k)
 
+            #gen_data_list = tf.stack([gen_data] + gen_iter_list, axis=-1)
             gen_data_list.append(tf.stack(gen_iter_list))
 
         critic_in_gen = [cond] + [const] + [gen_data]
@@ -457,22 +470,24 @@ class HarrisWGAN_Model(keras.Model):
         """
         # get mixture of generated and ground truth data
         #shape_dat = (gen_data - real_data).shape
-        alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        #alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        alpha = tf.random.uniform(shape=tf.shape(real_data), minval=0., maxval=1.)
         mix_data = real_data + alpha * (gen_data - real_data)
         critic_in_gen = [cond_data] + [const_data] + [mix_data]
 
         with tf.GradientTape() as gp_tape:
-            gp_tape.watch(mix_data)
+            gp_tape.watch(critic_in_gen[-1])
             critic_mix = self.critic.model(critic_in_gen, training=True)
 
         # calculate the gradient on the mixture data...
-        grads_mix = gp_tape.gradient(critic_mix, [mix_data])[0]
+        grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen[-1]])[0]
         # ... and norm it
+        #norm = tf.norm(grads_mix, ord=2, axis=list(range(1, len(grads_mix.shape))))
         norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
         gp = tf.reduce_mean((norm - 1.) ** 2)
 
         return gp
-    
+        
     @staticmethod
     def critic_loss(real_img, fake_img):
         real_loss = tf.reduce_mean(real_img)
@@ -996,22 +1011,34 @@ class Conv2DPadding(Layer):
         
         return config
         
-def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None):
+def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alpha=0.2, padding=None, norm=None, force_conv: bool = False):
     in_channels = int(x.shape[-1])
     x_in = x
 
     if stride > 1:
         x_in = AveragePooling2D(pool_size=(stride, stride))(x_in)
-    if (filters != in_channels):
+    if (filters != in_channels) or force_conv:
         x_in = Conv2D(filters=filters, kernel_size=(1, 1))(x_in)
 
     # first block of activation and 3x3 convolution (possibly strided, although we don't use this)
     x = LeakyReLU(relu_alpha)(x)
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
+    if norm == "batch":
+        x = BatchNormalization()(x)
+    elif norm is None:
+        pass
+    else:
+        raise ValueError(f"norm type {norm} not implemented")
 
     # second block of activation and 3x3 unstrided convolution
     x = LeakyReLU(relu_alpha)(x)
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
+    if norm == "batch":
+        x = BatchNormalization()(x)
+    elif norm is None:
+        pass
+    else:
+        raise ValueError(f"norm type {norm} not implemented")
     
     # skip connection
     x = Add()([x, x_in])
