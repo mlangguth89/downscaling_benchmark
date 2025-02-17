@@ -29,13 +29,12 @@ import random
 import numpy as np
 import xarray as xr
 import tensorflow as tf
-from abstract_data_normalization import Normalize
 import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
 except:
     from multiprocessing.pool import ThreadPool
-from all_normalizations import ZScore
+from all_normalizations import GeneralNormalizer
 from other_utils import to_list, find_closest_divisor, finditem
 
 
@@ -98,8 +97,17 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     Prepare training data for downscaling
     :param datadir: directory where netCDF-files for TF dataset are strored
     :param dataset_name: name of dataset to be loaded
-    :param ds_dict: dictionary of dataset names and their subsets
-    :param hparams_dict: dictionary of hyperparameters
+    :param ds_dict: dictionary of dataset configuration.
+                    Must comprise: 
+                    - predictors, predictands: Dictionaries of predictors and predictands with variable names as keys,
+                                               and respective normalization-method as values
+                    - num_files: Number of files num_files to load into memory if data is distributed over several netCDF-files
+                    - norm_dims: List of dimensions over which normalization parameters are derived
+                    Optional:
+                    - static_predictors: Same as predictors, but for temporally invariant variables 
+                    - varname_z: Dictionary for topography data in the form {variable name: normalization method}
+                    - var_tar2in: Dictionary for (static) target data that can (additionally) be used as predictor (deprecated!)                    
+    :param hparams_dict: dictionary of model hyperparameters
     :param mode: mode of dataset (train, val, test)
     :param norm_dims: names of dimension over which normalization is applied. Should be None if norm_obj is parsed
     :param norm_obj: normalization instance used to normalize the data.
@@ -112,11 +120,11 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     :param seed: seed for random shuffling of datafiles
     :return: tuple of (TensorFlow dataset object, dictionary of dataset information)
     """
-    # check parsed mode
+    # Check parsed dataset mode
     allowed_modes = ["train", "val", "test"]
     assert mode in allowed_modes, f"{mode} is not a valid mode. Allowed modes are {*allowed_modes,}" 
 
-    # check if normalization object is provided (mandatory for validation and test mode)
+    # Check if normalization object is provided (mandatory for validation and test mode)
     if mode != "train" and not norm_obj:
         raise ValueError(f"Normalization object norm_obj must be provided for mode {mode}.")
     else:
@@ -126,12 +134,41 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
         norm_dims = None
 
-    if norm_obj: assert isinstance(norm_obj, Normalize), "norm_obj is not an instance of the Normalize-class."
+    if norm_obj: 
+        assert isinstance(norm_obj, GeneralNormalizer), "norm_obj is not an instance of the GeneralNormalizer-class."
 
-    # check if target variables are provided
-    varnames_tar_all = to_list(ds_dict["predictands"]).copy()
+    # Handle predictands
+    varnames_tar_all = ds_dict["predictands"].copy()
+    # Apppend predictands in case of separate z_branch in model configuration 
     if finditem(hparams_dict, "z_branch", False):
-        varnames_tar_all += to_list(ds_dict["varname_z"])
+        varnames_tar_all = {**varnames_tar_all, **hparams_dict["varname_z"]}
+
+    # Handle dynamic and static predictors
+    predictors = ds_dict["predictors"].copy()           # predictors-dictionary must be provided
+
+    # Backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
+    if "var_tar2in" in ds_dict:
+        static_predictors = {**ds_dict.get['var_tar2in'], **ds_dict.get("static_predictors", {})}
+        print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
+              +f"Dictionary of updated static predictors: {','.join(static_predictors)}")
+    else:
+        static_predictors = ds_dict.get("static_predictors", None).copy()
+
+    # Get filenames for training dataset...    
+    fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
+    
+    # ... and set streaming mode
+    if hparams_dict.get("named_targets", False):
+        stream_mode = "hi_input_named_target"
+    else:
+        stream_mode = hparams_dict.get("stream_mode", "hi_input")
+
+    if not "stream_mode" in hparams_dict:
+        print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
+    else:
+        print(f"Selected stream mode for {mode} dataset: {stream_mode}")
+
+    # Get (effective) batch size and desired number of epochs from model configuration 
 
     # Note: bs_train is introduced to allow substepping in the training loop, e.g. for WGAN where n optimization steps
     # are applied to train the critic, before the generator is trained once.
@@ -143,30 +180,10 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         bs_train = ds_dict["batch_size"]
         nepochs = hparams_dict["nepochs"]
 
-    
-    fname_or_pattern = get_dataset_filename(datadir, dataset_name, mode)
-
-    # backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
-    if "var_tar2in" in ds_dict:
-        static_predictors = to_list(ds_dict["var_tar2in"]) + ds_dict.get("static_predictors", [])
-        print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
-              +f"List of updated static predictors: {','.join(static_predictors)}")
-    else:
-        static_predictors = ds_dict.get("static_predictors", None)
-    
-    if hparams_dict.get("named_targets", False):
-        stream_mode = "hi_input_named_target"
-    else:
-        stream_mode = hparams_dict.get("stream_mode", "hi_input")
-
-    if not "stream_mode" in hparams_dict:
-        print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
-    else:
-        print(f"Selected stream mode for {mode} dataset: {stream_mode}")
-
+    # Get TensorFlow datasets
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
-                                     predictands=varnames_tar_all, predictors=ds_dict.get("predictors", None),
+                                     predictands=varnames_tar_all, predictors=predictors,
                                      static_predictors=static_predictors, sample_dim=ds_dict.get("sample_dim", "time"),
                                      norm_obj=norm_obj, norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
@@ -186,23 +203,19 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         
         tfds_info = {"nsamples": ds_obj.nsamples, "data_norm": ds_obj.data_norm, "shape_in": tuple(shape_in),
                      "dataset_size": ds_obj.dataset_size, "ds_obj": ds_obj, "all_predictands": varnames_tar_all, "file": ds_obj.file_list,
-                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": ds_obj.predictor_list, 
+                     "effective_dataset_size": ds_obj.effective_dataset_size, "predictors": predictors, 
                      "static_predictors": static_predictors, "stream_mode": stream_mode}
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
+        vars2norm = {**predictors, **static_predictors, **varnames_tar_all}
         if not norm_obj:
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            norm_obj = ZScore(ds_dict["norm_dims"])
+            norm_obj = GeneralNormalizer(ds_dict["norm_dims"], vars2norm)
 
         ds = norm_obj.normalize(ds)
 
         nsamples = len(ds["time"])
-
-        # get list of predictors (same approach as in split_in_tar-method) if it's None
-        predictors=ds_dict.get("predictors", None)
-        if predictors is None:
-            predictors = [var for var in ds.data_vars if var.endswith("_in")]
 
         # create TensorFlow dataset
         tfds = make_tf_dataset_allmem(stream_mode, ds, bs_train, varnames_tar_all, predictors=predictors, 
@@ -303,7 +316,7 @@ def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, pr
         assert static_predictors is not None, "Provide high-resolved static input predictors for stream_mode 'lo_input'"
     else:
         if static_predictors:
-            predictors = to_list(static_predictors) + predictors
+            predictors = {**static_predictors, **predictors}
             static_predictors = None
             print(f"Static predictors added to predictors for data pipeline mode '{stream_mode}'")
 
@@ -434,36 +447,37 @@ def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = No
     varnames = list(ds.data_vars)
 
     if predictors is None:
-        invars = [var for var in varnames if var.endswith("_in")]
+        raise ValueError(f"Automatic detection of predictors is not supported anymore")
     else:
         assert all(
-            [predictor in varnames for predictor in predictors]
+            [predictor in varnames for predictor in predictors.keys()]
         ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
-        invars = list(predictors)
+        invars = list(predictors.keys())
+
     if predictands is None:
-        tarvars = [var for var in varnames if var.endswith("_tar")]
+        raise ValueError(f"Automatic detection of predictands is not supported anymore")
     else:
         assert all(
-            [predictand in varnames for predictand in predictands]
+            [predictand in varnames for predictand in predictands.keys()]
         ), f"At least one predictor is not a data variable. Available variables are {*varnames,}"
-        tarvars = list(predictands)
+        tarvars = list(predictands.keys())
 
     ds_in, ds_tar = ds[invars], ds[tarvars]
 
     if static_predictors is None:
         ds_stat = None
     else:
-        assert all([static_predictor in varnames for static_predictor in static_predictors]), \
+        assert all([static_predictor in varnames for static_predictor in static_predictors.keys()]), \
                 f"At least one static high-res predictor is not a data variable. Available variables are {*varnames,}"
-        statvars = list(static_predictors)
+        statvars = list(static_predictors.keys())
 
         ds_stat = ds[statvars]
 
     return ds_in, ds_tar, ds_stat
 
 class StreamMonthlyNetCDF(object):
-    def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: List,
-                 predictors: List = None, static_predictors: List = None, sample_dim: str = "time", norm_dims: List = None,
+    def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: Dict,
+                 predictors: Dict, static_predictors: Dict = None, sample_dim: str = "time", norm_dims: List = None,
                  norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
@@ -472,10 +486,9 @@ class StreamMonthlyNetCDF(object):
         :param datadir: directory where set of netCDF-files are located
         :param patt: filename pattern to allow globbing for netCDF-files
         :param nfiles_merge: number of files per data subset loaded into memory (can be an integer or a dictionary like {"#GPUS=1": 33})
-        :param predictands: list of predictand variables names to be obtained
-        :param predictors: list of predictor variable names to be obtained, pass None
-                           if all vars with suffix _in should be chosen
-        :param static_predictors: list of static predictor variable names to be obtained
+        :param predictands: Dictionary of predictands with variable names as keys and normalization method as values
+        :param predictors: Dictionary of predictors with variable names as keys and normalization method as values
+        :param static_predictors: Dictionary of static predictors with variable names as keys and normalization method as values
         :param sample_dim: name of dimension in the data over which sampling should be performed
         :param norm_dims: list of dimensions over which data will be normalized
         :param norm_obj: normalization object providing parameters for (de-)normalization
@@ -527,14 +540,16 @@ class StreamMonthlyNetCDF(object):
         t0 = timer()
         # check if normalization object is provided
         self.normalization_time = -999.
-        if norm_obj is None:
-            print("Start computing normalization parameters.")
-            self.data_norm = ZScore(norm_dims)  # TO-DO: Allow for arbitrary normalization
-            self.norm_params = self.data_norm.get_required_stats(ds_all)
+        if not norm_obj:
+            vars2norm = {**predictors, **static_predictors, **predictands}
+            # norm_obj must be freshly instantiated (triggering later parameter retrieval)
+            self.data_norm = GeneralNormalizer(norm_dims, vars2norm)  # TO-DO: Allow for arbitrary normalization
+            _ = self.data_norm.get_stats_from_data(ds_all)
             self.normalization_time = timer() - t0
         else:
+            if not isinstance(norm_obj, GeneralNormalizer):
+                raise ValueError("norm_obj is not an instance of the GeneralNormalizer-class.")
             self.data_norm = norm_obj
-            self.norm_params = norm_obj.norm_stats
 
         # initialize data loading
         self.data_loaded = [xr.Dataset, xr.Dataset]        # two datasets will be cached
@@ -654,38 +669,43 @@ class StreamMonthlyNetCDF(object):
         return self._predictor_list
 
     @predictor_list.setter
-    def predictor_list(self, selected_predictors: List):
+    def predictor_list(self, selected_predictors: Dict):
         """
         Initalizes predictor list. In case that selected_predictors is set to None, all variables with suffix `_in`
         in their names are selected.
         In case that a list of selected_predictors is parsed, their availability is checked
         :param selected_predictors: list of predictor variables or None
         """
-        self._predictor_list = self.check_and_choose_vars(selected_predictors, "_in")
+        assert isinstance(selected_predictors, dict), \
+            "Selected predictors must be a dictionary of variable names as keys and normalization method as values"
+        self._predictor_list = self.check_and_choose_vars(selected_predictors.keys())
         
     @property
     def static_predictor_list(self):
         return self._static_predictor_list
     
     @static_predictor_list.setter
-    def static_predictor_list(self, selected_static_predictors: List):
-        if selected_static_predictors is None:
+    def static_predictor_list(self, selected_static_predictors: Dict):
+        if selected_static_predictors == {}:
             # if no static, high-res predictors are added, set to None
-            self._static_predictor_list = None
+            self._static_predictor_list = {}
         else:
-            self._static_predictor_list = self.check_and_choose_vars(selected_static_predictors)
+            assert isinstance(selected_static_predictors, dict), \
+                "Selected static predictors must be a dictionary of variable names as keys and normalization method as values"
+            self._static_predictor_list = self.check_and_choose_vars(selected_static_predictors.keys())
 
     @property
     def predictand_list(self):
         return self._predictand_list
 
     @predictand_list.setter
-    def predictand_list(self, selected_predictands: List):
+    def predictand_list(self, selected_predictands: Dict):
         """
         Similar to predictor_list-setter, but does not allow for parsing None.
         """
-        assert isinstance(selected_predictands, list), "Selected predictands must be a list of variable names"
-        self._predictand_list = self.check_and_choose_vars(selected_predictands, "_tar")
+        assert isinstance(selected_predictands, dict), \
+            "Selected predictands must be a dictionary of variable names as keys and normalization method as values"
+        self._predictand_list = self.check_and_choose_vars(selected_predictands.keys())
 
     def __len__(self):
         return self.nsamples
@@ -777,16 +797,14 @@ class StreamMonthlyNetCDF(object):
         ds_test = xr.open_dataset(self.file_list[0])
         return list(ds_test.variables)
 
-    def check_and_choose_vars(self, var_list: List[str], suffix: str = "*"):
+    def check_and_choose_vars(self, var_list: List[str]):
         """
-        Checks list of variables for availability or retrieves all variables named with a given suffix
-        (for var_list = None)
-        :param var_list: list of predictor variables or None
-        :param suffix: optional suffix of variables to selected. Only effective if var_list is None
-        :return selected_vars: list of selected variables
+        Checks list of variables for availability 
+        :param var_list: list of variables
+        :return selected_vars: sanity checked list of variables
         """
         if var_list is None:
-            selected_vars = [var for var in self.varnames_list if var.endswith(suffix)]
+            raise ValueError(f"Automatic detection of predictors is not supported anymore")
         else:
             stat_list = [var in self.varnames_list for var in var_list]
             if all(stat_list):
