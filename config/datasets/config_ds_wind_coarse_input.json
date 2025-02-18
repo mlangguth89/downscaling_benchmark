@@ -1,7 +1,8 @@
 {
   "num_files": 22,
-  "norm_dims": ["time", "rlat", "rlon"],
-  "batch_size": 32,
+  "norm_dims": ["time", "rlat_in", "rlon_in", "rlat_tar", "rlon_tar"],
+  "batch_size": 16,
+  "steps_per_epoch": 4012,
   "varname_z": {"hsurf_tar": "zscore"},
   "predictands": {"ws_100m_tar": "log_zscore"},
   "predictors": {"msl_in": "zscore", "blh_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "z_pl700_in": "zscore",
