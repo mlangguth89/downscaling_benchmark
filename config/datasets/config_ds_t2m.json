@@ -2,8 +2,10 @@
   "num_files": 22,
   "norm_dims": ["time", "rlat", "rlon"],
   "batch_size": 32,
-  "varname_z": "hsurf_tar",
-  "predictands": ["t_2m_tar"],
-  "predictors": ["t2m_in", "slhf_in", "sshf_in", "u10_in", "v10_in", "blh_in", "sp_in", "z_in", "lsm_in", "t115_in", "t122_in", "t127_in", "t131_in", "t135_in"],
-  "static_predictors": ["hsurf_tar", "fr_land_tar"]
+  "varname_z": {"hsurf_tar": "zscore"},
+  "predictands": {"t_2m_tar": "zscore"},
+  "predictors": {"t2m_in": "zscore", "slhf_in": "zscore", "sshf_in": "zscore", "u10_in": "zscore", "v10_in": "zscore",
+                 "blh_in": "zscore", "sp_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "t115_in": "zscore", 
+                 "t122_in": "zscore", "t127_in": "zscore", "t131_in": "zscore", "t135_in": "zscore"},
+  "static_predictors": {"hsurf_tar": "zscore", "fr_land_tar": "zscore"}
 }
