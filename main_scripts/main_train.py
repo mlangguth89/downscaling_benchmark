@@ -62,7 +62,7 @@ def main(parser_args):
             predictands = {**predictands, **ds_dict["varname_z"]}
 
         norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
-                       **ds_dict.get("static_predicors", {}), **predictands}
+                       **ds_dict.get("static_predictors", {}), **predictands}
         
         # Initialize normalization object and read normalization parameters from file
         data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])

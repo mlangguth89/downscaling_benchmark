@@ -811,7 +811,7 @@ class StreamMonthlyNetCDF(object):
                 selected_vars = list(var_list)
             else:
                 miss_inds = [i for i, x in enumerate(stat_list) if not x]
-                miss_vars = [var_list[i] for i in miss_inds]
+                miss_vars = [list(var_list)[i] for i in miss_inds]
                 raise ValueError(f"Could not find the following variables in the dataset: {*miss_vars,}")
 
         return selected_vars
