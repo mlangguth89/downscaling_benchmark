@@ -53,6 +53,16 @@ class GeneralNormalizer:
         
         return method_groups
 
+    def get_stats_from_data(self, data):
+        norm_stats = {}
+        
+        for method, normalizer in self.normalizers.items():
+            vars_to_normalize = [var for var, norm in self.normalization_config.items() if norm == method]
+            norm_stats.update(normalizer.get_required_stats(data[vars_to_normalize]))
+
+        return norm_stats
+            
+
     def normalize(self, data: xr.Dataset):
         """
         Normalize the dataset based on the specified normalization methods.

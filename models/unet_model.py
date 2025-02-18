@@ -219,7 +219,7 @@ class Sha_UNet(AbstractModelClass):
         else:
             self._n_predictands_dyn = self._n_predictands
 
-        assert self._n_predictands_dyn > 0, f"Number of dynamic predictors is zero, check varnames_tar: {self._varnames_tar}"
+        assert self._n_predictands_dyn > 0, f"Number of dynamic predictands is zero, check varnames_tar: {self._varnames_tar}"
 
         self.set_model()
         # set compile and fit options as well as custom objects

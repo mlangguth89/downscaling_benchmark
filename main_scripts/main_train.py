@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2024-09-14"
+__update__ = "2025-02-18"
 
 import os
 import argparse
@@ -21,11 +21,11 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from tensorflow.keras.utils import plot_model
-from all_normalizations import ZScore
+from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
 from model_utils import check_config_ckpt
 from handle_data_class import prepare_dataset
-from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict, finditem
 
 # Open issues:
 # * nepochs and, if required, d_steps  must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
@@ -56,8 +56,17 @@ def main(parser_args):
 
     # get normalization object if corresponding JSON-file is parsed
     if js_norm:
-        data_norm = ZScore(ds_dict["norm_dims"])
-        data_norm.read_norm_from_file(js_norm)
+        # get normalization methods for all variables of interest
+        predictands = ds_dict["predictands"]
+        if finditem(hparams_dict, "z_branch", False):
+            predictands = {**predictands, **ds_dict["varname_z"]}
+
+        norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
+                       **ds_dict.get("static_predicors", {}), **predictands}
+        
+        # Initialize normalization object and read normalization parameters from file
+        data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
+        data_norm.read_norms_from_file(js_norm)
         norm_dims, write_norm = None, False
     else:
         data_norm, write_norm = None, True
@@ -85,7 +94,7 @@ def main(parser_args):
         ttrain_load = None
     
     if write_norm:
-        data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
+        data_norm.save_norms_to_file(os.path.join(model_savedir, "norm.json"))
     
     # validation dataset
     t0_val = timer()
@@ -105,7 +114,7 @@ def main(parser_args):
 
     # instantiate model...
     # Note: Parse varnames from train_info since list of varnames might get updated depending on model and dataset configuration
-    model = model_instance(shape_in, train_info["all_predictands"], hparams_dict, model_savedir, parser_args.exp_name) 
+    model = model_instance(shape_in, list(train_info["all_predictands"].keys()), hparams_dict, model_savedir, parser_args.exp_name) 
 
     # ... compile
     model.compile(**model.compile_options)

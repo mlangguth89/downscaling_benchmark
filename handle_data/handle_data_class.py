@@ -15,7 +15,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2025-02-17"
+__update__ = "2025-02-18"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -141,7 +141,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     varnames_tar_all = ds_dict["predictands"].copy()
     # Apppend predictands in case of separate z_branch in model configuration 
     if finditem(hparams_dict, "z_branch", False):
-        varnames_tar_all = {**varnames_tar_all, **hparams_dict["varname_z"]}
+        varnames_tar_all = {**varnames_tar_all, **ds_dict["varname_z"]}
 
     # Handle dynamic and static predictors
     predictors = ds_dict["predictors"].copy()           # predictors-dictionary must be provided
@@ -688,7 +688,7 @@ class StreamMonthlyNetCDF(object):
     def static_predictor_list(self, selected_static_predictors: Dict):
         if selected_static_predictors == {}:
             # if no static, high-res predictors are added, set to None
-            self._static_predictor_list = {}
+            self._static_predictor_list = None
         else:
             assert isinstance(selected_static_predictors, dict), \
                 "Selected static predictors must be a dictionary of variable names as keys and normalization method as values"
@@ -808,7 +808,7 @@ class StreamMonthlyNetCDF(object):
         else:
             stat_list = [var in self.varnames_list for var in var_list]
             if all(stat_list):
-                selected_vars = var_list
+                selected_vars = list(var_list)
             else:
                 miss_inds = [i for i, x in enumerate(stat_list) if not x]
                 miss_vars = [var_list[i] for i in miss_inds]
