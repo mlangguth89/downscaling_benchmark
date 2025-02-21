@@ -33,14 +33,16 @@ class GeneralNormalizer:
         """
         self.normalization_config = normalization_config
         self.norm_dims = norm_dims
-        self.normalizers = self._initialize_normalizers(**kwargs)
+        self.normalizers, self.vars_normalizers = self._initialize_normalizers(**kwargs)
 
     def _initialize_normalizers(self, **kwargs):
         """
         Create instances of normalization classes based on the config.
         :param kwargs: optional keyword arguments for respective normalizer
+        :return: Dictionary of normalizers and dictionary of variables for each normalizer
         """
         method_groups = {}
+        vars_in_groups = {}
         
         for _, method in self.normalization_config.items():
             if method not in method_groups:
@@ -50,15 +52,19 @@ class GeneralNormalizer:
                     method_groups[method] = Log_ZScore(self.norm_dims, **kwargs)
                 else:
                     raise ValueError(f"Unknown normalization method: {method}")
-        
-        return method_groups
+ 
+            if method not in vars_in_groups:
+                vars_in_groups[method] = []
+            
+            vars_in_groups[method].append(var)
+
+        return method_groups, vars_in_group
 
     def get_stats_from_data(self, data):
         norm_stats = {}
         
         for method, normalizer in self.normalizers.items():
-            vars_to_normalize = [var for var, norm in self.normalization_config.items() if norm == method]
-            norm_stats.update(normalizer.get_required_stats(data[vars_to_normalize]))
+            norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]])
 
         return norm_stats
             
