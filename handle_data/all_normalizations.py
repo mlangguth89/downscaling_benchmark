@@ -44,7 +44,7 @@ class GeneralNormalizer:
         method_groups = {}
         vars_in_groups = {}
         
-        for _, method in self.normalization_config.items():
+        for var, method in self.normalization_config.items():
             if method not in method_groups:
                 if method == "zscore":
                     method_groups[method] = ZScore(self.norm_dims, **kwargs)
@@ -58,13 +58,13 @@ class GeneralNormalizer:
             
             vars_in_groups[method].append(var)
 
-        return method_groups, vars_in_group
+        return method_groups, vars_in_groups
 
     def get_stats_from_data(self, data):
         norm_stats = {}
         
         for method, normalizer in self.normalizers.items():
-            norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]])
+            norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]]))
 
         return norm_stats
             
