@@ -44,10 +44,8 @@ import random
 
 def lightning_main(parser_args):
 
-    random_seed = 32
-    seed_everything(32,workers=True)
-
-
+    random_seed = parser_args.seed
+    seed_everything(random_seed,workers=True)
 
     # start timing
     to = timer()
@@ -325,6 +323,7 @@ if __name__ == "__main__":
     parser.add_argument("--job_id", "-id", dest="id", type=int, required=True, help="Job-id from Slurm.")
     parser.add_argument("--checkpoint_path", "-ckpt_path", dest="ckpt_path", type=str, default=None,
                         help="fielpath of the checkpoint to restart training")
+    parser.add_argument("--seed","-seed",type=int,required=True,help="seed number",default=32)
     args = parser.parse_args()
     #main(args)
     lightning_main(args)
