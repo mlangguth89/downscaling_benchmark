@@ -10,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-02-07"
+__update__ = "2025-02-24"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -54,6 +54,7 @@ class GeneratorHarris(AbstractModelClass):
         relu_alpha = self.hparams["relu_alpha"]
         padding = self.hparams["padding"]
         norm = self.hparams["norm"] 
+        force_conv = self.hparams["force_conv"]
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
@@ -81,6 +82,7 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm=norm,
+                force_conv=force_conv,
             )
 
         # Upsampling from low-res to high-res with alternating residual blocks
@@ -99,6 +101,7 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm=norm,
+                force_conv=force_conv,
             )
 
         # Concatenate with original size constants field
@@ -114,6 +117,7 @@ class GeneratorHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm=norm,
+                force_conv=force_conv,
             )
 
         # Output layer
@@ -138,8 +142,8 @@ class GeneratorHarris(AbstractModelClass):
         """
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
-        self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-5, 
-                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-05, "norm": None}
+        self.hparams_default = {"channels_start": 128, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-05, 
+                                "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06, "norm": "batch", "force_conv": True}
 
 
 class CriticHarris(AbstractModelClass):
@@ -161,6 +165,8 @@ class CriticHarris(AbstractModelClass):
         padding = self.hparams["padding"]
         norm = self.hparams["norm"]
         nres_blocks = self.hparams["nres_blocks"]
+        force_conv = self.hparams["force_conv"] 
+
         # Network inputs
         # low resolution condition
         generator_input = Input(shape=self._input_shape["lo_res_inputs"], name="lo_res_inputs")
@@ -193,6 +199,7 @@ class CriticHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm = norm,
+                force_conv=force_conv,
             )
             hi_res_input = Conv2D(
                 filters=block_channels[ii],
@@ -210,6 +217,7 @@ class CriticHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm = norm,
+                force_conv=force_conv,
             )
 
         # concatenate hi- and lo-res inputs channel-wise before passing through critic
@@ -225,6 +233,7 @@ class CriticHarris(AbstractModelClass):
                 relu_alpha=relu_alpha,
                 padding=padding,
                 norm = norm,
+                force_conv=force_conv,
             )
 
         # critic output
@@ -249,8 +258,8 @@ class CriticHarris(AbstractModelClass):
         Note: hyperparameter defaults of generator and critic model must be set in the respective model classes whose instances are just parsed here.
         """
         self.hparams_default = {"channels_start": 512, "activation": "leaky_relu", "kernel": (3, 3), "stride": (2, 2), 
-                                "lr": 1.e-5, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 1.e-06, 
-                                "norm": None, "nres_blocks": 1}
+                                "lr": 5.e-07, "ds_steps": [4,], "padding": "reflect", "relu_alpha": 0.2, "lr_end": 5.e-08, 
+                                "norm": None, "nres_blocks": 2, "force_conv": True}
 
     
 class NoiseGenerator(object):
