@@ -58,6 +58,9 @@ class GeneralNormalizer:
             
             vars_in_groups[method].append(var)
 
+        for method, vars_list in vars_in_groups.items():
+            print(f"Variables to normalize with method {method}: [{', '.join(vars_list)}]")
+
         return method_groups, vars_in_groups
 
     def get_stats_from_data(self, data):
@@ -77,9 +80,8 @@ class GeneralNormalizer:
         :return: Normalized xarray Dataset.
         """
         for method, normalizer in self.normalizers.items():
-            vars_to_normalize = [var for var, norm in self.normalization_config.items() if norm == method]
-            print(f"Variables to normalize with method {method}: [{', '.join(vars_to_normalize)}]")
-            data.update(normalizer.normalize(data[vars_to_normalize]))
+            data.update(normalizer.normalize(data[self.vars_normalizers[method]]))
+
         return data
 
     def denormalize(self, data: xr.Dataset):
@@ -90,8 +92,7 @@ class GeneralNormalizer:
         :return: Denormalized xarray Dataset.
         """
         for method, normalizer in self.normalizers.items():
-            vars_to_denormalize = [var for var, norm in self.normalization_config.items() if norm == method]
-            data.update(normalizer.denormalize(data[vars_to_denormalize]))
+            data.update(normalizer.denormalize(data[self.vars_normalizers[method]]))
         return data
 
     def read_norms_from_file(self, js_file):
