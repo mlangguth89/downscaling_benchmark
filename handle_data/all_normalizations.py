@@ -70,6 +70,18 @@ class GeneralNormalizer:
             norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]]))
 
         return norm_stats
+    
+    def get_normalizer_for_var(self, var):
+        """
+        Get the normalizer for a specific variable.
+        :param var: Variable name.
+        :return: Normalizer instance.
+        """
+        for method, vars_list in self.vars_normalizers.items():
+            if var in vars_list:
+                return self.normalizers[method]
+        
+        raise ValueError(f"Variable {var} not found in normalization configuration.")
             
 
     def normalize(self, data: xr.Dataset):
