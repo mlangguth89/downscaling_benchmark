@@ -1038,7 +1038,7 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
-    elif norm is None:
+    elif norm is None or norm == "":
         pass
     else:
         raise ValueError(f"norm type {norm} not implemented")
@@ -1048,7 +1048,7 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
-    elif norm is None:
+    elif norm is None or norm == "":
         pass
     else:
         raise ValueError(f"norm type {norm} not implemented")
