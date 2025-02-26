@@ -541,8 +541,10 @@ def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
         # no slicing required
         mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
 
-    # perform denormalization
-    mout_xr = norm.denormalize(mout_xr, varname=varname)
+    # get variable-specific normalizer and perform denormalization
+    norm_var = norm.get_normalizer_for_var(varname)
+
+    mout_xr = norm_var.denormalize(mout_xr, varname=varname)
 
     return mout_xr
 

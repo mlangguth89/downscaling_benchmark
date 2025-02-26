@@ -26,7 +26,7 @@ import pandas as pd
 import xarray as xr
 import cartopy.crs as ccrs
 from handle_data_class import prepare_dataset, make_tf_dataset_allmem
-from all_normalizations import ZScore
+from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
@@ -92,9 +92,17 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # prepare normalization
     js_norm = os.path.join(model_base, "norm.json")
     func_logger.debug("Read normalization file for subsequent data transformation.")
-    # To-Do: Enable handling of multiple normalizations
-    data_norm = ZScore(ds_dict["norm_dims"])
-    data_norm.read_norm_from_file(js_norm)
+    # get normalization methods for all variables of interest
+    predictands = ds_dict["predictands"]
+    if finditem(model_info["hparams_dict"], "z_branch", False):
+        predictands = {**predictands, **ds_dict["varname_z"]}
+
+    norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
+                    **ds_dict.get("static_predictors", {}), **predictands}
+    
+    # Initialize normalization object and read normalization parameters from file
+    data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
+    data_norm.read_norms_from_file(js_norm)
 
     #ds_dict["batch_size"] = 36
     
@@ -109,7 +117,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
 
     # get ground truth data
     # To-Do: Enable handling of multiple target variables (e.g. wind vectors)
-    tar_varname = test_info["all_predictands"][0]
+    tar_varname = list(test_info["all_predictands"].keys())[0]
     func_logger.info(f"Variable {tar_varname} serves as ground truth data.")
 
     # get ground truth data
