@@ -21,6 +21,9 @@ import pickle
 import numpy as np
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
+# set mixed precision policy
+tf.keras.mixed_precision.set_global_policy('mixed_float16')
+
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
@@ -246,6 +249,11 @@ class CriticHarris(AbstractModelClass):
             outputs=critic_output,
             name="critic",
         )
+
+        # add L2 regularization to all conv and dense layers
+        for layer in self.model.layers:
+            if isinstance(layer, tf.keras.layers.Conv2D) or isinstance(layer, tf.keras.layers.Dense):
+                layer.kernel_regularizer = tf.keras.regularizers.l2(1e-3)
                    
     def set_compile_options(self):
         raise RuntimeError(f"critic model is supposed to be part of a composite model such as WGAN, but not as standalone model for training.")
@@ -269,6 +277,9 @@ class NoiseGenerator(object):
         self.batch_size = batch_size
         self.prng = np.random.RandomState(seed=random_seed)
 
+        # Get the global compute dtype (float16 if mixed precision is enabled, otherwise float32)
+        self.dtype = tf.keras.mixed_precision.global_policy().compute_dtype
+
     def noise(self, shape, mean, std):
         shape = [self.batch_size] + shape
         n = self.prng.randn(*shape).astype(np.float32)
@@ -277,7 +288,7 @@ class NoiseGenerator(object):
             n *= std
         if mean != 0.0:
             n += mean
-        return n
+        return n.astype(self.dtype)  # Convert to correct dtype
     
     def __call__(self, mean=0.0, std=1.0):
         return self.noise(self.noise_shapes, mean, std)
@@ -340,16 +351,26 @@ class HarrisWGAN_Model(keras.Model):
                 
                 # calculate critic for both, the real and the generated data
                 critic_gen = self.critic.model(critic_in_gen, training=True)
-                critic_gt = self.critic.model(critic_in_gt, training=True)
+                critic_gt = self.critic.model(critic_in_gt, training=True), 
+                critic_gen, critic_gt = tf.cast(critic_gen, dtype=tf.float32), tf.cast(critic_gt, dtype=tf.float32)
                 # calculate the loss (incl. gradient penalty)
                 c_loss = self.critic_loss(critic_gt, critic_gen)
                 #gp = GradientPenalty()([sample_iter, gen_out])
-                gp = self.gradient_penalty(sample_iter, gen_out, cond_iter, const_iter)
+                gp = tf.cast(self.gradient_penalty(sample_iter, gen_out, cond_iter, const_iter), dtype=tf.float32)
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
-            # calculate gradients and update critic
+                #scaled_d_loss = self.c_optimizer.get_scaled_loss(d_loss)
+
+            ## compute scaled gradients, but unscale them before applying
+            #scaled_c_gradients = tape_critic.gradient(scaled_d_loss, self.critic.trainable_variables)
+            #d_gradient = self.c_optimizer.get_unscaled_gradients(scaled_c_gradients)
+            ## apply gradients
+            #self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
+            # calculate gradients and update critic 
             d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
-            self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
+            # additionally clip gradients
+            d_gradient_clipped, _ = tf.clip_by_global_norm(d_gradient, clip_norm=1.0)  
+            self.c_optimizer.apply_gradients(zip(d_gradient_clipped, self.critic.trainable_variables))
 
         # train generator
         with tf.GradientTape() as tape_generator:
@@ -375,7 +396,7 @@ class HarrisWGAN_Model(keras.Model):
                 gen_data_list.append(tf.stack(gen_iter_list))
             
             critic_in_gen = [cond_iter] + [const_iter] + [gen_data]
-            critic_gen = self.critic.model(critic_in_gen, training=True)
+            critic_gen = tf.cast(self.critic.model(critic_in_gen, training=True), dtype=tf.float32) 
 
             # critic loss for generator
             cg_loss = self.critic_gen_loss(critic_gen)
@@ -384,10 +405,20 @@ class HarrisWGAN_Model(keras.Model):
             cl_loss = self.recon_loss(sample_iter, data_ens)
             #cl_loss = self.recon_loss(sample_iter, gen_data_list[-1])
             # combined loss for generator
-            g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
+            g_loss = cg_loss + tf.cast(cl_loss, dtype=tf.float32)*self.hparams["recon_weight"]
+            ## scale loss
+            #scaled_g_loss = self.g_optimizer.get_scaled_loss(g_loss)
 
+        ## compute scaled gradients, but unscale them before applying
+        #scaled_g_gradients = tape_generator.gradient(scaled_g_loss, self.generator.trainable_variables)
+        #g_gradient = self.g_optimizer.get_unscaled_gradients(scaled_g_gradients)
+        ## apply gradients
+        #self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+        # calculate gradients and update critic (without mixed precision)
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
-        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+        # additionally clip gradients
+        g_gradient_clipped, _ = tf.clip_by_global_norm(g_gradient, clip_norm=1.0)  
+        self.g_optimizer.apply_gradients(zip(g_gradient_clipped, self.generator.trainable_variables))
 
         return OrderedDict(
             [
@@ -484,6 +515,9 @@ class HarrisWGAN_Model(keras.Model):
         # get mixture of generated and ground truth data
         #shape_dat = (gen_data - real_data).shape
         #alpha = tf.random.normal([self.hparams["batch_size"], 1, 1, 1], 0., 1.)
+        #dtype = tf.keras.mixed_precision.global_policy().compute_dtype
+        gen_data = tf.cast(gen_data, dtype=tf.float32)
+
         alpha = tf.random.uniform(shape=tf.shape(real_data), minval=0., maxval=1.)
         mix_data = real_data + alpha * (gen_data - real_data)
         critic_in_gen = [cond_data] + [const_data] + [mix_data]
@@ -491,6 +525,7 @@ class HarrisWGAN_Model(keras.Model):
         with tf.GradientTape() as gp_tape:
             gp_tape.watch(critic_in_gen[-1])
             critic_mix = self.critic.model(critic_in_gen, training=True)
+            critic_mix = tf.cast(critic_mix, dtype=tf.float32)
 
         # calculate the gradient on the mixture data...
         grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen[-1]])[0]
@@ -608,15 +643,16 @@ class HarrisWGAN(AbstractModelClass):
         """
         # set optimizers
         if self.hparams["optimizer"].lower() == "adam":
-            optimizer = keras.optimizers.Adam
+            optimizer = tf.keras.optimizers.Adam
             kwargs_opt = {"beta_1": 0.0, "beta_2": 0.9}
         elif self.hparams["optimizer"].lower() == "rmsprop":
-            optimizer = keras.optimizers.RMSprop
+            optimizer = tf.keras.optimizers.RMSprop
             kwargs_opt = {}
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
-        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
+        self.optimizer = (tf.keras.mixed_precision.LossScaleOptimizer(optimizer(self.critic.hparams["lr"], **kwargs_opt), dynamic=True, initial_scale=2**10), 
+                          tf.keras.mixed_precision.LossScaleOptimizer(optimizer(self.generator.hparams["lr"], **kwargs_opt), dynamic=True, initial_scale=2**10))
         
     def get_fit_options(self):
         """
@@ -1072,6 +1108,7 @@ def wasserstein_loss(y_true, y_pred):
     return K.mean(y_true * y_pred, axis=-1)
 
 def ensmean_MSE(y_true, y_pred):
+    y_pred = tf.cast(y_pred, tf.float32)
     pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
     y_true_squ = tf.squeeze(y_true, axis=-1)
     return tf.reduce_mean(tf.math.squared_difference(pred_mean, y_true_squ))
