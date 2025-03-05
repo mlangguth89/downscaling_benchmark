@@ -20,7 +20,6 @@ import json as js
 import pickle
 import tensorflow as tf
 import tensorflow.keras as keras
-import horovod.tensorflow.keras as hvd
 from tensorflow.keras import backend as K
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
@@ -65,6 +64,8 @@ def set_gpu_memory_growth():
 
 
 def setup_horovod_devices():
+        import horovod.tensorflow.keras as hvd
+
         # get GPU devices and set-up Horovod
         gpus = tf.config.experimental.list_physical_devices("GPU")
 
