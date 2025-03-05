@@ -151,7 +151,9 @@ class WGAN_Model(keras.Model):
 
             # calculate gradients and update discrimintor
             d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
-            self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
+            # additionally clip gradients
+            d_gradient_clipped, _ = tf.clip_by_global_norm(d_gradient, clip_norm=1.0)
+            self.c_optimizer.apply_gradients(zip(d_gradient_clipped, self.critic.trainable_variables))
 
         # train generator
         with tf.GradientTape() as tape_generator:
@@ -165,7 +167,9 @@ class WGAN_Model(keras.Model):
             g_loss = cg_loss + self.hparams["recon_weight"] * rloss
 
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
-        self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
+        # additionally clip gradients
+        g_gradient_clipped, _ = tf.clip_by_global_norm(g_gradient, clip_norm=1.0)   
+        self.g_optimizer.apply_gradients(zip(g_gradient_clipped, self.generator.trainable_variables))
 
         return OrderedDict(
             [("c_loss", c_loss), ("gp_loss", self.hparams["gp_weight"] * gp), ("d_loss", d_loss), ("cg_loss", cg_loss),
