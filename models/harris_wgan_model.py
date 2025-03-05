@@ -574,7 +574,7 @@ class HarrisWGAN_Model(keras.Model):
 class HarrisWGAN(AbstractModelClass):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict,
-                 varnames_tar: List, savedir: str, expname: str):
+                 varnames_tar: List, savedir: str, expname: str, with_horovod: bool = False):
         """
         Initialize the HarrisWGANModel class.
 
@@ -586,12 +586,20 @@ class HarrisWGAN(AbstractModelClass):
         :param varnames_tar: List of target variable names.
         :param savedir: Drectory to save the model.
         :param expname: The name of the experiment.
+        :param with_horovod: Whether to use Horovod for distributed training.
         """        
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [1, 1, 1, 1]
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "harriswgan"
+        self.with_horovod = with_horovod
+        self.main_process = True 
+        if self.with_horovod:
+            import horovod.tensorflow as hvd
+            import
+
+            self.main_process = hvd.rank() == 0
         
         # set hyperparmaters
         self.set_hparams(hparams)
@@ -618,6 +626,13 @@ class HarrisWGAN(AbstractModelClass):
 
         self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         
+        # wrap optimizers for distributed training
+        if self.with_horovod:
+            # wrap optimizers for distributed training
+            self.optimizer = tuple([hvd.DistributedOptimizer(opt, backward_passes_per_step=1,
+                                                            average_aggregated_gradients=True)
+                                                            opt in self.optimizer])
+        
     def get_fit_options(self):
         """
         Get options that will be parsed to the fit-method of the Keras model.
@@ -627,12 +642,17 @@ class HarrisWGAN(AbstractModelClass):
         if self.hparams["lr_decay"]:
             harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
         
-        if self.hparams["lcheckpointing"]:            
+        if self.hparams["lcheckpointing"] and self.main_process:            
             harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
                                                                   monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
             
         if self.hparams["learlystopping"]:
             harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+
+        if self.with_horovod:
+            harriswgan_callbacks.append(hvd_callbacks.BroadcastGlobalVariablesCallback(0))
+            harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback()])
+
             
         if harriswgan_callbacks is not None:
             return {"callbacks": harriswgan_callbacks}
