@@ -9,7 +9,7 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2024-09-14"
+__update__ = "2025-03-05"
 
 # import modules
 import os
@@ -20,6 +20,7 @@ import json as js
 import pickle
 import tensorflow as tf
 import tensorflow.keras as keras
+import horovod.tensorflow.keras as hvd
 from tensorflow.keras import backend as K
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
@@ -62,6 +63,17 @@ def set_gpu_memory_growth():
         for gpu in gpus:
             tf.config.experimental.set_memory_growth(gpu, True)
 
+
+def setup_horovod_devices():
+        # get GPU devices and set-up Horovod
+        gpus = tf.config.experimental.list_physical_devices("GPU")
+
+        set_gpu_memory_growth()
+
+        if len(gpus) == 0:
+            raise Exception("No GPUs available")
+        if len(gpus) > 1:
+            tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], "GPU")
 
 def get_loss_from_history(history: keras.callbacks.History, loss_name: str = "loss"):
 
