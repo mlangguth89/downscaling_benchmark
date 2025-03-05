@@ -452,9 +452,22 @@ def merge_dicts(default_dict, user_dict, recursive: bool = True):
             else:
                 merged_dict[key] = value
         else:
-            # Otherwise, set the value in the merged dictionary.
-            assert isinstance(value, type(merged_dict[key])) or merged_dict[key] is None, \
-                f"Type mismatch for key '{key}': {type(value)} != {type(merged_dict[key])}"
+            # If the target key already exists, retain its type
+            if key in merged_dict and merged_dict[key] is not None:
+                expected_type = type(merged_dict[key])
+
+                # Convert `value` if it's a list or tuple
+                if isinstance(value, (list, tuple)) and isinstance(merged_dict[key], (list, tuple)):
+                    if isinstance(merged_dict[key], tuple):
+                        value = tuple(value)  # Convert to tuple
+                    else:
+                        value = list(value)   # Convert to list
+
+                # Ensure the final value matches the expected type
+                assert isinstance(value, expected_type), \
+                    f"Type mismatch for key '{key}': Expected {expected_type}, got {type(value)}"
+            
+            # Assign the value to the merged dictionary
             merged_dict[key] = value
 
     return merged_dict
