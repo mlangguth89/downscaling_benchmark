@@ -597,7 +597,7 @@ class HarrisWGAN(AbstractModelClass):
         self.main_process = True 
         if self.with_horovod:
             import horovod.tensorflow as hvd
-            import
+            import horovod.keras.callbacks as hvd_callbacks
 
             self.main_process = hvd.rank() == 0
         
@@ -629,9 +629,8 @@ class HarrisWGAN(AbstractModelClass):
         # wrap optimizers for distributed training
         if self.with_horovod:
             # wrap optimizers for distributed training
-            self.optimizer = tuple([hvd.DistributedOptimizer(opt, backward_passes_per_step=1,
-                                                            average_aggregated_gradients=True)
-                                                            opt in self.optimizer])
+            self.optimizer = tuple(hvd.DistributedOptimizer(opt, backward_passes_per_step=1, average_aggregated_gradients=True)
+                                   for opt in self.optimizer)
         
     def get_fit_options(self):
         """
@@ -651,7 +650,7 @@ class HarrisWGAN(AbstractModelClass):
 
         if self.with_horovod:
             harriswgan_callbacks.append(hvd_callbacks.BroadcastGlobalVariablesCallback(0))
-            harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback()])
+            harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback())
 
             
         if harriswgan_callbacks is not None:
