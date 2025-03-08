@@ -6,7 +6,13 @@
 Methods to handle data for the neural networks.
 
 Provides:
-    - get_dataset_filenames: 
+    - get_dataset_filenames: get files for known datasets  
+    - prepare_dataset: set up TF data pipeline for model training
+    - make_tf_dataset_dyn: Dynmaical data streaming from bunch of netCDF-files
+    - make_tf_dataset_allmem: Data streaming from a single netCDF-file that fits into memory
+    - reshape_ds: reshape dataset 
+    - split_in_tar: split dataset between input and target data:
+    - StreamMonthlyNetCDF: class for dynamical data streaming from netCDF-files
 
 To-Dos:
     - Shuffle indices for sharding in make_tf_dataset_all-method
@@ -15,7 +21,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2025-02-18"
+__update__ = "2025-03-08"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -29,6 +35,11 @@ import random
 import numpy as np
 import xarray as xr
 import tensorflow as tf
+try:
+    import horovod.tensorflow as hvd
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
@@ -120,6 +131,10 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     :param seed: seed for random shuffling of datafiles
     :return: tuple of (TensorFlow dataset object, dictionary of dataset information)
     """
+    main_process = True
+    if with_horovod:
+        main_process = hvd.rank() == 0
+
     # Check parsed dataset mode
     allowed_modes = ["train", "val", "test"]
     assert mode in allowed_modes, f"{mode} is not a valid mode. Allowed modes are {*allowed_modes,}" 
@@ -131,7 +146,7 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
         assert norm_obj or norm_dims, f"Neither norm_obj nor norm_dims has been provided."
 
     if norm_obj and norm_dims:
-        print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
+        if main_process: print("WARNING: norm_obj and norm_dims have been passed. norm_dims will be ignored.")
         norm_dims = None
 
     if norm_obj: 
@@ -149,8 +164,8 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     # Backward compatibility for deprecated keys var_tar2in and named_targets in ds_dict and hparams_dict, respectively
     if "var_tar2in" in ds_dict:
         static_predictors = {**ds_dict.get['var_tar2in'], **ds_dict.get("static_predictors", {})}
-        print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
-              +f"Dictionary of updated static predictors: {','.join(static_predictors)}")
+        if main_process: print("Warning: The usage of 'var_tar2in' is deprecated. Use 'static_predictors' instead. \n"
+                               +f"Dictionary of updated static predictors: {','.join(static_predictors)}")
     else:
         static_predictors = ds_dict.get("static_predictors", None).copy()
 
@@ -163,10 +178,12 @@ def prepare_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparams_dict
     else:
         stream_mode = hparams_dict.get("stream_mode", "hi_input")
 
-    if not "stream_mode" in hparams_dict:
+    if not "stream_mode" in hparams_dict and main_process:
         print(f"Warning: stream_mode not provided in hparams_dict. Autmotically set to '{stream_mode}'.")
-    else:
+    elif main_process:
         print(f"Selected stream mode for {mode} dataset: {stream_mode}")
+    else:
+        pass
 
     # Get (effective) batch size and desired number of epochs from model configuration 
 
@@ -270,9 +287,8 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, lr
         tf_split = lambda arr_in, arr_stat, arr_out: make_dict(arr_in, arr_stat, arr_out)
 
     # enable flexibility in factor for range
-    n_reads = int(ds_obj.nfiles_merged*nepochs)
+    n_reads = int(ds_obj.nds*nepochs)
     if ds_obj.with_horovod:
-        import horovod.tensorflow as hvd
         tfds = tf.data.Dataset.range(n_reads).shard(hvd.size(), hvd.rank()).map(tf_read_nc).prefetch(1)
     else:
         tfds = tf.data.Dataset.range(n_reads).map(tf_read_nc).prefetch(1)
@@ -311,6 +327,10 @@ def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, pr
     :param drop_remainder: flag if samples will be dropped in case batch size is not a divisor of # data samples
     :param with_horovod: flag to trigger horovod-based distributed dataset creation
     """
+    main_process = True
+    if with_horovod:
+        main_process = hvd.rank() == 0
+
     # add static predictors to predictors-list unless lo_input-streaming mode is chosen
     if stream_mode == "lo_input":
         assert static_predictors is not None, "Provide high-resolved static input predictors for stream_mode 'lo_input'"
@@ -318,10 +338,9 @@ def make_tf_dataset_allmem(stream_mode: str, ds: xr.Dataset, batch_size: int, pr
         if static_predictors:
             predictors = {**static_predictors, **predictors}
             static_predictors = None
-            print(f"Static predictors added to predictors for data pipeline mode '{stream_mode}'")
+            if main_process: print(f"Static predictors added to predictors for data pipeline mode '{stream_mode}'")
 
     if with_horovod:
-        import horovod.tensorflow as hvd
         ntimes = len(ds["time"])
         # To-Do: Indices should be shuffled to avoid daytime dependencies
         inds = list(range(hvd.rank(), ntimes, hvd.size()))
@@ -478,7 +497,7 @@ def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = No
 class StreamMonthlyNetCDF(object):
     def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: Dict,
                  predictors: Dict, static_predictors: Dict = None, sample_dim: str = "time", norm_dims: List = None,
-                 norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10):
+                 norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10, max_tries: int = 3):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
         rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
@@ -495,10 +514,12 @@ class StreamMonthlyNetCDF(object):
         :param with_horovod: flag to trigger horovod-based distributed dataset creation
         :param seed: seed for random sampling of netCDF-files
         :param nworkers: number of threads to read the netCDF-files
+        :param max_tries: maximum number of tries to append data to fixed number of samples in read_netcdf-method
         """
         self.with_horovod = with_horovod
+        self.main_process = True
         if self.with_horovod:
-            import horovod.tensorflow as hvd
+            self.main_process = hvd.rank() == 0
         self.seed = seed
         self.stream_mode = mode
         self.data_dir = datadir
@@ -514,7 +535,7 @@ class StreamMonthlyNetCDF(object):
         # sampling of datafiles
         self.file_list_random = random.sample(self.file_list, self.nfiles)
         self.nfiles2merge = nfiles_merge                                # number of files to be merged for data subset  
-        self.nfiles_merged = int(self.nfiles / self.nfiles2merge)       # number of data subsets
+        self.nds = int(self.nfiles / self.nfiles2merge)                 # number of data subsets
         self.samples_merged = self.get_samples_per_merged_file()
         # list of files can be larger for distributed training, i.e. effective dataset size can be increased
         if self.with_horovod:
@@ -550,6 +571,8 @@ class StreamMonthlyNetCDF(object):
             if not isinstance(norm_obj, GeneralNormalizer):
                 raise ValueError("norm_obj is not an instance of the GeneralNormalizer-class.")
             self.data_norm = norm_obj
+
+        self.max_tries = max_tries
 
         # initialize data loading
         self.data_loaded = [xr.Dataset, xr.Dataset]        # two datasets will be cached
@@ -621,8 +644,11 @@ class StreamMonthlyNetCDF(object):
 
         if isinstance(n2merge, int):
             n = n2merge
-        else: 
-            n = n2merge[f"#GPUS={hvd.size()}"] if self.with_horovod else n2merge[f"#GPUS=1"]
+        else:
+            if self.with_horovod: 
+                n = n2merge[f"#GPUS={hvd.size()}"]
+            else:
+                n = n2merge[f"#GPUS=1"]
 
         # ensure that n is a divisor of the total number of files
         n = find_closest_divisor(self.nfiles, n)
@@ -630,13 +656,10 @@ class StreamMonthlyNetCDF(object):
         self._nfiles2merge = n
         # for distributed training, data files must be distributed over workers
         if self.with_horovod:
-            if hvd.rank() == 0:
-                if n != n2merge:
-                    print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
-                print(f"Distributed streaming over {hvd.size()} workers.")
+            if self.main_process: print(f"Distributed streaming over {hvd.size()} workers.")
 
-            assert n > hvd.size(), f"Number of files to merge {n} must be larger than number of workers {hvd.size()}."
-            self._nfiles2merge = int(n / hvd.size())
+            #assert n > hvd.size(), f"Number of files to merge {n} must be larger than number of workers {hvd.size()}."
+            #self._nfiles2merge = int(n / hvd.size())
             if n % hvd.size() > 0:
                 # In case that the modulo is non-zero, nfiles2merge is incremented and the file list is appended
                 # so that each work processes the same number of files.
@@ -644,12 +667,12 @@ class StreamMonthlyNetCDF(object):
                 # To avoid duplicates in the last subset itself, only files from the preceiding subsets are appended.
                 self._nfiles2merge += 1
                 nfiles_req = int(hvd.size() * self._nfiles2merge * self.nfiles/n)
-                if hvd.rank() == 0: 
+                if self.main_process: 
                     print(f"Append file list by {nfiles_req - self.nfiles} files to get {nfiles_req} files ({self._nfiles2merge} files per worker).")
                 self.file_list_random += random.sample(self.file_list_random[0:self.nfiles-n], nfiles_req - self.nfiles)
                 self.nfiles = len(self.file_list_random)
         else:
-            if n != n2merge:
+            if n != n2merge and self.main_process:
                 print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
 
 
@@ -716,6 +739,8 @@ class StreamMonthlyNetCDF(object):
         or as tuple of arrays (mode: 'lo_input')
         :param indices: sample indices 
         """
+        indices = np.array(indices) % self.data_now.sizes[self.sample_dim]
+
         if self.stream_mode == "lo_input":
             da_now = self.getitems_as_tuple(indices)
         else:
@@ -786,7 +811,7 @@ class StreamMonthlyNetCDF(object):
     def get_samples_per_merged_file(self):
         nsamples_merged = []
 
-        for i in range(self.nfiles_merged):
+        for i in range(self.nds):
             file_list_now = self.file_list_random[i * self.nfiles2merge: (i + 1) * self.nfiles2merge]
             ds_now = xr.open_mfdataset(list(file_list_now), decode_cf=False)
             nsamples_merged.append(ds_now.dims[self.sample_dim])  
@@ -860,48 +885,31 @@ class StreamMonthlyNetCDF(object):
         return ds_all
 
     def read_netcdf(self, set_ind):
+        # get start index for data subset
         set_ind = tf.keras.backend.get_value(set_ind)
         set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
-        set_ind = int(set_ind % self.nfiles_merged)
+        set_ind = int(set_ind % self.nds)
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
+        if self.main_process: print(f"ifiles: {set_ind * self.nfiles2merge} -> {(set_ind + 1) * self.nfiles2merge}")
+        
         il = int(self.iload_next % 2)
         # read the normalized data into memory
         t0 = timer()
         # Restriction to read dynamic variables is not required currently,
         # since constant data get automatically broadcasted with the _read_mfdataset-method
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        nsamples = data_now.sizes[self.sample_dim]
-
-        if nsamples < self.samples_merged:
-            t1 = timer()
-            add_samples = self.samples_merged - nsamples
-            istart = random.randint(0, self.samples_merged - add_samples - 1)
-            # slice data from data_now...
-            ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
-            if ds_add.sizes[self.sample_dim] != add_samples:
-                print("WARNING: ds_add contains inconsistent number of samples. Re-try...")
-                add_samples = self.samples_merged - nsamples
-                istart = random.randint(0, self.samples_merged - add_samples - 1)
-                ds_add = data_now.isel({self.sample_dim: slice(istart, istart + add_samples)})
-            # ... and modify underlying sample-dimension to allow clean concatenation
-            ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
-            ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
-            data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
-            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
-                  f"(total #samples: {data_now.sizes[self.sample_dim]})")
-            
-        # Appending with constant variables is not required since they are read and broadcast to data_now already (see above)
-        #if self.const_vars:
-        #    ds_const_append = self.ds_const.copy().expand_dims({self.sample_dim: data_now[self.sample_dim]})
-        #    data_now = xr.merge([data_now, ds_const_append])
-
+        # appending to fixed number of samples is not performed anymore
+        # Instead, indices are wrapped to avoid index out-of-range errors (cf. getitems-method)
+        #nsamples = data_now.sizes[self.sample_dim]
+        #add_samples = self.samples_merged - nsamples
+       
         # write to class attribute
         self.data_loaded[il] = data_now
         # timing
         t_read = timer() - t0
         self.reading_times.append(t_read)
         self.ds_proc_size += data_now.nbytes
-        print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
+        if self.main_process: print(f"Dataset #{set_ind:d} ({il+1:d}/2) reading time: {t_read:.2f}s.")
         self.iload_next = il + 1
 
         return il
@@ -909,6 +917,6 @@ class StreamMonthlyNetCDF(object):
     def choose_data(self, _):
         ik = int(self.iuse_next % 2)
         self.data_now = self.data_loaded[ik]
-        print(f"Use data subset {ik:d}...")
+        if self.main_process: print(f"Use data subset {ik:d}...")
         self.iuse_next = ik + 1
         return True
