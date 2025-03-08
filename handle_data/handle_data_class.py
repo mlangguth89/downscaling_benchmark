@@ -497,7 +497,7 @@ def split_in_tar(ds: xr.Dataset, predictands: List = None, predictors: List = No
 class StreamMonthlyNetCDF(object):
     def __init__(self, mode: str, datadir: Path, patt: str, nfiles_merge: Union[int, Dict], predictands: Dict,
                  predictors: Dict, static_predictors: Dict = None, sample_dim: str = "time", norm_dims: List = None,
-                 norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10, max_tries: int = 3):
+                 norm_obj=None ,with_horovod: bool = False, seed: int = None, nworkers: int = 10):
         """
         Class object providing all methods to create a TF dataset that iterates over a set of (monthly) netCDF-files
         rather than loading all into memory. Instead, only a subset of all netCDF-files is loaded into memory.
@@ -514,7 +514,6 @@ class StreamMonthlyNetCDF(object):
         :param with_horovod: flag to trigger horovod-based distributed dataset creation
         :param seed: seed for random sampling of netCDF-files
         :param nworkers: number of threads to read the netCDF-files
-        :param max_tries: maximum number of tries to append data to fixed number of samples in read_netcdf-method
         """
         self.with_horovod = with_horovod
         self.main_process = True
@@ -571,8 +570,6 @@ class StreamMonthlyNetCDF(object):
             if not isinstance(norm_obj, GeneralNormalizer):
                 raise ValueError("norm_obj is not an instance of the GeneralNormalizer-class.")
             self.data_norm = norm_obj
-
-        self.max_tries = max_tries
 
         # initialize data loading
         self.data_loaded = [xr.Dataset, xr.Dataset]        # two datasets will be cached
