@@ -10,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-02-24"
+__update__ = "2025-03-06"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -32,7 +32,11 @@ from custom_losses import get_custom_loss
 from wgan_model import LearningRateSchedulerWGAN
 from model_utils import save_opt_weights
 from tensorflow.python.platform import tf_logging as logging
-
+try:
+    import horovod.tensorflow as hvd
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 
 list_or_tuple = Union[List, Tuple]
 
@@ -348,6 +352,8 @@ class HarrisWGAN_Model(keras.Model):
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update critic
+            tape_critic = hvd.DistributedGradientTape(tape_critic)
+
             d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
             self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
 
@@ -386,6 +392,8 @@ class HarrisWGAN_Model(keras.Model):
             # combined loss for generator
             g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
 
+        tape_generator = hvd.DistributedGradientTape(tape_generator)
+        
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
 
@@ -488,12 +496,21 @@ class HarrisWGAN_Model(keras.Model):
         mix_data = real_data + alpha * (gen_data - real_data)
         critic_in_gen = [cond_data] + [const_data] + [mix_data]
 
+        # cleaner implementation
         with tf.GradientTape() as gp_tape:
-            gp_tape.watch(critic_in_gen[-1])
-            critic_mix = self.critic.model(critic_in_gen, training=True)
+            gp_tape.watch(mix_data)
+            mixed_score = self.critic.model(critic_in_gen)
 
-        # calculate the gradient on the mixture data...
-        grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen[-1]])[0]
+        # Compute gradients with respect to mixed data
+        grads_mix = gp_tape.gradient(mixed_score, mix_data)
+
+        #with tf.GradientTape() as gp_tape:
+            #gp_tape.watch(critic_in_gen[-1])
+        #    gp_tape.watch(critic_in_gen)
+        #    critic_mix = self.critic.model(critic_in_gen, training=True)
+        #
+        ## calculate the gradient on the mixture data...
+        #grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen])[0]
         # ... and norm it
         #norm = tf.norm(grads_mix, ord=2, axis=list(range(1, len(grads_mix.shape))))
         norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
@@ -627,10 +644,11 @@ class HarrisWGAN(AbstractModelClass):
         self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         
         # wrap optimizers for distributed training
-        if self.with_horovod:
-            # wrap optimizers for distributed training
-            self.optimizer = tuple(hvd.DistributedOptimizer(opt, backward_passes_per_step=1, average_aggregated_gradients=True)
-                                   for opt in self.optimizer)
+        #if self.with_horovod:
+        #    import horovod.tensorflow as hvd
+        #    # wrap optimizers for distributed training
+        #    self.optimizer = tuple(hvd.DistributedOptimizer(opt, backward_passes_per_step=1, average_aggregated_gradients=True)
+        #                          for opt in self.optimizer)
         
     def get_fit_options(self):
         """
@@ -648,9 +666,9 @@ class HarrisWGAN(AbstractModelClass):
         if self.hparams["learlystopping"]:
             harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
 
-        if self.with_horovod:
-            harriswgan_callbacks.append(hvd_callbacks.BroadcastGlobalVariablesCallback(0))
-            harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback())
+        if self.with_horovod:            
+            harriswgan_callbacks.append(BroadcastWeightsCallback(self.generator, self.critic, self.optimizer[0], self.optimizer[1]))
+            #harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback())
 
             
         if harriswgan_callbacks is not None:
@@ -829,6 +847,37 @@ class HarrisWGAN(AbstractModelClass):
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
+
+
+
+class BroadcastWeightsCallback(tf.keras.callbacks.Callback):
+    """ 
+    Custom callback to broadcast model weights at the end of each batch.
+    Ensures all workers stay synchronized during training.
+    """
+
+    def __init__(self, generator, critic, g_optimizer, c_optimizer, root_rank=0):
+        super(BroadcastWeightsCallback, self).__init__()
+        self.generator = generator
+        self.critic = critic
+        self.g_optimizer = g_optimizer
+        self.c_optimizer = c_optimizer
+        self.root_rank = root_rank
+
+    #def on_train_batch_end(self, batch, logs=None):
+    #    """Broadcast weights at the end of each batch."""
+    #    hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
+    #    hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
+    #    hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
+    #    hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        # broadcast weights at the beginning of the first epoch
+        if epoch == 0:
+            hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
+            hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)
 
 
 class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
