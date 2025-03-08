@@ -9,7 +9,7 @@ Driver-script to train downscaling models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-10-06"
-__update__ = "2025-03-03"
+__update__ = "2025-03-08"
 
 import os
 import argparse
@@ -21,7 +21,11 @@ import numpy as np
 import xarray as xr
 import tensorflow as tf
 from tensorflow.keras.utils import plot_model
-import horovod.tensorflow.keras as hvd
+try:
+    import horovod.tensorflow as hvd
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
 from model_utils import check_config_ckpt, setup_horovod_devices, check_horovod
@@ -106,6 +110,7 @@ def main(parser_args):
     # get tensoflow dataset objects for training and validation data
     # training dataset
     t0_train = timer()
+    print(f"Enable Horovod in main_train: {with_horovod}")
     tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", norm_obj=data_norm, 
                                              norm_dims=norm_dims, with_horovod=with_horovod, seed=seed)  
     
@@ -182,7 +187,7 @@ def main(parser_args):
     if main_process: print(f"Start training of {parser_args.model.capitalize()}...")
     history = model.fit(x=tfds_train, epochs=model.hparams["nepochs"], initial_epoch=init_epoch,
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=int(8640/ds_dict["batch_size"]),
-                        verbose=2, **model.fit_options)
+                        verbose=2 if main_process else 0, **model.fit_options)
 
     # finalise training and save model
     if main_process:
