@@ -10,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-03-06"
+__update__ = "2025-03-08"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -24,7 +24,8 @@ import tensorflow as tf
 import tensorflow.keras as keras
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense, BatchNormalization
+from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, \
+                                    Dense, BatchNormalization, LayerNormalization
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
@@ -283,7 +284,7 @@ class NoiseGenerator(object):
             n += mean
         return n
     
-    def __call__(self, mean=0.0, std=1.0):
+    def __call__(self, mean=0.0, std=1.):
         return self.noise(self.noise_shapes, mean, std)
     
     
@@ -1106,6 +1107,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
@@ -1116,6 +1119,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
