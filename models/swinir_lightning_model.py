@@ -935,9 +935,9 @@ class SwinIR(nn.Module):
 
     
 class SwinIRLightning(L.LightningModule):
-    def __init__(self,shape_in: List, varnames_tar: List, hparams: dict, savedir: str, exp_name: str = 'swinir_model'):
+    def __init__(self,shape_in: List, varnames_tar: List, hparams: dict, savedir: str, expname: str = 'swinir_model'):
         super(SwinIRLightning,self).__init__()
-        self.swinir = SwinIR(shape_in,varnames_tar,hparams,savedir,exp_name)
+        self.swinir = SwinIR(shape_in,varnames_tar,hparams,savedir,expname)
 
         weights = self.swinir.hparams['loss_weights']
         self.loss = torch.nn.L1Loss if self.swinir.hparams["loss"].lower() == "mae" else None

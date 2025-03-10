@@ -21,11 +21,11 @@ from timeit import default_timer as timer
 import numpy as np
 import xarray as xr
 from tensorflow.keras.utils import plot_model
-from all_normalizations import ZScore
+from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
 from model_utils import TimeHistory, handle_opt_utils, get_loss_from_history
 from handle_data_class import prepare_dataset,prepare_torch_dataset
-from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict
+from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict, finditem
 
 #import torch module
 import torch
@@ -35,7 +35,7 @@ from swinir_lightning_model import SwinIR
 from swinir_lightning_model import SwinIRLightning
 from lightning import Trainer,seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-from lightning.pytorch.loggers import WandbLogger
+#from lightning.pytorch.loggers import WandbLogger
 import random
 
 # Open issues:
@@ -61,8 +61,8 @@ def lightning_main(parser_args):
     model_savedir = os.path.join(outdir, parser_args.exp_name)
 
     model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
-    wandb_logger = WandbLogger(project="downscaling",
-                                name= parser_args.exp_name)
+    #wandb_logger = WandbLogger(project="downscaling",
+    #                            name= parser_args.exp_name)
     # read configuration files for model and dataset
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
@@ -70,20 +70,37 @@ def lightning_main(parser_args):
     with parser_args.conf_md as mdf:
         hparams_dict = js.load(mdf)
 
+    ## get normalization object if corresponding JSON-file is parsed
+    #if js_norm:
+    #    data_norm = ZScore(ds_dict["norm_dims"])
+    #    data_norm.read_norm_from_file(js_norm)
+    #    norm_dims, write_norm = None, False
+    #else:
+    #    data_norm, write_norm = None, True
+    #    norm_dims = ds_dict["norm_dims"]
+
     # get normalization object if corresponding JSON-file is parsed
     if js_norm:
-        data_norm = ZScore(ds_dict["norm_dims"])
-        data_norm.read_norm_from_file(js_norm)
+        # get normalization methods for all variables of interest
+        predictands = ds_dict["predictands"]
+        if finditem(hparams_dict, "z_branch", False):
+            predictands = {**predictands, **ds_dict["varname_z"]}
+
+        norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
+                       **ds_dict.get("static_predictors", {}), **predictands}
+        
+        # Initialize normalization object and read normalization parameters from file
+        data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
+        data_norm.read_norms_from_file(js_norm)
         norm_dims, write_norm = None, False
     else:
         data_norm, write_norm = None, True
-        norm_dims = ds_dict["norm_dims"]
+        norm_dims = ds_dict["norm_dims"]   
 
     # get torch dataset objects for training and validation data
     # training
     t0_train = timer
-    torch_train_dataloader, train_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "train", ds_dict["predictands"], 
-                                             norm_obj=data_norm, norm_dims=norm_dims,seed=random_seed) 
+    torch_train_dataloader, train_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "train", norm_obj=data_norm, norm_dims=norm_dims,seed=random_seed) 
 
     
     data_norm, shape_in, nsamples, tfds_train_size = (train_info["data_norm"], train_info["shape_in"], 
@@ -127,21 +144,22 @@ def lightning_main(parser_args):
     copy_filelist(filelist, model_savedir, filelist_new)
 
     # instantiate model...
-    model = SwinIRLightning(shape_in, list(train_info["varnames_tar"]), hparams_dict, model_savedir, parser_args.exp_name)
+    model = SwinIRLightning(shape_in, list(train_info["all_predictands"].keys()), hparams_dict, model_savedir, parser_args.exp_name)
 
     #args to be passed, currently magic numbers are used 
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
                       max_epochs=ds_obj_train.nfiles_merged*model.swinir.hparams['nepochs'],
                       check_val_every_n_epoch=ds_obj_train.nfiles_merged,
-                      num_nodes=4,
+                      num_nodes=1,
                       devices=4,
                       accelerator='cuda',
                       strategy='ddp',
                       precision="16-mixed",
                       sync_batchnorm=True,
                       plugins=[SLURMEnvironment()],
-                      logger=wandb_logger)
+                      #logger=wandb_logger)
+                      )
 
     trainer.fit(model,
             torch_train_dataloader,

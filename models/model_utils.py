@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,15 +9,22 @@ Some auxiliary methods to create Keras models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-26"
-__update__ = "2023-12-11"
+__update__ = "2024-09-14"
 
 # import modules
+import os
+import glob
 from timeit import default_timer as timer
+from pathlib import Path
+import json as js
+import pickle
+import tensorflow as tf
 import tensorflow.keras as keras
+from tensorflow.keras import backend as K
 from tensorflow.python.keras.layers import deserialize, serialize
 from tensorflow.python.keras.saving import saving_utils
 from tensorflow.keras.models import Model
-import xarray as xr
+
 
 # define class for creating timer callback
 class TimeHistory(keras.callbacks.Callback):
@@ -29,6 +36,31 @@ class TimeHistory(keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs={}):
         self.epoch_times.append(timer() - self.epoch_time_start)
+
+def check_horovod():
+    """
+    Check if job is run with Horovod based on environment variables
+
+    :return: True if Horovod is detected, False otherwise
+    """
+    # Program is run with horovodrun
+    with_horovod = "HOROVOD_RANK" in os.environ
+
+    if not with_horovod:
+        # Program is run with srun
+        with_horovod = "SLURM_STEP_NUM_TASKS" in os.environ and int(os.environ["SLURM_STEP_NUM_TASKS"]) > 1
+
+    return with_horovod
+
+
+def set_gpu_memory_growth():
+    """
+    Set GPU memory growth to avoid allocating all memory at once.
+    """
+    gpus = tf.config.list_physical_devices('GPU')
+    if gpus:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, True)
 
 
 def get_loss_from_history(history: keras.callbacks.History, loss_name: str = "loss"):
@@ -59,6 +91,54 @@ def handle_opt_utils(model: keras.Model, opt_funcname: str):
 
     return opt_dict
 
+def save_opt_weights(optimizer, filepath):
+    """
+    Save optimizer weights to file.
+    :param optimizer: Keras optimizer instance
+    :param filepath: path to file where weights should be saved
+    """
+    symbolic_weights = getattr(optimizer, 'weights')
+    if symbolic_weights:
+        weight_values = K.batch_get_value(symbolic_weights)
+        
+        with open(filepath, 'wb') as f:
+            pickle.dump(weight_values, f)
+    else:
+        raise ValueError(f"Failed to deduce weight from optimizer")
+    
+def check_config_ckpt(ckpt_path, ds_dict, hparams_dict):
+    """
+    Check if configuration files of checkpoint match the parsed ones.
+    :param ckpt_path: path to checkpoint directory or path
+    :param ds_dict: dictionary of dataset configuration
+    :param hparams_dict: dictionary of model configuration
+    """
+    ckpt_path = Path(ckpt_path)
+
+    model_basedir = ckpt_path if ckpt_path.suffix == ".h5" else ckpt_path.parents[0] 
+
+    # load configuration files from checkpoint
+    fconfig_ds = glob.glob(str(model_basedir.joinpath("config_ds*.json")))
+    fconfig_md = glob.glob(str(model_basedir.joinpath("custom_config_*.json")))
+
+    if fconfig_ds:
+        with open(fconfig_ds[0], "r") as f:
+            ds_dict_ckpt = js.load(f)
+    else:
+        raise FileNotFoundError(f"Dataset configuration file not found in checkpoint directory '{model_basedir}'.")
+
+    if fconfig_md:
+        with open(fconfig_md[0], "r") as f:
+            hparams_dict_ckpt = js.load(f)
+    else:
+        raise FileNotFoundError(f"Model configuration file not found in checkpoint directory '{model_basedir}'.")
+
+    # compare configurations 
+    if ds_dict != ds_dict_ckpt:
+        raise ValueError(f"Dataset configuration file of checkpoint ('{ds_dict_ckpt}') and the parsed one do not match.")
+    
+    if hparams_dict != hparams_dict_ckpt:
+        raise ValueError(f"Model configuration file of checkpoint ('{hparams_dict_ckpt}') and the parsed one do not match.")
 
 # Helpers from MLAir, see:
 # https://gitlab.jsc.fz-juelich.de/esde/machine-learning/mlair/-/blob/master/mlair/helpers/helpers.py?ref_type=heads (MIT License)
@@ -85,30 +165,3 @@ def make_keras_pickable():
 
     cls = Model
     cls.__reduce__ = __reduce__
-
-
-def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
-    """
-    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
-    :param mout_np: numpy-array of model output
-    :param norm: normalization object
-    :param varname: name of variable
-    :param coords: coordinates of target data
-    :param dims: dimensions of target data
-    :param z_branch: flag for z-branch
-    :return: xarray.DataArray of model output with denormalized data
-    """
-    if z_branch:
-        # slice data to get first channel only
-        if isinstance(mout_np, list): mout_np = mout_np[0]
-        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
-    else:
-        # no slicing required
-        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
-
-    # perform denormalization
-    mout_xr = norm.denormalize(mout_xr, varname=varname)
-
-    return mout_xr
-
-

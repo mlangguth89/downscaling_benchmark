@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+    # SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,17 +9,19 @@ Model engine to get and instantiate known models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-15"
-__update__ = "2023-12-15"
+__update__ = "2024-09-18"
 
 # import modules
-from unet_model import UNet_Sha, UNet_DeepRU
+from unet_model import Sha_UNet, DeepRU_UNet
 from wgan_model import WGAN, Critic_Simple
+from harris_wgan_model import HarrisWGAN, GeneratorHarris, CriticHarris
+from swinir_lightning_model import SwinIRLightning 
 from other_utils import to_list
 
 class ModelEngine(object):
     """
     Class to get and instantiate known models.
-    To add new models, please adapt known_models accoringly.
+    To add new models, please adapt known_models accordingly.
     General info:
     The key value of the implemented model should be based on keras.Model and should expect 'hparams', 'exp_name' and
     'model_savedir' as arguments for initialization. Further keyword arguments are possible.
@@ -29,12 +31,19 @@ class ModelEngine(object):
     Example: WGAN is a composite model consisting of a generator and critic (see wgan_model.py).
              Thus, the derived class should be the first element of the tuple.
              The model constructions of the generator (e.g. a U-Net) and the critic must then constitute the second and
-             third element of the tuple, i.e. {"wgan": (WGAN, UNet_Sha, Critic_Simple).
+             third element of the tuple, i.e. {"wgan": (WGAN, Sha_UNet, Critic_Simple).
     """
 
-    known_models = {"sha_unet": (UNet_Sha,),
-                    "deepru": (UNet_DeepRU,),
-                    "sha_wgan": (WGAN, UNet_Sha, Critic_Simple)}
+    known_models = {"sha_unet": (Sha_UNet,),
+                    "deepru": (DeepRU_UNet,),
+                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple),
+                    "harris_wgan": (HarrisWGAN, GeneratorHarris, CriticHarris),
+                    "swinir": (SwinIRLightning,)}
+    
+    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN","SWINIR"]
+    
+    assert len(known_models) == len(long_names), f"Conflicting number of known_models ({len(known_models)})" + \
+                                                 f" and long_names ({len(long_names)})."
 
     def __init__(self, model_name: str):
         """
@@ -43,10 +52,8 @@ class ModelEngine(object):
         Hint: Pass help to get an overview of the available models.
         """
         self.modelname = model_name
-        if self.modelname is None:
-            self.model = None
-        else:
-            self.model = self.known_models[self.modelname]
+        self.model = self.known_models[self.modelname]
+        self.model_longname = self.long_names[list(self.known_models.keys()).index(self.modelname)]
 
     def __call__(self, shape_in, varnames_tar, hparams_dict, save_dir, expname, **kwargs):
         """
@@ -63,6 +70,9 @@ class ModelEngine(object):
             else:
                 submodels = model_list[1:]
                 model = target_model(*submodels, **model_args)
+
+                # Fix to ensure that correct modelname is set
+                model.modelname = self.modelname
         except Exception as e:
             err_str = str(e)
             raise RuntimeError(f"Failed to instantiate the model. The following error occured: \n {err_str}")
