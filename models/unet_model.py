@@ -9,7 +9,7 @@ Class for building blocks of U-Net as well as model classes for Sha U-Net and De
 __author__ = "Michael Langguth, Erik Pavel"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2025-01-02"
+__update__ = "2025-03-13"
 
 # import modules
 import os
@@ -18,6 +18,12 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
 import keras.backend as K
+try:
+    import horovod.tensorflow as hvd
+    from horovod.tensorflow import callbacks as hvd_callbacks
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
                                      Activation, AveragePooling2D, Add, UpSampling2D, SpatialDropout2D)
@@ -203,16 +209,14 @@ class Sha_UNet(AbstractModelClass):
     
     def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False, with_horovod: bool = False):
         
+        self.dummy_shape = [8, 8, 1]    
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
-            shape_in = [8, 8, 8]
+            shape_in = self.dummy_shape
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
         
         self.concat_out = concat_out
         self.with_horovod = with_horovod
-        if self.with_horovod:
-            import horovod.tensorflow.keras as hvd
-            from horovod.tensorflow import callbacks as hvd_callbacks
-
+            
         # get building blocks for U-Net
         building_blocks = UNetModelBase()
         self.conv_block = building_blocks.conv_block
@@ -396,11 +400,22 @@ class DeepRU_UNet(Sha_UNet):
         # get building blocks for U-Net
         building_blocks = UNetModelBase()
         self.encoder_block_dru, self.decoder_block_dru = building_blocks.encoder_block_deepru, building_blocks.decoder_block_deepru
-        
+
+        # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
+        self.dummy_shape = [32, 36, 1]    
+        dummy_shape = False
+        if not shape_in:                   
+            shape_in = self.dummy_shape
+            dummy_shape = True
+    
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         # set hyperparmaters
         self.set_hparams(hparams)
+
+        # ensure that input shape fits to the model configuration determined by strides_list in case it is not provided
+        if dummy_shape:
+            self._input_shape = list(np.prod(self.hparams["strides_list"], axis=0)) + [1]
         
         # set model
         self.set_model()
