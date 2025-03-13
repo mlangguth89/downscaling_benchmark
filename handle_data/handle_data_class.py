@@ -887,7 +887,6 @@ class StreamMonthlyNetCDF(object):
         set_ind = int(str(set_ind).lstrip("b'").rstrip("'"))
         set_ind = int(set_ind % self.nds)
         file_list_now = self.file_list_random[set_ind * self.nfiles2merge:(set_ind + 1) * self.nfiles2merge]
-        if self.main_process: print(f"ifiles: {set_ind * self.nfiles2merge} -> {(set_ind + 1) * self.nfiles2merge}")
         
         il = int(self.iload_next % 2)
         # read the normalized data into memory

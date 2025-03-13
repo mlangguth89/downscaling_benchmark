@@ -734,7 +734,7 @@ class HarrisWGAN(AbstractModelClass):
             elif decay_st <= epoch < decay_end:
                 return lr * tf.math.exp(decay_rate)
             elif epoch >= decay_end:
-                return lr
+                return min(lr, lr_end)
 
         return lr_scheduler
 
