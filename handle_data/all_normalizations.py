@@ -9,7 +9,7 @@ General normalizer class which encapsulates all normalization based on abstract 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
-__update__ = "2025-02-17"
+__update__ = "2025-03-14"
 
 import os
 from typing import List, Union
@@ -248,7 +248,7 @@ class Log_ZScore(Normalize):
     """
     Class to perform zscore-normalization on log transformed data.
     """
-    def __init__(self, norm_dims: List, eps=0.01):
+    def __init__(self, norm_dims: List, eps=1.e-04):
         super().__init__("log_zscore", norm_dims)
         self.norm_stats = {"log_mu": None, "log_sigma": None}
         self.eps = eps
