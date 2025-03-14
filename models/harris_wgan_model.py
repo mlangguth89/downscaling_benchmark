@@ -35,6 +35,7 @@ from model_utils import save_opt_weights
 from tensorflow.python.platform import tf_logging as logging
 try:
     import horovod.tensorflow as hvd
+    import horovod.keras.callbacks as hvd_callbacks
 except:
     print("Horovod is not installed. Distributed training is not supported.")
     pass
@@ -297,6 +298,12 @@ class HarrisWGAN_Model(keras.Model):
         self.hparams = hparams
         self._expname = expname
         self.noise_gen = noise_gen
+        if self.hparams["noise_input"]:
+            self.noise_amplitude = 1.
+        else:
+            self.noise_amplitude = 0.
+            self.hparams["noise_channels"] = 1
+
         if noise_gen:
             assert isinstance(noise_gen, NoiseGenerator), "Parsed noise_gen must be an instance of the NoiseGenerator-class"
         
@@ -322,10 +329,10 @@ class HarrisWGAN_Model(keras.Model):
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         sample = outputs["output"]
 
         # train critic
@@ -423,10 +430,10 @@ class HarrisWGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         sample = outputs["output"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
         noise_iter = noise[0:self.hparams["batch_size"]:, ...]
         noise_0 = noise_iter[..., 0]
@@ -463,7 +470,7 @@ class HarrisWGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         
         if self.hparams["ensemble_size"] is not None:
-            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
+            noise = [self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"])]
             gen_list = []
             for noise_iter in noise:
                 gen_in = [cond] + [const] + [noise_iter]
@@ -471,7 +478,7 @@ class HarrisWGAN_Model(keras.Model):
                 gen_list.append(gen_iter)
             gen_out = tf.stack(gen_list, axis=-1)
         else:
-            noise = self.noise_gen()
+            noise = self.noise_gen(self.noise_amplitude)
             gen_in = [cond] + [const] + [noise]
             gen_out = self.generator(gen_in, training=False)
         return gen_out
@@ -614,13 +621,13 @@ class HarrisWGAN(AbstractModelClass):
         self.with_horovod = with_horovod
         self.main_process = True 
         if self.with_horovod:
-            import horovod.tensorflow as hvd
-            import horovod.keras.callbacks as hvd_callbacks
-
             self.main_process = hvd.rank() == 0
         
         # set hyperparmaters
         self.set_hparams(hparams)
+        if not self.hparams["noise_input"]:
+            print("Set noise channels to 1.")
+            self.hparams["noise_channels"] = 1
         # set submodels
         self.generator, self.critic = self.set_model(generator, critic)
         # set compile and fit options as well as custom objects
@@ -846,7 +853,7 @@ class HarrisWGAN(AbstractModelClass):
         """
         self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8, "noise_input": True,
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
 
 
