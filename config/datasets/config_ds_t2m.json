@@ -5,7 +5,7 @@
   "varname_z": {"hsurf_tar": "zscore"},
   "predictands": {"t_2m_tar": "zscore"},
   "predictors": {"t2m_in": "zscore", "slhf_in": "zscore", "sshf_in": "zscore", "u10_in": "zscore", "v10_in": "zscore",
-                 "blh_in": "zscore", "sp_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "t115_in": "zscore", 
-                 "t122_in": "zscore", "t127_in": "zscore", "t131_in": "zscore", "t135_in": "zscore"},
+                 "blh_in": "zscore", "msl_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "t_ml115_in": "zscore",
+                 "t_ml122_in": "zscore", "t_ml127_in": "zscore", "t_ml131_in": "zscore", "t_ml135_in": "zscore"},
   "static_predictors": {"hsurf_tar": "zscore", "fr_land_tar": "zscore"}
 }
