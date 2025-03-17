@@ -140,6 +140,8 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     gc.collect()
     #free_mem([tfds_test])
 
+    if isinstance(y_pred, list): y_pred = y_pred[0]
+
     ### Post-process results from test dataset
     # average over ensemble members or select specific member
     if np.ndim(y_pred) == 5:
@@ -149,6 +151,8 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
         else:
             assert isinstance(ens_member, int), f"Invalid value '{ens_member}' for ens_member. Must be 'mean' or integer."
             y_pred = y_pred[..., ens_member]
+    else:
+        ens_out = False
 
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
