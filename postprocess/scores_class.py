@@ -302,10 +302,9 @@ class Scores:
         if not relative:
             bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
-            bias = (self.data_fcst - self.data_ref).mean(
+            bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
-            ) / self.data_ref
-
+            )
         return bias
 
     def calc_psnr(self, **kwargs):
