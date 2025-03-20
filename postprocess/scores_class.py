@@ -39,7 +39,9 @@ class Scores:
                              "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
                              "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
                              "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
-                             "iqd": self.calc_iqd}
+            "iqd": self.calc_iqd,
+            "fss": self.calc_fss,
+        }
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
@@ -554,8 +556,29 @@ class Scores:
 
         return var_diff_amplitude
 
+    def calc_fss(self, window: tuple[int] = (8, 8), thres: float = 0.5, **kwargs):
+        """
+        Calculates the Fractions Skill Score (FSS)
+        :param window: size of spatially sliding window (height, width)
+        :param thres: threshold to define events
+        :return: fss-values
+        """
+        from scores.spatial import fss_2d
 
-    def check_for_coords(self, coord_names_data, dim_query: str, return_index: bool = False):
+        # wip
+        fss = fss_2d(
+            self.data_fcst,
+            self.data_ref,
+            event_threshold=thres,
+            window_size=window,
+            spatial_dims=["lat", "lon"],
+            preserve_dims=["time"],
+        )
+
+        return fss
+
+    def check_for_coords(
+        self, coord_names_data, dim_query: str, return_index: bool = False):
         """
         Check if one of the known geographical coordinates is part of the passed list.
         :param coord_names_data: list of coordinate names
