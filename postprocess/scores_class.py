@@ -214,33 +214,51 @@ class Scores:
 
         return mae
 
-    def calc_mse(self, **kwargs):
+    def calc_mse(self, relative: bool = False, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative RMSE, otherwise absolute
         :return: MSE
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mse.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_mse.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_mse are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_mse are without effect."
+            )
 
-        mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        if not relative:
+            mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        else:
+            mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
+                dim=self.avg_dims
+            )
 
         return mse
 
-    def calc_rmse(self, **kwargs):
+    def calc_rmse(self, relative: bool = False, **kwargs):
         """
-        Calculate mse of forecast data w.r.t. reference data
+        Calculate rmse of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative RMSE, otherwise absolute
         :return: RMSE
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_rmse are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_rmse are without effect."
+            )
 
-        rmse = np.sqrt(self.calc_mse())
+        if not relative:
+            rmse = np.sqrt(self.calc_mse())
+        else:
+            rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
     
@@ -263,15 +281,28 @@ class Scores:
 
         return acc
 
-    def calc_bias(self, **kwargs):
-
+    def calc_bias(self, relative: bool = False, **kwargs):
+        """
+        Calculate bias of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative bias, otherwise absolute
+        :return: bias
+        """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_bias.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_bias.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_bias are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_bias are without effect."
+            )
 
-        bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        if not relative:
+            bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        else:
+            bias = (self.data_fcst - self.data_ref).mean(
+                dim=self.avg_dims
+            ) / self.data_ref
 
         return bias
 
