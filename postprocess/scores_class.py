@@ -555,23 +555,43 @@ class Scores:
 
         return var_diff_amplitude
 
-    def calc_fss(self, window: tuple[int] = (8, 8), thres: float = 0.5, **kwargs):
+    def calc_fss(
+        self,
+        lonlat_dims: List[str] = ["rlon", "rlat"],
+        window: tuple[int] = (8, 8),
+        thres: float = 0.5,
+        **kwargs,
+    ):
         """
-        Calculates the Fractions Skill Score (FSS)
+        Calculates the Fractions Skill Score (FSS) between forecast and reference data.
+        Note that no averaging over the spatial dimensions is possible since
+        the FSS is calculated across spatially sliding windows.
+        :param lonlat_dims: list of longitude and latitude dimensions
         :param window: size of spatially sliding window (height, width)
         :param thres: threshold to define events
         :return: fss-values
         """
-        from scores.spatial import fss_2d
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
-        # wip
+        avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
+
+        if avg_dims != self.avg_dims:
+            func_logger.debug(
+                f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}"
+            )
+        from scores.spatial import fss_2d  # debug: keep import here until it is tested
+
         fss = fss_2d(
             self.data_fcst,
             self.data_ref,
             event_threshold=thres,
             window_size=window,
-            spatial_dims=["lat", "lon"],
-            preserve_dims=["time"],
+            spatial_dims=lonlat_dims,
+            reduce_dims=avg_dims,
+            zero_padding=True,  # TODO: tbd if sought after or not
         )
 
         return fss
