@@ -9,14 +9,15 @@ General normalizer class which encapsulates all normalization based on abstract 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
-__update__ = "2025-03-14"
+__update__ = "2025-03-20"
 
 import os
 from typing import List, Union
 import json as js
-from abstract_data_normalization import Normalize
+import numpy as np
 import dask
 import xarray as xr
+from abstract_data_normalization import Normalize
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 
@@ -306,7 +307,7 @@ class Log_ZScore(Normalize):
         :param std: standard deviation of data for denormalization
         :return data_norm: denormalized data
         """
-        data = np.exp( data + np.log(self.eps)) - self.eps
         data = data * log_std + log_mu
+        data = np.exp( data + np.log(self.eps)) - self.eps
 
         return data
