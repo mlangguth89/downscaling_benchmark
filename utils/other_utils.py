@@ -429,7 +429,7 @@ def copy_filelist(file_list: List, dest_dir: str, file_list_dest: List = None ,l
             else:
                 print(f"WARNING: Could not find file '{f}'.")
 
-def merge_dicts(default_dict, user_dict, recursive: bool = True):
+def merge_dicts(default_dict, user_dict, recursive=True):
     """
     Merge two dictionaries, ensuring that all default keys are set.
     Recursive strategy is optional.
@@ -443,31 +443,22 @@ def merge_dicts(default_dict, user_dict, recursive: bool = True):
     for key, value in user_dict.items():
         if key not in merged_dict:
             raise KeyError(f"Key '{key}' not found in the default dictionary.")
-        
-        if isinstance(value, dict) and key in merged_dict and isinstance(merged_dict[key], dict):
-            # If the value is a dictionary and the key exists in both dictionaries,
-            # recursively merge the dictionaries.
-            if recursive:
-                merged_dict[key] = merge_dicts(merged_dict[key], value)
-            else:
-                merged_dict[key] = value
+
+        default_value = merged_dict.get(key)
+
+        if isinstance(value, dict) and isinstance(default_value, dict) and recursive:
+            merged_dict[key] = merge_dicts(default_value, value)
         else:
-            # If the target key already exists, retain its type
-            if key in merged_dict and merged_dict[key] is not None:
-                expected_type = type(merged_dict[key])
+            if default_value is not None:
+                expected_type = type(default_value)
 
-                # Convert `value` if it's a list or tuple
-                if isinstance(value, (list, tuple)) and isinstance(merged_dict[key], (list, tuple)):
-                    if isinstance(merged_dict[key], tuple):
-                        value = tuple(value)  # Convert to tuple
-                    else:
-                        value = list(value)   # Convert to list
+                # Convert lists/tuples to match the expected type
+                if isinstance(value, (list, tuple)) and isinstance(default_value, (list, tuple)):
+                    value = tuple(value) if isinstance(default_value, tuple) else list(value)
 
-                # Ensure the final value matches the expected type
                 assert isinstance(value, expected_type), \
                     f"Type mismatch for key '{key}': Expected {expected_type}, got {type(value)}"
-            
-            # Assign the value to the merged dictionary
+
             merged_dict[key] = value
 
     return merged_dict
