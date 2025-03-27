@@ -29,7 +29,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
 from custom_losses import get_custom_loss
-from wgan_model import LearningRateSchedulerWGAN
+from wgan_model import LearningRateSchedulerWGAN 
 from model_utils import save_opt_weights
 from tensorflow.python.platform import tf_logging as logging
 
@@ -625,7 +625,7 @@ class HarrisWGAN(AbstractModelClass):
         harriswgan_callbacks = []
         
         if self.hparams["lr_decay"]:
-            harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
+            harriswgan_callbacks.append(LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1))
         
         if self.hparams["lcheckpointing"]:            
             harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
@@ -810,50 +810,7 @@ class HarrisWGAN(AbstractModelClass):
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
-
-
-class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
-    """Note SL: taken from wgan_model.py"""
-    def __init__(self, schedule, verbose=0):
-        super(LearningRateSchedulerWGAN, self).__init__(schedule, verbose)
-
-    def on_epoch_begin(self, epoch, logs=None):
-        if not hasattr(self.model, "g_optimizer"):
-            raise AttributeError('Model must have a "g_optimizer" for optimizing the generator.')
-
-        if not hasattr(self.model, "c_optimizer"):
-            raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
-
-        if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
-            raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
-        try:  # new API
-            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
-                         float(K.get_value(self.model.c_optimizer.lr))
-            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
-        except TypeError:  # Support for old API for backward compatibility
-            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
-
-        if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
-                isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
-            raise ValueError('The output of the "schedule" function '
-                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)' )
-        if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
-           and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
-            raise ValueError(
-                f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
-                f'and {lr_c.dtype} (critic)' )
-        # set updated learning rate
-        K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
-        K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
-        if self.verbose > 0:
-            print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
-                  f'rate for generator to {lr_g}, for critic to {lr_c}.')
-
-    def on_epoch_end(self, epoch, logs=None):
-        logs = logs or {}
-        logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
-        logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
-
+        
 
 class ModelCheckpointHarrisWGAN(ModelCheckpoint):
     """Note SL: taken from wgan_model.py"""
