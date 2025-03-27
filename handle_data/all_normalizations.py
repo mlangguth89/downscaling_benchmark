@@ -68,7 +68,8 @@ class GeneralNormalizer:
         norm_stats = {}
         
         for method, normalizer in self.normalizers.items():
-            norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]]))
+            _ = normalizer.get_required_stats(data[self.vars_normalizers[method]])
+            norm_stats.update(normalizer.norm_stats)
 
         return norm_stats
     

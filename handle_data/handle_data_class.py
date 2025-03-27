@@ -543,7 +543,7 @@ class StreamMonthlyNetCDF(object):
         if not norm_obj:
             vars2norm = {**predictors, **static_predictors, **predictands}
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            self.data_norm = GeneralNormalizer(norm_dims, vars2norm)  # TO-DO: Allow for arbitrary normalization
+            self.data_norm = GeneralNormalizer(vars2norm, norm_dims)  # TO-DO: Allow for arbitrary normalization
             _ = self.data_norm.get_stats_from_data(ds_all)
             self.normalization_time = timer() - t0
         else:
