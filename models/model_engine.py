@@ -9,12 +9,12 @@ Model engine to get and instantiate known models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-15"
-__update__ = "2024-09-18"
+__update__ = "2025-03-28"
 
 # import modules
 from unet_model import Sha_UNet, DeepRU_UNet
-from wgan_model import WGAN, Critic_Simple
-from harris_wgan_model import HarrisWGAN, GeneratorHarris, CriticHarris
+from wgan_model import Sha_WGAN, Critic_Simple
+from harris_wgan_model import Harris_WGAN, GeneratorHarris, CriticHarris
 from other_utils import to_list
 
 class ModelEngine(object):
@@ -35,8 +35,8 @@ class ModelEngine(object):
 
     known_models = {"sha_unet": (Sha_UNet,),
                     "deepru": (DeepRU_UNet,),
-                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple),
-                    "harris_wgan": (HarrisWGAN, GeneratorHarris, CriticHarris)}
+                    "sha_wgan": (Sha_WGAN, Sha_UNet, Critic_Simple),
+                    "harris_wgan": (Harris_WGAN, GeneratorHarris, CriticHarris)}
     
     long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN"]
     
