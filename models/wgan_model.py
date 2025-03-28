@@ -13,13 +13,15 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2024-09-18"
+__update__ = "2025-03-25"
 
 import os
+import glob
 from typing import List, Tuple, Union
 import inspect
 from collections import OrderedDict
 from pathlib import Path
+import pickle
 import numpy as np
 import tensorflow as tf
 import tensorflow.keras as keras
@@ -28,6 +30,11 @@ from tensorflow.keras.callbacks import LearningRateScheduler, ModelCheckpoint, E
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.python.platform import tf_logging as logging
+try:
+    import horovod.tensorflow as hvd
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 
 # all the layers used for U-net
 from tensorflow.keras.layers import (Input, Dense, GlobalAveragePooling2D)
@@ -37,6 +44,7 @@ from abstract_model_class import AbstractModelClass
 from unet_model import UNetModelBase
 from custom_losses import get_custom_loss
 from advanced_activations import advanced_activation
+from model_utils import save_opt_weights
 
 
 list_or_tuple = Union[List, Tuple]
@@ -94,7 +102,7 @@ class Critic_Simple(AbstractModelClass):
                                 "lbatch_norm": True, "kernel": (3, 3), "stride": (2, 2), "lr": 1.e-06,}
 
 
-class WGAN_Model(keras.Model):
+class Sha_WGAN_Model(keras.Model):
     def __init__(self, generator, critic, hparams):
         super().__init__()
         self.generator = generator
@@ -212,9 +220,64 @@ class WGAN_Model(keras.Model):
         gp = tf.reduce_mean((norm - 1.) ** 2)
 
         return gp
+    
+    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
+             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
+        """
+        Save generator and critic seperately.
+        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
+        :param filepath: path to SavedModel or H5 file to save both models
+        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
+                          with a manual prompt.
+        :param include_optimizer: If True, save optimizer's state together.
+        :param save_format: Currently, only the 'tf' format is supported.
+        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
+                           Please see the `signatures` argument in `tf.saved_model.save` for details.
+        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
+                        for saving to SavedModel.
+        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
+                            traces for each layer. This can be disabled, so that only the configs of each layer are
+                            stored.  Defaults to `True`. Disabling this will decrease
+                            serialization time and reduce file size, but it requires that
+                            all custom layers/models implement a `get_config()` method.
+        :return: -
+        """       
+        assert save_format != "h5", f"h5 is not supported as save format for this model"            
+
+        # save generator and critic seperately
+        generator_path, critic_path = Path(filepath).joinpath(f"{self._expname}_generator{suffix}"), \
+                                      Path(filepath).joinpath(f"{self._expname}_critic{suffix}")
+        
+        os.makedirs(generator_path, exist_ok =True)
+        os.makedirs(critic_path, exist_ok =True)
+        
+        if tf.__version__ >= "2.12.0":
+            self.generator.save(generator_path, overwrite, save_format)
+            self.critic.save(critic_path, overwrite, save_format)
+        else:
+            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        
+        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
+        # https://github.com/keras-team/tf-keras/issues/504
+        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
+        if include_optimizer:    # required to resume training    
+            self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}"), overwrite=overwrite,
+                                        save_format=save_format, options=options)
+            self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}"), overwrite=overwrite,
+                                     save_format=save_format, options=options)
+        
+            
+            generator_opt = generator_path.joinpath(f"{self._expname}_generator_opt{suffix}.pkl")
+            critic_opt = critic_path.joinpath(f"{self._expname}_critic_opt{suffix}.pkl")
+            
+            print(f"Save generator optimiter state to {generator_opt}...")
+            save_opt_weights(self.g_optimizer, generator_opt)
+            print(f"Save critic optimiter state to {critic_opt}...")
+            save_opt_weights(self.c_optimizer, critic_opt)
 
 
-class WGAN(AbstractModelClass):
+class Sha_WGAN(AbstractModelClass):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str,
                  with_horovod: bool = False):
@@ -235,13 +298,10 @@ class WGAN(AbstractModelClass):
 
         # flag if horovod is used and import required modules
         self.with_horovod = with_horovod
-        if self.with_horovod: 
-            import horovod.tensorflow as hvd
-            import horovod.keras.callbacks as hvd_callbacks
-            # Print warning since Horovod is not fully supported yet (missing learning rate schedule and warmup).
-            # Thus, it should only be used for benchmarking with JUBE so far.
-            if hvd.rank() == 0:
-                print("Warning: Horovod is not fully supported yet. It should only be used for benchmarking with JUBE so far.")
+        self.main_process = True 
+        if self.with_horovod:
+            raise RuntimeError("Harris WGAN does not support Horovod yet.")
+            self.main_process = hvd.rank() == 0
 
         # set hyperparmaters
         self.set_hparams(hparams)
@@ -254,8 +314,6 @@ class WGAN(AbstractModelClass):
         
     def set_compile_options(self):
         # set optimizers
-        scale_fac = hvd.size() if self.with_horovod else 1.
-
         # check if optimizer is valid and set corresponding optimizers for generator and critic
         if self.hparams["optimizer"].lower() == "adam":
             optimizer = keras.optimizers.Adam
@@ -266,11 +324,8 @@ class WGAN(AbstractModelClass):
         else:
             raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
 
-        self.optimizer = (optimizer(self.critic.hparams["lr"]*scale_fac, **kwargs_opt), 
-                          optimizer(self.generator.hparams["lr"]*scale_fac, **kwargs_opt))
-        if self.with_horovod:
-            kwargs_opt_hvd = {"backward_passes_per_step": 1, "average_aggregated_gradients": True}
-            self.optimizer = (hvd.DistributedOptimizer(self.optimizer[0], **kwargs_opt_hvd), hvd.DistributedOptimizer(self.optimizer[1], **kwargs_opt_hvd))
+        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), 
+                          optimizer(self.generator.hparams["lr"], **kwargs_opt))
 
         self.loss = self.get_recon_loss()
         
@@ -283,24 +338,17 @@ class WGAN(AbstractModelClass):
         if self.hparams["lr_decay"]:
             wgan_callbacks.append(LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1))
         
-        if self.hparams["lcheckpointing"]:          
-            savedir_best = os.path.join(self._savedir, f"{self._expname}_best")
-            os.makedirs(savedir_best, exist_ok=True)
-
-            chkpt_obj = ModelCheckpointWGAN(savedir_best, self._expname, monitor="val_recon_loss", verbose=1, save_best_only=True, mode="min")
-            if not self.with_horovod:
-                wgan_callbacks.append(chkpt_obj)
-            else: # only add checkpointing for rank 0
-                if hvd.rank() == 0: wgan_callbacks.append(chkpt_obj)    
-
+        if self.hparams["lcheckpointing"] and self.main_process:   
+            # checkpoint model after each epoch (save best model only is set to False)       
+            wgan_callbacks.append(ModelCheckpointWGAN(self._savedir, self._expname,
+                                                      monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
             
         if self.hparams["learlystopping"]:
             wgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
 
-        if self.with_horovod:
-            wgan_callbacks["wgan_callbacks"] += [hvd_callbacks.BroadcastGlobalVariablesCallback(0), hvd_callbacks.MetricAverageCallback()]
+        if self.with_horovod:            
+            wgan_callbacks.append(BroadcastWeightsCallback(self.generator, self.critic, self.optimizer[0], self.optimizer[1]))
 
-            
         if wgan_callbacks is not None:
             return {"callbacks": wgan_callbacks}
         else:
@@ -330,7 +378,7 @@ class WGAN(AbstractModelClass):
         hparams_wgan_only.pop("hparams_generator")
                 
         # ...and create WGAN model instance
-        self.model = WGAN_Model(gen_model, critic_model, hparams_wgan_only)
+        self.model = Sha_WGAN_Model(gen_model, critic_model, hparams_wgan_only)
 
         return gen_model, critic_model
     
@@ -343,6 +391,7 @@ class WGAN(AbstractModelClass):
             kwargs_loss = {"n_channels": self._n_predictands}
 
         loss_fn = get_custom_loss(self.hparams["recon_loss"], **kwargs_loss)
+        print(f"Using {self.hparams['recon_loss']} as reconstruction loss function.")
 
         return loss_fn
         
@@ -383,8 +432,58 @@ class WGAN(AbstractModelClass):
         k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
         k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
 
-    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = None,
-             signatures=None, options=None, save_traces: bool = True):
+    def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
+        """
+        Load model from checkpoint that has been either saved with the save-method or with the Checkpoint-callback.
+        Requires that the model is compiled! 
+        :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
+        :param checkpoint_format: format of checkpoint, must match the format used for saving.
+        :return: iteration step of checkpointed model
+        """
+        generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
+                                      Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
+        
+        matching_gen_dir, matching_critic_dir = glob.glob(str(generator_path)), glob.glob(str(critic_path))
+        
+        if matching_gen_dir:
+            generator_path = Path(matching_gen_dir[0])
+            suffix_gen = str(generator_path).split("_generator")[-1]
+        else:
+            raise FileNotFoundError(f"No matching director for generator-model {str(generator_path)} found.")
+            
+        if matching_critic_dir:
+            critic_path = Path(matching_critic_dir[0])
+            suffix_critic = str(critic_path).split("_critic")[-1]
+        else:
+            raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
+        
+        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
+        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
+
+        opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
+                                        critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
+        with open(opt_gen_path, "rb") as f:
+            optimizer_weights_gen = pickle.load(f)
+
+        with open(opt_critic_path, "rb") as f:
+            optimizer_weights_critic = pickle.load(f)
+
+        # Note the optimizers are directly accessible from the model-class due to the __getattr__-method of AbstractModelClass
+        # set state for g_optimizer
+        self.g_optimizer._create_all_weights(self.generator.trainable_variables)
+        self.g_optimizer.set_weights(optimizer_weights_gen)
+
+        # set state for c_optimizer
+        self.c_optimizer._create_all_weights(self.critic.trainable_variables)
+        self.c_optimizer.set_weights(optimizer_weights_critic)
+
+        # retrieve iteration step of checkpointed model
+        iter_step = (self.g_optimizer.variables()[0]).numpy()
+
+        return iter_step
+
+    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
+             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
         """
         Save generator and critic seperately.
         The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
@@ -392,8 +491,7 @@ class WGAN(AbstractModelClass):
         :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
                           with a manual prompt.
         :param include_optimizer: If True, save optimizer's state together.
-        :param save_format: Either `'tf'` or `'h5'`, indicating whether to save the model to Tensorflow SavedModel or
-                            HDF5. Defaults to 'tf' in TF 2.X, and 'h5' in TF 1.X.
+        :param save_format: Currently, only the 'tf' format is supported.
         :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
                            Please see the `signatures` argument in `tf.saved_model.save` for details.
         :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
@@ -404,15 +502,40 @@ class WGAN(AbstractModelClass):
                             serialization time and reduce file size, but it requires that
                             all custom layers/models implement a `get_config()` method.
         :return: -
-        """
-        generator_path, critic_path = os.path.join(filepath, "{0}_generator_last".format(self._expname)), \
-                                      os.path.join(filepath, "{0}_critic_last".format(self._expname))
+        """       
+        assert save_format != "h5", f"h5 is not supported as save format for this model"            
+
+        # save generator and critic seperately
+        generator_path, critic_path = Path(filepath).joinpath(f"{self._expname}_generator{suffix}"), \
+                                      Path(filepath).joinpath(f"{self._expname}_critic{suffix}")
+        
+        os.makedirs(generator_path, exist_ok =True)
+        os.makedirs(critic_path, exist_ok =True)
+        
         if tf.__version__ >= "2.12.0":
             self.generator.save(generator_path, overwrite, save_format)
             self.critic.save(critic_path, overwrite, save_format)
         else:
             self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
             self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        
+        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
+        # https://github.com/keras-team/tf-keras/issues/504
+        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
+        if include_optimizer:    # required to resume training    
+            self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}"), overwrite=overwrite,
+                                        save_format=save_format, options=options)
+            self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}"), overwrite=overwrite,
+                                     save_format=save_format, options=options)
+        
+            
+            generator_opt = generator_path.joinpath(f"{self._expname}_generator_opt{suffix}.pkl")
+            critic_opt = critic_path.joinpath(f"{self._expname}_critic_opt{suffix}.pkl")
+            
+            print(f"Save generator optimiter state to {generator_opt}...")
+            save_opt_weights(self.g_optimizer, generator_opt)
+            print(f"Save critic optimiter state to {critic_opt}...")
+            save_opt_weights(self.c_optimizer, critic_opt)
 
     def load_inference_model(self, model_dir, format="tf"):
             
@@ -500,9 +623,11 @@ class LearningRateSchedulerWGAN(LearningRateScheduler):
 
 
 class ModelCheckpointWGAN(ModelCheckpoint):
-
+    """
+    ModelCheckpoint callback for WGAN mode by savin the generator and critic models separately.
+    """
     def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
-                 mode='auto', save_freq='epoch', options=None, **kwargs):
+                 mode='auto', save_freq="epoch", options=None, **kwargs):
         super(ModelCheckpointWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
                                                   save_weights_only, mode, save_freq, options=options, **kwargs)
         self._expname = expname
@@ -528,13 +653,12 @@ class ModelCheckpointWGAN(ModelCheckpoint):
             filepath = self._get_file_path(epoch, batch, logs)
             # ML S
             if self.save_best_only:
-                add_str = "best"
+                add_str = "_best"
             else:
-                add_str = f"epoch{epoch:05d}"
-            filepath_gen = os.path.join(filepath, f"{self._expname}_generator_{add_str}")
-            filepath_critic = os.path.join(filepath, f"{self._expname}_critic_{add_str}")
+                add_str = f"_epoch{epoch+1:05d}"
+            
+            filepath = Path(filepath).joinpath(f"{self._expname}{add_str}")
             # ML E
-
             try:
                 if self.save_best_only:
                     current = logs.get(self.monitor)
@@ -547,15 +671,10 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                                       ' saving model to %s' % (epoch + 1, self.monitor,
                                                                self.best, current, filepath))
                             self.best = current
+                            
                             # ML S
-                            if self.save_weights_only:
-                                self.model.generator.save_weights(
-                                    filepath_gen, overwrite=True, options=self._options)
-                                self.model.critic.save_weights(
-                                    filepath_critic, overwrite=True, options=self._options)
-                            else:
-                                self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
-                                self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                            self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
+                                            suffix=add_str)#, options=self._options)
                             # ML E
                         else:
                             if self.verbose > 0:
@@ -565,14 +684,8 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                     if self.verbose > 0:
                         print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
                     # ML S
-                    if self.save_weights_only:
-                        self.model.generator.save_weights(
-                            filepath_gen, overwrite=True, options=self._options)
-                        self.model.critic.save_weights(
-                            filepath_critic, overwrite=True, options=self._options)
-                    else:
-                        self.model.generator.save(filepath_gen, overwrite=True, options=self._options)
-                        self.model.critic.save(filepath_critic, overwrite=True, options=self._options)
+                    self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
+                                    suffix=add_str)#, options=self._options)
                     # ML E
                 self._maybe_remove_file()
             except IsADirectoryError as e:  # h5py 3.x
@@ -585,5 +698,27 @@ class ModelCheckpointWGAN(ModelCheckpoint):
                                   'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
                 # Re-throw the error for any other causes.
                 raise e
-               
+
+
+class BroadcastWeightsCallback(tf.keras.callbacks.Callback):
+    """ 
+    Custom callback to broadcast model weights at the end of each batch.
+    Ensures all workers stay synchronized during training.
+    """
+
+    def __init__(self, generator, critic, g_optimizer, c_optimizer, root_rank=0):
+        super(BroadcastWeightsCallback, self).__init__()
+        self.generator = generator
+        self.critic = critic
+        self.g_optimizer = g_optimizer
+        self.c_optimizer = c_optimizer
+        self.root_rank = root_rank
+
+    def on_epoch_begin(self, epoch, logs=None):
+        # broadcast weights at the beginning of the first epoch
+        if epoch == 0:
+            hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
+            hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)            
 

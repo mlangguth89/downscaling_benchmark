@@ -10,28 +10,24 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-02-24"
+__update__ = "2025-03-28"
 
-import os
 from typing import List, Tuple, Union, Dict
-import glob
 from collections import OrderedDict
 from pathlib import Path
-import pickle
 import numpy as np
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.python.keras.utils import tf_utils
-from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense, BatchNormalization
 from tensorflow.keras.models import Model
-from tensorflow.keras.utils import plot_model as k_plot_model
-from tensorflow.keras import backend as K
+try:
+    import horovod.tensorflow as hvd
+except:
+    print("Horovod is not installed. Distributed training is not supported.")
+    pass
 from custom_losses import get_custom_loss
-from wgan_model import LearningRateSchedulerWGAN 
-from model_utils import save_opt_weights
-from tensorflow.python.platform import tf_logging as logging
+from wgan_model import Sha_WGAN 
 
 
 list_or_tuple = Union[List, Tuple]
@@ -284,7 +280,7 @@ class NoiseGenerator(object):
     
     
 
-class HarrisWGAN_Model(keras.Model):
+class Harris_WGAN_Model(keras.Model):
     def __init__(self, generator, critic, hparams, expname, noise_gen=None):
         super().__init__()
         self.generator = generator
@@ -307,9 +303,9 @@ class HarrisWGAN_Model(keras.Model):
             )
 
         # losses
-        self.critic_loss = self.critic_loss #get_custom_loss("critic")
-        self.critic_gen_loss = self.generator_loss #get_custom_loss("critic_generator")
-        self.recon_loss = CL_chooser(self.hparams["recon_loss"])
+        self.critic_loss = get_custom_loss("critic")
+        self.critic_gen_loss = get_custom_loss("critic_generator")
+        self.recon_loss = loss
         
     @tf.function    
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
@@ -500,83 +496,15 @@ class HarrisWGAN_Model(keras.Model):
         gp = tf.reduce_mean((norm - 1.) ** 2)
 
         return gp
-        
-    @staticmethod
-    def critic_loss(real_img, fake_img):
-        real_loss = tf.reduce_mean(real_img)
-        fake_loss = tf.reduce_mean(fake_img)
-        return fake_loss - real_loss
-
-
-    # Define the loss functions for the generator.
-    @staticmethod
-    def generator_loss(fake_img):
-        return -tf.reduce_mean(fake_img)
     
-    
-    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
-             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
-        """
-        Save generator and critic seperately.
-        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
-        :param filepath: path to SavedModel or H5 file to save both models
-        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
-                          with a manual prompt.
-        :param include_optimizer: If True, save optimizer's state together.
-        :param save_format: Currently, only the 'tf' format is supported.
-        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
-                           Please see the `signatures` argument in `tf.saved_model.save` for details.
-        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
-                        for saving to SavedModel.
-        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
-                            traces for each layer. This can be disabled, so that only the configs of each layer are
-                            stored.  Defaults to `True`. Disabling this will decrease
-                            serialization time and reduce file size, but it requires that
-                            all custom layers/models implement a `get_config()` method.
-        :return: -
-        """       
-        assert save_format != "h5", f"h5 is not supported as save format for this model"            
 
-        # save generator and critic seperately
-        generator_path, critic_path = Path(filepath).joinpath(f"{self._expname}_generator{suffix}"), \
-                                      Path(filepath).joinpath(f"{self._expname}_critic{suffix}")
-        
-        os.makedirs(generator_path, exist_ok =True)
-        os.makedirs(critic_path, exist_ok =True)
-        
-        if tf.__version__ >= "2.12.0":
-            self.generator.save(generator_path, overwrite, save_format)
-            self.critic.save(critic_path, overwrite, save_format)
-        else:
-            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-        
-        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
-        # https://github.com/keras-team/tf-keras/issues/504
-        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
-        if include_optimizer:    # required to resume training    
-            self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}"), overwrite=overwrite,
-                                        save_format=save_format, options=options)
-            self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}"), overwrite=overwrite,
-                                     save_format=save_format, options=options)
-        
-            
-            generator_opt = generator_path.joinpath(f"{self._expname}_generator_opt{suffix}.pkl")
-            critic_opt = critic_path.joinpath(f"{self._expname}_critic_opt{suffix}.pkl")
-            
-            print(f"Save generator optimiter state to {generator_opt}...")
-            save_opt_weights(self.g_optimizer, generator_opt)
-            print(f"Save critic optimiter state to {critic_opt}...")
-            save_opt_weights(self.c_optimizer, critic_opt)
-        
-
-
-class HarrisWGAN(AbstractModelClass):
+class Harris_WGAN(Sha_WGAN):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict,
                  varnames_tar: List, savedir: str, expname: str):
         """
-        Initialize the HarrisWGANModel class.
+        Initialize the Harris_WGAN model class.
+        !!! Note: Inherits from Sha_WGAN and overwrites methods when necessary only !!!
 
         :param generator: The generator model.
         :param critic: The critic model.
@@ -592,6 +520,10 @@ class HarrisWGAN(AbstractModelClass):
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "harriswgan"
+        self.main_process = True 
+        if self.with_horovod:
+            raise RuntimeError("Harris WGAN does not support Horovod yet.")
+            self.main_process = hvd.rank() == 0
         
         # set hyperparmaters
         self.set_hparams(hparams)
@@ -602,42 +534,9 @@ class HarrisWGAN(AbstractModelClass):
         self.set_custom_objects(loss=self.compile_options['loss'])
         self.set_fit_options()
         
-    def set_compile_options(self):
-        """
-        Set compile options for the HarrisWGAN model.
-        """
-        # set optimizers
-        if self.hparams["optimizer"].lower() == "adam":
-            optimizer = keras.optimizers.Adam
-            kwargs_opt = {"beta_1": 0.0, "beta_2": 0.9}
-        elif self.hparams["optimizer"].lower() == "rmsprop":
-            optimizer = keras.optimizers.RMSprop
-            kwargs_opt = {}
-        else:
-            raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
-
-        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
-        
-    def get_fit_options(self):
-        """
-        Get options that will be parsed to the fit-method of the Keras model.
-        """
-        harriswgan_callbacks = []
-        
-        if self.hparams["lr_decay"]:
-            harriswgan_callbacks.append(LearningRateSchedulerWGAN(self.get_lr_decay(), verbose=1))
-        
-        if self.hparams["lcheckpointing"]:            
-            harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
-                                                                  monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
-            
-        if self.hparams["learlystopping"]:
-            harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
-            
-        if harriswgan_callbacks is not None:
-            return {"callbacks": harriswgan_callbacks}
-        else:
-            return {}  
+    # !!! NOTE !!!
+    # set_compile_options and get_fit_options are inherited from Sha_WGAN
+    # !!! NOTE !!!
         
     def set_model(self, generator, critic):
         """
@@ -664,103 +563,14 @@ class HarrisWGAN(AbstractModelClass):
         hparams_wgan_only.pop("hparams_critic")
         hparams_wgan_only.pop("hparams_generator")
                 
-        # ...and create HarrisWGAN model instance
-        self.model = HarrisWGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
+        # ...and create Harris_WGAN model instance
+        self.model = Harris_WGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
 
         return gen_model, critc_model
     
-        
-    def get_lr_decay(self):
-        """
-        Get callable of learning rate scheduler which can be used as callabck in Keras models.
-        Exponential decay is applied to change the learning rate from the start to the end value.
-        Note that the exponential decay is calculated based on the learning rate of the generator, but applies to both.
-        :return: learning rate scheduler
-        
-        NOTE SL: taken from wgan_model.py
-        """
-        decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
-        lr_start, lr_end = self.hparams["hparams_generator"]["lr"], self.hparams["hparams_generator"]["lr_end"]
-
-        if not decay_end > decay_st:
-            raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
-                             "Your values: {0:d}, {1:d})".format(decay_st, decay_end))
-
-        ne_decay = decay_end - decay_st
-        # calculate decay rate from start and end learning rate
-        decay_rate = 1./ne_decay*np.log(lr_end/lr_start)
-
-        def lr_scheduler(epoch, lr):
-            if epoch < decay_st:
-                return lr
-            elif decay_st <= epoch < decay_end:
-                return lr * tf.math.exp(decay_rate)
-            elif epoch >= decay_end:
-                return lr
-
-        return lr_scheduler
-
-    def plot_model(self, save_dir, **kwargs):
-        """
-        Plot generator and critci model separately.
-        :param save_dir: directory under which plots will be saved
-        :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
-        
-        NOTE SL: taken from wgan_model.py
-        """
-        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
-        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
-    
-    
-    def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
-        """
-        Load model from checkpoint that has been either saved with the save-method or with the Checkpoint-callback.
-        Requires that the model is compiled!
-        :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
-        :param checkpoint_format: format of checkpoint, must match the format used for saving.
-        :return: iteration step of checkpointed model
-        """
-        generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
-                                      Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
-        
-        matching_gen_dir, matching_critic_dir = glob.glob(str(generator_path)), glob.glob(str(critic_path))
-        
-        if matching_gen_dir:
-            generator_path = Path(matching_gen_dir[0])
-            suffix_gen = str(generator_path).split("_generator")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(generator_path)} found.")
-            
-        if matching_critic_dir:
-            critic_path = Path(matching_critic_dir[0])
-            suffix_critic = str(critic_path).split("_critic")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
-        
-        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
-        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
-
-        opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
-                                        critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
-        with open(opt_gen_path, "rb") as f:
-            optimizer_weights_gen = pickle.load(f)
-
-        with open(opt_critic_path, "rb") as f:
-            optimizer_weights_critic = pickle.load(f)
-
-        # set state for g_optimizer
-        self.g_optimizer._create_all_weights(self.generator.trainable_variables)
-        self.g_optimizer.set_weights(optimizer_weights_gen)
-
-        # set state for c_optimizer
-        self.c_optimizer._create_all_weights(self.critic.trainable_variables)
-        self.c_optimizer.set_weights(optimizer_weights_critic)
-
-        # retrieve iteration step of checkpointed model
-        iter_step = (self.g_optimizer.variables()[0]).numpy()
-
-        return iter_step
-        
+    # !!! NOTE !!!
+    # get_lr_decay, load_checkpoint, and plot_model are inherited from Sha_WGAN
+    # !!! NOTE !!!
         
     def load_inference_model(self, model_dir, format="tf"):
             
@@ -786,21 +596,13 @@ class HarrisWGAN(AbstractModelClass):
         
         # get construct model for inference exposing predict-method
         # Note the predict-step makes use of the generator only. Thus, the critic model is not needed here
-        wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
+        wgan_model = Harris_WGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
         
         return wgan_model
 
-    def count_params(self):
-        """
-        Count number of trainable and untrainable parameters
-        """
-        trainable_param = int(np.sum([K.count_params(p) for p in self.generator.trainable_weights]))
-        untrainable_param = int(np.sum([K.count_params(p) for p in self.generator.non_trainable_weights]))
-
-        trainable_param += int(np.sum([K.count_params(p) for p in self.critic.trainable_weights]))
-        untrainable_param += int(np.sum([K.count_params(p) for p in self.critic.non_trainable_weights]))
-        
-        return trainable_param, untrainable_param
+    # !!! NOTE !!!
+    # count_parameters is inherited from Sha_WGAN
+    # !!! NOTE !!!
     
     def set_hparams_default(self):
         """
@@ -811,81 +613,6 @@ class HarrisWGAN(AbstractModelClass):
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
         
-
-class ModelCheckpointHarrisWGAN(ModelCheckpoint):
-    """Note SL: taken from wgan_model.py"""
-    def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
-                 mode='auto', save_freq="epoch", options=None, **kwargs):
-        super(ModelCheckpointHarrisWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
-                                                  save_weights_only, mode, save_freq, options=options, **kwargs)
-        self._expname = expname
-
-    def _save_model(self, epoch, batch, logs):
-        """Saves the model.
-        ML: The source-code is largely identical to Keras v2.6.0 implementation except that two models,
-            the critic and the generator, are saved separately in filepath_gen and filepath_critic (see below).
-            Modified source-code is envelopped between 'ML S' and 'ML E'-comment strings.
-
-        Args:
-            epoch: the epoch this iteration is in.
-            batch: the batch this iteration is in. `None` if the `save_freq`
-              is set to `epoch`.
-            logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
-        """
-        logs = logs or {}
-
-        if isinstance(self.save_freq, int) or self.epochs_since_last_save >= self.period:
-            # Block only when saving interval is reached.
-            logs = tf_utils.sync_to_numpy_or_python_type(logs)
-            self.epochs_since_last_save = 0
-            filepath = self._get_file_path(epoch, batch, logs)
-            # ML S
-            if self.save_best_only:
-                add_str = "_best"
-            else:
-                add_str = f"_epoch{epoch+1:05d}"
-            
-            filepath = Path(filepath).joinpath(f"{self._expname}{add_str}")
-            # ML E
-            try:
-                if self.save_best_only:
-                    current = logs.get(self.monitor)
-                    if current is None:
-                        logging.warning('Can save best model only with %s available, skipping.', self.monitor)
-                    else:
-                        if self.monitor_op(current, self.best):
-                            if self.verbose > 0:
-                                print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
-                                      ' saving model to %s' % (epoch + 1, self.monitor,
-                                                               self.best, current, filepath))
-                            self.best = current
-                            
-                            # ML S
-                            self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
-                                            suffix=add_str)#, options=self._options)
-                            # ML E
-                        else:
-                            if self.verbose > 0:
-                                print('\nEpoch %05d: %s did not improve from %0.5f' %
-                                      (epoch + 1, self.monitor, self.best))
-                else:
-                    if self.verbose > 0:
-                        print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
-                    # ML S
-                    self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
-                                    suffix=add_str)#, options=self._options)
-                    # ML E
-                self._maybe_remove_file()
-            except IsADirectoryError as e:  # h5py 3.x
-                raise IOError('Please specify a non-directory filepath for'  
-                              'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
-            except IOError as e:  # h5py 2.x
-                # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
-                if 'is a directory' in str(e.args[0]).lower():
-                    raise IOError('Please specify a non-directory filepath for '
-                                  'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
-                # Re-throw the error for any other causes.
-                raise e
 
 ####################################################################################
 ####################################################################################
@@ -1023,23 +750,3 @@ def const_upscale_block(const_input, steps, filters):
         const_output = Conv2D(filters=filters, kernel_size=(step, step), strides=step, padding="valid", activation="relu")(const_output)
     return const_output
 
-
-def wasserstein_loss(y_true, y_pred):
-    #return 1.
-    return K.mean(y_true * y_pred, axis=-1)
-
-def ensmean_MSE(y_true, y_pred):
-    pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
-    y_true_squ = tf.squeeze(y_true, axis=-1)
-    return tf.reduce_mean(tf.math.squared_difference(pred_mean, y_true_squ))
-
-def CL_chooser(CLtype):
-    if CLtype != "ensmeanMSE":
-        raise NotImplementedError(f"{CLtype = } not implemented, only CLtype = 'ensmeanMSE' is available!")
-        
-    return {
-        # "CRPS": sample_crps,
-        # "CRPS_phys": sample_crps_phys,
-        "ensmeanMSE": ensmean_MSE,
-        # "ensmeanMSE_phys": ensmean_MSE_phys#
-    }[CLtype]
