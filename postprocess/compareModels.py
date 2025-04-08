@@ -82,11 +82,14 @@ df['dataset'] = df['model'].apply(
     lambda x: next((dataset for dataset in datasets if dataset in x), 'unknown')
 )
 
+# Filter out entries with 'unknown' in 'model_type' or 'dataset'
+df = df[(df['model_type'] != 'unknown') & (df['dataset'] != 'unknown')]
+
 # Remove unnecessary columns
 df = df.drop(columns=['model'])
 df_lean = df.drop(columns=['model_number'])
 
-print(str(df_lean))
+#print(str(df_lean))
 
 # Function to calculate the mean of tuples
 def tuple_mean(tuples):
@@ -101,9 +104,16 @@ agg_dict = {col: tuple_mean for col in tuple_columns}
 # Calculate average values
 avg_df = df_lean.groupby(['model_type', 'dataset']).agg(agg_dict).reset_index()
 
-# Colors and markers for plotting
-colors = {'sha_wgan': 'blue', 'sha_unet': 'red', 'deepru': 'green', 'swinir': 'orange'}
-markers = {'t2m': 'o', 'wind': 's', 'rad': 'D'}
+
+# Predefined lists of colors and markers
+available_colors = plt.cm.tab10.colors  # You can also use a custom list like ['blue', 'red', 'green', ...]
+available_markers = ['o', 's', 'D', '^', 'v', '>', '<', 'p', '*', 'x']
+
+# Assign colors dynamically to model types
+colors = {model: available_colors[i % len(available_colors)] for i, model in enumerate(model_types)}
+
+# Assign markers dynamically to datasets
+markers = {dataset: available_markers[i % len(available_markers)] for i, dataset in enumerate(datasets)}
 
 # Define output PDF file
 pdf_path = os.path.join(output_dir, "compare_plots.pdf")
@@ -131,7 +141,7 @@ with PdfPages(pdf_path) as pdf:
                     # Annotate points
                     for i, row in temp_df.iterrows():
                         plt.annotate(
-                            row['model_type'],  
+                            row['model_number'],  
                             (row['rmse_global'][0], row['grad_amplitude_global'][0]),  
                             textcoords="offset points", 
                             xytext=(0, 5), 
