@@ -16,6 +16,7 @@ import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
 from evaluation_utils import get_spectrum
+from scores_spatial_fss import fss_2d
 
 # auxiliary variable for logger
 logger_module_name = f"__main__.{__name__}"
@@ -233,8 +234,10 @@ class Scores:
             )
 
         if not relative:
+            func_logger.debug("kwarg relative=False => calculating absolute mse.")
             mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
+            func_logger.debug("kwarg relative=True => calculating relative mse.")
             mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
@@ -258,8 +261,10 @@ class Scores:
             )
 
         if not relative:
+            func_logger.debug("kwarg relative=False => calculating absolute rmse.")
             rmse = np.sqrt(self.calc_mse())
         else:
+            func_logger.debug("kwarg relative=True => calculating relative rmse.")
             rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
@@ -300,8 +305,10 @@ class Scores:
             )
 
         if not relative:
+            func_logger.debug("kwarg relative=False => calculating absolute bias.")
             bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
+            func_logger.debug("kwarg relative=True => calculating relative bias.")
             bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
@@ -582,7 +589,9 @@ class Scores:
             func_logger.debug(
                 f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}"
             )
-        from scores.spatial import fss_2d  # debug: keep import here until it is tested
+        # xarray==0.20.1 is too old for scores, the relevant open-source code is copy-pasted into "scores_spatial_fss.oy"
+        # updated env to include newer xarray. testing to be finalised
+        from scores.spatial import fss_2d
 
         fss = fss_2d(
             self.data_fcst,
