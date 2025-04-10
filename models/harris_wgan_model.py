@@ -10,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-03-08"
+__update__ = "2025-04-10"
 
 import os
 from typing import List, Tuple, Union, Dict
@@ -25,7 +25,7 @@ import tensorflow.keras as keras
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, \
-                                    Dense, BatchNormalization, LayerNormalization
+                                    Dense, BatchNormalization, LayerNormalization, ReLU
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
@@ -244,7 +244,14 @@ class CriticHarris(AbstractModelClass):
 
         # critic output
         critic_output = GlobalAveragePooling2D()(critic_input)
-        critic_output = Dense(64, activation="relu")(critic_output)
+        # add additional normalization if desired
+        critic_output = Dense(64)(critic_output)
+        if norm == "batch":
+            critic_output = BatchNormalization()(critic_output)
+        elif norm == "layer":
+           critic_output = LayerNormalization()(critic_output)
+        critic_output = ReLU()(critic_output)
+
         critic_output = Dense(1, name="critic_output")(critic_output)
 
         self.model = Model(
