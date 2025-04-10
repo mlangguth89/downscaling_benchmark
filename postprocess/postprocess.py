@@ -50,7 +50,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     :param model_base_dir: Base directory where trained models are stored
     :param exp_name: Experiment name
     :param data_dir: Directory where testdata is stored
-    :param out_dir: Output directory
+    :param out_dir: Output directory where results are stored in a netCDF-file
     :param varname: Name of variable that was downscaled
     :param model_type: Type of model (if None, model type is inferred from experiment name)
     :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
@@ -64,10 +64,6 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
 
     # get trained model for inference
     trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type)
-
-    # get directory for saving netcdf output
-    #model_name = str(model_base.parents[0])
-    nc_dir = Path(out_dir).joinpath(exp_name)
 
     # read configuration files
     ds_config_pattern = f"config_ds_{dataset}.json"
@@ -138,7 +134,6 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # clean-up to reduce memory footprint
     del tfds_test
     gc.collect()
-    #free_mem([tfds_test])
 
     if isinstance(y_pred, list): y_pred = y_pred[0]
 
@@ -158,7 +153,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # write inference data to netCDf
-    ncfile_out = nc_dir.joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
+    ncfile_out = out_dir.joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")
 
     ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
