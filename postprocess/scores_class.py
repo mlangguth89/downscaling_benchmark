@@ -16,7 +16,6 @@ import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
 from evaluation_utils import get_spectrum
-from scores_spatial_fss import fss_2d
 
 # auxiliary variable for logger
 logger_module_name = f"__main__.{__name__}"
