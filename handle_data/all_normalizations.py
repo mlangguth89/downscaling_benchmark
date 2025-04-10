@@ -17,6 +17,7 @@ import json as js
 from abstract_data_normalization import Normalize
 import dask
 import xarray as xr
+import numpy as np
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 
