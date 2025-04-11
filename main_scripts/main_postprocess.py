@@ -54,6 +54,8 @@ def main(parser_args):
             last_or_epoch = "best"
 
         plt_dir = os.path.join(plt_basedir, f"epoch_{last_or_epoch}")
+        if parser_args.ens_mem:
+            plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
 
         # create output-directory and initialze logger    
         os.makedirs(plt_dir, exist_ok=True)
@@ -61,8 +63,8 @@ def main(parser_args):
         logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
         logger = config_logger(logger, log_file) 
 
-#       # get results from inference
-        ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, parser_args.output_base_dir,
+        # get results from inference
+        ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, plt_dir,
                                                     varname, parser_args.model_type, last_or_epoch, parser_args.dataset, parser_args.ens_mem)
         model_info = test_info["model_info"]
     elif parser_args.mode == "provided_results":
@@ -240,7 +242,7 @@ if __name__ == "__main__":
                             help="NetCDF-file containing results to be evaluated.")
     parser_results.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
                                 help="Name of the model for which results are provided.")
-    parser_results.add_argument("--derive_outdir_from_results", "-derive_output_dir", dest="derive_output_dir", type=False, action="store_true",
+    parser_results.add_argument("--derive_outdir_from_results", "-derive_output_dir", dest="derive_output_dir", default=False, action="store_true",
                                 help="Flag to derive output directory from the path of the netCDF-file providing the downscaling results. " +
                                      "Overwrites the output_base_directory argument.")
     
