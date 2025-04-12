@@ -54,7 +54,7 @@ def main(parser_args):
             last_or_epoch = "best"
 
         plt_dir = os.path.join(plt_basedir, f"epoch_{last_or_epoch}")
-        if parser_args.ens_mem:
+        if parser_args.ens_mem is not None:
             plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
 
         # create output-directory and initialze logger    
