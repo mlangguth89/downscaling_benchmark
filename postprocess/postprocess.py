@@ -758,23 +758,23 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
         if self.varname == "t2m":
-            eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0},
+            eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                          "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
                         }
         elif self.varname == "wind":
-            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
                          "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
                         }
         elif self.varname == "irradiance":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0},
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
                          "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
