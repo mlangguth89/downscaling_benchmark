@@ -376,16 +376,21 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
         _ = plt_kwargs.pop(key, None)
 
     score_all = score_engine(score_name)
+    func_logger.error(score_all)
 
+    metric_config = plt_kwargs.pop("metric_config")
+    score_suffix = metric_config[score_name]["relative"]
+    func_logger.error(score_suffix)
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}_{score_suffix}"
     score_mean = score_all.mean(dim="time")
-    fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
+    fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
     plot_score_map(score_mean, fname, dims=dims,
                      title=f"{score_name.upper()} (avg.)", **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
-        fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
+        fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
         plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
                        dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
 
@@ -394,7 +399,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
         for sea in score_now["season"]:
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
-                                 f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
+                                 f"{fname_base}_{sea.values}_{hh:02d}_map.png")
             plot_score_map(score_now.sel({"season": sea}), fname, dims=dims,
                            title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
@@ -758,12 +763,23 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
-                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}}
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
+                        }
         elif self.varname == "wind":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
+                        }
+        elif self.varname == "irradiance":
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5},
+                        }
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -784,7 +800,7 @@ class SpatialEvaluation(AbstractMetricEvaluation):
 
         self.spatial_dims = spatial_dims
         self.proj = proj
-
+        
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
         
         # get score engine
