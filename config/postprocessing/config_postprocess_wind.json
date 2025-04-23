@@ -1,8 +1,8 @@
 {
-  "varname": "t2m",
-  "unit": "K",
+  "varname": "ws100m",
+  "unit": "m/s",
   "do_evaluation_time": true,
-  "config_evaluation_time": {"bias": {"relative": true}, "rmse": {"relative": true}, "fss": {"window": (144, 128), "thres": 310}},
+  "config_evaluation_time": {"bias": {"relative": true}, "rmse": {"relative": true}, "fss": {"window": (144, 128), "thres": 10}},
   "do_evaluation_spatial": true,
   "config_evaluation_spatial": {"bias": {"relative": true}, "rmse": {"relative": true}},
   "do_spectral_analysis": false,
@@ -12,7 +12,7 @@
   "do_marginal_analysis": false,
   "config_marginal_analysis": {},
   "do_comparison_plots": false,
-  "config_comparison_plots": {"nsamples": 100, "offset": -273.15, "cmap_name": "PuOr_r", "cmap_name_diff": "bwr"},
+  "config_comparison_plots": {"nsamples": 100, "cmap_name": "PuOr_r", "cmap_name_diff": "bwr"},
   "do_feature_importance": false,
   "config_feature_importance": {"score_name": "rmse"}
 }
