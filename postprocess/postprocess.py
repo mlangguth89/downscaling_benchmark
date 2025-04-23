@@ -319,10 +319,16 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
 
+    metric_config = kwargs.pop("metric_config")
+    score_suffix = metric_config[score_name]["relative"]
+    func_logger.error(score_suffix)
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}_{score_suffix}"
+    fname = os.path.join(plot_dir, f"{fname_base}.png")
+    
     # create plots
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
-                     os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **kwargs)
+                     fname, **kwargs)
 
     # save scores to netCDF
     fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
@@ -336,6 +342,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_seas = score_all.groupby("time.season")
 
     for sea, score_sea in score_seas:
+        fname = os.path.join(plot_dir, f"{fname_base}_{sea}.png")
         score_sea_hh = score_sea.groupby("time.hour")
         score_sea_hh_mean = score_sea_hh.mean()
         score_sea_hh_mean_b = bootstrap_grouped_hourly(score_sea_hh, score_sea_hh_mean, block_length, nboots)  
@@ -345,7 +352,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         
         plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[0], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
-                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
+                         fname, **kwargs)
         
         # save scores to netCDF
         fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{sea}.nc')
