@@ -599,7 +599,7 @@ class Scores:
             window_size=window,
             spatial_dims=lonlat_dims,
             reduce_dims=avg_dims,
-            zero_padding=True,  # TODO: tbd if sought after or not
+            zero_padding=False,
         )
 
         return fss
