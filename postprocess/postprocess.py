@@ -25,9 +25,13 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import cartopy.crs as ccrs
-from handle_data_class import prepare_dataset, make_tf_dataset_allmem
 from all_normalizations import GeneralNormalizer
-from model_engine import ModelEngine
+try:
+    from handle_data_class import prepare_dataset, make_tf_dataset_allmem
+    from model_engine import ModelEngine
+except ModuleNotFoundError:
+    # skip import when running postprocessing with different env
+    pass
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles

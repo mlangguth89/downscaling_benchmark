@@ -28,7 +28,11 @@ from timeit import default_timer as timer
 import random
 import numpy as np
 import xarray as xr
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ModuleNotFoundError:
+    # skip import when running postprocessing with different env
+    pass
 import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
