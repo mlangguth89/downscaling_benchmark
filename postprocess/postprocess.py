@@ -29,7 +29,7 @@ from all_normalizations import GeneralNormalizer
 try:
     from handle_data_class import prepare_dataset, make_tf_dataset_allmem
     from model_engine import ModelEngine
-except ModuleNotFoundError:
+except (ModuleNotFoundError, NameError):
     # skip import when running postprocessing with different env
     pass
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
