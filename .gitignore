@@ -130,6 +130,9 @@ downscaling_ap5/jube/ap5_dataloader/*
 # Ignore results
 **/results
 
+# Ignore test scripts
+**/test_scripts
+
 # Ignore file for diagnosis
 *.json
 *.csv
