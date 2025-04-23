@@ -321,6 +321,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     func_logger.error(kwargs)
     if kwargs.pop("relative", False):
         score_suffix = "_relative"
+        score_unit = "[1]"
     else:
         score_suffix = ""
     func_logger.error(score_suffix)
