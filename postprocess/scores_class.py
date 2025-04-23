@@ -219,7 +219,7 @@ class Scores:
     def calc_mse(self, relative: bool = False, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
-        :param relative: when True, calculates the relative RMSE, otherwise absolute
+        :param relative: when True, calculates the relative MSE, otherwise absolute
         :return: MSE
         """
         # get local logger
@@ -233,10 +233,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug("kwarg relative=False => calculating absolute mse.")
+            func_logger.debug(f"kwarg {relative = } => calculating absolute mse.")
             mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
-            func_logger.debug("kwarg relative=True => calculating relative mse.")
+            func_logger.debug(f"kwarg {relative = } => calculating relative mse.")
             mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
@@ -260,10 +260,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug("kwarg relative=False => calculating absolute rmse.")
+            func_logger.debug(f"kwarg {relative = } => calculating absolute rmse.")
             rmse = np.sqrt(self.calc_mse())
         else:
-            func_logger.debug("kwarg relative=True => calculating relative rmse.")
+            func_logger.debug(f"kwarg {relative = } => calculating relative rmse.")
             rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
@@ -304,10 +304,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug("kwarg relative=False => calculating absolute bias.")
+            func_logger.debug(f"kwarg {relative = } => calculating absolute bias.")
             bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
-            func_logger.debug("kwarg relative=True => calculating relative bias.")
+            func_logger.debug(f"kwarg {relative = } => calculating relative bias.")
             bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
@@ -564,7 +564,7 @@ class Scores:
     def calc_fss(
         self,
         lonlat_dims: List[str] = ["rlon", "rlat"],
-        window: tuple[int] = (8, 8),
+        window: tuple[int, int] = (8, 8),
         thres: float = 0.5,
         **kwargs,
     ):
@@ -577,6 +577,8 @@ class Scores:
         :param thres: threshold to define events
         :return: fss-values
         """
+        # import inside function because it needs a specific env for postprocessing only
+        from scores.spatial import fss_2d
         # get local logger
         func_logger = logging.getLogger(
             f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
@@ -586,12 +588,10 @@ class Scores:
 
         if avg_dims != self.avg_dims:
             func_logger.debug(
-                f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}"
+                f"Only apply averaging over the follwoing dimensions: {', '.join(avg_dims)}"
             )
-        # xarray==0.20.1 is too old for scores, the relevant open-source code is copy-pasted into "scores_spatial_fss.oy"
-        # updated env to include newer xarray. testing to be finalised
-        from scores.spatial import fss_2d
-
+        func_logger.debug(avg_dims)
+        func_logger.debug(lonlat_dims)
         fss = fss_2d(
             self.data_fcst,
             self.data_ref,
