@@ -280,7 +280,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     return trained_model, model_info      
         
 
-def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str,**kwargs):
+def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **kwargs):
     """
     Create line plots of desired evaluation metric. Evaluation metric must have a time-dimension
     :param score_engine: Score engine object to comput evaluation metric
@@ -318,12 +318,16 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean = score_hourly_all.mean()
 
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
-
-    metric_config = kwargs.pop("metric_config")
-    score_suffix = metric_config[score_name]["relative"]
+    func_logger.error(kwargs)
+    if kwargs.pop("relative", False):
+        score_suffix = "_relative"
+    else:
+        score_suffix = ""
     func_logger.error(score_suffix)
-    fname_base = f"downscaling_{model_type}_{score_name.lower()}_{score_suffix}"
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
+
+    score_name = f"{score_name}{score_suffix}"
     
     # create plots
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
