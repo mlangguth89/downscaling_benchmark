@@ -2,7 +2,7 @@
   "varname": "ws100m",
   "unit": "m/s",
   "do_evaluation_time": true,
-  "config_evaluation_time": {"bias": {"relative": true}, "rmse": {"relative": true}, "fss": {"window": (144, 128), "thres": 10}},
+  "config_evaluation_time": {"bias": {"relative": true}, "rmse": {"relative": true}, "fss": {}},
   "do_evaluation_spatial": true,
   "config_evaluation_spatial": {"bias": {"relative": true}, "rmse": {"relative": true}},
   "do_spectral_analysis": false,
