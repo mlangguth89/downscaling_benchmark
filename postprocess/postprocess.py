@@ -396,6 +396,8 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     else:
         score_suffix = ""
     func_logger.debug(score_suffix)
+
+    score_name = f"{score_name}{score_suffix}"
     
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     score_mean = score_all.mean(dim="time")
