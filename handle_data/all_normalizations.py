@@ -9,9 +9,10 @@ General normalizer class which encapsulates all normalization based on abstract 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
-__update__ = "2025-03-20"
+__update__ = "2025-04-24"
 
 import os
+import re
 from typing import List, Union
 import json as js
 import numpy as np
@@ -51,6 +52,11 @@ class GeneralNormalizer:
                     method_groups[method] = ZScore(self.norm_dims, **kwargs)
                 elif method == "log_zscore":
                     method_groups[method] = Log_ZScore(self.norm_dims, **kwargs)
+                elif method == "log_1plus":
+                    method_groups[method] = Log_1Plus(self.norm_dims, **kwargs)
+                elif "logit" in method:
+                    eps = self.extract_logit_epsilon(method)
+                    method_groups[method] = Logit(self.norm_dims, eps=eps, **kwargs)
                 else:
                     raise ValueError(f"Unknown normalization method: {method}")
  
@@ -179,6 +185,36 @@ class GeneralNormalizer:
         # write to JSON-file
         with open(js_file, "w") as jsf:
             js.dump(norm_serialized, jsf)
+
+    def extract_logit_epsilon(transform_str, default_eps=1e-6):
+        """
+        Extracts the epsilon value from a logit transformation string.
+
+        Examples of valid strings:
+            "logit_eps1e-06"
+            "logit_0.01"
+            "logit" (will return default_eps)
+        
+        :param transform_str: The transformation string to parse.
+        :param default_eps: Default epsilon value to return if no specific value is found.
+        :return: The extracted epsilon value or the default value.
+        """
+        if not transform_str.startswith("logit"):
+            raise ValueError(f"Invalid transformation string: {transform_str}. Expected to start with 'logit'.")
+
+        # Try to match 'logit_eps<value>' or 'logit_<value>'
+        match = re.match(r"logit(?:_eps|_)?([0-9.eE+-]+)?", transform_str)
+        if match:
+            eps_str = match.group(1)
+            if eps_str:
+                try:
+                    return float(eps_str)
+                except ValueError:
+                    raise ValueError(f"Invalid epsilon format in string: {transform_str}")
+            else:
+                return default_eps
+        else:
+            return default_eps
 
 #
 ### Normalizers
@@ -310,5 +346,79 @@ class Log_ZScore(Normalize):
         """
         data = data * log_std + log_mu
         data = np.exp( data + np.log(self.eps)) - self.eps
+
+        return data
+
+
+class Logit(Normalize):
+    """
+    Class to perform logit-transformation on data.
+    """
+    def __init__(self, norm_dims: List, eps=1.e-04):
+        self.eps = eps
+        if eps <= 0 or eps >= 1:
+            raise ValueError(f"eps must be in (0, 1) but is {eps}.")
+        
+        super().__init__(f"logit_{eps: .0e}", norm_dims)
+        self.norm_stats = {}                        # no parameters required except eps which is independent of data
+
+    def get_required_stats(self, *args ,**stats):
+        """
+        Nothing to be done for logit transformation
+        """
+        pass
+
+    def normalize_data(self, data):
+        """
+        Perform logit transformation on data
+        :param data: Data array of interest
+        :return data_norm: normalized data
+        """
+        data = np.log((data + self.eps) / (1 - data + self.eps))
+
+        return data
+    
+    def denormalize_data(self, data):
+        """
+        Perform inverse logit transformation on data
+        :param data: Data array of interest
+        :return data_denorm: denormalized data
+        """
+        data = 1 / (1 + np.exp(-data))
+
+        return data
+
+class Log_1Plus(Normalize):
+    """
+    Class to perform np.log_10(1 + x) transformation on data.
+    Taken from Harris et al., 2022 for precipitation
+    """
+    def __init__(self, norm_dims: List):       
+        super().__init__(f"log_1plus", norm_dims)
+        self.norm_stats = {}                        # no parameters required except eps which is independent of data
+
+    def get_required_stats(self, *args ,**stats):
+        """
+        Nothing to be done for logit transformation
+        """
+        pass
+
+    def normalize_data(self, data):
+        """
+        Perform logit transformation on data
+        :param data: Data array of interest
+        :return data_norm: normalized data
+        """
+        data = np.log10(1 + data )
+
+        return data
+    
+    def denormalize_data(self, data):
+        """
+        Perform inverse logit transformation on data
+        :param data: Data array of interest
+        :return data_denorm: denormalized data
+        """
+        data = np.power(10, data) - 1
 
         return data
