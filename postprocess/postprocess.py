@@ -837,8 +837,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         if self.varname in ["t2m", "wind"]:
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
-            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r"}, 
-                         "bias": {"levels": lvl_bias, "cmap_name": "seismic"}}
+            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
