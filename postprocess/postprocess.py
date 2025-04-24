@@ -782,21 +782,21 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (144, 128), "thres": 310},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": 310},
                         }
         elif self.varname == "wind":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (144, 128), "thres": 10},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": 10},
                         }
         elif self.varname == "irradiance":
             eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (144, 128), "thres": 500},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": 500},
                         }
         else:
             if eval_dict is None:
