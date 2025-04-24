@@ -233,10 +233,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug(f"kwarg {relative = } => calculating absolute mse.")
+            func_logger.info(f"kwarg {relative = } => calculating absolute mse.")
             mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
-            func_logger.debug(f"kwarg {relative = } => calculating relative mse.")
+            func_logger.info(f"kwarg {relative = } => calculating relative mse.")
             mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
@@ -260,10 +260,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug(f"kwarg {relative = } => calculating absolute rmse.")
+            func_logger.info(f"kwarg {relative = } => calculating absolute rmse.")
             rmse = np.sqrt(self.calc_mse())
         else:
-            func_logger.debug(f"kwarg {relative = } => calculating relative rmse.")
+            func_logger.info(f"kwarg {relative = } => calculating relative rmse.")
             rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
@@ -304,10 +304,10 @@ class Scores:
             )
 
         if not relative:
-            func_logger.debug(f"kwarg {relative = } => calculating absolute bias.")
+            func_logger.info(f"kwarg {relative = } => calculating absolute bias.")
             bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
         else:
-            func_logger.debug(f"kwarg {relative = } => calculating relative bias.")
+            func_logger.info(f"kwarg {relative = } => calculating relative bias.")
             bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
                 dim=self.avg_dims
             )
