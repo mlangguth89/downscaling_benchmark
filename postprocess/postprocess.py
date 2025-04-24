@@ -302,7 +302,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict", "window", "thres"]:
         _ = kwargs.pop(key, None)
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
@@ -318,13 +318,13 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean = score_hourly_all.mean()
 
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
-    func_logger.error(kwargs)
+    func_logger.debug(kwargs)
     if kwargs.pop("relative", False):
         score_suffix = "_relative"
-        score_unit = "[1]"
+        score_unit = "1"
     else:
         score_suffix = ""
-    func_logger.error(score_suffix)
+    func_logger.debug(score_suffix)
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
 
