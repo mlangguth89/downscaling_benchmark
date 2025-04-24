@@ -388,11 +388,16 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
 
     score_all = score_engine(score_name)
     func_logger.error(score_all)
-
-    metric_config = plt_kwargs.pop("metric_config")
-    score_suffix = metric_config[score_name]["relative"]
-    func_logger.error(score_suffix)
-    fname_base = f"downscaling_{model_type}_{score_name.lower()}_{score_suffix}"
+    
+    func_logger.debug(plt_kwargs)
+    if plt_kwargs.pop("relative", False):
+        score_suffix = "_relative"
+        score_unit = "1"
+    else:
+        score_suffix = ""
+    func_logger.debug(score_suffix)
+    
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
     plot_score_map(score_mean, fname, dims=dims,
