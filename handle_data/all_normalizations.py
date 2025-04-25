@@ -57,6 +57,8 @@ class GeneralNormalizer:
                 elif "logit" in method:
                     eps = self.extract_logit_epsilon(method)
                     method_groups[method] = Logit(self.norm_dims, eps=eps, **kwargs)
+                elif method == "":
+                    continue
                 else:
                     raise ValueError(f"Unknown normalization method: {method}")
  
@@ -164,6 +166,10 @@ class GeneralNormalizer:
             norm_serialized.update({key: da.to_dict() for key, da in norm_stats.items()})
 
             # check data type for consistency
+            if len(norm_stats) == 0:
+                print(f"Normalizer {normalizer} does not have data-dependant parameters. Nothing to save.")
+                continue 
+
             d0 = list(norm_stats.values())[0]
             if isinstance(d0, xr.DataArray):
                 data_type_now = "data_array"
@@ -186,6 +192,7 @@ class GeneralNormalizer:
         with open(js_file, "w") as jsf:
             js.dump(norm_serialized, jsf)
 
+    @staticmethod
     def extract_logit_epsilon(transform_str, default_eps=1e-6):
         """
         Extracts the epsilon value from a logit transformation string.
