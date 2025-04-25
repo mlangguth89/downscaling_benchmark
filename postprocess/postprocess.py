@@ -389,18 +389,18 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
-
-    score_all = score_engine(score_name)
-    func_logger.error(score_all)
     
-    func_logger.debug(plt_kwargs)
-    if plt_kwargs.pop("relative", False):
+    # build score specific kwargs
+    # fss, rmse, bias, mse
+    score_kwargs = {key: plt_kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
+    score_all = score_engine(score_name, **score_kwargs)
+        
+    if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
     else:
         score_suffix = ""
-    func_logger.debug(score_suffix)
-
+    
     score_name = f"{score_name}{score_suffix}"
     
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
