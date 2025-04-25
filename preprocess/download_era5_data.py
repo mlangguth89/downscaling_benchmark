@@ -115,10 +115,10 @@ class ERA5_Data_Loader(object):
         month_end = kwargs.get("month_end", self.month_end)
 
         # create base request dictionary (None-values will be set dynamically)
-        req_dict_base = {"product_type": "reanalysis", "format": f"{format}", 
+        req_dict_base = {"product_type": "reanalysis", "data_format": f"{format}", 
                          "variable": to_list(varlist), 
                          "day": None, "month": None, "time": [f"{h:02d}" for h in range(24)], "year": None,
-                        "area": area}   
+                         "download_format": "unarchived", "area": area}   
 
         # initialize multiprocessing pool
         func_logger.info(f"Downloading ERA5 surface data for variables {', '.join(varlist)} with {self.nworkers} workers.")
