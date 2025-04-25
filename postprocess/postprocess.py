@@ -302,14 +302,18 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
-    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict", "window", "thres"]:
+    for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = kwargs.pop(key, None)
     # keyword arguments for configuring bootstrapping
     nboots = kwargs.pop("nboots", 1000)
     block_length = kwargs.pop("block_length", 5)
 
+    # build score specific kwargs
+    # fss, rmse, bias, mse
+    score_kwargs = {key: kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
+    
     func_logger.info(f"Start evaluation in terms of {score_name}")
-    score_all = score_engine(score_name)
+    score_all = score_engine(score_name, **score_kwargs)
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
                      f"standard deviation: {score_all.std().values:.4f}")  
