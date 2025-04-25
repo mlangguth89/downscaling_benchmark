@@ -323,7 +323,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
     func_logger.debug(kwargs)
-    if kwargs.pop("relative", False):
+    if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
     else:
