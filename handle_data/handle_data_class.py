@@ -15,7 +15,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2025-02-18"
+__update__ = "2025-04-24"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -71,7 +71,7 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for AtmoRep.")
-    elif dataset_name in ["benchmark_t2m", "benchmark_wind"]:
+    elif dataset_name in ["benchmark_t2m", "benchmark_wind", "benchmark_glob_rad"]:
         fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
