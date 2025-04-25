@@ -326,6 +326,12 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
+        if score_name == "mse":
+            kwargs["value_range"] = (0, 1e-2)
+        if score_name == "rmse":
+            kwargs["value_range"] = (0, 1e-2)
+        elif score_name == "bias":
+            kwargs["value_range"] = (-5e-3, 5e-3)
     else:
         score_suffix = ""
     func_logger.debug(score_suffix)
@@ -398,6 +404,12 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
+        if score_name == "mse":
+            plt_kwargs["levels"] = np.arange(0., 3.1e-1, 0.02)
+        if score_name == "rmse":
+            plt_kwargs["levels"] = np.arange(0., 3.1e-1, 0.02)
+        elif score_name == "bias":
+            plt_kwargs["levels"] = np.arange(-2e-1, 2.1e-1, .01)
     else:
         score_suffix = ""
     
@@ -786,7 +798,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": 310},
+                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": 285},
                         }
         elif self.varname == "wind":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
