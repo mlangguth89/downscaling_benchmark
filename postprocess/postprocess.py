@@ -152,6 +152,12 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
+    # for the global radiance downscaling task, we need to rescale the data
+    if tar_varname == "global_rad_pp_ratio":
+        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        y_pred = y_pred * ds_test["tisr_tar"]
+        tar_varname = "global_rad_pp"
+
     # write inference data to netCDf
     ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")
@@ -759,6 +765,11 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
+        elif self.varname == "glob_rad":
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 30.), "ref_line": None}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-10., 10.), "ref_line": 0},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 1.3), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -797,7 +808,7 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         If the variable for evaluation is unknown, eval_dict cannot be None.
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
-        if self.varname in ["t2m", "wind"]:
+        if self.varname in ["t2m", "wind", "global_rad"]:
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r"}, 
