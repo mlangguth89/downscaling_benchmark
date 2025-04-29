@@ -334,6 +334,12 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
             kwargs["value_range"] = (-5e-3, 5e-3)
     else:
         score_suffix = ""
+
+    # include threshold value in naming style for fss
+    if score_name == "fss":
+        score_suffix = f"_thres_{score_kwargs['thres']}"
+        quit(score_suffix)
+
     func_logger.debug(score_suffix)
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
@@ -346,7 +352,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      fname, **kwargs)
 
     # save scores to netCDF
-    fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
+    fname_nc = os.path.join(metric_dir, f'eval_{score_name}{score_suffix}_year.nc')
 
     func_logger.debug(f"Save hourly averaged {score_name} to {fname_nc}...")
     ds = xr.Dataset({f"{score_name}": score_all, f"{score_name}_mean": score_hourly_mean, f"{score_name}_mean_boot": score_hourly_mean_b})
@@ -370,7 +376,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                          fname, **kwargs)
         
         # save scores to netCDF
-        fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{sea}.nc')
+        fname_nc = os.path.join(metric_dir, f'eval_{score_name}{score_suffix}_{sea}.nc')
         func_logger.debug(f"Save hourly averaged {score_name} for season {sea} to {fname_nc}...")
         ds_sea = xr.Dataset({f"{score_name}": score_sea, f"{score_name}_mean": score_sea_hh_mean, f"{score_name}_mean_boot": score_sea_hh_mean_b})
         ds_sea.to_netcdf(fname_nc)
@@ -783,9 +789,8 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
 
         # run evaluation for each metric
-
         for metric, metric_config in self.evaluation_dict.items():
-            # fss
+            # fss needs a dedicated loop for multiple threshold inputs
             if metric == "fss":
                 if isinstance(metric_config["thres"], list):
                     thres_list = metric_config.pop("thres")
