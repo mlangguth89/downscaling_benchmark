@@ -312,16 +312,6 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # fss, rmse, bias, mse
     score_kwargs = {key: kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
     
-    func_logger.info(f"Start evaluation in terms of {score_name}")
-    score_all = score_engine(score_name, **score_kwargs)
-
-    func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
-                     f"standard deviation: {score_all.std().values:.4f}")  
-    
-    score_hourly_all = score_all.groupby("time.hour")
-    score_hourly_mean = score_hourly_all.mean()
-
-    score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
     func_logger.debug(kwargs)
     if score_kwargs["relative"]:
         score_suffix = "_relative"
@@ -341,6 +331,19 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     score_name = f"{score_name}{score_suffix}"
     func_logger.debug(score_name)
+    
+    
+    func_logger.info(f"Start evaluation in terms of {score_name}")
+    score_all = score_engine(score_name, **score_kwargs)
+
+    func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
+                     f"standard deviation: {score_all.std().values:.4f}")  
+    
+    score_hourly_all = score_all.groupby("time.hour")
+    score_hourly_mean = score_hourly_all.mean()
+
+    score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
+    
     fname_base = f"downscaling_{model_type}_{score_name.lower()}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
 
