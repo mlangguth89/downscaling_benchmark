@@ -339,11 +339,11 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     if score_name == "fss":
         score_suffix = f"_thres_{score_kwargs['thres']}"
 
-    func_logger.debug(score_suffix)
-    fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
+    score_name = f"{score_name}{score_suffix}"
+    func_logger.debug(score_name)
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
 
-    score_name = f"{score_name}{score_suffix}"
     
     # create plots
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
@@ -351,7 +351,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                      fname, **kwargs)
 
     # save scores to netCDF
-    fname_nc = os.path.join(metric_dir, f'eval_{score_name}{score_suffix}_year.nc')
+    fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
 
     func_logger.debug(f"Save hourly averaged {score_name} to {fname_nc}...")
     ds = xr.Dataset({f"{score_name}": score_all, f"{score_name}_mean": score_hourly_mean, f"{score_name}_mean_boot": score_hourly_mean_b})
@@ -375,7 +375,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
                          fname, **kwargs)
         
         # save scores to netCDF
-        fname_nc = os.path.join(metric_dir, f'eval_{score_name}{score_suffix}_{sea}.nc')
+        fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{sea}.nc')
         func_logger.debug(f"Save hourly averaged {score_name} for season {sea} to {fname_nc}...")
         ds_sea = xr.Dataset({f"{score_name}": score_sea, f"{score_name}_mean": score_sea_hh_mean, f"{score_name}_mean_boot": score_sea_hh_mean_b})
         ds_sea.to_netcdf(fname_nc)
