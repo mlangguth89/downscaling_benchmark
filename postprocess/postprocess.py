@@ -338,7 +338,6 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # include threshold value in naming style for fss
     if score_name == "fss":
         score_suffix = f"_thres_{score_kwargs['thres']}"
-        quit(score_suffix)
 
     func_logger.debug(score_suffix)
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
