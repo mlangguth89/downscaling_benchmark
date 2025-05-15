@@ -1,8 +1,7 @@
 decorator==5.0.9
 networkx==2.6.3
 Werkzeug==3.0.6
-numpy==1.23
-xarray==2024.1
+numpy==1.21.3
+xarray==0.20.1
 climetlab==0.8.14
 climetlab-maelstrom-downscaling==0.1.0
-scores==1.2.0
