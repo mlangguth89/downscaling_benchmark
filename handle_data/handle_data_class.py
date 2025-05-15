@@ -33,7 +33,7 @@ try:
 except ModuleNotFoundError:
     # skip import when running postprocessing with different env
     print(
-        "Note: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
+        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
     pass
 import multiprocessing
 try:
