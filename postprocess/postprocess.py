@@ -318,12 +318,6 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
-        if score_name == "mse":
-            kwargs["value_range"] = (0, 1e-2)
-        if score_name == "rmse":
-            kwargs["value_range"] = (0, 1e-2)
-        elif score_name == "bias":
-            kwargs["value_range"] = (-5e-3, 5e-3)
     else:
         score_suffix = ""
 
@@ -415,12 +409,6 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
-        if score_name == "mse":
-            plt_kwargs["levels"] = np.arange(0., 3.1e-1, 0.02)
-        if score_name == "rmse":
-            plt_kwargs["levels"] = np.arange(0., 3.1e-1, 0.02)
-        elif score_name == "bias":
-            plt_kwargs["levels"] = np.arange(-2e-1, 2.1e-1, .01)
     else:
         score_suffix = ""
     
