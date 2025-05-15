@@ -804,14 +804,12 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [285, 295, 305]},
                         }
         elif self.varname == "wind":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [10, 12, 15]},
                         }
         elif self.varname == "irradiance":
             eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
