@@ -31,6 +31,8 @@ try:
     from model_engine import ModelEngine
 except (ModuleNotFoundError, NameError):
     # skip import when running postprocessing with different env
+    print(
+        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
     pass
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
@@ -325,6 +327,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     else:
         score_suffix = ""
 
+    
+    score_all = score_engine(score_name, **score_kwargs)
+    
     # include threshold value in naming style for fss
     if score_name == "fss":
         score_suffix = f"_thres_{score_kwargs['thres']}"
@@ -332,9 +337,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_name = f"{score_name}{score_suffix}"
     func_logger.debug(score_name)
     
-    
     func_logger.info(f"Start evaluation in terms of {score_name}")
-    score_all = score_engine(score_name, **score_kwargs)
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
                      f"standard deviation: {score_all.std().values:.4f}")  
