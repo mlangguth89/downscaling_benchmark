@@ -28,7 +28,13 @@ from timeit import default_timer as timer
 import random
 import numpy as np
 import xarray as xr
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ModuleNotFoundError:
+    # skip import when running postprocessing with different env
+    print(
+        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
+    pass
 import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
