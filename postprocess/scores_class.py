@@ -39,7 +39,9 @@ class Scores:
                              "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
                              "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
                              "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
-                             "iqd": self.calc_iqd}
+            "iqd": self.calc_iqd,
+            "fss": self.calc_fss,
+        }
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
@@ -214,33 +216,55 @@ class Scores:
 
         return mae
 
-    def calc_mse(self, **kwargs):
+    def calc_mse(self, relative: bool = False, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative MSE, otherwise absolute
         :return: MSE
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mse.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_mse.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_mse are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_mse are without effect."
+            )
 
-        mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        if not relative:
+            func_logger.info(f"kwarg {relative = } => calculating absolute mse.")
+            mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating relative mse.")
+            mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
+                dim=self.avg_dims
+            )
 
         return mse
 
-    def calc_rmse(self, **kwargs):
+    def calc_rmse(self, relative: bool = False, **kwargs):
         """
-        Calculate mse of forecast data w.r.t. reference data
+        Calculate rmse of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative RMSE, otherwise absolute
         :return: RMSE
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_rmse are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_rmse are without effect."
+            )
 
-        rmse = np.sqrt(self.calc_mse())
+        if not relative:
+            func_logger.info(f"kwarg {relative = } => calculating absolute rmse.")
+            rmse = np.sqrt(self.calc_mse())
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating relative rmse.")
+            rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
     
@@ -263,16 +287,30 @@ class Scores:
 
         return acc
 
-    def calc_bias(self, **kwargs):
-
+    def calc_bias(self, relative: bool = False, **kwargs):
+        """
+        Calculate bias of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative bias, otherwise absolute
+        :return: bias
+        """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_bias.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_bias.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_bias are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_bias are without effect."
+            )
 
-        bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
-
+        if not relative:
+            func_logger.info(f"kwarg {relative = } => calculating absolute bias.")
+            bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating relative bias.")
+            bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
+                dim=self.avg_dims
+            )
         return bias
 
     def calc_psnr(self, **kwargs):
@@ -523,8 +561,51 @@ class Scores:
 
         return var_diff_amplitude
 
+    def calc_fss(
+        self,
+        lonlat_dims: List[str] = ["rlon", "rlat"],
+        window: tuple[int, int] = (8, 8),
+        thres: float = 0.5,
+        **kwargs,
+    ):
+        """
+        Calculates the Fractions Skill Score (FSS) between forecast and reference data.
+        Note that no averaging over the spatial dimensions is possible since
+        the FSS is calculated across spatially sliding windows.
+        :param lonlat_dims: list of longitude and latitude dimensions
+        :param window: size of spatially sliding window (height, width)
+        :param thres: threshold to define events
+        :return: fss-values
+        """
+        # import inside function because it needs a specific env for postprocessing only
+        from scores.spatial import fss_2d
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
-    def check_for_coords(self, coord_names_data, dim_query: str, return_index: bool = False):
+        avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
+
+        if avg_dims != self.avg_dims:
+            func_logger.debug(
+                f"Only apply averaging over the follwoing dimensions: {', '.join(avg_dims)}"
+            )
+        func_logger.debug(avg_dims)
+        func_logger.debug(lonlat_dims)
+        fss = fss_2d(
+            self.data_fcst,
+            self.data_ref,
+            event_threshold=thres,
+            window_size=window,
+            spatial_dims=lonlat_dims,
+            reduce_dims=avg_dims,
+            zero_padding=False,
+        )
+
+        return fss
+
+    def check_for_coords(
+        self, coord_names_data, dim_query: str, return_index: bool = False):
         """
         Check if one of the known geographical coordinates is part of the passed list.
         :param coord_names_data: list of coordinate names
