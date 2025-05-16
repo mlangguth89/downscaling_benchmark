@@ -860,11 +860,16 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         If the variable for evaluation is unknown, eval_dict cannot be None.
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
-        if self.varname in ["t2m", "wind", "global_rad"]:
+        if self.varname in ["t2m", "wind"]:
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "global_rad":
+            lvl_bias = np.arange(-.5, .5, .05)
+            lvl_rmse =  np.arange(0., 0.8, 0.05)
+            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
+                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": True}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
