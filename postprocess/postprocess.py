@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-19"
+__update__ = "2025-05-16"
 
 import os
 import glob
@@ -159,10 +159,10 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # for the global radiance downscaling task, we need to rescale the data
-    if tar_varname == "global_rad_pp_ratio":
+    if tar_varname == "glob_rad_pp_ratio_tar":
         func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
         y_pred = y_pred * ds_test["tisr_tar"]
-        tar_varname = "global_rad_pp"
+        tar_varname = "glob_rad_pp_tar"
 
     # write inference data to netCDf
     ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
@@ -398,7 +398,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     :param dims: Spatial dimension names
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
     
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -815,15 +815,12 @@ class TemporalEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
-                        }
-        elif self.varname == "irradiance":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
-                        }
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
+        elif self.varname == "glob_rad":
+            eval_dict = {"rmse": {"score_unit": "W m**-2", "value_range": (50., 150.), "ref_line": None}, 
+                         "bias": {"score_unit": "W m**-2", "value_range": (-10., 10.), "ref_line": 0},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.2, 1.05), "ref_line": 1.},
+                         "me_std": {"score_unit": "W m**-2", "value_range": (10, 40), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
