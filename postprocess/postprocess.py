@@ -22,6 +22,7 @@ import gc
 import multiprocessing as mp
 from multiprocessing import pool
 import numpy as np
+import pandas as pd
 import xarray as xr
 import cartopy.crs as ccrs
 from handle_data_class import prepare_dataset, prepare_torch_dataset, make_tf_dataset_allmem, make_torch_dataloader_allmem
@@ -46,7 +47,7 @@ da_or_ds = Union[xr.DataArray, xr.Dataset]
 list_or_str = Union[List[str], str]
 
 # auxiliary variable for logger
-logger_module_name = f"main_postprocess.{__name__}"
+logger_module_name = f"main_postprocess_lightning.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
 
@@ -577,7 +578,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     :param dims: Spatial dimension names
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
     
     os.makedirs(plot_dir, exist_ok=True)
 
@@ -923,7 +924,7 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
 
     # run parallelized plotting
     nworkers = min(int(mp.cpu_count()/2), nsamples, 96)
-    pool = Pool(processes=nworkers)
+    pool = mp.Pool(processes=nworkers)
     func_logger.info(f"Start parallelized plotting of comparison plots for {nsamples} samples over {nworkers} workers...")
 
     def errorhandler(exc):
@@ -973,8 +974,8 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         elif self.varname == "wind":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.5, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \

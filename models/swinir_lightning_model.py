@@ -251,7 +251,6 @@ class SwinTransformerBlock(nn.Module):
             for w in w_slices:
                 img_mask[:, h, w, :] = cnt
                 cnt += 1
-
         mask_windows = window_partition(img_mask, self.window_size)  # nW, window_size, window_size, 1
         mask_windows = mask_windows.view(-1, self.window_size * self.window_size)
         attn_mask = mask_windows.unsqueeze(1) - mask_windows.unsqueeze(2)
@@ -623,7 +622,7 @@ class UpsampleOneStep(nn.Sequential):
         self.num_feat = num_feat
         self.input_resolution = input_resolution
         m = []
-        m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1))
+        m.append(nn.Conv2d(num_feat, (scale ** 2) * num_out_ch, 3, 1, 1, bias=False))
         m.append(nn.PixelShuffle(scale))
         super(UpsampleOneStep, self).__init__(*m)
 
@@ -698,7 +697,7 @@ class SwinIR(nn.Module):
         embed_dim = self.embed_dim
         #####################################################################################################
         ################################### 1, shallow feature extraction ###################################
-        self.conv_first = nn.Conv2d(in_chans, embed_dim, 3, 1, 1)
+        self.conv_first = nn.Conv2d(in_chans, embed_dim, 3, 1, 1, bias=False)
         depths = self.hparams["depths"]
         self.num_layers = len(depths)
         
@@ -744,7 +743,7 @@ class SwinIR(nn.Module):
 
         # absolute position embedding
         if self.ape:
-            self.absolute_pos_embed = nn.Parameter(torch.zeros(1, num_patches, embed_dim))
+            self.absolute_pos_embed = nn.Parameter(torch.zeros(1, img_size[0]*img_size[1], embed_dim))
             trunc_normal_(self.absolute_pos_embed, std=.02)
 
         self.pos_drop = nn.Dropout(p=drop_rate)
@@ -775,7 +774,7 @@ class SwinIR(nn.Module):
 
         # build the last conv layer in deep feature extraction
         if resi_connection == '1conv':
-            self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 3, 1, 1)
+            self.conv_after_body = nn.Conv2d(embed_dim, embed_dim, 3, 1, 1,bias=False)
         elif resi_connection == '3conv':
             # to save parameters and memory
             self.conv_after_body = nn.Sequential(nn.Conv2d(embed_dim, embed_dim // 4, 3, 1, 1),
@@ -819,6 +818,9 @@ class SwinIR(nn.Module):
         elif isinstance(m, nn.LayerNorm):
             nn.init.constant_(m.bias, 0)
             nn.init.constant_(m.weight, 1.0)
+        
+        elif isinstance(m,nn.Conv2d):
+            trunc_normal_(m.weight, std=0.02)
 
     @torch.jit.ignore
     def no_weight_decay(self):
@@ -927,8 +929,8 @@ class SwinIR(nn.Module):
         """
         Return default hyperparameter dictionary.
         """
-        hparams_dict = {"upscale": 1, "img_size": (96,120), "window_size": 8, "depths": [6, 6, 6, 6], "embed_dim":60, "num_heads" : [6, 6, 6, 6], "mlp_ratio": 2, "upsampler": 'pixelshuffledirect',"in_chans":16,"out_chans":2,"qkv_bias":True,"qk_scale":None,"drop_rate":0.,"attn_drop_rate":0.,"drop_path_rate":0.1,"norm_layer":nn.LayerNorm,"ape":False,"patch_norm":True,"img_range":1.,"patch_size":1,"resi_connection":'1conv',"resume_checkpoint":None,
-                        "batch_size": 32, "lr": 6e-5, "nepochs": 70, "loss": "mae", "loss_weights": [1.0, 1.0],            # training parameters
+        hparams_dict = {"upscale": 1, "img_size": (128,144), "window_size": 8, "depths": [6, 6, 6, 6], "embed_dim":60, "num_heads" : [6, 6, 6, 6], "mlp_ratio": 2, "upsampler": 'pixelshuffledirect',"in_chans":16,"out_chans":2,"qkv_bias":True,"qk_scale":None,"drop_rate":0.,"attn_drop_rate":0.,"drop_path_rate":0.1,"norm_layer":nn.LayerNorm,"ape":False,"patch_norm":True,"img_range":1.,"patch_size":1,"resi_connection":'1conv',"resume_checkpoint":None,
+                        "batch_size": 32, "lr": 12e-5, "nepochs": 70, "loss": "mae", "loss_weights": [1.0, 1.0],            # training parameters
                         "weight_decay": 0.01,"optimizer": "adamw", "lscheduled_train": True}
 
         return hparams_dict
@@ -940,7 +942,8 @@ class SwinIRLightning(L.LightningModule):
         self.swinir = SwinIR(shape_in,varnames_tar,hparams,savedir,expname)
 
         weights = self.swinir.hparams['loss_weights']
-        self.loss = torch.nn.L1Loss if self.swinir.hparams["loss"].lower() == "mae" else None
+        self.loss = torch.nn.L1Loss if self.swinir.hparams["loss"].lower() == "mae" else torch.nn.MSELoss
+        self.val_loss = torch.nn.L1Loss
         self.loss_weights = torch.tensor(weights,device=self.swinir.device)
 
 
@@ -968,7 +971,7 @@ class SwinIRLightning(L.LightningModule):
         loss_weights = self.loss_weights.to(y.device)
         y = torch.einsum('j,mjkl->mjkl',loss_weights,y)
         y_pred = torch.einsum('j,mjkl->mjkl',loss_weights,y_pred)
-        loss = self.loss()(y_pred,y)
+        loss = self.val_loss()(y_pred,y)
         self.log_dict({"val_loss":loss},on_epoch=True,prog_bar=True,logger=True,sync_dist=True)
 
     def predict_step(self,batch,batch_idx):
@@ -985,7 +988,16 @@ class SwinIRLightning(L.LightningModule):
                     self.swinir.parameters(),
                     lr=self.swinir.hparams['lr'],
                     weight_decay=self.swinir.hparams["weight_decay"])
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,int(0.15*self.swinir.hparams["nepochs"]))
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer,int(0.3*self.swinir.hparams["nepochs"]))
+        if self.swinir.hparams['optimizer'].lower() ==  'adam' :
+            optimizer = torch.optim.Adam(
+                    self.swinir.parameters(),
+                    lr=self.swinir.hparams['lr'],
+                    weight_decay=self.swinir.hparams["weight_decay"])
+            scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer,[12*0.5*self.swinir.hparams["nepochs"],
+                                                                        12*0.8*self.swinir.hparams["nepochs"],
+                                                                        12*0.9*self.swinir.hparams["nepochs"],
+                                                                        12*0.95*self.swinir.hparams["nepochs"]],gamma=0.5)
         return [optimizer] , [scheduler]
         
 if __name__ == '__main__':

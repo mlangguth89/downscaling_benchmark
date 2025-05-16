@@ -35,7 +35,7 @@ from swinir_lightning_model import SwinIR
 from swinir_lightning_model import SwinIRLightning
 from lightning import Trainer,seed_everything
 from lightning.pytorch.plugins.environments import SLURMEnvironment
-#from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.loggers import WandbLogger
 import random
 
 # Open issues:
@@ -61,8 +61,10 @@ def lightning_main(parser_args):
     model_savedir = os.path.join(outdir, parser_args.exp_name)
 
     model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
-    #wandb_logger = WandbLogger(project="downscaling",
-    #                            name= parser_args.exp_name)
+    wandb_logger = WandbLogger(project="downscaling",
+                                name= parser_args.exp_name,
+                                log_model=True)
+
     # read configuration files for model and dataset
     with parser_args.conf_ds as dsf:
         ds_dict = js.load(dsf)
@@ -146,6 +148,8 @@ def lightning_main(parser_args):
     # instantiate model...
     model = SwinIRLightning(shape_in, list(train_info["all_predictands"].keys()), hparams_dict, model_savedir, parser_args.exp_name)
 
+    wandb_logger.watch(model)  
+    
     #args to be passed, currently magic numbers are used 
     trainer = Trainer(enable_model_summary=True,
                       enable_progress_bar=True,
@@ -158,8 +162,7 @@ def lightning_main(parser_args):
                       precision="16-mixed",
                       sync_batchnorm=True,
                       plugins=[SLURMEnvironment()],
-                      #logger=wandb_logger)
-                      )
+                      logger=wandb_logger)
 
     trainer.fit(model,
             torch_train_dataloader,
