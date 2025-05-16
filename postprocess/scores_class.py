@@ -201,18 +201,24 @@ class Scores:
 
         return l2
     
-    def calc_mae(self, **kwargs):
+    def calc_mae(self, relative: bool = False, **kwargs):
         """
         Calculate mean absolute error (MAE) of forecast data w.r.t. reference data
         :return: MAE averaged over provided dimensions
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.mae.__name__}")
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mae.__name__}")
 
         if kwargs:
             func_logger.debug("Passed keyword arguments to calc_mae are without effect.")    
 
         mae = np.abs(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+
+        if relative:
+            func_logger.info(f"kwarg {relative = } => calculating relative mae.")
+            mae = mae / self.data_ref.mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute mae.")
 
         return mae
 
@@ -232,14 +238,14 @@ class Scores:
                 "Passed keyword arguments to calc_mse are without effect."
             )
 
-        if not relative:
-            func_logger.info(f"kwarg {relative = } => calculating absolute mse.")
-            mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
-        else:
+        # calculate mse
+        mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        
+        if relative:
             func_logger.info(f"kwarg {relative = } => calculating relative mse.")
-            mse = np.square((self.data_fcst - self.data_ref) / self.data_ref).mean(
-                dim=self.avg_dims
-            )
+            mse = mse / np.square(self.data_ref.mean(dim=self.avg_dims))
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute mse.")
 
         return mse
 
@@ -303,14 +309,15 @@ class Scores:
                 "Passed keyword arguments to calc_bias are without effect."
             )
 
-        if not relative:
-            func_logger.info(f"kwarg {relative = } => calculating absolute bias.")
-            bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
-        else:
+        # calculate bias
+        bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+
+        if relative:
             func_logger.info(f"kwarg {relative = } => calculating relative bias.")
-            bias = ((self.data_fcst - self.data_ref) / self.data_ref).mean(
-                dim=self.avg_dims
-            )
+            bias = bias / self.data_ref.mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute bias.")
+
         return bias
 
     def calc_psnr(self, **kwargs):
