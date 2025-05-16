@@ -28,7 +28,13 @@ from timeit import default_timer as timer
 import random
 import numpy as np
 import xarray as xr
-import tensorflow as tf
+try:
+    import tensorflow as tf
+except ModuleNotFoundError:
+    # skip import when running postprocessing with different env
+    print(
+        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
+    pass
 import multiprocessing
 try:
     from multiprocessing import Pool as ThreadPool
@@ -543,7 +549,7 @@ class StreamMonthlyNetCDF(object):
         if not norm_obj:
             vars2norm = {**predictors, **static_predictors, **predictands}
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            self.data_norm = GeneralNormalizer(vars2norm, norm_dims)  # TO-DO: Allow for arbitrary normalization
+            self.data_norm = GeneralNormalizer(vars2norm, norm_dims)  
             _ = self.data_norm.get_stats_from_data(ds_all)
             self.normalization_time = timer() - t0
         else:
