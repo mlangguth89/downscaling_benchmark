@@ -9,14 +9,16 @@ General normalizer class which encapsulates all normalization based on abstract 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-10-06"
-__update__ = "2025-02-17"
+__update__ = "2025-04-24"
 
 import os
+import re
 from typing import List, Union
 import json as js
-from abstract_data_normalization import Normalize
+import numpy as np
 import dask
 import xarray as xr
+from abstract_data_normalization import Normalize
 
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 
@@ -33,7 +35,6 @@ class GeneralNormalizer:
         """
         self.normalization_config = normalization_config
         self.norm_dims = norm_dims
-        print(norm_dims)
         self.normalizers, self.vars_normalizers = self._initialize_normalizers(**kwargs)
 
     def _initialize_normalizers(self, **kwargs):
@@ -51,6 +52,13 @@ class GeneralNormalizer:
                     method_groups[method] = ZScore(self.norm_dims, **kwargs)
                 elif method == "log_zscore":
                     method_groups[method] = Log_ZScore(self.norm_dims, **kwargs)
+                elif method == "log_1plus":
+                    method_groups[method] = Log_1Plus(self.norm_dims, **kwargs)
+                elif "logit" in method:
+                    eps = self.extract_logit_epsilon(method)
+                    method_groups[method] = Logit(self.norm_dims, eps=eps, **kwargs)
+                elif method == "":
+                    continue
                 else:
                     raise ValueError(f"Unknown normalization method: {method}")
  
@@ -68,10 +76,11 @@ class GeneralNormalizer:
         norm_stats = {}
         
         for method, normalizer in self.normalizers.items():
-            norm_stats.update(normalizer.get_required_stats(data[self.vars_normalizers[method]]))
+            _ = normalizer.get_required_stats(data[self.vars_normalizers[method]])
+            norm_stats.update(normalizer.norm_stats)
 
         return norm_stats
-
+    
     def get_normalizer_for_var(self, var):
         """
         Get the normalizer for a specific variable.
@@ -82,7 +91,8 @@ class GeneralNormalizer:
             if var in vars_list:
                 return self.normalizers[method]
         
-        raise ValueError(f"Variable {var} not found in normalization configuration.")            
+        raise ValueError(f"Variable {var} not found in normalization configuration.")
+            
 
     def normalize(self, data: xr.Dataset):
         """
@@ -156,6 +166,10 @@ class GeneralNormalizer:
             norm_serialized.update({key: da.to_dict() for key, da in norm_stats.items()})
 
             # check data type for consistency
+            if len(norm_stats) == 0:
+                print(f"Normalizer {normalizer} does not have data-dependant parameters. Nothing to save.")
+                continue 
+
             d0 = list(norm_stats.values())[0]
             if isinstance(d0, xr.DataArray):
                 data_type_now = "data_array"
@@ -177,6 +191,37 @@ class GeneralNormalizer:
         # write to JSON-file
         with open(js_file, "w") as jsf:
             js.dump(norm_serialized, jsf)
+
+    @staticmethod
+    def extract_logit_epsilon(transform_str, default_eps=1e-6):
+        """
+        Extracts the epsilon value from a logit transformation string.
+
+        Examples of valid strings:
+            "logit_eps1e-06"
+            "logit_0.01"
+            "logit" (will return default_eps)
+        
+        :param transform_str: The transformation string to parse.
+        :param default_eps: Default epsilon value to return if no specific value is found.
+        :return: The extracted epsilon value or the default value.
+        """
+        if not transform_str.startswith("logit"):
+            raise ValueError(f"Invalid transformation string: {transform_str}. Expected to start with 'logit'.")
+
+        # Try to match 'logit_eps<value>' or 'logit_<value>'
+        match = re.match(r"logit(?:_eps|_)?([0-9.eE+-]+)?", transform_str)
+        if match:
+            eps_str = match.group(1)
+            if eps_str:
+                try:
+                    return float(eps_str)
+                except ValueError:
+                    raise ValueError(f"Invalid epsilon format in string: {transform_str}")
+            else:
+                return default_eps
+        else:
+            return default_eps
 
 #
 ### Normalizers
@@ -248,7 +293,7 @@ class Log_ZScore(Normalize):
     """
     Class to perform zscore-normalization on log transformed data.
     """
-    def __init__(self, norm_dims: List, eps=0.01):
+    def __init__(self, norm_dims: List, eps=1.e-04):
         super().__init__("log_zscore", norm_dims)
         self.norm_stats = {"log_mu": None, "log_sigma": None}
         self.eps = eps
@@ -306,7 +351,172 @@ class Log_ZScore(Normalize):
         :param std: standard deviation of data for denormalization
         :return data_norm: denormalized data
         """
-        data = np.exp( data + np.log(self.eps)) - self.eps
         data = data * log_std + log_mu
+        data = np.exp( data + np.log(self.eps)) - self.eps
 
         return data
+
+
+class Logit(Normalize):
+    """
+    Class to perform logit-transformation on data.
+    """
+    def __init__(self, norm_dims: List, eps=1.e-04):
+        self.eps = eps
+        if eps <= 0 or eps >= 1:
+            raise ValueError(f"eps must be in (0, 1) but is {eps}.")
+        
+        super().__init__(f"logit_{eps: .0e}", norm_dims)
+        self.norm_stats = {}                        # no parameters required except eps which is independent of data
+
+    def get_required_stats(self, *args ,**stats):
+        """
+        Nothing to be done for logit transformation
+        """
+        pass
+
+    def normalize_data(self, data):
+        """
+        Perform logit transformation on data
+        :param data: Data array of interest
+        :return data_norm: normalized data
+        """
+        data = np.log((data + self.eps) / (1 - data + self.eps))
+
+        return data
+    
+    def denormalize_data(self, data):
+        """
+        Perform inverse logit transformation on data
+        :param data: Data array of interest
+        :return data_denorm: denormalized data
+        """
+        data = 1 / (1 + np.exp(-data))
+
+        return data
+
+class Log_1Plus(Normalize):
+    """
+    Class to perform np.log_10(1 + x) transformation on data.
+    Taken from Harris et al., 2022 for precipitation
+    """
+    def __init__(self, norm_dims: List):       
+        super().__init__(f"log_1plus", norm_dims)
+        self.norm_stats = {}                        # no parameters required except eps which is independent of data
+
+    def get_required_stats(self, *args ,**stats):
+        """
+        Nothing to be done for logit transformation
+        """
+        pass
+
+    def normalize_data(self, data):
+        """
+        Perform logit transformation on data
+        :param data: Data array of interest
+        :return data_norm: normalized data
+        """
+        data = np.log10(1 + data )
+
+        return data
+    
+    def denormalize_data(self, data):
+        """
+        Perform inverse logit transformation on data
+        :param data: Data array of interest
+        :return data_denorm: denormalized data
+        """
+        data = np.power(10, data) - 1
+
+        return data
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
