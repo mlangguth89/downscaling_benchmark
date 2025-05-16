@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-01-24"
+__update__ = "2025-02-17"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -81,7 +81,7 @@ class HandleAllMemTorchDataset(Dataset):
 
        
 class HandleIterDataset(IterDataPipe):
-    def __init__(self,stream_monthly_netcdf,named_targets=None):
+    def __init__(self,stream_monthly_netcdf,shuffle,named_targets=None):
         """
         Create iterable torch dataset
         :param stream_monthly_netcdf: an instance object of StreamMonthltNetCDF 
@@ -90,12 +90,18 @@ class HandleIterDataset(IterDataPipe):
         """
         super(HandleIterDataset).__init__()
         self.stream_monthly_netcdf = stream_monthly_netcdf
+        print("predictands_number",self.stream_monthly_netcdf.n_predictands)
         self.named_targets = named_targets
+        print("named_targets",self.named_targets)
+        self.shuffle = shuffle
         self.max_files = self.stream_monthly_netcdf.get_samples_per_merged_file()
         self.file_sequence  = 0
         self.stream_monthly_netcdf.read_netcdf(self.file_sequence)
         self.stream_monthly_netcdf.choose_data('filler')
-        self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        if self.shuffle:
+            self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        else:
+            self.random_sample =  np.arange(self.max_files)
         self.num_gpus = int(os.environ['SLURM_NTASKS']) 
         #self.rank = int(os.environ['SLURM_NODEID'])*int(os.environ['SLURM_NTASKS_PER_NODE']) + int(os.environ['SLURM_LOCALID'])
         self.rank = int(os.environ['SLURM_PROCID'])
@@ -119,11 +125,14 @@ class HandleIterDataset(IterDataPipe):
         self.file_sequence = self.file_sequence % self.stream_monthly_netcdf.nfiles_merged
         self.stream_monthly_netcdf.read_netcdf(self.file_sequence)
         self.stream_monthly_netcdf.choose_data('filler')
-        self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        if self.shuffle:
+            self.random_sample = np.random.choice(np.arange(self.max_files),self.max_files,replace=False)
+        else:
+            self.random_sample = np.arange(self.max_files)
         self.file_sequence+=1
 
     def getitem(self,idx):
-        arr =  self.stream_monthly_netcdf.getitems([idx]).to_numpy()
+        arr =  self.stream_monthly_netcdf.getitems([self.random_sample[idx]]).to_numpy()
         if self.named_targets is not None :
             varnames = self.stream_monthly_netcdf.predictand_list
             return (arr[..., 0:-self.stream_monthly_netcdf.n_predictands],
@@ -449,6 +458,8 @@ def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparam
     else:
         bs_train = ds_dict["batch_size"]
         nepochs = hparams_dict["nepochs"]
+
+    print(stream_mode)
     
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
@@ -456,12 +467,12 @@ def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparam
                                      static_predictors=static_predictors, sample_dim=ds_dict.get("sample_dim", "time"),
                                      norm_obj=norm_obj, norm_dims=norm_dims, with_horovod=with_horovod, seed=seed, nworkers=nworkers)
         
-        if shuffle:
-            nshuffle = ds_obj.samples_merged
-        else:
-            nshuffle = 1          # equivalent to no shuffling
+        #if shuffle:
+        #    nshuffle = ds_obj.samples_merged
+        #else:
+        #    nshuffle = 1          # equivalent to no shuffling
 
-        torch_loader = make_torch_iter_dataloader(ds_obj, bs_train, nepochs, nshuffle=nshuffle, named_targets=hparams_dict.get("named_targets", False),
+        torch_loader = make_torch_iter_dataloader(ds_obj, bs_train, nepochs, nshuffle=shuffle, named_targets=hparams_dict.get("named_targets", False),
                                    lrepeat=lrepeat, drop_remainder=drop_remainder)
         
         # get input shape depending on streaming mode and processed data
@@ -477,11 +488,11 @@ def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparam
     else:                                                                   # load all data into memory
         ds = xr.open_dataset(fname_or_pattern)
 
+        vars2norm = {**predictors, **static_predictors, **varnames_tar_all}
         if not norm_obj:
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            norm_obj = ZScore(ds_dict["norm_dims"])
+            norm_obj = GeneralNormalizer(ds_dict["norm_dims"], vars2norm)
 
-        vars2norm = {**predictors, **static_predictors, **varnames_tar_all}
         ds = norm_obj.normalize(ds)
 
         nsamples = len(ds["time"])
@@ -778,7 +789,7 @@ def make_tf_dataset_dyn(ds_obj, batch_size: int, nepochs: int, nshuffle: int, na
 
     return tfds
 
-def make_torch_iter_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: int, named_targets: bool = False,
+def make_torch_iter_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: bool, named_targets: bool = False,
                         lrepeat: bool = True, drop_remainder: bool = True) -> torch.utils.data.DataLoader:
     """
     Build Pytorch dataloader by from chunked netCDF files using xarray's open_mfdatset-method.
@@ -793,7 +804,7 @@ def make_torch_iter_dataloader(ds_obj, batch_size: int, nepochs: int, nshuffle: 
     :param named_targets: boolean if targets will be provided as dictionary with named variables for data stream
     """
 
-    dataset = HandleIterDataset(ds_obj)
+    dataset = HandleIterDataset(ds_obj,shuffle=nshuffle)
     dataloader = DataLoader(dataset,batch_size=batch_size)
 
     return dataloader
@@ -1067,6 +1078,7 @@ class StreamMonthlyNetCDF(object):
             self.all_vars = self.static_predictor_list + self.all_vars     # ordering important to ensure that predictors come first (cf. make_tf_dataset_allmem-method)!
             self.n_predictors += len(self.static_predictor_list) 
 
+        print("all_vars",self.all_vars)
         self.data_xy_dim = self.get_nxy_dim(ds_all) 
         # sanity check on shapes of predictors, predictands and static predictors depending on stream_mode
         self.check_data_shapes()    
@@ -1077,7 +1089,7 @@ class StreamMonthlyNetCDF(object):
         if not norm_obj:
             vars2norm = {**predictors, **static_predictors, **predictands}
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            self.data_norm = GeneralNormalizer(norm_dims, vars2norm)  # TO-DO: Allow for arbitrary normalization
+            self.data_norm = GeneralNormalizer(vars2norm, norms_dims)  # TO-DO: Allow for arbitrary normalization
             _ = self.data_norm.get_stats_from_data(ds_all)
             self.normalization_time = timer() - t0
         else:
@@ -1250,6 +1262,7 @@ class StreamMonthlyNetCDF(object):
         or as tuple of arrays (mode: 'lo_input')
         :param indices: sample indices 
         """
+        indices = np.array(indices) % self.data_now.sizes[self.sample_dim]
         if self.stream_mode == "lo_input":
             da_now = self.getitems_as_tuple(indices)
         else:
@@ -1386,6 +1399,9 @@ class StreamMonthlyNetCDF(object):
     def _read_mfdataset(self, files, **kwargs):
         # parallel processing of files incl. normalization
         datasets = self.pool.map(partial(self._process_one_netcdf, data_norm=self.data_norm, **kwargs), files)
+        #datasets = []
+        #for file in files:
+        #    datasets.append(self._process_one_netcdf(file, data_norm=self.data_norm,**kwargs))
         ds_all = xr.concat(datasets, dim=self.sample_dim)
         # clean-up
         del datasets
@@ -1404,26 +1420,26 @@ class StreamMonthlyNetCDF(object):
         # Restriction to read dynamic variables is not required currently,
         # since constant data get automatically broadcasted with the _read_mfdataset-method
         data_now = self._read_mfdataset(file_list_now, var_list=self.all_vars).copy()
-        nsamples = data_now.sizes[self.sample_dim]
+        #nsamples = data_now.sizes[self.sample_dim]
 
-        if nsamples < self.samples_merged:
-            t1 = timer()
-            add_samples = self.samples_merged - nsamples
-            istart = random.randint(0, self.samples_merged - add_samples - 1)
-            # slice data from data_now...
-            ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
-            if ds_add.sizes[self.sample_dim] != add_samples:
-                print("WARNING: ds_add contains inconsistent number of samples. Re-try...")
-                add_samples = self.samples_merged - nsamples
-                istart = random.randint(0, self.samples_merged - add_samples - 1)
-                ds_add = data_now.isel({self.sample_dim: slice(istart, istart + add_samples)})
-            # ... and modify underlying sample-dimension to allow clean concatenation
-            ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
-            ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
-            data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
-            print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
-                  f"(total #samples: {data_now.sizes[self.sample_dim]})")
-            
+        #if nsamples < self.samples_merged:
+        #    t1 = timer()
+        #    add_samples = self.samples_merged - nsamples
+        #    istart = random.randint(0, self.samples_merged - add_samples - 1)
+        #    # slice data from data_now...
+        #    ds_add = data_now.isel({self.sample_dim: slice(istart, istart+add_samples)})
+        #    if ds_add.sizes[self.sample_dim] != add_samples:
+        #        print("WARNING: ds_add contains inconsistent number of samples. Re-try...")
+        #        add_samples = self.samples_merged - nsamples
+        #        istart = random.randint(0, self.samples_merged - add_samples - 1)
+        #        ds_add = data_now.isel({self.sample_dim: slice(istart, istart + add_samples)})
+        #    # ... and modify underlying sample-dimension to allow clean concatenation
+        #    ds_add[self.sample_dim] = data_now[self.sample_dim][-1].values + 1 + np.arange(add_samples)
+        #    ds_add[self.sample_dim] = ds_add[self.sample_dim].assign_attrs(data_now[self.sample_dim].attrs)
+        #    data_now = xr.concat([data_now, ds_add], dim=self.sample_dim)
+        #    print(f"Appending data with {add_samples:d} samples took {timer() - t1:.2f}s" +
+        #          f"(total #samples: {data_now.sizes[self.sample_dim]})")
+        #    
         # Appending with constant variables is not required since they are read and broadcast to data_now already (see above)
         #if self.const_vars:
         #    ds_const_append = self.ds_const.copy().expand_dims({self.sample_dim: data_now[self.sample_dim]})
