@@ -300,7 +300,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     
     # get possible keyword arguments
     model_type = kwargs.pop("model_type", "sha_wgan")
-    model_name = kwargs.pop("model_name", "Sha WGAN")
+    model_name = kwargs.pop("model_longname", "Model")
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
@@ -343,7 +343,6 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     
     fname_base = f"downscaling_{model_type}_{score_name.lower()}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
-
     
     # create plots
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
@@ -780,6 +779,9 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
+
+        # add varname to plotting kwargs
+        plt_kwargs["varname"] = self.varname
 
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
