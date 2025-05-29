@@ -864,8 +864,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         elif self.varname == "glob_rad":
-            lvl_bias = np.arange(-.5, .5, .05)
-            lvl_rmse =  np.arange(0., 0.8, 0.05)
+            lvl_bias = np.arange(-2.5, 2.5, .25)
+            lvl_rmse =  np.arange(0., 2.7, 0.2)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
                          "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": True}}
         else:
