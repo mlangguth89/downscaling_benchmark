@@ -401,7 +401,6 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
     
     os.makedirs(plot_dir, exist_ok=True)
-
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
@@ -786,7 +785,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
+        
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
             # fss needs a dedicated loop for multiple threshold inputs
@@ -844,10 +843,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         self.proj = proj
         
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
-        
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
             _ = run_evaluation_spatial(score_engine, metric, plot_dir=os.path.join(self.plt_dir, f"{metric}_spatial"), 
@@ -865,7 +862,7 @@ class SpatialEvaluation(AbstractMetricEvaluation):
             lvl_rmse =  np.arange(0., 3.1, 0.2)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
-        elif self.varname == "global_rad":
+        elif self.varname == "glob_rad":
             lvl_bias = np.arange(-.5, .5, .05)
             lvl_rmse =  np.arange(0., 0.8, 0.05)
             eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
