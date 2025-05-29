@@ -426,13 +426,14 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
                      title=f"{score_name.upper()} (avg.)", **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
-    for hh in range(24):
+    hours_in_data = score_hourly_mean.hour.values
+    for hh in hours_in_data:
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
         plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
                        dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
 
-    for hh in range(24):
+    for hh in hours_in_data:
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
