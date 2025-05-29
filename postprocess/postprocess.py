@@ -818,10 +818,10 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
         elif self.varname == "glob_rad":
             eval_dict = {"mae": {"score_unit": "W m**-2", "value_range": (0., 0.5), "ref_line": None, "relative": True},
-                         "rmse": {"score_unit": "W m**-2", "value_range": (0., 0.5), "ref_line": None, "relative": True}, 
-                         "bias": {"score_unit": "W m**-2", "value_range": (-0.2, 0.2), "ref_line": 0, "relative": True},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.2, 1.05), "ref_line": 1.},
-                         "me_std": {"score_unit": "W m**-2", "value_range": (10, 50), "ref_line": None}}
+                         "rmse": {"score_unit": "W m**-2", "value_range": (0., 0.7), "ref_line": None, "relative": True}, 
+                         "bias": {"score_unit": "W m**-2", "value_range": (-0.25, 0.25), "ref_line": 0, "relative": True},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0., 1.05), "ref_line": 1.},
+                         "me_std": {"score_unit": "W m**-2", "value_range": (5, 100), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
