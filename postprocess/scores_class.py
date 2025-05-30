@@ -400,7 +400,7 @@ class Scores:
 
         return ratio_spat_variability
 
-    def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List):
+    def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List, **kwargs):
         """
         Calculates stable equitable error in probabiliyt space (SEEPS), see Rodwell et al., 2011
         :param seeps_weights: SEEPS-parameter matrix to weight contingency table elements
@@ -454,7 +454,7 @@ class Scores:
 
         return seeps_values
     
-    def calc_ralsd(self, lonlat_dims: List[str] = ["rlon", "rlat"], lcutoff: bool = True, re: float = 6371.e3):
+    def calc_ralsd(self, lonlat_dims: List[str] = ["rlon", "rlat"], lcutoff: bool = True, re: float = 6371.e3, **kwargs):
         """
         Calculate radially averaged log-spectral distance (RALSD) between forecast and reference data (see Eq. 8 in Harris et al., 2022, DOI: 10.1029/2022MS003120).
         Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
@@ -492,7 +492,7 @@ class Scores:
 
         return ralsd
     
-    def calc_iqd(self, align_join: str = "exact", steps: int = 1000) -> xr.DataArray:
+    def calc_iqd(self, align_join: str = "exact", steps: int = 1000, **kwargs) -> xr.DataArray:
         """
         Calculate the Integrated Quadratic Distance (IQD) between the forecast and reference data in CDF space.
 
@@ -534,7 +534,7 @@ class Scores:
         return iqd
 
 
-    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
+    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True, **kwargs):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
