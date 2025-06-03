@@ -320,18 +320,35 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     ref_linestyle = kwargs.pop("ref_linestyle", "k--")
     
     fig, (ax) = plt.subplots(1, 1)
-    ax.plot(data[x_coord].values, data.values, linestyle, label=model_name, **kwargs)
+
+    # plot data
+    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+    avg_value = np.nanmean(data.values)
+    label = rf"$\overline{{{metric_name}}}_{{{model_name}}}: {avg_value:.2f}\ {metric_unit}$"
+
+    ax.plot(data[x_coord].values, data.values, linestyle, **kwargs)
     ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
                     alpha=0.2)
     if ref_line is not None:
         nval = np.shape(data[x_coord].values)[0]
         ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
-    ax.set_ylim(*val_range)
+    ax.set_ylim(*val_range)    
+    
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=fs)
-    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
+
+    # add legend
+    ax.text(
+        0.98, 0.95,               # x, y in axis fraction coordinates
+        label,
+        transform=ax.transAxes,  # interpret as axes coords (0–1)
+        fontsize=fs-2,
+        verticalalignment='top',
+        horizontalalignment='right',
+        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
+    )   
 
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
