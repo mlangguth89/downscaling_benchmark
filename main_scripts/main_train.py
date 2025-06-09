@@ -22,7 +22,7 @@ from tensorflow.keras.utils import plot_model
 try:
     import horovod.tensorflow as hvd
 except:
-    print("main_train: Horovod is not installed. Distributed training is not supported.")
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
     pass
 from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
@@ -107,7 +107,7 @@ def main(parser_args):
     # get tensoflow dataset objects for training and validation data
     # training dataset
     t0_train = timer()
-    print(f"Enable Horovod in main_train: {with_horovod}")
+    if main_process: print(f"Enable Horovod in main_train: {with_horovod}")
     tfds_train, train_info = prepare_dataset(datadir, dataset, ds_dict, hparams_dict, "train", norm_obj=data_norm, 
                                              norm_dims=norm_dims, with_horovod=with_horovod, seed=seed)  
     

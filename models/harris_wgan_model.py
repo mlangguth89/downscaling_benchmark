@@ -35,9 +35,8 @@ from model_utils import save_opt_weights
 from tensorflow.python.platform import tf_logging as logging
 try:
     import horovod.tensorflow as hvd
-    import horovod.keras.callbacks as hvd_callbacks
 except:
-    print("Horovod is not installed. Distributed training is not supported.")
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
     pass
 
 list_or_tuple = Union[List, Tuple]

@@ -22,7 +22,7 @@ try:
     import horovod.tensorflow as hvd
     from horovod.tensorflow.keras import callbacks as hvd_callbacks
 except:
-    print("Horovod is not installed. Distributed training is not supported.")
+    print(f"{__file__}]: Horovod is not installed. Distributed training is not supported.")
     pass
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
