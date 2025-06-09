@@ -38,7 +38,7 @@ import tensorflow as tf
 try:
     import horovod.tensorflow as hvd
 except:
-    print("Horovod is not installed. Distributed training is not supported.")
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
     pass
 import multiprocessing
 try:
@@ -646,6 +646,8 @@ class StreamMonthlyNetCDF(object):
                 n = n2merge[f"#GPUS={hvd.size()}"]
             else:
                 n = n2merge[f"#GPUS=1"]
+        
+        self._nfiles2merge = n
 
         # for distributed training, data files must be distributed over workers
         if self.with_horovod:
@@ -662,8 +664,9 @@ class StreamMonthlyNetCDF(object):
                     print(f"Append file list by {nfiles_req - self.nfiles} files to get {nfiles_req} files ({self._nfiles2merge} files per worker).")
                 self.file_list_random += random.sample(self.file_list_random[0:self.nfiles-n], nfiles_req - self.nfiles)
                 self.nfiles = len(self.file_list_random)
-            if n != n2merge and self.main_process:
-                # ensure that n is a divisor of the total number of files
+        else:
+            if n != n2merge:
+            # ensure that n is a divisor of the total number of files
                 n = find_closest_divisor(self.nfiles, n)
                 self._nfiles2merge = n
                 print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
