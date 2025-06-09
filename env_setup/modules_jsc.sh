@@ -17,5 +17,6 @@ ml SciPy-bundle/2021.10
 ml xarray/0.20.1
 ml dask/2021.9.1
 ml TensorFlow/2.6.0-CUDA-11.5
+ml Horovod/0.24.3
 ml Cartopy/0.20.0
 ml Graphviz/2.49.3
