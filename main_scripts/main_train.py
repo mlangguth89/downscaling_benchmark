@@ -184,7 +184,7 @@ def main(parser_args):
     if main_process: print(f"Start training of {parser_args.model.capitalize()}...")
     history = model.fit(x=tfds_train, epochs=model.hparams["nepochs"], initial_epoch=init_epoch,
                         steps_per_epoch=steps_per_epoch, validation_data=tfds_val, validation_steps=int(8640/ds_dict["batch_size"]),
-                        verbose=1 if main_process else 0, **model.fit_options)
+                        verbose=2 if main_process else 0, **model.fit_options)
 
     # finalise training and save model
     if main_process:
