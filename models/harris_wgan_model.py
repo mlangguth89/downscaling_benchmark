@@ -10,7 +10,7 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-03-28"
+__update__ = "2025-04-10"
 
 from typing import List, Tuple, Union, Dict
 from collections import OrderedDict
@@ -19,7 +19,10 @@ import numpy as np
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense, BatchNormalization
+from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, \
+                                    Dense, BatchNormalization, LayerNormalization, ReLU
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
+from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.models import Model
 try:
     import horovod.tensorflow as hvd
@@ -27,8 +30,15 @@ except:
     print("Horovod is not installed. Distributed training is not supported.")
     pass
 from custom_losses import get_custom_loss
-from wgan_model import Sha_WGAN 
+from wgan_model import Sha_WGAN, LearningRateSchedulerWGAN
+from model_utils import save_opt_weights
+from tensorflow.python.platform import tf_logging as logging
 
+try:
+    import horovod.tensorflow as hvd
+except:
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
+    pass
 
 list_or_tuple = Union[List, Tuple]
 
@@ -234,7 +244,14 @@ class CriticHarris(AbstractModelClass):
 
         # critic output
         critic_output = GlobalAveragePooling2D()(critic_input)
-        critic_output = Dense(64, activation="relu")(critic_output)
+        # add additional normalization if desired
+        critic_output = Dense(64)(critic_output)
+        if norm == "batch":
+            critic_output = BatchNormalization()(critic_output)
+        elif norm == "layer":
+           critic_output = LayerNormalization()(critic_output)
+        critic_output = ReLU()(critic_output)
+
         critic_output = Dense(1, name="critic_output")(critic_output)
 
         self.model = Model(
@@ -275,7 +292,7 @@ class NoiseGenerator(object):
             n += mean
         return n
     
-    def __call__(self, mean=0.0, std=1.0):
+    def __call__(self, mean=0.0, std=1.):
         return self.noise(self.noise_shapes, mean, std)
     
     
@@ -288,6 +305,12 @@ class Harris_WGAN_Model(keras.Model):
         self.hparams = hparams
         self._expname = expname
         self.noise_gen = noise_gen
+        if self.hparams["noise_input"]:
+            self.noise_amplitude = 1.
+        else:
+            self.noise_amplitude = 0.
+            self.hparams["noise_channels"] = 1
+
         if noise_gen:
             assert isinstance(noise_gen, NoiseGenerator), "Parsed noise_gen must be an instance of the NoiseGenerator-class"
         
@@ -313,10 +336,10 @@ class Harris_WGAN_Model(keras.Model):
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         sample = outputs["output"]
 
         # train critic
@@ -344,6 +367,8 @@ class Harris_WGAN_Model(keras.Model):
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update critic
+            tape_critic = hvd.DistributedGradientTape(tape_critic)
+
             d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
             self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
 
@@ -382,6 +407,8 @@ class Harris_WGAN_Model(keras.Model):
             # combined loss for generator
             g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
 
+        tape_generator = hvd.DistributedGradientTape(tape_generator)
+        
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
 
@@ -410,10 +437,10 @@ class Harris_WGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         sample = outputs["output"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
         noise_iter = noise[0:self.hparams["batch_size"]:, ...]
         noise_0 = noise_iter[..., 0]
@@ -450,7 +477,7 @@ class Harris_WGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         
         if self.hparams["ensemble_size"] is not None:
-            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
+            noise = [self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"])]
             gen_list = []
             for noise_iter in noise:
                 gen_in = [cond] + [const] + [noise_iter]
@@ -458,7 +485,7 @@ class Harris_WGAN_Model(keras.Model):
                 gen_list.append(gen_iter)
             gen_out = tf.stack(gen_list, axis=-1)
         else:
-            noise = self.noise_gen()
+            noise = self.noise_gen(self.noise_amplitude)
             gen_in = [cond] + [const] + [noise]
             gen_out = self.generator(gen_in, training=False)
         return gen_out
@@ -484,12 +511,21 @@ class Harris_WGAN_Model(keras.Model):
         mix_data = real_data + alpha * (gen_data - real_data)
         critic_in_gen = [cond_data] + [const_data] + [mix_data]
 
+        # cleaner implementation
         with tf.GradientTape() as gp_tape:
-            gp_tape.watch(critic_in_gen[-1])
-            critic_mix = self.critic.model(critic_in_gen, training=True)
+            gp_tape.watch(mix_data)
+            mixed_score = self.critic.model(critic_in_gen)
 
-        # calculate the gradient on the mixture data...
-        grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen[-1]])[0]
+        # Compute gradients with respect to mixed data
+        grads_mix = gp_tape.gradient(mixed_score, mix_data)
+
+        #with tf.GradientTape() as gp_tape:
+            #gp_tape.watch(critic_in_gen[-1])
+        #    gp_tape.watch(critic_in_gen)
+        #    critic_mix = self.critic.model(critic_in_gen, training=True)
+        #
+        ## calculate the gradient on the mixture data...
+        #grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen])[0]
         # ... and norm it
         #norm = tf.norm(grads_mix, ord=2, axis=list(range(1, len(grads_mix.shape))))
         norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
@@ -501,7 +537,7 @@ class Harris_WGAN_Model(keras.Model):
 class Harris_WGAN(Sha_WGAN):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict,
-                 varnames_tar: List, savedir: str, expname: str):
+                 varnames_tar: List, savedir: str, expname: str, with_horovod: bool = False):
         """
         Initialize the Harris_WGAN model class.
         !!! Note: Inherits from Sha_WGAN and overwrites methods when necessary only !!!
@@ -514,19 +550,23 @@ class Harris_WGAN(Sha_WGAN):
         :param varnames_tar: List of target variable names.
         :param savedir: Drectory to save the model.
         :param expname: The name of the experiment.
+        :param with_horovod: Whether to use Horovod for distributed training.
         """        
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [1, 1, 1, 1]
         super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
 
         self.modelname = "harriswgan"
+        self.with_horovod = with_horovod
         self.main_process = True 
         if self.with_horovod:
-            raise RuntimeError("Harris WGAN does not support Horovod yet.")
             self.main_process = hvd.rank() == 0
         
         # set hyperparmaters
         self.set_hparams(hparams)
+        if not self.hparams["noise_input"]:
+            print("Set noise channels to 1.")
+            self.hparams["noise_channels"] = 1
         # set submodels
         self.generator, self.critic = self.set_model(generator, critic)
         # set compile and fit options as well as custom objects
@@ -534,9 +574,54 @@ class Harris_WGAN(Sha_WGAN):
         self.set_custom_objects(loss=self.compile_options['loss'])
         self.set_fit_options()
         
-    # !!! NOTE !!!
-    # set_compile_options and get_fit_options are inherited from Sha_WGAN
-    # !!! NOTE !!!
+    def set_compile_options(self):
+        """
+        Set compile options for the HarrisWGAN model.
+        """
+        # set optimizers
+        if self.hparams["optimizer"].lower() == "adam":
+            optimizer = keras.optimizers.Adam
+            kwargs_opt = {"beta_1": 0.0, "beta_2": 0.9}
+        elif self.hparams["optimizer"].lower() == "rmsprop":
+            optimizer = keras.optimizers.RMSprop
+            kwargs_opt = {}
+        else:
+            raise ValueError("'{0}' is not a valid optimizer. Either choose Adam or RMSprop-optimizer")
+
+        self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
+        
+        # wrap optimizers for distributed training
+        #if self.with_horovod:
+        #    import horovod.tensorflow as hvd
+        #    # wrap optimizers for distributed training
+        #    self.optimizer = tuple(hvd.DistributedOptimizer(opt, backward_passes_per_step=1, average_aggregated_gradients=True)
+        #                          for opt in self.optimizer)
+        
+    def get_fit_options(self):
+        """
+        Get options that will be parsed to the fit-method of the Keras model.
+        """
+        harriswgan_callbacks = []
+        
+        if self.hparams["lr_decay"]:
+            harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
+        
+        if self.hparams["lcheckpointing"] and self.main_process:            
+            harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
+                                                                  monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
+            
+        if self.hparams["learlystopping"]:
+            harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+
+        if self.with_horovod:            
+            harriswgan_callbacks.append(BroadcastWeightsCallback(self.generator, self.critic, self.optimizer[0], self.optimizer[1]))
+            #harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback())
+
+            
+        if harriswgan_callbacks is not None:
+            return {"callbacks": harriswgan_callbacks}
+        else:
+            return {}  
         
     def set_model(self, generator, critic):
         """
@@ -567,10 +652,99 @@ class Harris_WGAN(Sha_WGAN):
         self.model = Harris_WGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
 
         return gen_model, critc_model
+
+        
+    def get_lr_decay(self):
+        """
+        Get callable of learning rate scheduler which can be used as callabck in Keras models.
+        Exponential decay is applied to change the learning rate from the start to the end value.
+        Note that the exponential decay is calculated based on the learning rate of the generator, but applies to both.
+        :return: learning rate scheduler
+        
+        NOTE SL: taken from wgan_model.py
+        """
+        decay_st, decay_end = self.hparams["decay_start"], self.hparams["decay_end"]
+        lr_start, lr_end = self.hparams["hparams_generator"]["lr"], self.hparams["hparams_generator"]["lr_end"]
+
+        if not decay_end > decay_st:
+            raise ValueError("Epoch for end of learning rate decay must be large than start epoch. " +
+                             "Your values: {0:d}, {1:d})".format(decay_st, decay_end))
+
+        ne_decay = decay_end - decay_st
+        # calculate decay rate from start and end learning rate
+        decay_rate = 1./ne_decay*np.log(lr_end/lr_start)
+
+        def lr_scheduler(epoch, lr):
+            if epoch < decay_st:
+                return lr
+            elif decay_st <= epoch < decay_end:
+                return lr * tf.math.exp(decay_rate)
+            elif epoch >= decay_end:
+                return min(lr, lr_end)
+
+        return lr_scheduler
+
+    def plot_model(self, save_dir, **kwargs):
+        """
+        Plot generator and critci model separately.
+        :param save_dir: directory under which plots will be saved
+        :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
+        
+        NOTE SL: taken from wgan_model.py
+        """
+        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
+        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
     
-    # !!! NOTE !!!
-    # get_lr_decay, load_checkpoint, and plot_model are inherited from Sha_WGAN
-    # !!! NOTE !!!
+    
+    def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
+        """
+        Load model from checkpoint that has been either saved with the save-method or with the Checkpoint-callback.
+        Requires that the model is compiled!
+        :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
+        :param checkpoint_format: format of checkpoint, must match the format used for saving.
+        :return: iteration step of checkpointed model
+        """
+        generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
+                                      Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
+        
+        matching_gen_dir, matching_critic_dir = glob.glob(str(generator_path)), glob.glob(str(critic_path))
+        
+        if matching_gen_dir:
+            generator_path = Path(matching_gen_dir[0])
+            suffix_gen = str(generator_path).split("_generator")[-1]
+        else:
+            raise FileNotFoundError(f"No matching director for generator-model {str(generator_path)} found.")
+            
+        if matching_critic_dir:
+            critic_path = Path(matching_critic_dir[0])
+            suffix_critic = str(critic_path).split("_critic")[-1]
+        else:
+            raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
+        
+        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
+        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
+
+        opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
+                                        critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
+        with open(opt_gen_path, "rb") as f:
+            optimizer_weights_gen = pickle.load(f)
+
+        with open(opt_critic_path, "rb") as f:
+            optimizer_weights_critic = pickle.load(f)
+
+        # set state for g_optimizer
+        self.g_optimizer._create_all_weights(self.generator.trainable_variables)
+        self.g_optimizer.set_weights(optimizer_weights_gen)
+
+        # set state for c_optimizer
+        self.c_optimizer._create_all_weights(self.critic.trainable_variables)
+        self.c_optimizer.set_weights(optimizer_weights_critic)
+
+        # retrieve iteration step of checkpointed model
+        iter_step = (self.g_optimizer.variables()[0]).numpy()
+
+        return iter_step
+
         
     def load_inference_model(self, model_dir, format="tf"):
             
@@ -610,9 +784,150 @@ class Harris_WGAN(Sha_WGAN):
         """
         self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8, "noise_input": True,
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
-        
+
+
+class BroadcastWeightsCallback(tf.keras.callbacks.Callback):
+    """ 
+    Custom callback to broadcast model weights at the end of each batch.
+    Ensures all workers stay synchronized during training.
+    """
+
+    def __init__(self, generator, critic, g_optimizer, c_optimizer, root_rank=0):
+        super(BroadcastWeightsCallback, self).__init__()
+        self.generator = generator
+        self.critic = critic
+        self.g_optimizer = g_optimizer
+        self.c_optimizer = c_optimizer
+        self.root_rank = root_rank
+
+    def on_epoch_begin(self, epoch, logs=None):
+        # broadcast weights at the beginning of the first epoch
+        if epoch == 0:
+            hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
+            hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)
+
+
+class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
+    """Note SL: taken from wgan_model.py"""
+    def __init__(self, schedule, verbose=0):
+        super(LearningRateSchedulerWGAN, self).__init__(schedule, verbose)
+
+    def on_epoch_begin(self, epoch, logs=None):
+        if not hasattr(self.model, "g_optimizer"):
+            raise AttributeError('Model must have a "g_optimizer" for optimizing the generator.')
+
+        if not hasattr(self.model, "c_optimizer"):
+            raise AttributeError('Model must have a "c_optimizer" for optimizing the critic.')
+
+        if not (hasattr(self.model.g_optimizer, "lr") and hasattr(self.model.c_optimizer, "lr")):
+            raise ValueError('Optimizer for generator and critic must both have a "lr" attribute.')
+        try:  # new API
+            lr_g, lr_c = float(K.get_value(self.model.g_optimizer.lr)), \
+                         float(K.get_value(self.model.c_optimizer.lr))
+            lr_g, lr_c = self.schedule(epoch, lr_g), self.schedule(epoch, lr_c)
+        except TypeError:  # Support for old API for backward compatibility
+            raise NotImplementedError("WGAN learning rate schedule is not compatible with old API. Update TF Keras.")
+
+        if not (isinstance(lr_g, (tf.Tensor, float, np.float32, np.float64)) and
+                isinstance(lr_c, (tf.Tensor, float, np.float32, np.float64))):
+            raise ValueError('The output of the "schedule" function '
+                             f'should be float. Got: {lr_g} (generator) and {lr_c} (critic)' )
+        if isinstance(lr_g, tf.Tensor) and not lr_g.dtype.is_floating \
+           and isinstance(lr_c, tf.Tensor) and lr_c.dtype.is_floating:
+            raise ValueError(
+                f'The dtype of `lr_g` and `lr_c` Tensor should be float. Got: {lr_g.dtype} (generator)'
+                f'and {lr_c.dtype} (critic)' )
+        # set updated learning rate
+        K.set_value(self.model.g_optimizer.lr, K.get_value(lr_g))
+        K.set_value(self.model.c_optimizer.lr, K.get_value(lr_c))
+        if self.verbose > 0:
+            print(f'\nEpoch {epoch + 1}: LearningRateScheduler setting learning '
+                  f'rate for generator to {lr_g}, for critic to {lr_c}.')
+
+    def on_epoch_end(self, epoch, logs=None):
+        logs = logs or {}
+        logs['lr_generator'] = K.get_value(self.model.g_optimizer.lr)
+        logs['lr_critic'] = K.get_value(self.model.c_optimizer.lr)
+
+
+class ModelCheckpointHarrisWGAN(ModelCheckpoint):
+    """Note SL: taken from wgan_model.py"""
+    def __init__(self, filepath, expname, monitor='val_loss', verbose=0, save_best_only=False, save_weights_only=False,
+                 mode='auto', save_freq="epoch", options=None, **kwargs):
+        super(ModelCheckpointHarrisWGAN, self).__init__(filepath,  monitor, verbose, save_best_only,
+                                                  save_weights_only, mode, save_freq, options=options, **kwargs)
+        self._expname = expname
+
+    def _save_model(self, epoch, batch, logs):
+        """Saves the model.
+        ML: The source-code is largely identical to Keras v2.6.0 implementation except that two models,
+            the critic and the generator, are saved separately in filepath_gen and filepath_critic (see below).
+            Modified source-code is envelopped between 'ML S' and 'ML E'-comment strings.
+
+        Args:
+            epoch: the epoch this iteration is in.
+            batch: the batch this iteration is in. `None` if the `save_freq`
+              is set to `epoch`.
+            logs: the `logs` dict passed in to `on_batch_end` or `on_epoch_end`.
+        """
+        logs = logs or {}
+
+        if isinstance(self.save_freq, int) or self.epochs_since_last_save >= self.period:
+            # Block only when saving interval is reached.
+            logs = tf_utils.sync_to_numpy_or_python_type(logs)
+            self.epochs_since_last_save = 0
+            filepath = self._get_file_path(epoch, batch, logs)
+            # ML S
+            if self.save_best_only:
+                add_str = "_best"
+            else:
+                add_str = f"_epoch{epoch+1:05d}"
+            
+            filepath = Path(filepath).joinpath(f"{self._expname}{add_str}")
+            # ML E
+            try:
+                if self.save_best_only:
+                    current = logs.get(self.monitor)
+                    if current is None:
+                        logging.warning('Can save best model only with %s available, skipping.', self.monitor)
+                    else:
+                        if self.monitor_op(current, self.best):
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s improved from %0.5f to %0.5f,'
+                                      ' saving model to %s' % (epoch + 1, self.monitor,
+                                                               self.best, current, filepath))
+                            self.best = current
+                            
+                            # ML S
+                            self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
+                                            suffix=add_str)#, options=self._options)
+                            # ML E
+                        else:
+                            if self.verbose > 0:
+                                print('\nEpoch %05d: %s did not improve from %0.5f' %
+                                      (epoch + 1, self.monitor, self.best))
+                else:
+                    if self.verbose > 0:
+                        print('\nEpoch %05d: saving model to %s' % (epoch + 1, filepath))
+                    # ML S
+                    self.model.save(filepath, overwrite=True, include_optimizer=not self.save_weights_only, save_format="tf", 
+                                    suffix=add_str)#, options=self._options)
+                    # ML E
+                self._maybe_remove_file()
+            except IsADirectoryError as e:  # h5py 3.x
+                raise IOError('Please specify a non-directory filepath for'  
+                              'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+            except IOError as e:  # h5py 2.x
+                # `e.errno` appears to be `None` so checking the content of `e.args[0]`.
+                if 'is a directory' in str(e.args[0]).lower():
+                    raise IOError('Please specify a non-directory filepath for '
+                                  'ModelCheckpoint. Filepath used is an existing directory: {}'.format(filepath))
+                # Re-throw the error for any other causes.
+                raise e
 
 ####################################################################################
 ####################################################################################
@@ -722,6 +1037,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
@@ -732,6 +1049,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
