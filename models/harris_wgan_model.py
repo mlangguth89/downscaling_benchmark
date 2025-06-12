@@ -878,13 +878,6 @@ class BroadcastWeightsCallback(tf.keras.callbacks.Callback):
         self.c_optimizer = c_optimizer
         self.root_rank = root_rank
 
-    #def on_train_batch_end(self, batch, logs=None):
-    #    """Broadcast weights at the end of each batch."""
-    #    hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
-    #    hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
-    #    hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
-    #    hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)
-
     def on_epoch_begin(self, epoch, logs=None):
         # broadcast weights at the beginning of the first epoch
         if epoch == 0:
