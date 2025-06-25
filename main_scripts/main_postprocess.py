@@ -57,6 +57,7 @@ def main(parser_args):
         if parser_args.ens_mem is not None:
             plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
 
+
         # create output-directory and initialze logger    
         os.makedirs(plt_dir, exist_ok=True)
         log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
@@ -72,7 +73,7 @@ def main(parser_args):
             plt_dir = os.path.dirname(parser_args.results_nc)
         else:
             plt_dir = plt_basedir
-
+        
         # create output-directory and initialze logger
         os.makedirs(plt_dir, exist_ok=True)
         log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
@@ -82,12 +83,17 @@ def main(parser_args):
         # get results from file
         ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
 
+    plt_dir = os.path.join(plt_dir, "plots")
+    os.makedirs(plt_dir, exist_ok=True)
+
     # run temporal evaluation if specified
     if conf_postprocess.get("do_evaluation_time", False):
         logger.info("Start temporal evaluation...")
         t0_tplot = timer()
 
-        temp_eval = TemporalEvaluation(varname, plt_dir, model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
+        plt_dir_temporal = os.path.join(plt_dir, "temporal_evaluation")
+
+        temp_eval = TemporalEvaluation(varname, plt_dir_temporal, model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
         temp_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
         
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
@@ -97,7 +103,9 @@ def main(parser_args):
         logger.info("Start spatial evaluation...")
         t0_splot = timer()
 
-        spat_eval = SpatialEvaluation(varname, plt_dir, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
+        plt_dir_spatial = os.path.join(plt_dir, "spatial_evaluation")
+
+        spat_eval = SpatialEvaluation(varname, plt_dir_spatial, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
                                       eval_dict=conf_postprocess.get("config_evaluation_spatial", None))
         spat_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
 
@@ -151,9 +159,11 @@ def main(parser_args):
     if conf_postprocess.get("do_cond_quantile_analysis", False):
         logger.info("Start conditional quantile plots...")
         t0_cq = timer()
+
+        plt_dir_condquant = os.path.join(plt_dir, "conditional_quantile_plots")
     
         labels = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
-        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir, labels, unit, 
+        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_condquant, labels, unit, 
                                           **conf_postprocess.get("config_cond_quantile_analysis", {}))      
 
         logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
@@ -164,6 +174,8 @@ def main(parser_args):
         logger.info("Start feature importance analysis...")
         t0_fi = timer()
         
+        plt_dir_importance = os.path.join(plt_dir, "feature_importance")
+
         # load test dataset
         ds_test = xr.open_dataset(test_info["file"])
         conf_fi = conf_postprocess["config_feature_importance"]
@@ -179,7 +191,7 @@ def main(parser_args):
         all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
         _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
-                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir, conf_fi.get("patch_size", (8, 8)))
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)))
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
