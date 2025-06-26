@@ -332,7 +332,8 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     if ref_line is not None:
         nval = np.shape(data[x_coord].values)[0]
         ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
-    ax.set_ylim(*val_range)    
+    ax.set_ylim(*val_range)
+    ax.set_xlim(0, 23)
     
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=fs)
