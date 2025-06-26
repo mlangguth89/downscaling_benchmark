@@ -324,7 +324,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     # plot data
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     avg_value = np.nanmean(data.values)
-    label = rf"$\overline{{{metric_name.replace('_', '\_')}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit}$"
+    label = (rf"$\overline{{{metric_name.replace('_', '\_')}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit if metric_unit != '1' else ''}$").rstrip(" ")
 
     ax.plot(data[x_coord].values, data.values, linestyle, **kwargs)
     ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
