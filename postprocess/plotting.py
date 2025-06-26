@@ -324,7 +324,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     # plot data
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     avg_value = np.nanmean(data.values)
-    label = rf"$\overline{{{metric_name}}}_{{{model_name}}}: {avg_value:.2f}\ {metric_unit}$"
+    label = rf"$\overline{{{metric_name}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit}$"
 
     ax.plot(data[x_coord].values, data.values, linestyle, **kwargs)
     ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
@@ -347,8 +347,11 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
         fontsize=fs-2,
         verticalalignment='top',
         horizontalalignment='right',
-        bbox=dict(boxstyle='round', facecolor='white', alpha=0.8, edgecolor='gray')
-    )   
+        bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+    )
+
+    # enable grid
+    ax.grid(alpha=0.5)
 
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
