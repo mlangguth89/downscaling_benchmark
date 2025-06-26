@@ -280,7 +280,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     func_logger.info(f"Model was loaded successfully.")
 
     return trained_model, model_info      
-        
+
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **kwargs):
     """
@@ -294,7 +294,8 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
     # create output-directories if necessary 
-    metric_dir = os.path.join(plot_dir, "metric_files")
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/")
+    plot_dir = os.path.join(plot_dir, score_name)
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
     
@@ -545,6 +546,9 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
     :param plt_kwargs: Additional keyword arguments for plotting that are parsed to the plot_power_spectra-method
     """
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
+    
+    metric_dir = plt_dir.replace("/plots/", "/metric_files/")
+    os.makedirs(metric_dir, exist_ok=True)
 
     # check if number of vairables for spectral analysis and labels are equal
     ds_vars, labels = to_list(data_vars), to_list(labels)
@@ -575,7 +579,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
                        x_coord="wavenumber", **plt_kwargs)
     
     # save power spectrum to netCDF
-    fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_all.nc')
+    fname_nc = os.path.join(metric_dir, f'{varname}_power_spectrum_all.nc')
 
     func_logger.debug(f"Save power spectrum to {fname_nc}...")
     ds_ps.to_netcdf(fname_nc)
@@ -593,7 +597,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
                            x_coord="wavenumber", **plt_kwargs)
         
         # save power spectrum to netCDF
-        fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_{sea}.nc')
+        fname_nc = os.path.join(metric_dir, f'{varname}_power_spectrum_{sea}.nc')
 
         func_logger.debug(f"Save power spectrum to {fname_nc}...")
         ds_ps_sea.to_netcdf(fname_nc)
@@ -623,7 +627,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     
     # get reference score
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
-    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
+    score_file = os.path.join(plt_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     ds_score = xr.open_dataset(score_file)
@@ -732,7 +736,8 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
     os.makedirs(plt_dir, exist_ok=True)
 
     # get score data
-    score_file = os.path.join(plt_dir, "..", "metric_files", f"eval_{score_name}_year.nc")
+    metric_dir = plt_dir.replace("/plots/", "/metric_files/").replace("/comparison_plots", "/temporal_evaluation")
+    score_file = os.path.join(metric_dir, f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     
