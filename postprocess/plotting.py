@@ -542,7 +542,15 @@ def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, la
         
     # add IQD-value
     if iqd:
-        ax.text(0.12, 0.93, f"IQD = {iqd:.2e}", horizontalalignment="center", fontsize=fs-2, transform=ax.transAxes)
+        ax.text(
+            0.02, 0.97,               # x, y in axis fraction coordinates
+            f"IQD = {iqd:.2e}",
+            transform=ax.transAxes,  # interpret as axes coords (0–1)
+            fontsize=fs-2,
+            verticalalignment='top',
+            horizontalalignment='left',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+        )
         
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
