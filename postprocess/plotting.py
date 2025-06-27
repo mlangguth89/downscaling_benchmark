@@ -217,7 +217,6 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     fig.savefig(plt_fname, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
-    
 def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name: str, **kwargs):
     """
     Plots a score on a map.
