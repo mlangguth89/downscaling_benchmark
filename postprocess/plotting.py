@@ -116,6 +116,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     :param kwargs: valid keyword arguments are
                   - vars2plt: list of two variables to compare
                   - titles: list of plot titles for both variables
+                  - suptitle: suptitle for plot
                   - proj_data: cartopy projection-object for the data
                   - proj_plot: cartopy projection-object for the plotted domain
                   - dims: name of spatial coordinates, e.g. ["lat", "lon"]
@@ -134,6 +135,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     # check and get keyword arguments
     vars2plt = kwargs.pop("vars2plt", None)
     titles = kwargs.pop("titles", None)
+    suptitle = kwargs.pop("suptitle", None)
     proj_data = kwargs.pop("proj_data", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
                       
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
@@ -146,7 +148,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     cmap_name = kwargs.pop("cmap_name", "jet")
     levels_diff = kwargs.pop("levels_diff", np.arange(-5.25, 5.01, 0.5))
     cmap_name_diff = kwargs.pop("cmap_name_diff", "PuOr_r")
-    cbar_shrink = .8
+    cbar_shrink = .7
     
     # auxiliary variables
     lvl, lvl_diff = np.asarray(levels), np.asarray(levels_diff)
@@ -165,7 +167,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
                                       f"must match number of titles ({len(titles)})."
     else:
         titles = [var.replace("_", " ").upper() for var in vars2plt]
-    
+
     # get coordinate data
     try:
         var_now = ds[vars2plt[0]]
@@ -197,18 +199,19 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
             diff = np.squeeze(ds[vars2plt[1]] - ds[vars2plt[0]])
             plt_diff = ax.pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
                                      transform=proj_data, **kwargs)
-            ax.set_title("Difference", size=fs)
+            ax.set_title(f"Difference (avg. {np.nanmean(diff.values):.2f})", size=fs)
         
         # custom plot apparance
         ax = decorate_plot(ax, plot_ylabel= i == 0, extent=extent, fs=fs)
     
+    plt.suptitle(suptitle, fontsize=fs, y=0.9)
     # add colorbars
     cbar = fig.colorbar(plt_data, ax=axs[0:2], orientation="vertical", shrink=cbar_shrink,
                         pad=.02, ticks=lvl[1::2], fraction=0.02)
     cbar.ax.tick_params(labelsize=fs-2)
     
-    cbar_diff = fig.colorbar(plt_diff, ax=axs[-1], orientation="vertical", shrink=1.5,
-                             pad=.04, ticks=lvl_diff[1::2], fraction=0.02)
+    cbar_diff = fig.colorbar(plt_diff, ax=axs[-1], orientation="vertical", shrink=cbar_shrink*2,
+                             pad=.02, ticks=lvl_diff[1::2], fraction=0.02)
     cbar_diff.ax.tick_params(labelsize=fs-2)
 
     # save plot and close figure

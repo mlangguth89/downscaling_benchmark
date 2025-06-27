@@ -778,6 +778,7 @@ def run_comparison_plots(ds, plot_dir, score_name, model_type, nsamples = 200, o
         fname = os.path.join(plot_dir, f"{model_type}_{varname}_{date_str}_{score_name}_q{quantile_now}.png")
         if varname == "t2m" and seasonal_levels:
            kwargs_now["levels"] = get_season_t2m_levels(t.values)
+           kwargs_now["suptitle"] = f"{date_str} {score_name.upper()} q{quantile_now.replace('p', ".")}"
         pool.apply_async(plot_comparison_maps, (ds.sel({"time": t}) + offset, fname), kwargs_now, error_callback=errorhandler)
         
     pool.close()
