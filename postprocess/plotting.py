@@ -673,7 +673,7 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
 
     # start plotting
     title = kwargs.get("title", "Q-Q plot")
-    figsize = kwargs.get("figsize", (12, 6))
+    figsize = kwargs.get("figsize", (7, 5))
     fs_title = kwargs.get("fs_axis_title", 16)
     fs_label = kwargs.get("fs_axis_label", fs_title-2)
     fig, ax = plt.subplots(figsize=figsize)
@@ -707,6 +707,7 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     ax.tick_params(axis="both", labelsize=fs_label)
     ax2.tick_params(axis="both", labelsize=fs_label)
 
+    ax.grid(True, linewidth=0.5, alpha=0.5)
     plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close("all")
