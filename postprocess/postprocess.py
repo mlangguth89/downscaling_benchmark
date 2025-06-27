@@ -430,7 +430,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
         plot_score_map(score_hourly_mean.sel({"hour": hh}), fname, model_name=model_name,
-                       dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
+                       dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
     for hh in range(24):
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
@@ -439,7 +439,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
             fname = os.path.join(plot_dir,
                                  f"{fname_base}_{sea.values}_{hh:02d}_map.png")
             plot_score_map(score_now.sel({"season": sea}), fname, model_name=model_name, dims=dims,
-                           title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
+                           title=f"{score_name} {sea.values} {hh:02d} UTC", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
     return True
 
