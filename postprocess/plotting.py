@@ -471,17 +471,16 @@ def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, la
     :param iqd: Interquartile distance to be printed in the plot
     :param kwargs: Keyword arguments for plotting
                      Valid keys are:
-                        - "title": title of plot, default: None
-                        - "bin_width": width of bins, default: 1
-                        - "bin_range": range of bins, default: None
-                        - "fs": font size of labels, default: 16
-                        - "figsize": figure size in inch, default: (9, 6)
-                        - "xlabel": label of x-axis, default: "data"
-                        - "colors": list of colors for each data array, default: ["navy", "green"]
-                        - "yscale": scale of y-axis, default: "log"
+                        - title: title of plot, default: None
+                        - bin_width: width of bins, default: 1
+                        - bin_range: range of bins, default: None
+                        - fs: font size of labels, default: 16
+                        - figsize: figure size in inch, default: (9, 6)
+                        - xlabel: label of x-axis, default: "data"
+                        - colors: list of colors for each data array, default: ["navy", "green"]
+                        - yscale: scale of y-axis, default: "log"
                         - other valid arguments of ax.bar
     """
-
     func_logger = logging.getLogger(f"postpess.{module_name}.{plot_histograms.__name__}")
     
     # get keyword parameters
@@ -528,7 +527,7 @@ def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, la
     ax.tick_params(axis='both', which='major', labelsize=fs-2)
     # add title if desired
     if title:
-        ax.title(title)
+        ax.title(title.upper(), fs=fs)
         
     ax.legend(fontsize=fs-2, loc="upper right")
     
@@ -550,8 +549,6 @@ def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, la
     func_logger.info(f"Save plot in file '{plt_fname}'")
     fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
-
-
 
 def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt_fname: str, x_coord: str = "wavenumber", **kwargs):
     """

@@ -488,7 +488,7 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, un
         plt_kwargs["title"] = sea
         plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **plt_kwargs) 
 
-def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_dir: str, labels: List[str], varname: str, unit: str, **opts: dict):
+def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_dir: str, labels: List[str], varname: str, unit: str, **plt_kwargs: dict):
     """
     Perform marginal analysis for forecast (downscaled) and reference data
     which includes calculation of the Interquartile Distance (IQD) score and plotting both histograms.
@@ -498,7 +498,7 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_
     :param labels: List of labels for forecast and reference data
     :param varname: Physical name of variable
     :param unit: Physical unit of variable
-    :param opts: Additional keyword arguments for plotting
+    :param plt_kwargs: Additional keyword arguments for plotting
     :return: None
     """ 
     func_logger = logging.getLogger(f"{logger_module_name}.{run_marginal_analysis.__name__}")
@@ -516,7 +516,8 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_
 
     # create histogram plot for all data
     plt_fname = os.path.join(plot_dir, f"histogram_{varname}_all.png")
-    plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **opts)
+    plt_kwargs["title"] = "year"
+    plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **plt_kwargs)
 
     # conditional quantile analysis for each season
     data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
@@ -531,7 +532,8 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_
         func_logger.info(f"IQD for {varname} data from season {sea}: {iqd_sea: .2e}")
 
         plt_fname = os.path.join(plot_dir, f"histogram_{varname}_{sea}.png")
-        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **opts)
+        plt_kwargs["title"] = sea
+        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **plt_kwargs)
                            
 
 def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plot_dir: str, labels: List[str], varname: str, var_unit: str,
