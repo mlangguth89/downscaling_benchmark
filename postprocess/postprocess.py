@@ -580,6 +580,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plot_dir: str, l
     colors = plt_kwargs.pop("colors", ["navy", "green"])
 
     plt_fname = os.path.join(plot_dir, f"{varname}_power_spectrum_all.png")
+    plt_kwargs["title"] = "Power spectrum YEAR"
     plot_power_spectra(ds_ps, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
                        x_coord="wavenumber", **plt_kwargs)
     
@@ -598,6 +599,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plot_dir: str, l
         ds_ps_sea = get_spectrum_exps(ds_sea, ds_vars, info, lcutoff=lcutoff, re=re)
 
         plt_fname = os.path.join(plot_dir, f"{varname}_power_spectrum_{sea}.png")
+        plt_kwargs["title"] = f"Power spectrum {sea}"
         plot_power_spectra(ds_ps_sea, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
                            x_coord="wavenumber", **plt_kwargs)
         

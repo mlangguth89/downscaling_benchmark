@@ -563,10 +563,11 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     :param x_coord: Name of coordinate along which spectrum is plotted
     :param kwargs: Keyword arguments for plotting
                    Valid keys are:
-                     - "linestyle": linestyle of plot, default: "-"
-                     - "linewidth": linewidth of plot, default: 2.
-                     - "colors": list of colors for each experiment, default: nexps*["blue"]
-                     - "fs": font size of labels, default: 16
+                     - title: title of the plot
+                     - linestyle: linestyle of plot, default: "-"
+                     - linewidth: linewidth of plot, default: 2.
+                     - colors: list of colors for each experiment, default: nexps*["blue"]
+                     - fs: font size of labels, default: 16
                      - other valid arguments of ax.plot
     """
     func_logger = logging.getLogger(f"postpess.{module_name}.{plot_power_spectra.__name__}")
@@ -577,6 +578,7 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     assert nexps == len(labels), "Number of labels must match number of experiments"
 
     # get some plot parameters
+    title = kwargs.pop("title", "Power spectrum")
     linestyle = kwargs.pop("linestyle", "-")
     lw = kwargs.pop("linewidth", 2.)
     cols = kwargs.pop("colors", nexps*["blue"])
@@ -591,11 +593,14 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     ax.set_yscale("log")
     ax.set_title(f"")
     # label axis
-    ax.set_xlabel("wavenumber", fontsize=fs)
+    ax.set_xlabel("Wavenumber", fontsize=fs)
     var_name, spectrum_unit = list(var_info.keys())[0], list(var_info.values())[0]
     ax.set_ylabel(f"Spectral power {var_name} [{spectrum_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
     ax.legend(fontsize=fs-2)
+    ax.set_title(title, size=fs)
+    ax.grid(True, linewidth=0.5, color="gray", alpha=0.75)
+    ax.grid(True, which="minor", linewidth=0.25, color="gray", alpha=0.75)
     
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
