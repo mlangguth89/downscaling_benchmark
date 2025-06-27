@@ -294,7 +294,7 @@ def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name
     )
 
     # add colorbar
-    cax = fig.add_axes([0.91, 0.13, 0.025, 0.73])
+    cax = fig.add_axes([0.91, 0.12, 0.025, 0.75])
     cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=fs-2)
 
