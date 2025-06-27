@@ -609,18 +609,18 @@ def plot_power_spectra(ds_ps: xr.Dataset, var_info: dict, labels: List[str], plt
     fig.savefig(plt_fname)
     plt.close(fig)
 
-def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, opt: dict = {}):
+def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, **kwargs):
     """
     Creates conditional quantile plot
     :param quantile_panel: quantile panel created by calculate_cond_quantiles
     :param data_marginal: data array for which histogram will be plotted
     :param plt_fname: name of the plot-file to be created
-    :param opt: options to customize the plot
+    :param kwargs: options to customize the plot
                 Valid keys are:
-                - "figsize": tuple with dimensions of figure, default: (12, 6)
-                - "fs_title": font size of title, default: 16)
-                - "fs_axis_label": font size of axis labels, default: fs_title-2
-                - "plt_title": title of plot, default: ""
+                - title: title of plot, default: ""
+                - figsize: tuple with dimensions of figure, default: (12, 6)
+                - fs_title: font size of title, default: 16)
+                - fs_axis_label: font size of axis labels, default: fs_title-2
     :return:
     """
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_cond_quantile.__name__}") 
@@ -634,8 +634,8 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     if list(quantile_panel.coords) != ["bin_center", "quantile"]:
         raise ValueError("The coordinates of quantile_panel must be ['bin_center', 'quantile']. Use calculate_cond_quantiles to calculate them.")
 
-    if opt is None:
-        opt = {}
+    if kwargs is None:
+        kwargs = {}
 
     func_logger.info(f"Start creating conditional quantile plot in file '{plt_fname}'")
 
@@ -667,10 +667,10 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     lw_all[int(nquantiles/2)] = 1.5
 
     # start plotting
-    figsize = opt.get("figsize", (12, 6))
-    fs_title = opt.get("fs_axis_title", 16)
-    fs_label = opt.get("fs_axis_label", fs_title-2)
-    plt_title = opt.get("plt_title", "")
+    title = kwargs.get("title", "Q-Q plot")
+    figsize = kwargs.get("figsize", (12, 6))
+    fs_title = kwargs.get("fs_axis_title", 16)
+    fs_label = kwargs.get("fs_axis_label", fs_title-2)
     fig, ax = plt.subplots(figsize=figsize)
 
     # plot reference line
@@ -697,11 +697,12 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     # ensure that histogram extends to the lower half of the plot
     y2_max_power = int(np.log10(ax2.get_ylim()[1]))
     ax2.set(ylim=(1.e00, np.power(10, y2_max_power*4)), yticks=np.logspace(0, y2_max_power+1, y2_max_power+2)) 
-    ax2.set_title(plt_title)
+    ax2.set_title(title.upper(), fontsize=fs_title)
 
     ax.tick_params(axis="both", labelsize=fs_label)
     ax2.tick_params(axis="both", labelsize=fs_label)
 
+    plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close("all")
 

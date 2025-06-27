@@ -443,7 +443,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
 
     return True
 
-def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, unit, **opts: dict):
+def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, unit, **plt_kwargs: dict):
     """
     Create conditional quantile plots for given variables.
     :param data_fcst: xarray.DataArray with forecast data
@@ -451,28 +451,29 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, un
     :param plot_dir: Directory to save plot files
     :param varname_lables: List of variable names
     :param unit: Unit of variable
-    :param opt: Dictionary with configuration options
+    :param plt_kwargs: Dictionary with configuration options
                 Valid keys are: 
-                - "factorization": Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
-                - "quantiles": Quantiles for dashed lines in plot
-                - "figsize": tuple with dimensions of figure, default: (12, 6)
-                - "fs_title": font size of title, default: 16)
-                - "fs_axis_label": font size of axis labels, default: fs_title-2
-                - "plt_title": title of plot, default: ""
+                - factorization: Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
+                - quantiles: Quantiles for dashed lines in plot
+                - figsize: tuple with dimensions of figure, default: (12, 6)
+                - fs_title: font size of title, default: 16)
+                - fs_axis_label: font size of axis labels, default: fs_title-2
+                - title: title of plot, default: ""
     """
-
+    os.makedirs(plot_dir, exist_ok=True)
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_cond_quantile_analysis.__name__}")
 
-    factorization = opts.pop("factorization", "calibration_refinement")  
-    quantiles = opts.pop("quantiles", [0.05, 0.5, 0.95])
+    factorization = plt_kwargs.pop("factorization", "calibration_refinement")  
+    quantiles = plt_kwargs.pop("quantiles", [0.05, 0.5, 0.95])
 
     # conditional quantile analysis on all data
     quantile_panel_all, marginal_all = calculate_cond_quantiles(data_fcst, data_ref, varname_lables, unit, factorization=factorization, quantiles=quantiles)
 
     # create plot
     plt_fname = os.path.join(plot_dir, f"conditional_quantile_plot_{factorization}_all.png")
-    plot_cond_quantile(quantile_panel_all, marginal_all, plt_fname, **opts)
+    plt_kwargs["title"] = "year"
+    plot_cond_quantile(quantile_panel_all, marginal_all, plt_fname, **plt_kwargs)
 
     # conditional quantile analysis for each season
     data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
@@ -484,7 +485,8 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, un
         quantile_panel_sea, marginal_sea = calculate_cond_quantiles(data_fcst_sea, data_ref_sea, varname_lables, unit, factorization=factorization, quantiles=quantiles)
 
         plt_fname = os.path.join(plot_dir, f"conditional_quantile_plot_{factorization}_{sea}.png")
-        plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
+        plt_kwargs["title"] = sea
+        plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **plt_kwargs) 
 
 def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_dir: str, labels: List[str], varname: str, unit: str, **opts: dict):
     """
