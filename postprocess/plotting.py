@@ -304,7 +304,6 @@ def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name
     fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
-
 def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.DataArray, model_name: str, metric: dict,
                      plt_fname: str, varname: str = "T2m", x_coord: str = "hour", **kwargs):
     """
@@ -383,7 +382,6 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     fig.savefig(plt_fname)
     plt.close(fig)
 
-
 # write the create_box_plot function
 def create_box_plot(data, plt_fname: str, **plt_kwargs):
     """
@@ -460,7 +458,6 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     func_logger.info(f"Feature importance scores saved to {plt_fname}.")
     
     return True
-
 
 def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, labels: List[str] = ["Sha WGAN", "COSMO REA6"], iqd: float = None, **kwargs):
     """
