@@ -527,7 +527,7 @@ def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, la
     ax.tick_params(axis='both', which='major', labelsize=fs-2)
     # add title if desired
     if title:
-        ax.title(title.upper(), fs=fs)
+        ax.set_title(title.upper(), fontsize=fs)
         
     ax.legend(fontsize=fs-2, loc="upper right")
     
