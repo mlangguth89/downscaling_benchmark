@@ -346,6 +346,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     fname = os.path.join(plot_dir, f"{fname_base}.png")
     
     # create plots
+    kwargs["title"] = "year"
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
                      fname, **kwargs)
@@ -370,6 +371,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
+        kwargs["title"] = sea
         plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[0], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
                          fname, **kwargs)

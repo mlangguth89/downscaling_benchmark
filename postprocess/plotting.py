@@ -319,6 +319,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     :param x_coord: Name of coordinate along which metric is plotted
     :param kwargs: Keyword arguments for plotting
                    Valid keys are:
+                    - title: title of the plot
                     - "linestyle": linestyle of plot, default: "k-"
                     - "error_color": color of error bounds, default: "blue"
                     - "value_range": range of y-axis, default: (0., 4.)
@@ -330,6 +331,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_metric_line.__name__}")
 
     # get some plot parameters
+    title = kwargs.pop("title", "Score")
     linestyle = kwargs.pop("linestyle", "k-")
     err_col = kwargs.pop("error_color", "blue")
     val_range = kwargs.pop("value_range", (0., 4.))
@@ -360,7 +362,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
 
     # add legend
     ax.text(
-        0.98, 0.95,               # x, y in axis fraction coordinates
+        0.98, 0.97,               # x, y in axis fraction coordinates
         label,
         transform=ax.transAxes,  # interpret as axes coords (0–1)
         fontsize=fs-2,
@@ -368,6 +370,7 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
         horizontalalignment='right',
         bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
     )
+    ax.set_title(title.upper(), size=fs)
 
     # enable grid
     ax.grid(alpha=0.5)
