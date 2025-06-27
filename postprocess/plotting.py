@@ -218,11 +218,13 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     plt.close(fig)
 
     
-def plot_score_map(score, plt_fname, **kwargs):
+def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name: str, **kwargs):
     """
     Plots a score on a map.
     :param score: DataArray containing the score
     :param plt_fname: path to output filename
+    :param metric: Dictionary containing metric name and unit 
+    :param model_name: Name of model
     :param kwargs: valid keyword arguments are
                   - title: title of the plot
                   - proj_data: cartopy projection-object for the data
@@ -242,7 +244,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     proj_data = kwargs.pop("proj_data", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
     dims = kwargs.pop("dims", ["rlat", "rlon"])
-    extent = kwargs.pop("extent", [3.2, 16.3, 43.1, 51.3])
+    extent = kwargs.pop("extent", [3.2, 16.4, 43., 51.5])
     fs = kwargs.pop("fs", 22)
     figsize = kwargs.pop("figsize", (12, 8))
     # get levels and colorbars 
@@ -274,6 +276,22 @@ def plot_score_map(score, plt_fname, **kwargs):
     ax = decorate_plot(ax, extent=extent, fs=fs)
 
     ax.set_title(title, size=fs)
+
+    # add text with avg value
+    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+    avg_value = np.nanmean(score.values)
+    label = (rf"$\overline{{{metric_name.replace('_', '\_')}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit if metric_unit != '1' else ''}$").rstrip(" ")
+
+    # add legend
+    ax.text(
+        0.02, 0.97,               # x, y in axis fraction coordinates
+        label,
+        transform=ax.transAxes,  # interpret as axes coords (0–1)
+        fontsize=fs-2,
+        verticalalignment='top',
+        horizontalalignment='left',
+        bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+    )
 
     # add colorbar
     cax = fig.add_axes([0.91, 0.13, 0.025, 0.73])

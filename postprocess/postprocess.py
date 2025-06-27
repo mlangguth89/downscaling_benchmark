@@ -383,11 +383,12 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     return score_all
 
 
-def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, 
+def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_dir: str, 
                            dims = ["rlat", "rlon"], **plt_kwargs):
     """
     Create map plots of desired evaluation metric. Evaluation metric must be given in rotated coordinates.
     :param score_engine: Score engine object to comput evaluation metric
+    :param score_unit: Unit of evaluation metric
     :param plot_dir: Directory to save plot files
     :param dims: Spatial dimension names
     """
@@ -397,6 +398,8 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     os.makedirs(plot_dir, exist_ok=True)
 
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
+    model_name = plt_kwargs.pop("model_longname", "Model")
+
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
@@ -417,14 +420,14 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
-    plot_score_map(score_mean, fname, dims=dims,
-                     title=f"{score_name.upper()} (avg.)", **plt_kwargs)
+    plot_score_map(score_mean, fname, model_name=model_name, dims=dims,
+                     title=f"{score_name.upper()} (avg.)", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
-        plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
+        plot_score_map(score_hourly_mean.sel({"hour": hh}), fname, model_name=model_name,
                        dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
 
     for hh in range(24):
@@ -433,7 +436,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"{fname_base}_{sea.values}_{hh:02d}_map.png")
-            plot_score_map(score_now.sel({"season": sea}), fname, dims=dims,
+            plot_score_map(score_now.sel({"season": sea}), fname, model_name=model_name, dims=dims,
                            title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
     return True
@@ -863,11 +866,17 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         If the variable for evaluation is unknown, eval_dict cannot be None.
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
-        if self.varname in ["t2m", "wind"]:
-            lvl_bias = np.arange(-2, 2.1, .1)
-            lvl_rmse =  np.arange(0., 3.1, 0.2)
-            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
-                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        lvl_bias = np.arange(-2, 2.1, .1)
+        lvl_rmse =  np.arange(0., 3.1, 0.2)
+        if self.varname == "t2m":
+            eval_dict = {"rmse": {"score_unit": "K", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "K", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "wind":
+            eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "irradiance":
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
