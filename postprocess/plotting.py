@@ -86,8 +86,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
     """
     # add nice coast- and borderlines
     ax_plot.coastlines(linewidth=0.75)
-    ax_plot.coastlines(linewidth=0.75)
-    ax_plot.add_feature(cartopy.feature.BORDERS)
+    ax_plot.add_feature(cartopy.feature.BORDERS, linewidth=0.75)
 
     # adjust extent and ticks as well as axis-label
     ax_plot.set_xticks(np.arange(0., 360. + 0.1, 5.))  # ,crs=projection_crs)
@@ -95,6 +94,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
 
     ax_plot.set_extent(extent)    # , crs=prj_crs)
     ax_plot.minorticks_on()
+    ax_plot.grid(True, linewidth=0.5, color="gray")
     ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=fs)
 
     # some labels
@@ -242,8 +242,8 @@ def plot_score_map(score, plt_fname, **kwargs):
     proj_data = kwargs.pop("proj_data", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
     dims = kwargs.pop("dims", ["rlat", "rlon"])
-    extent = kwargs.pop("extent", [3., 16.5, 43., 51.5])
-    fs = kwargs.pop("fs", 16)
+    extent = kwargs.pop("extent", [3.2, 16.3, 43.1, 51.3])
+    fs = kwargs.pop("fs", 22)
     figsize = kwargs.pop("figsize", (12, 8))
     # get levels and colorbars 
     levels = kwargs.pop("levels", np.arange(-5.25, 5.01, 0.5))
@@ -276,7 +276,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     ax.set_title(title, size=fs)
 
     # add colorbar
-    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cax = fig.add_axes([0.91, 0.13, 0.025, 0.73])
     cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=fs-2)
 
