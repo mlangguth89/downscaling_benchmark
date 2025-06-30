@@ -883,7 +883,7 @@ class SpatialEvaluation(AbstractMetricEvaluation):
 
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
-            _ = run_evaluation_spatial(score_engine, metric, plot_dir=os.path.join(self.plt_dir, f"{metric}_spatial"), 
+            _ = run_evaluation_spatial(score_engine, metric, plot_dir=self.plt_dir, 
                                        dims=self.spatial_dims, projection=self.proj, **self.model_info, 
                                        **metric_config, **plt_kwargs)
 
