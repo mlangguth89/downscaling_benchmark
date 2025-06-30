@@ -397,7 +397,10 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
     
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/")
+    plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
     os.makedirs(plot_dir, exist_ok=True)
+    os.makedirs(metric_dir, exist_ok=True)
 
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     model_name = plt_kwargs.pop("model_longname", "Model")
@@ -410,7 +413,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     # fss, rmse, bias, mse
     score_kwargs = {key: plt_kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
     score_all = score_engine(score_name, **score_kwargs)
-        
+
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
@@ -424,6 +427,21 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
     plot_score_map(score_mean, fname, model_name=model_name, dims=dims,
                      title=f"{score_name.upper()} (avg.)", metric={score_name.upper(): score_unit}, **plt_kwargs)
+
+    # save scores to netCDF
+    fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
+    func_logger.debug(f"Save spatial score {score_name} to {fname_nc}...")
+    ds = xr.Dataset({f"{score_name}": score_all, f"{score_name}_mean": score_mean})
+    ds.to_netcdf(fname_nc)
+
+    score_mean_sea = score_all.groupby("time.season").mean(dim=["time"])
+    for sea in score_mean_sea["season"]:
+        fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{str(sea.values)}.nc')
+        score_mean_sea_iter = score_mean_sea.sel({"season": sea})
+        func_logger.debug(f"Save spatial score season {score_name} to {fname_nc}...")
+        ds = xr.Dataset({f"{score_name}_mean": score_mean_sea_iter})
+        ds.to_netcdf(fname_nc)
+        
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
     for hh in range(24):
