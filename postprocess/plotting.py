@@ -211,7 +211,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     cbar.ax.tick_params(labelsize=fs-2)
     
     cbar_diff = fig.colorbar(plt_diff, ax=axs[-1], orientation="vertical", shrink=cbar_shrink*2,
-                             pad=.02, ticks=lvl_diff[1::2], fraction=0.02)
+                             pad=.04, ticks=lvl_diff[1::2], fraction=0.029)
     cbar_diff.ax.tick_params(labelsize=fs-2)
 
     # save plot and close figure
