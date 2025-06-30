@@ -802,6 +802,70 @@ def run_comparison_plots(ds, plot_dir, score_name, model_type, nsamples = 200, o
     pool.close()
     pool.join()
 
+def run_score_card(model, varname, metric_dir, **kwargs):
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_score_card.__name__}")
+
+    # create output-directories if necessary
+    os.makedirs(metric_dir, exist_ok=True)
+
+    # load scores from precalculated metrics
+    scores_dict = {
+        "eval_type": [],
+        "model": [],
+        "time": [],
+        "varname": [],
+        "score_name": [],
+        "value": [],
+    }
+    temporal_eval_metric_dir = metric_dir.replace("score_card", "temporal_evaluation")
+    spatial_eval_metric_dir = metric_dir.replace("score_card", "spatial_evaluation")
+    for metric_iter in ["bias", "rmse", "ralsd", "grad_amplitude", "me_std"]:
+        for time_agg in ["year", "MAM", "JJA", "SON", "DJF"]:
+            score_iter = xr.open_dataset(os.path.join(temporal_eval_metric_dir, f"eval_{metric_iter}_{time_agg}.nc"))[f"{metric_iter}_mean"]
+            score_iter_mean = np.nanmean(score_iter)
+
+            scores_dict["eval_type"].append("temporal")
+            scores_dict["model"].append(model)
+            scores_dict["time"].append(time_agg)
+            scores_dict["varname"].append(varname)
+            scores_dict["score_name"].append(metric_iter)
+            scores_dict["value"].append(score_iter_mean)
+    for metric_iter in ["bias", "rmse"]:
+        for time_agg in ["year", "MAM", "JJA", "SON", "DJF"]:
+            score_iter = xr.open_dataset(os.path.join(spatial_eval_metric_dir, f"eval_{metric_iter}_{time_agg}.nc"))[f"{metric_iter}_mean"]
+            score_iter_mean = np.nanmean(score_iter)
+
+            scores_dict["eval_type"].append("spatial")
+            scores_dict["model"].append(model)
+            scores_dict["time"].append(time_agg)
+            scores_dict["varname"].append(varname)
+            scores_dict["score_name"].append(metric_iter)
+            scores_dict["value"].append(score_iter_mean)
+
+    scores_df = pd.DataFrame(scores_dict)
+    fname_csv = os.path.join(metric_dir, "scores.csv")
+    func_logger.debug(f"Saving scores to {fname_csv}...")
+    scores_df.to_csv(fname_csv)
+
+def run_score_card_plots(out_dir, plot_dir, **kwargs):
+    import glob
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_score_card_plots.__name__}")
+
+    # read all score card files
+    # todo: need to glob one level higher for all variables because out_dir is only t2m
+    # todo: or decide if scorecards should only cover one variable per plot
+    scores_files = glob.glob(f"{out_dir}/*/metric_files/score_card/scores.csv")
+    scores_all = pd.concat([pd.read_csv(score_fname, index_col=0) for score_fname in scores_files], axis=0)
+    func_logger.debug(out_dir)
+    func_logger.debug(scores_files)
+    func_logger.debug(scores_all)
+
+    # Demo: downscaling_benchmark/jupyter_notebooks_demo/demo_scorecards.ipynb
+
+    return None
+
 class TemporalEvaluation(AbstractMetricEvaluation):
     """
     Class for temporal evaluation of downscaling results.

@@ -22,7 +22,7 @@ import gc
 import xarray as xr
 import cartopy.crs as ccrs
 from postprocess import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
-                        run_feature_importance, run_spectral_analysis, run_marginal_analysis, run_comparison_plots
+                        run_feature_importance, run_spectral_analysis, run_marginal_analysis, run_comparison_plots, run_score_card, run_score_card_plots
 from other_utils import config_logger
 #from other_utils import free_mem
 
@@ -195,6 +195,36 @@ def main(parser_args):
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
+    # create score cards, collecting and visualising multi-model results
+    if conf_postprocess.get("do_score_card_calc", False):
+        logger.info("Start score card calculations...")
+        t0_cq = timer()
+
+        metric_dir_score_card = os.path.join(plt_dir, "score_card")
+        metric_dir_score_card = metric_dir_score_card.replace("/plots/", "/metric_files/")
+    
+        run_score_card(
+            model=model_info['model_longname'],
+            varname=varname,
+            metric_dir=metric_dir_score_card,
+            **conf_postprocess.get("config_score_card", {})
+        )
+
+        logger.info(f"Score card calculation finished in {timer() - t0_cq:.2f}s.")  
+
+    if conf_postprocess.get("do_score_card_plots", False):
+        logger.info("Start score card plots...")
+        t0_cq = timer()
+
+        plt_dir_score_card = os.path.join(plt_dir, "score_card")
+        run_score_card_plots(
+            out_dir=parser_args.output_base_dir,
+            plot_dir=plt_dir_score_card,
+            **conf_postprocess.get("config_score_card_plots", {})
+        )
+
+        logger.info(f"Score card plots finished in {timer() - t0_cq:.2f}s.")  
+
     # clean-up to reduce memory footprint
     del ds_out
     gc.collect()
