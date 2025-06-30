@@ -824,13 +824,13 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                         }
-        elif self.varname == "wind":
+        elif self.varname == "ws100m":
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
                         }
-        elif self.varname == "irradiance":
+        elif self.varname == "glob_rad":
             eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
@@ -880,10 +880,10 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         if self.varname == "t2m":
             eval_dict = {"rmse": {"score_unit": "K", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"score_unit": "K", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
-        elif self.varname == "wind":
+        elif self.varname == "ws100m":
             eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
-        elif self.varname == "irradiance":
+        elif self.varname == "glob_rad":
             eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         else:
