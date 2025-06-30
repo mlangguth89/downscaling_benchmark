@@ -8,11 +8,23 @@
   "do_spectral_analysis": true,
   "config_spectral_analysis": {},
   "do_cond_quantile_analysis": true,
-  "config_cond_quantile_analysis": {"factorization": "calibration_refinement"},
+  "config_cond_quantile_analysis": {
+    "factorization": "calibration_refinement"
+  },
   "do_marginal_analysis": true,
   "config_marginal_analysis": {},
   "do_comparison_plots": true,
-  "config_comparison_plots": {"nsamples": 100, "cmap_name": "PuOr_r", "cmap_name_diff": "bwr"},
+  "config_comparison_plots": {
+    "nsamples": 100,
+    "cmap_name": "PuOr_r",
+    "cmap_name_diff": "bwr"
+  },
   "do_feature_importance": false,
-  "config_feature_importance": {"score_name": "rmse"}
+  "config_feature_importance": {
+    "score_name": "rmse"
+  },
+  "do_score_card_calc": true,
+  "config_score_card_calc": {},
+  "do_score_card_plots": true,
+  "config_score_card_plots": {}
 }
