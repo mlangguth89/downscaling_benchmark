@@ -22,9 +22,5 @@
   "do_feature_importance": false,
   "config_feature_importance": {
     "score_name": "rmse"
-  },
-  "do_score_card_calc": true,
-  "config_score_card_calc": {},
-  "do_score_card_plots": true,
-  "config_score_card_plots": {}
+  }
 }
