@@ -10,11 +10,14 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-04-10"
+__update__ = "2025-07-17"
 
+import os
+import glob
 from typing import List, Tuple, Union, Dict
 from collections import OrderedDict
 from pathlib import Path
+import pickle
 import numpy as np
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
@@ -24,11 +27,8 @@ from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D,
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.models import Model
-try:
-    import horovod.tensorflow as hvd
-except:
-    print("Horovod is not installed. Distributed training is not supported.")
-    pass
+from tensorflow.keras.utils import plot_model as k_plot_model
+from tensorflow.keras import backend as K
 from custom_losses import get_custom_loss
 from wgan_model import Sha_WGAN, LearningRateSchedulerWGAN
 from model_utils import save_opt_weights
@@ -328,7 +328,7 @@ class Harris_WGAN_Model(keras.Model):
         # losses
         self.critic_loss = get_custom_loss("critic")
         self.critic_gen_loss = get_custom_loss("critic_generator")
-        self.recon_loss = loss
+        self.recon_loss = get_custom_loss(self.hparams["recon_loss"])
         
     @tf.function    
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
@@ -554,7 +554,8 @@ class Harris_WGAN(Sha_WGAN):
         """        
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [1, 1, 1, 1]
-        super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
+
+        super().__init__(generator, critic, shape_in, hparams, varnames_tar, savedir, expname, with_horovod)
 
         self.modelname = "harriswgan"
         self.with_horovod = with_horovod
@@ -567,12 +568,6 @@ class Harris_WGAN(Sha_WGAN):
         if not self.hparams["noise_input"]:
             print("Set noise channels to 1.")
             self.hparams["noise_channels"] = 1
-        # set submodels
-        self.generator, self.critic = self.set_model(generator, critic)
-        # set compile and fit options as well as custom objects
-        self.set_compile_options()
-        self.set_custom_objects(loss=self.compile_options['loss'])
-        self.set_fit_options()
         
     def set_compile_options(self):
         """

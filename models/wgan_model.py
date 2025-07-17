@@ -13,7 +13,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-05-19"
-__update__ = "2025-06-10"
+__update__ = "2025-07-17"
 
 import os
 import glob
@@ -302,7 +302,6 @@ class Sha_WGAN(AbstractModelClass):
         self.with_horovod = with_horovod
         self.main_process = True 
         if self.with_horovod:
-            raise RuntimeError("Harris WGAN does not support Horovod yet.")
             self.main_process = hvd.rank() == 0
 
         # set hyperparmaters
@@ -316,6 +315,11 @@ class Sha_WGAN(AbstractModelClass):
 
     
     def set_compile_options(self):
+
+        # Ensure that training is not distributed (not supported yet)
+        if self.with_horovod:
+            raise RuntimeError("Sha WGAN does not support Horovod yet.")
+        
         # set optimizers
         # check if optimizer is valid and set corresponding optimizers for generator and critic
         if self.hparams["optimizer"].lower() == "adam":
