@@ -6,7 +6,6 @@ ml Stages/2022
 
 ml GCCcore/.11.2.0
 ml GCC/11.2.0
-#ml ParaStationMPI/5.5.0-1
 ml OpenMPI/4.1.2
 ml mpi4py/3.1.3
 ml tqdm/4.62.3

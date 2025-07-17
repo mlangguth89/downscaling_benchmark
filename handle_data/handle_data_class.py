@@ -21,7 +21,7 @@ To-Dos:
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2025-04-24"
+__update__ = "2025-06-09"
 
 import os, glob
 from typing import List, Tuple, Union, Dict
@@ -34,16 +34,11 @@ from timeit import default_timer as timer
 import random
 import numpy as np
 import xarray as xr
+import tensorflow as tf
 try:
     import horovod.tensorflow as hvd
 except:
-    print("Horovod is not installed. Distributed training is not supported.")
-try:
-    import tensorflow as tf
-except ModuleNotFoundError:
-    # skip import when running postprocessing with different env
-    print(
-        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
     pass
 import multiprocessing
 try:
@@ -51,7 +46,7 @@ try:
 except:
     from multiprocessing.pool import ThreadPool
 from all_normalizations import GeneralNormalizer
-from other_utils import to_list, find_closest_divisor, finditem
+from other_utils import find_closest_divisor, finditem
 
 
 
@@ -651,32 +646,30 @@ class StreamMonthlyNetCDF(object):
                 n = n2merge[f"#GPUS={hvd.size()}"]
             else:
                 n = n2merge[f"#GPUS=1"]
-
-        # ensure that n is a divisor of the total number of files
-        n = find_closest_divisor(self.nfiles, n)
-
+        
         self._nfiles2merge = n
+
         # for distributed training, data files must be distributed over workers
         if self.with_horovod:
-            if self.main_process: print(f"Distributed streaming over {hvd.size()} workers.")
+            if self.main_process:
+                print(f"Distributed streaming over {hvd.size()} workers.")
 
-            #assert n > hvd.size(), f"Number of files to merge {n} must be larger than number of workers {hvd.size()}."
-            #self._nfiles2merge = int(n / hvd.size())
-            if n % hvd.size() > 0:
-                # In case that the modulo is non-zero, nfiles2merge is incremented and the file list is appended
-                # so that each work processes the same number of files.
+            if self.nfiles % (n * hvd.size()) > 0:   # cannot distribute files evenly over workers
+                # In case that the modulo is non-zero, the file list is appended so that each work processes the same number of files.
                 # Note that duplicated files only occur in the last data subset. 
                 # To avoid duplicates in the last subset itself, only files from the preceiding subsets are appended.
-                self._nfiles2merge += 1
-                nfiles_req = int(hvd.size() * self._nfiles2merge * self.nfiles/n)
+                nfiles_req = int((int(self.nfiles / hvd.size()) + 1) * hvd.size()) 
+
                 if self.main_process: 
                     print(f"Append file list by {nfiles_req - self.nfiles} files to get {nfiles_req} files ({self._nfiles2merge} files per worker).")
                 self.file_list_random += random.sample(self.file_list_random[0:self.nfiles-n], nfiles_req - self.nfiles)
                 self.nfiles = len(self.file_list_random)
         else:
-            if n != n2merge and self.main_process:
+            if n != n2merge:
+            # ensure that n is a divisor of the total number of files
+                n = find_closest_divisor(self.nfiles, n)
+                self._nfiles2merge = n
                 print(f"{n2merge} is not a divisor of the total number of files. Value is changed to {n}")
-
 
     @property
     def sample_dim(self):
