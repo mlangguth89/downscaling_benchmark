@@ -9,7 +9,7 @@ Class for building blocks of U-Net as well as model classes for Sha U-Net and De
 __author__ = "Michael Langguth, Erik Pavel"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2021-XX-XX"
-__update__ = "2025-03-13"
+__update__ = "2025-06-04"
 
 # import modules
 import os
@@ -20,9 +20,9 @@ import tensorflow.keras as keras
 import keras.backend as K
 try:
     import horovod.tensorflow as hvd
-    from horovod.tensorflow import callbacks as hvd_callbacks
+    from horovod.tensorflow.keras import callbacks as hvd_callbacks
 except:
-    print("Horovod is not installed. Distributed training is not supported.")
+    print(f"{__file__}]: Horovod is not installed. Distributed training is not supported.")
     pass
 # all the layers used for U-net
 from tensorflow.keras.layers import (Concatenate, Conv2D, Conv2DTranspose, Input, MaxPool2D, BatchNormalization,
