@@ -158,6 +158,12 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
+    # for the global radiance downscaling task, we need to rescale the data
+    if tar_varname == "global_rad_pp_ratio":
+        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        y_pred = y_pred * ds_test["tisr_tar"]
+        tar_varname = "global_rad_pp"
+
     # write inference data to netCDf
     ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")

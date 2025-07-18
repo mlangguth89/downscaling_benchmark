@@ -82,7 +82,7 @@ def get_dataset_filename(datadir: str, dataset_name: str, subset: str, laugmente
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
         if laugmented: raise ValueError("No augmented dataset available for AtmoRep.")
-    elif dataset_name in ["benchmark_t2m", "benchmark_ws100m"]:
+    elif dataset_name in ["benchmark_t2m", "benchmark_ws100", "benchmark_glob_rad"]:
         fname_suffix = f"{fname_suffix}_{dataset_name}_{subset}"
         if subset == "train":
             fname_suffix = f"{fname_suffix}*"
