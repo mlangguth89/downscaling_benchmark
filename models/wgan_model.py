@@ -108,63 +108,7 @@ class Sha_WGAN_Model(keras.Model):
         self.generator = generator
         self.critic = critic
         self.hparams = hparams  
-        self._n_predictands, self._n_predictands_dyn = self._get_npredictands()
-
-    def save(self, filepath: str, expname: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
-             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
-        """
-        Save generator and critic seperately.
-        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
-        :param filepath: path to SavedModel or H5 file to save both models
-        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
-                          with a manual prompt.
-        :param include_optimizer: If True, save optimizer's state together.
-        :param save_format: Currently, only the 'tf' format is supported.
-        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
-                           Please see the `signatures` argument in `tf.saved_model.save` for details.
-        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
-                        for saving to SavedModel.
-        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
-                            traces for each layer. This can be disabled, so that only the configs of each layer are
-                            stored.  Defaults to `True`. Disabling this will decrease
-                            serialization time and reduce file size, but it requires that
-                            all custom layers/models implement a `get_config()` method.
-        :return: -
-        """       
-        assert save_format != "h5", f"h5 is not supported as save format for this model"            
-
-        # save generator and critic seperately
-        generator_path, critic_path = Path(filepath).joinpath(f"{expname}_generator{suffix}"), \
-                                      Path(filepath).joinpath(f"{expname}_critic{suffix}")
-        
-        os.makedirs(generator_path, exist_ok =True)
-        os.makedirs(critic_path, exist_ok =True)
-        
-        if tf.__version__ >= "2.12.0":
-            self.generator.save(generator_path, overwrite, save_format)
-            self.critic.save(critic_path, overwrite, save_format)
-        else:
-            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
-        
-        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
-        # https://github.com/keras-team/tf-keras/issues/504
-        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
-        if include_optimizer:    # required to resume training    
-            self.generator.save_weights(generator_path.joinpath(f"{expname}_generator{suffix}"), overwrite=overwrite,
-                                        save_format=save_format, options=options)
-            self.critic.save_weights(critic_path.joinpath(f"{expname}_critic{suffix}"), overwrite=overwrite,
-                                     save_format=save_format, options=options)
-        
-            
-            generator_opt = generator_path.joinpath(f"{expname}_generator_opt{suffix}.pkl")
-            critic_opt = critic_path.joinpath(f"{expname}_critic_opt{suffix}.pkl")
-            
-            print(f"Save generator optimiter state to {generator_opt}...")
-            save_opt_weights(self.g_optimizer, generator_opt)
-            print(f"Save critic optimiter state to {critic_opt}...")
-            save_opt_weights(self.c_optimizer, critic_opt)
-        
+        self._n_predictands, self._n_predictands_dyn = self._get_npredictands()        
         
     def _get_npredictands(self):
         """
@@ -276,6 +220,65 @@ class Sha_WGAN_Model(keras.Model):
         gp = tf.reduce_mean((norm - 1.) ** 2)
 
         return gp
+    
+    def save(self, filepath: str, expname: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
+             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
+        """
+        TODO: This should be in the AbstractModelClass to also allow inheritcance.
+        Note 2025-07-21: This does not work yet.
+
+        Save generator and critic seperately.
+        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
+        :param filepath: path to SavedModel or H5 file to save both models
+        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
+                          with a manual prompt.
+        :param include_optimizer: If True, save optimizer's state together.
+        :param save_format: Currently, only the 'tf' format is supported.
+        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
+                           Please see the `signatures` argument in `tf.saved_model.save` for details.
+        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
+                        for saving to SavedModel.
+        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
+                            traces for each layer. This can be disabled, so that only the configs of each layer are
+                            stored.  Defaults to `True`. Disabling this will decrease
+                            serialization time and reduce file size, but it requires that
+                            all custom layers/models implement a `get_config()` method.
+        :return: -
+        """       
+        assert save_format != "h5", f"h5 is not supported as save format for this model"            
+
+        # save generator and critic seperately
+        generator_path, critic_path = Path(filepath).joinpath(f"{expname}_generator{suffix}"), \
+                                      Path(filepath).joinpath(f"{expname}_critic{suffix}")
+        
+        os.makedirs(generator_path, exist_ok =True)
+        os.makedirs(critic_path, exist_ok =True)
+        
+        if tf.__version__ >= "2.12.0":
+            self.generator.save(generator_path, overwrite, save_format)
+            self.critic.save(critic_path, overwrite, save_format)
+        else:
+            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        
+        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
+        # https://github.com/keras-team/tf-keras/issues/504
+        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
+        if include_optimizer:    # required to resume training    
+            self.generator.save_weights(generator_path.joinpath(f"{expname}_generator{suffix}"), overwrite=overwrite,
+                                        save_format=save_format, options=options)
+            self.critic.save_weights(critic_path.joinpath(f"{expname}_critic{suffix}"), overwrite=overwrite,
+                                     save_format=save_format, options=options)
+        
+            
+            generator_opt = generator_path.joinpath(f"{expname}_generator_opt{suffix}.pkl")
+            critic_opt = critic_path.joinpath(f"{expname}_critic_opt{suffix}.pkl")
+            
+            print(f"Save generator optimiter state to {generator_opt}...")
+            save_opt_weights(self.g_optimizer, generator_opt)
+            print(f"Save critic optimiter state to {critic_opt}...")
+            save_opt_weights(self.c_optimizer, critic_opt)
+
     
     
 
@@ -446,6 +449,7 @@ class Sha_WGAN(AbstractModelClass):
         """
         k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
         k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
+
 
     def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
         """
