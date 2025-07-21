@@ -533,6 +533,64 @@ class Harris_WGAN_Model(keras.Model):
 
         return gp
     
+    def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
+             signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
+        """
+        TODO: This should be in the AbstractModelClass to also allow inheritcance.
+
+        Save generator and critic seperately.
+        The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
+        :param filepath: path to SavedModel or H5 file to save both models
+        :param overwrite: Whether to silently overwrite any existing file at the target location, or provide the user
+                          with a manual prompt.
+        :param include_optimizer: If True, save optimizer's state together.
+        :param save_format: Currently, only the 'tf' format is supported.
+        :param signatures: Signatures to save with the SavedModel. Applicable to the 'tf' format only.
+                           Please see the `signatures` argument in `tf.saved_model.save` for details.
+        :param options: (only applies to SavedModel format) `tf.saved_model.SaveOptions` object that specifies options
+                        for saving to SavedModel.
+        :param save_traces: (only applies to SavedModel format) When enabled, the SavedModel will store the function
+                            traces for each layer. This can be disabled, so that only the configs of each layer are
+                            stored.  Defaults to `True`. Disabling this will decrease
+                            serialization time and reduce file size, but it requires that
+                            all custom layers/models implement a `get_config()` method.
+        :return: -
+        """       
+        assert save_format != "h5", f"h5 is not supported as save format for this model"            
+
+        # save generator and critic seperately
+        generator_path, critic_path = Path(filepath).joinpath(f"{self._expname}_generator{suffix}"), \
+                                      Path(filepath).joinpath(f"{self._expname}_critic{suffix}")
+        
+        os.makedirs(generator_path, exist_ok =True)
+        os.makedirs(critic_path, exist_ok =True)
+        
+        if tf.__version__ >= "2.12.0":
+            self.generator.save(generator_path, overwrite, save_format)
+            self.critic.save(critic_path, overwrite, save_format)
+        else:
+            self.generator.save(generator_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+            self.critic.save(critic_path, overwrite, include_optimizer, save_format, signatures, options, save_traces)
+        
+        # save weights and optimizer state seperately, since the latter is not supported by Keras' save-method due to a bug
+        # https://github.com/keras-team/tf-keras/issues/504
+        # Note that it also does not work when choosing the h5-format (and when setting include_otimizer = False as in previous TF versions) 
+        if include_optimizer:    # required to resume training    
+            self.generator.save_weights(generator_path.joinpath(f"{self._expname}_generator{suffix}"), overwrite=overwrite,
+                                        save_format=save_format, options=options)
+            self.critic.save_weights(critic_path.joinpath(f"{self._expname}_critic{suffix}"), overwrite=overwrite,
+                                     save_format=save_format, options=options)
+        
+            
+            generator_opt = generator_path.joinpath(f"{self._expname}_generator_opt{suffix}.pkl")
+            critic_opt = critic_path.joinpath(f"{self._expname}_critic_opt{suffix}.pkl")
+            
+            print(f"Save generator optimiter state to {generator_opt}...")
+            save_opt_weights(self.g_optimizer, generator_opt)
+            print(f"Save critic optimiter state to {critic_opt}...")
+            save_opt_weights(self.c_optimizer, critic_opt)
+
+    
 
 class Harris_WGAN(Sha_WGAN):
     
@@ -585,6 +643,7 @@ class Harris_WGAN(Sha_WGAN):
 
         self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         
+        print(self.model)
         # wrap optimizers for distributed training
         #if self.with_horovod:
         #    import horovod.tensorflow as hvd
@@ -679,68 +738,7 @@ class Harris_WGAN(Sha_WGAN):
 
         return lr_scheduler
 
-    def plot_model(self, save_dir, **kwargs):
-        """
-        Plot generator and critci model separately.
-        :param save_dir: directory under which plots will be saved
-        :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
-        
-        NOTE SL: taken from wgan_model.py
-        """
-        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
-        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
-    
-    
-    def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
-        """
-        Load model from checkpoint that has been either saved with the save-method or with the Checkpoint-callback.
-        Requires that the model is compiled!
-        :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
-        :param checkpoint_format: format of checkpoint, must match the format used for saving.
-        :return: iteration step of checkpointed model
-        """
-        generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
-                                      Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
-        
-        matching_gen_dir, matching_critic_dir = glob.glob(str(generator_path)), glob.glob(str(critic_path))
-        
-        if matching_gen_dir:
-            generator_path = Path(matching_gen_dir[0])
-            suffix_gen = str(generator_path).split("_generator")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(generator_path)} found.")
-            
-        if matching_critic_dir:
-            critic_path = Path(matching_critic_dir[0])
-            suffix_critic = str(critic_path).split("_critic")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
-        
-        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
-        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
 
-        opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
-                                        critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
-        with open(opt_gen_path, "rb") as f:
-            optimizer_weights_gen = pickle.load(f)
-
-        with open(opt_critic_path, "rb") as f:
-            optimizer_weights_critic = pickle.load(f)
-
-        # set state for g_optimizer
-        self.g_optimizer._create_all_weights(self.generator.trainable_variables)
-        self.g_optimizer.set_weights(optimizer_weights_gen)
-
-        # set state for c_optimizer
-        self.c_optimizer._create_all_weights(self.critic.trainable_variables)
-        self.c_optimizer.set_weights(optimizer_weights_critic)
-
-        # retrieve iteration step of checkpointed model
-        iter_step = (self.g_optimizer.variables()[0]).numpy()
-
-        return iter_step
-
-        
     def load_inference_model(self, model_dir, format="tf"):
             
         # construct directories to generator- and critic model from model directory
@@ -769,9 +767,6 @@ class Harris_WGAN(Sha_WGAN):
         
         return wgan_model
 
-    # !!! NOTE !!!
-    # count_parameters is inherited from Sha_WGAN
-    # !!! NOTE !!!
     
     def set_hparams_default(self):
         """
