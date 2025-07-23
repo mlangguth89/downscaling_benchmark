@@ -10,11 +10,11 @@ Class for Harris et al 2022, conditional Wasserstein GAN model (cWGAN)
 __author__ = "Sebastian Lehner, Michael Langguth"
 __email__ = "sebastian.lehner@geosphere.at, m.langguth@fz-juelich.de"
 __date__ = "2024-03-28"
-__update__ = "2025-02-24"
+__update__ = "2025-07-17"
 
 import os
-from typing import List, Tuple, Union, Dict
 import glob
+from typing import List, Tuple, Union, Dict
 from collections import OrderedDict
 from pathlib import Path
 import pickle
@@ -22,17 +22,23 @@ import numpy as np
 from abstract_model_class import AbstractModelClass
 import tensorflow as tf
 import tensorflow.keras as keras
-from tensorflow.python.keras.utils import tf_utils
+from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, \
+                                    Dense, BatchNormalization, LayerNormalization, ReLU
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
-from tensorflow.keras.layers import Input, concatenate, LeakyReLU, UpSampling2D, Layer, Conv2D, Add, AveragePooling2D, GlobalAveragePooling2D, Dense, BatchNormalization
+from tensorflow.python.keras.utils import tf_utils
 from tensorflow.keras.models import Model
 from tensorflow.keras.utils import plot_model as k_plot_model
 from tensorflow.keras import backend as K
 from custom_losses import get_custom_loss
-from wgan_model import LearningRateSchedulerWGAN
+from wgan_model import Sha_WGAN, LearningRateSchedulerWGAN
 from model_utils import save_opt_weights
 from tensorflow.python.platform import tf_logging as logging
 
+try:
+    import horovod.tensorflow as hvd
+except:
+    print(f"{__file__}: Horovod is not installed. Distributed training is not supported.")
+    pass
 
 list_or_tuple = Union[List, Tuple]
 
@@ -238,7 +244,14 @@ class CriticHarris(AbstractModelClass):
 
         # critic output
         critic_output = GlobalAveragePooling2D()(critic_input)
-        critic_output = Dense(64, activation="relu")(critic_output)
+        # add additional normalization if desired
+        critic_output = Dense(64)(critic_output)
+        if norm == "batch":
+            critic_output = BatchNormalization()(critic_output)
+        elif norm == "layer":
+           critic_output = LayerNormalization()(critic_output)
+        critic_output = ReLU()(critic_output)
+
         critic_output = Dense(1, name="critic_output")(critic_output)
 
         self.model = Model(
@@ -279,12 +292,12 @@ class NoiseGenerator(object):
             n += mean
         return n
     
-    def __call__(self, mean=0.0, std=1.0):
+    def __call__(self, mean=0.0, std=1.):
         return self.noise(self.noise_shapes, mean, std)
     
     
 
-class HarrisWGAN_Model(keras.Model):
+class Harris_WGAN_Model(keras.Model):
     def __init__(self, generator, critic, hparams, expname, noise_gen=None):
         super().__init__()
         self.generator = generator
@@ -292,6 +305,12 @@ class HarrisWGAN_Model(keras.Model):
         self.hparams = hparams
         self._expname = expname
         self.noise_gen = noise_gen
+        if self.hparams["noise_input"]:
+            self.noise_amplitude = 1.
+        else:
+            self.noise_amplitude = 0.
+            self.hparams["noise_channels"] = 1
+
         if noise_gen:
             assert isinstance(noise_gen, NoiseGenerator), "Parsed noise_gen must be an instance of the NoiseGenerator-class"
         
@@ -307,9 +326,9 @@ class HarrisWGAN_Model(keras.Model):
             )
 
         # losses
-        self.critic_loss = self.critic_loss #get_custom_loss("critic")
-        self.critic_gen_loss = self.generator_loss #get_custom_loss("critic_generator")
-        self.recon_loss = CL_chooser(self.hparams["recon_loss"])
+        self.critic_loss = get_custom_loss("critic")
+        self.critic_gen_loss = get_custom_loss("critic_generator")
+        self.recon_loss = get_custom_loss(self.hparams["recon_loss"])
         
     @tf.function    
     def train_step(self, data_iter: Dict, embed=None) -> OrderedDict:
@@ -317,10 +336,10 @@ class HarrisWGAN_Model(keras.Model):
         cond = inputs["lo_res_inputs"]
         const = inputs["hi_res_inputs"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         sample = outputs["output"]
 
         # train critic
@@ -348,6 +367,8 @@ class HarrisWGAN_Model(keras.Model):
                 d_loss = c_loss + self.hparams["gp_weight"] * gp
 
             # calculate gradients and update critic
+            tape_critic = hvd.DistributedGradientTape(tape_critic)
+
             d_gradient = tape_critic.gradient(d_loss, self.critic.trainable_variables)
             self.c_optimizer.apply_gradients(zip(d_gradient, self.critic.trainable_variables))
 
@@ -386,6 +407,8 @@ class HarrisWGAN_Model(keras.Model):
             # combined loss for generator
             g_loss = cg_loss + cl_loss*self.hparams["recon_weight"]
 
+        tape_generator = hvd.DistributedGradientTape(tape_generator)
+        
         g_gradient = tape_generator.gradient(g_loss, self.generator.trainable_variables)
         self.g_optimizer.apply_gradients(zip(g_gradient, self.generator.trainable_variables))
 
@@ -414,10 +437,10 @@ class HarrisWGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         sample = outputs["output"]
         if self.hparams["ensemble_size"] is None:
-            noise = self.noise_gen()
+            noise = self.noise_gen(std=self.noise_amplitude)
         else:
             # ensemble stacked in an additional dimension at the end
-            noise = tf.stack([self.noise_gen() for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
+            noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
         noise_iter = noise[0:self.hparams["batch_size"]:, ...]
         noise_0 = noise_iter[..., 0]
@@ -454,7 +477,7 @@ class HarrisWGAN_Model(keras.Model):
         const = inputs["hi_res_inputs"]
         
         if self.hparams["ensemble_size"] is not None:
-            noise = [self.noise_gen() for _ in range(self.hparams["ensemble_size"])]
+            noise = [self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"])]
             gen_list = []
             for noise_iter in noise:
                 gen_in = [cond] + [const] + [noise_iter]
@@ -462,7 +485,7 @@ class HarrisWGAN_Model(keras.Model):
                 gen_list.append(gen_iter)
             gen_out = tf.stack(gen_list, axis=-1)
         else:
-            noise = self.noise_gen()
+            noise = self.noise_gen(self.noise_amplitude)
             gen_in = [cond] + [const] + [noise]
             gen_out = self.generator(gen_in, training=False)
         return gen_out
@@ -488,35 +511,33 @@ class HarrisWGAN_Model(keras.Model):
         mix_data = real_data + alpha * (gen_data - real_data)
         critic_in_gen = [cond_data] + [const_data] + [mix_data]
 
+        # cleaner implementation
         with tf.GradientTape() as gp_tape:
-            gp_tape.watch(critic_in_gen[-1])
-            critic_mix = self.critic.model(critic_in_gen, training=True)
+            gp_tape.watch(mix_data)
+            mixed_score = self.critic.model(critic_in_gen)
 
-        # calculate the gradient on the mixture data...
-        grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen[-1]])[0]
+        # Compute gradients with respect to mixed data
+        grads_mix = gp_tape.gradient(mixed_score, mix_data)
+
+        #with tf.GradientTape() as gp_tape:
+            #gp_tape.watch(critic_in_gen[-1])
+        #    gp_tape.watch(critic_in_gen)
+        #    critic_mix = self.critic.model(critic_in_gen, training=True)
+        #
+        ## calculate the gradient on the mixture data...
+        #grads_mix = gp_tape.gradient(critic_mix, [critic_in_gen])[0]
         # ... and norm it
         #norm = tf.norm(grads_mix, ord=2, axis=list(range(1, len(grads_mix.shape))))
         norm = tf.sqrt(tf.reduce_mean(tf.square(grads_mix), axis=[1, 2, 3]))
         gp = tf.reduce_mean((norm - 1.) ** 2)
 
         return gp
-        
-    @staticmethod
-    def critic_loss(real_img, fake_img):
-        real_loss = tf.reduce_mean(real_img)
-        fake_loss = tf.reduce_mean(fake_img)
-        return fake_loss - real_loss
-
-
-    # Define the loss functions for the generator.
-    @staticmethod
-    def generator_loss(fake_img):
-        return -tf.reduce_mean(fake_img)
-    
     
     def save(self, filepath: str, overwrite: bool = True, include_optimizer: bool = True, save_format: str = "tf",
              signatures=None, options=None, save_traces: bool = True, suffix: str = "_last"):
         """
+        TODO: This should be in the AbstractModelClass to also allow inheritcance.
+
         Save generator and critic seperately.
         The parameters of this method are equivalent to Keras.model.save ensuring full functionality.
         :param filepath: path to SavedModel or H5 file to save both models
@@ -568,15 +589,16 @@ class HarrisWGAN_Model(keras.Model):
             save_opt_weights(self.g_optimizer, generator_opt)
             print(f"Save critic optimiter state to {critic_opt}...")
             save_opt_weights(self.c_optimizer, critic_opt)
-        
 
+    
 
-class HarrisWGAN(AbstractModelClass):
+class Harris_WGAN(Sha_WGAN):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict,
-                 varnames_tar: List, savedir: str, expname: str):
+                 varnames_tar: List, savedir: str, expname: str, with_horovod: bool = False):
         """
-        Initialize the HarrisWGANModel class.
+        Initialize the Harris_WGAN model class.
+        !!! Note: Inherits from Sha_WGAN and overwrites methods when necessary only !!!
 
         :param generator: The generator model.
         :param critic: The critic model.
@@ -586,21 +608,24 @@ class HarrisWGAN(AbstractModelClass):
         :param varnames_tar: List of target variable names.
         :param savedir: Drectory to save the model.
         :param expname: The name of the experiment.
+        :param with_horovod: Whether to use Horovod for distributed training.
         """        
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [1, 1, 1, 1]
-        super().__init__(shape_in, hparams, varnames_tar, savedir, expname)
+
+        super().__init__(generator, critic, shape_in, hparams, varnames_tar, savedir, expname, with_horovod)
 
         self.modelname = "harriswgan"
+        self.with_horovod = with_horovod
+        self.main_process = True 
+        if self.with_horovod:
+            self.main_process = hvd.rank() == 0
         
         # set hyperparmaters
         self.set_hparams(hparams)
-        # set submodels
-        self.generator, self.critic = self.set_model(generator, critic)
-        # set compile and fit options as well as custom objects
-        self.set_compile_options()
-        self.set_custom_objects(loss=self.compile_options['loss'])
-        self.set_fit_options()
+        if not self.hparams["noise_input"]:
+            print("Set noise channels to 1.")
+            self.hparams["noise_channels"] = 1
         
     def set_compile_options(self):
         """
@@ -618,6 +643,14 @@ class HarrisWGAN(AbstractModelClass):
 
         self.optimizer = (optimizer(self.critic.hparams["lr"], **kwargs_opt), optimizer(self.generator.hparams["lr"], **kwargs_opt))
         
+        print(self.model)
+        # wrap optimizers for distributed training
+        #if self.with_horovod:
+        #    import horovod.tensorflow as hvd
+        #    # wrap optimizers for distributed training
+        #    self.optimizer = tuple(hvd.DistributedOptimizer(opt, backward_passes_per_step=1, average_aggregated_gradients=True)
+        #                          for opt in self.optimizer)
+        
     def get_fit_options(self):
         """
         Get options that will be parsed to the fit-method of the Keras model.
@@ -627,12 +660,17 @@ class HarrisWGAN(AbstractModelClass):
         if self.hparams["lr_decay"]:
             harriswgan_callbacks.append(LearningRateSchedulerHarrisWGAN(self.get_lr_decay(), verbose=1))
         
-        if self.hparams["lcheckpointing"]:            
+        if self.hparams["lcheckpointing"] and self.main_process:            
             harriswgan_callbacks.append(ModelCheckpointHarrisWGAN(self._savedir, self._expname, 
                                                                   monitor="val_recon_loss", verbose=1, save_best_only=False, mode="min"))
             
         if self.hparams["learlystopping"]:
             harriswgan_callbacks.append(EarlyStopping(monitor="val_recon_loss", patience=8))
+
+        if self.with_horovod:            
+            harriswgan_callbacks.append(BroadcastWeightsCallback(self.generator, self.critic, self.optimizer[0], self.optimizer[1]))
+            #harriswgan_callbacks.append(hvd_callbacks.MetricAverageCallback())
+
             
         if harriswgan_callbacks is not None:
             return {"callbacks": harriswgan_callbacks}
@@ -664,11 +702,11 @@ class HarrisWGAN(AbstractModelClass):
         hparams_wgan_only.pop("hparams_critic")
         hparams_wgan_only.pop("hparams_generator")
                 
-        # ...and create HarrisWGAN model instance
-        self.model = HarrisWGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
+        # ...and create Harris_WGAN model instance
+        self.model = Harris_WGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
 
         return gen_model, critc_model
-    
+
         
     def get_lr_decay(self):
         """
@@ -696,72 +734,11 @@ class HarrisWGAN(AbstractModelClass):
             elif decay_st <= epoch < decay_end:
                 return lr * tf.math.exp(decay_rate)
             elif epoch >= decay_end:
-                return lr
+                return min(lr, lr_end)
 
         return lr_scheduler
 
-    def plot_model(self, save_dir, **kwargs):
-        """
-        Plot generator and critci model separately.
-        :param save_dir: directory under which plots will be saved
-        :param kwargs: All keyword arguments valid for tf.keras.utils.plot_model
-        
-        NOTE SL: taken from wgan_model.py
-        """
-        k_plot_model(self.generator, os.path.join(save_dir, f"plot_{self._expname}_generator.png"), **kwargs)
-        k_plot_model(self.critic, os.path.join(save_dir, f"plot_{self._expname}_critic.png"), **kwargs)
-    
-    
-    def load_checkpoint(self, checkpoint_dir, checkpoint_format: str = "h5"):
-        """
-        Load model from checkpoint that has been either saved with the save-method or with the Checkpoint-callback.
-        Requires that the model is compiled!
-        :param checkpoint_dir": Base-directory where checkpointed model is saved (must contain generator and critic separately)
-        :param checkpoint_format: format of checkpoint, must match the format used for saving.
-        :return: iteration step of checkpointed model
-        """
-        generator_path, critic_path = Path(checkpoint_dir).joinpath(f"{self._expname}_generator*"), \
-                                      Path(checkpoint_dir).joinpath(f"{self._expname}_critic*")
-        
-        matching_gen_dir, matching_critic_dir = glob.glob(str(generator_path)), glob.glob(str(critic_path))
-        
-        if matching_gen_dir:
-            generator_path = Path(matching_gen_dir[0])
-            suffix_gen = str(generator_path).split("_generator")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(generator_path)} found.")
-            
-        if matching_critic_dir:
-            critic_path = Path(matching_critic_dir[0])
-            suffix_critic = str(critic_path).split("_critic")[-1]
-        else:
-            raise FileNotFoundError(f"No matching director for generator-model {str(critic_path)} found.")
-        
-        self.generator.load_weights(generator_path.joinpath(f"{self._expname}_generator{suffix_gen}"))
-        self.critic.load_weights(critic_path.joinpath(f"{self._expname}_critic{suffix_critic}"))
 
-        opt_gen_path, opt_critic_path = generator_path.joinpath(f"{self._expname}_generator_opt{suffix_gen}.pkl"), \
-                                        critic_path.joinpath(f"{self._expname}_critic_opt{suffix_critic}.pkl")
-        with open(opt_gen_path, "rb") as f:
-            optimizer_weights_gen = pickle.load(f)
-
-        with open(opt_critic_path, "rb") as f:
-            optimizer_weights_critic = pickle.load(f)
-
-        # set state for g_optimizer
-        self.g_optimizer._create_all_weights(self.generator.trainable_variables)
-        self.g_optimizer.set_weights(optimizer_weights_gen)
-
-        # set state for c_optimizer
-        self.c_optimizer._create_all_weights(self.critic.trainable_variables)
-        self.c_optimizer.set_weights(optimizer_weights_critic)
-
-        # retrieve iteration step of checkpointed model
-        iter_step = (self.g_optimizer.variables()[0]).numpy()
-
-        return iter_step
-        
-        
     def load_inference_model(self, model_dir, format="tf"):
             
         # construct directories to generator- and critic model from model directory
@@ -786,21 +763,10 @@ class HarrisWGAN(AbstractModelClass):
         
         # get construct model for inference exposing predict-method
         # Note the predict-step makes use of the generator only. Thus, the critic model is not needed here
-        wgan_model = HarrisWGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
+        wgan_model = Harris_WGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
         
         return wgan_model
 
-    def count_params(self):
-        """
-        Count number of trainable and untrainable parameters
-        """
-        trainable_param = int(np.sum([K.count_params(p) for p in self.generator.trainable_weights]))
-        untrainable_param = int(np.sum([K.count_params(p) for p in self.generator.non_trainable_weights]))
-
-        trainable_param += int(np.sum([K.count_params(p) for p in self.critic.trainable_weights]))
-        untrainable_param += int(np.sum([K.count_params(p) for p in self.critic.non_trainable_weights]))
-        
-        return trainable_param, untrainable_param
     
     def set_hparams_default(self):
         """
@@ -808,8 +774,31 @@ class HarrisWGAN(AbstractModelClass):
         """
         self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
-                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8,  
+                                "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8, "noise_input": True,
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }
+
+
+class BroadcastWeightsCallback(tf.keras.callbacks.Callback):
+    """ 
+    Custom callback to broadcast model weights at the end of each batch.
+    Ensures all workers stay synchronized during training.
+    """
+
+    def __init__(self, generator, critic, g_optimizer, c_optimizer, root_rank=0):
+        super(BroadcastWeightsCallback, self).__init__()
+        self.generator = generator
+        self.critic = critic
+        self.g_optimizer = g_optimizer
+        self.c_optimizer = c_optimizer
+        self.root_rank = root_rank
+
+    def on_epoch_begin(self, epoch, logs=None):
+        # broadcast weights at the beginning of the first epoch
+        if epoch == 0:
+            hvd.broadcast_variables(self.generator.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.critic.variables, root_rank=self.root_rank)
+            hvd.broadcast_variables(self.g_optimizer.variables(), root_rank=self.root_rank)
+            hvd.broadcast_variables(self.c_optimizer.variables(), root_rank=self.root_rank)
 
 
 class LearningRateSchedulerHarrisWGAN(LearningRateSchedulerWGAN):
@@ -1038,6 +1027,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=stride, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
@@ -1048,6 +1039,8 @@ def residual_block(x, filters, conv_size=(3, 3), stride=1, dilations=1, relu_alp
     x = Conv2DPadding(filters=filters, kernel_size=conv_size, stride=1, dilations=dilations, padding=padding)(x)
     if norm == "batch":
         x = BatchNormalization()(x)
+    elif norm == "layer":
+        x = LayerNormalization()(x)
     elif norm is None or norm == "":
         pass
     else:
@@ -1066,23 +1059,3 @@ def const_upscale_block(const_input, steps, filters):
         const_output = Conv2D(filters=filters, kernel_size=(step, step), strides=step, padding="valid", activation="relu")(const_output)
     return const_output
 
-
-def wasserstein_loss(y_true, y_pred):
-    #return 1.
-    return K.mean(y_true * y_pred, axis=-1)
-
-def ensmean_MSE(y_true, y_pred):
-    pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
-    y_true_squ = tf.squeeze(y_true, axis=-1)
-    return tf.reduce_mean(tf.math.squared_difference(pred_mean, y_true_squ))
-
-def CL_chooser(CLtype):
-    if CLtype != "ensmeanMSE":
-        raise NotImplementedError(f"{CLtype = } not implemented, only CLtype = 'ensmeanMSE' is available!")
-        
-    return {
-        # "CRPS": sample_crps,
-        # "CRPS_phys": sample_crps_phys,
-        "ensmeanMSE": ensmean_MSE,
-        # "ensmeanMSE_phys": ensmean_MSE_phys#
-    }[CLtype]
