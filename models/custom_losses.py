@@ -50,6 +50,8 @@ def get_custom_loss(loss_name, **kwargs):
     elif loss_name == "mse_vec":
         assert n_channels > 0, f"n_channels must be a number larger than zero, but is {n_channels}."
         loss_fn = fix_channels(**kwargs)(mse_vec)
+    elif loss_name == "ensmeanmse":
+        loss_fn = ensmean_MSE
     elif loss_name == "critic":
         loss_fn = critic_loss
     elif loss_name == "critic_generator":
@@ -141,6 +143,20 @@ def mse_vec(x, x_hat, n_channels, channels_last: bool = True, avg_channels: bool
         else:
             rloss += mse_channels(x[:, nd_vec::, ...], x_hat[:, nd_vec::, ...], True, avg_channels)   
             
+    return rloss
+
+
+def ensmean_MSE(y_true, y_pred):
+    """
+    Computes the mean squared error of the ensemble mean.
+    :param y_true: true values
+    :param y_pred: predicted values with ensemble dimension as first dimension
+    :return: mean squared error
+    """
+    pred_mean = tf.squeeze(tf.reduce_mean(y_pred, axis=0), axis=-1)
+    y_true_squ = tf.squeeze(y_true, axis=-1)
+    rloss = tf.reduce_mean(tf.math.squared_difference(pred_mean, y_true_squ))
+
     return rloss
 
 def critic_loss(critic_real, critic_gen):
