@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-19"
+__update__ = "2025-05-16"
 
 import os
 import glob
@@ -159,10 +159,10 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
     # for the global radiance downscaling task, we need to rescale the data
-    if tar_varname == "global_rad_pp_ratio":
+    if tar_varname == "glob_rad_pp_ratio_tar":
         func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
         y_pred = y_pred * ds_test["tisr_tar"]
-        tar_varname = "global_rad_pp"
+        tar_varname = "glob_rad_pp_tar"
 
     # write inference data to netCDf
     ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
@@ -401,13 +401,11 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     :param dims: Spatial dimension names
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
     
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
     os.makedirs(plot_dir, exist_ok=True)
-    os.makedirs(metric_dir, exist_ok=True)
-
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     model_name = plt_kwargs.pop("model_longname", "Model")
 
@@ -450,13 +448,14 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
         
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
-    for hh in range(24):
+    hours_in_data = score_hourly_mean.hour.values
+    for hh in hours_in_data:
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
         plot_score_map(score_hourly_mean.sel({"hour": hh}), fname, model_name=model_name,
                        dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
-    for hh in range(24):
+    for hh in hours_in_data:
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
@@ -919,8 +918,8 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
                         }
         elif self.varname == "glob_rad":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": True}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": True},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
                          "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
@@ -947,10 +946,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         self.proj = proj
         
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
-        
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
             _ = run_evaluation_spatial(score_engine, metric, plot_dir=self.plt_dir, 
@@ -972,8 +969,8 @@ class SpatialEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         elif self.varname == "glob_rad":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
-                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
+                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": True}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
