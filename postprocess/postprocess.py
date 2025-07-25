@@ -406,6 +406,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
     os.makedirs(plot_dir, exist_ok=True)
+    os.makedirs(metric_dir, exist_ok=True)
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     model_name = plt_kwargs.pop("model_longname", "Model")
 
