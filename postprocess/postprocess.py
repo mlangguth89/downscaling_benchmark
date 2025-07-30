@@ -884,11 +884,11 @@ class TemporalEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.5, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None}}
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}
                          }
         elif self.varname == "irradiance":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": True, 
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": True}, 
                          "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": True},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
