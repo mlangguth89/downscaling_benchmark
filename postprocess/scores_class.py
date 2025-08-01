@@ -41,6 +41,8 @@ class Scores:
                              "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
             "iqd": self.calc_iqd,
             "fss": self.calc_fss,
+            "rmse_relative": self.calc_rmse,
+            "bias_relative": self.calc_bias,
         }
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
