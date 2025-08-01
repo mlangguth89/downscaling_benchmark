@@ -282,7 +282,9 @@ def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name
     # add text with avg value
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     avg_value = np.nanmean(score.values)
-    label = (rf"$\overline{{{metric_name.replace('_', '\_')}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit if metric_unit != '1' else ''}$").rstrip(" ")
+    escaped_metric_name = metric_name.replace("_", r"\_")
+    unit = metric_unit if metric_unit != "1" else ""
+    label = rf"$\overline{{{escaped_metric_name}}}_{{{model_name}}} = {avg_value:.2f}\ {unit}$".rstrip(" ")
 
     # add legend
     ax.text(
@@ -345,7 +347,9 @@ def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.Da
     # plot data
     metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     avg_value = np.nanmean(data.values)
-    label = (rf"$\overline{{{metric_name.replace('_', '\_')}}}_{{{model_name}}} = {avg_value:.2f}\ {metric_unit if metric_unit != '1' else ''}$").rstrip(" ")
+    escaped_metric_name = metric_name.replace("_", r"\_")
+    unit = metric_unit if metric_unit != "1" else ""
+    label = rf"$\overline{{{escaped_metric_name}}}_{{{model_name}}} = {avg_value:.2f}\ {unit}$".rstrip(" ")
 
     ax.plot(data[x_coord].values, data.values, linestyle, **kwargs)
     ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
