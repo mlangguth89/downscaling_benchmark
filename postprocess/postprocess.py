@@ -302,7 +302,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
 
     # remove relative suffix from score_name, because suffix is handled further down below
     # and via the relative kwarg and not the suffix in the score_name
-    score_name = score_name.rstrip("_relative")
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
 
     # create output-directories if necessary 
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
@@ -410,7 +410,7 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
 
     # remove relative suffix from score_name, because suffix is handled further down below
     # and via the relative kwarg and not the suffix in the score_name
-    score_name = score_name.rstrip("_relative")
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
 
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
