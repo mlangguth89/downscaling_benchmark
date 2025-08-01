@@ -299,6 +299,11 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
+
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.rstrip("_relative")
+
     # create output-directories if necessary 
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, score_name)
@@ -402,7 +407,11 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
-    
+
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.rstrip("_relative")
+
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
     os.makedirs(plot_dir, exist_ok=True)
