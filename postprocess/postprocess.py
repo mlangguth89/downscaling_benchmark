@@ -299,6 +299,11 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
+
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
+
     # create output-directories if necessary 
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, score_name)
@@ -402,7 +407,11 @@ def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
-    
+
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
+
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
     os.makedirs(plot_dir, exist_ok=True)
@@ -881,17 +890,20 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                         }
         elif self.varname == "ws100m":
-            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.5, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None}}
-                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}
-                         }
-        elif self.varname == "irradiance":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": True, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": True},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.1), "ref_line": 1.},
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
+                        }
+        elif self.varname == "glob_rad":
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
+                         "rmse_relative": {"score_unit": "1", "value_range": (0., 3.), "ref_line": None, "relative": True}, 
+                         "bias_relative": {"score_unit": "1", "value_range": (-1., 1.), "ref_line": 0, "relative": True},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                          "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
                         }
         else:
@@ -939,8 +951,11 @@ class SpatialEvaluation(AbstractMetricEvaluation):
             eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
                          "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
         elif self.varname == "glob_rad":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
-                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": True}}
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False},
+                         "rmse_relative": {"score_unit": "1", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
+                         "bias_relative": {"score_unit": "1", "levels": lvl_bias, "cmap_name": "seismic", "relative": True}
+                        }
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
