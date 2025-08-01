@@ -5,9 +5,9 @@
   "config_evaluation_time": {},
   "do_evaluation_spatial": true,
   "config_evaluation_spatial": {},
-  "do_spectral_analysis": false,
+  "do_spectral_analysis": true,
   "config_spectral_analysis": {},
-  "do_cond_quantile_analysis": false,
+  "do_cond_quantile_analysis": true,
   "config_cond_quantile_analysis": {
     "factorization": "calibration_refinement"
   },
