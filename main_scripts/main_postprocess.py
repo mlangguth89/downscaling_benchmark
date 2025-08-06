@@ -202,12 +202,22 @@ def main(parser_args):
 
         metric_dir_score_card = os.path.join(plt_dir, "aggregate_scores")
         metric_dir_score_card = metric_dir_score_card.replace("/plots/", "/metric_files/")
-    
+        
+        # creating an instance of the TemporalEvaluation class here is needed to access the evaluation_dict properly
+        temp_eval = TemporalEvaluation(varname, os.path.join(plt_dir, "temporal_evaluation"), model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
+        metric_list=[*temp_eval.evaluation_dict]
+        # expand fss by thresholds which are part of the metric name
+        if "fss" in metric_list:
+            fss_thres = temp_eval.evaluation_dict["fss"]["thres"]
+            metric_list.remove("fss")
+            for thres in fss_thres:
+                metric_list.append(f"fss_thres_{thres}")
         run_aggregate_scores(
             model=model_info['model_longname'],
             varname=varname,
             metric_dir=metric_dir_score_card,
-            **conf_postprocess.get("config_aggregate_scores", {})
+            metric_list=metric_list,
+            **conf_postprocess.get("config_aggregate_scores", None),
         )
 
         logger.info(f"Aggregate scores finished {timer() - t0_cq:.2f}s.")  

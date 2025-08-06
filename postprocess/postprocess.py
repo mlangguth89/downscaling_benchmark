@@ -817,7 +817,7 @@ def run_comparison_plots(ds, plot_dir, score_name, model_type, nsamples = 200, o
     pool.close()
     pool.join()
 
-def run_aggregate_scores(model, varname, metric_dir, **kwargs):
+def run_aggregate_scores(model, varname, metric_dir, metric_list, **kwargs):
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_aggregate_scores.__name__}")
 
@@ -833,10 +833,19 @@ def run_aggregate_scores(model, varname, metric_dir, **kwargs):
         "value": [],
     }
     temporal_eval_metric_dir = metric_dir.replace("aggregate_scores", "temporal_evaluation")
-    for metric_iter in ["bias", "rmse", "ralsd", "grad_amplitude", "me_std"]:
+    for metric_iter in metric_list:
         for time_agg in ["year", "MAM", "JJA", "SON", "DJF"]:
-            score_iter = xr.open_dataset(os.path.join(temporal_eval_metric_dir, f"eval_{metric_iter}_{time_agg}.nc"))[f"{metric_iter}_mean"]
-            score_iter_mean = np.nanmean(score_iter)
+            try:
+                score_iter = xr.open_dataset(os.path.join(temporal_eval_metric_dir, f"eval_{metric_iter}_{time_agg}.nc"))[f"{metric_iter}_mean"]
+                score_iter_mean = np.nanmean(score_iter)
+            except FileNotFoundError:
+                # set the aggregated value to nan if file is not calculated and log a warning
+                func_logger.warning(
+                    f"Metric file {os.path.join(temporal_eval_metric_dir, f'eval_{metric_iter}_{time_agg}.nc')} "
+                    f" for {model = } {time_agg = } {varname = } {metric_iter = } does"
+                    " not exist. Filling with NaN."
+                )
+                score_iter_mean = np.nan
 
             scores_dict["model"].append(model)
             scores_dict["time"].append(time_agg.upper())
