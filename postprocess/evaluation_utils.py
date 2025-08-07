@@ -164,7 +164,7 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
 
     if nblocks < 10:
         err_mess = f"Less than 10 blocks are present with given block length {block_length:d}. Too less for bootstrapping."
-        func_logger.error(err_mess, stack_info=True, exc_info=True)
+        func_logger.warning(err_mess, stack_info=False, exc_info=False)
         return None
         #raise ValueError(err_mess)
 
