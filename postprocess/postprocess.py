@@ -34,6 +34,12 @@ except (ModuleNotFoundError, NameError):
     print(
         "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
     pass
+try:
+    from scores.spatial import fss_2d
+    FSS_available = True
+except ImportError:
+    # FSS is not available in the postprocessing environment
+    FSS_available = False
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
@@ -915,8 +921,9 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0., 70.), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
-                         #"fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
                         }
+            if FSS_available:
+                eval_dict["fss"] = {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
