@@ -107,6 +107,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     data_norm.read_norms_from_file(js_norm)
 
     #ds_dict["batch_size"] = 36
+    #ds_dict["batch_size"] = 19
     
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
@@ -271,6 +272,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
             func_logger.debug(hparams_dict)
     
     #hparams_dict["batch_size"] = 36
+    #hparams_dict["batch_size"] = 19
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
@@ -906,14 +908,14 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                         }
         elif self.varname == "glob_rad":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
-                         "rmse_relative": {"score_unit": "1", "value_range": (0., 3.), "ref_line": None, "relative": True}, 
-                         "bias_relative": {"score_unit": "1", "value_range": (-1., 1.), "ref_line": 0, "relative": True},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
-                         "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (50., 250.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-20., 35.), "ref_line": 0, "relative": False},
+                         "rmse_relative": {"score_unit": "1", "value_range": (0., 1.), "ref_line": None, "relative": True}, 
+                         "bias_relative": {"score_unit": "1", "value_range": (-0.5, 0.5), "ref_line": 0, "relative": True},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.2), "ref_line": 1.},
+                         "me_std": {"score_unit": "W/m^2", "value_range": (0., 70.), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
+                         #"fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
                         }
         else:
             if eval_dict is None:
