@@ -9,7 +9,7 @@ Contains all methods and classes used in main_postrprocess.py.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-12-08"
-__update__ = "2024-09-19"
+__update__ = "2025-05-16"
 
 import os
 import glob
@@ -34,6 +34,12 @@ except (ModuleNotFoundError, NameError):
     print(
         "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
     pass
+try:
+    from scores.spatial import fss_2d
+    FSS_available = True
+except ImportError:
+    # FSS is not available in the postprocessing environment
+    FSS_available = False
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
@@ -107,6 +113,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     data_norm.read_norms_from_file(js_norm)
 
     #ds_dict["batch_size"] = 36
+    #ds_dict["batch_size"] = 19
     
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
@@ -157,6 +164,12 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
 
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
+
+    # for the global radiance downscaling task, we need to rescale the data
+    if tar_varname == "glob_rad_pp_ratio_tar":
+        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        y_pred = y_pred * ds_test["tisr_tar"]
+        tar_varname = "glob_rad_pp_tar"
 
     # write inference data to netCDf
     ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
@@ -265,6 +278,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
             func_logger.debug(hparams_dict)
     
     #hparams_dict["batch_size"] = 36
+    #hparams_dict["batch_size"] = 19
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
@@ -280,7 +294,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     func_logger.info(f"Model was loaded successfully.")
 
     return trained_model, model_info      
-        
+
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **kwargs):
     """
@@ -293,14 +307,20 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
 
+
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
+
     # create output-directories if necessary 
-    metric_dir = os.path.join(plot_dir, "metric_files")
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/")
+    plot_dir = os.path.join(plot_dir, score_name)
     os.makedirs(plot_dir, exist_ok=True)
     os.makedirs(metric_dir, exist_ok=True)
     
     # get possible keyword arguments
     model_type = kwargs.pop("model_type", "sha_wgan")
-    model_name = kwargs.pop("model_name", "Sha WGAN")
+    model_name = kwargs.pop("model_longname", "Model")
     quantiles = kwargs.pop("quantiles", (.001, .99))
 
     # ad-hoc fix to remove unnecessary keyword arguments
@@ -343,9 +363,9 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     
     fname_base = f"downscaling_{model_type}_{score_name.lower()}"
     fname = os.path.join(plot_dir, f"{fname_base}.png")
-
     
     # create plots
+    kwargs["title"] = "year"
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
                      fname, **kwargs)
@@ -370,6 +390,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         func_logger.info(f"Averaged {score_name} for {sea}: {score_sea.mean().values:.4f} {score_unit}, " +
                          f"standard deviation: {score_sea.std().values:.4f}")  
         
+        kwargs["title"] = sea
         plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[0], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
                          fname, **kwargs)
@@ -383,20 +404,29 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     return score_all
 
 
-def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, 
+def run_evaluation_spatial(score_engine, score_name: str, score_unit: str, plot_dir: str, 
                            dims = ["rlat", "rlon"], **plt_kwargs):
     """
     Create map plots of desired evaluation metric. Evaluation metric must be given in rotated coordinates.
     :param score_engine: Score engine object to comput evaluation metric
+    :param score_unit: Unit of evaluation metric
     :param plot_dir: Directory to save plot files
     :param dims: Spatial dimension names
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_time.__name__}")
-    
-    os.makedirs(plot_dir, exist_ok=True)
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
 
+    # remove relative suffix from score_name, because suffix is handled further down below
+    # and via the relative kwarg and not the suffix in the score_name
+    score_name = score_name.replace("_relative", "") if "_relative" in score_name else score_name
+
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/")
+    plot_dir = os.path.join(plot_dir, f"{score_name}_spatial")
+    os.makedirs(plot_dir, exist_ok=True)
+    os.makedirs(metric_dir, exist_ok=True)
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
+    model_name = plt_kwargs.pop("model_longname", "Model")
+
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
@@ -405,7 +435,7 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     # fss, rmse, bias, mse
     score_kwargs = {key: plt_kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
     score_all = score_engine(score_name, **score_kwargs)
-        
+
     if score_kwargs["relative"]:
         score_suffix = "_relative"
         score_unit = "1"
@@ -417,57 +447,74 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     score_mean = score_all.mean(dim="time")
     fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
-    plot_score_map(score_mean, fname, dims=dims,
-                     title=f"{score_name.upper()} (avg.)", **plt_kwargs)
+    plot_score_map(score_mean, fname, model_name=model_name, dims=dims,
+                     title=f"{score_name.upper()} (avg.)", metric={score_name.upper(): score_unit}, **plt_kwargs)
+
+    # save scores to netCDF
+    fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
+    func_logger.debug(f"Save spatial score {score_name} to {fname_nc}...")
+    ds = xr.Dataset({f"{score_name}": score_all, f"{score_name}_mean": score_mean})
+    ds.to_netcdf(fname_nc)
+
+    score_mean_sea = score_all.groupby("time.season").mean(dim=["time"])
+    for sea in score_mean_sea["season"]:
+        fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{str(sea.values)}.nc')
+        score_mean_sea_iter = score_mean_sea.sel({"season": sea})
+        func_logger.debug(f"Save spatial score season {score_name} to {fname_nc}...")
+        ds = xr.Dataset({f"{score_name}_mean": score_mean_sea_iter})
+        ds.to_netcdf(fname_nc)
+        
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
-    for hh in range(24):
+    hours_in_data = score_hourly_mean.hour.values
+    for hh in hours_in_data:
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
         fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
-        plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
-                       dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
+        plot_score_map(score_hourly_mean.sel({"hour": hh}), fname, model_name=model_name,
+                       dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
-    for hh in range(24):
+    for hh in hours_in_data:
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
                                  f"{fname_base}_{sea.values}_{hh:02d}_map.png")
-            plot_score_map(score_now.sel({"season": sea}), fname, dims=dims,
-                           title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
+            plot_score_map(score_now.sel({"season": sea}), fname, model_name=model_name, dims=dims,
+                           title=f"{score_name} {sea.values} {hh:02d} UTC", metric={score_name.upper(): score_unit}, **plt_kwargs)
 
     return True
 
-def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, unit, **opts: dict):
+def run_cond_quantile_analysis(data_fcst, data_ref, plot_dir, varname_lables, unit, **plt_kwargs: dict):
     """
     Create conditional quantile plots for given variables.
     :param data_fcst: xarray.DataArray with forecast data
     :param data_ref: xarray.DataArray with reference data
-    :param plt_dir: Directory to save plot files
+    :param plot_dir: Directory to save plot files
     :param varname_lables: List of variable names
     :param unit: Unit of variable
-    :param opt: Dictionary with configuration options
+    :param plt_kwargs: Dictionary with configuration options
                 Valid keys are: 
-                - "factorization": Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
-                - "quantiles": Quantiles for dashed lines in plot
-                - "figsize": tuple with dimensions of figure, default: (12, 6)
-                - "fs_title": font size of title, default: 16)
-                - "fs_axis_label": font size of axis labels, default: fs_title-2
-                - "plt_title": title of plot, default: ""
+                - factorization: Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
+                - quantiles: Quantiles for dashed lines in plot
+                - figsize: tuple with dimensions of figure, default: (12, 6)
+                - fs_title: font size of title, default: 16)
+                - fs_axis_label: font size of axis labels, default: fs_title-2
+                - title: title of plot, default: ""
     """
-
+    os.makedirs(plot_dir, exist_ok=True)
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_cond_quantile_analysis.__name__}")
 
-    factorization = opts.pop("factorization", "calibration_refinement")  
-    quantiles = opts.pop("quantiles", [0.05, 0.5, 0.95])
+    factorization = plt_kwargs.pop("factorization", "calibration_refinement")  
+    quantiles = plt_kwargs.pop("quantiles", [0.05, 0.5, 0.95])
 
     # conditional quantile analysis on all data
     quantile_panel_all, marginal_all = calculate_cond_quantiles(data_fcst, data_ref, varname_lables, unit, factorization=factorization, quantiles=quantiles)
 
     # create plot
-    plt_fname = os.path.join(plt_dir, f"conditional_quantile_plot_{factorization}_all.png")
-    plot_cond_quantile(quantile_panel_all, marginal_all, plt_fname, **opts)
+    plt_fname = os.path.join(plot_dir, f"conditional_quantile_plot_{factorization}_all.png")
+    plt_kwargs["title"] = "year"
+    plot_cond_quantile(quantile_panel_all, marginal_all, plt_fname, **plt_kwargs)
 
     # conditional quantile analysis for each season
     data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
@@ -478,20 +525,21 @@ def run_cond_quantile_analysis(data_fcst, data_ref, plt_dir, varname_lables, uni
 
         quantile_panel_sea, marginal_sea = calculate_cond_quantiles(data_fcst_sea, data_ref_sea, varname_lables, unit, factorization=factorization, quantiles=quantiles)
 
-        plt_fname = os.path.join(plt_dir, f"conditional_quantile_plot_{factorization}_{sea}.png")
-        plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **opts) 
+        plt_fname = os.path.join(plot_dir, f"conditional_quantile_plot_{factorization}_{sea}.png")
+        plt_kwargs["title"] = sea
+        plot_cond_quantile(quantile_panel_sea, marginal_sea, plt_fname, **plt_kwargs) 
 
-def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_dir: str, labels: List[str], varname: str, unit: str, **opts: dict):
+def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plot_dir: str, labels: List[str], varname: str, unit: str, **plt_kwargs: dict):
     """
     Perform marginal analysis for forecast (downscaled) and reference data
     which includes calculation of the Interquartile Distance (IQD) score and plotting both histograms.
     :param data_fcst: xarray.DataArray with forecast (downscaled) data
     :param data_ref: xarray.DataArray with reference (ground truth) data
-    :param plt_dir: Directory to save plot files
+    :param plot_dir: Directory to save plot files
     :param labels: List of labels for forecast and reference data
     :param varname: Physical name of variable
     :param unit: Physical unit of variable
-    :param opts: Additional keyword arguments for plotting
+    :param plt_kwargs: Additional keyword arguments for plotting
     :return: None
     """ 
     func_logger = logging.getLogger(f"{logger_module_name}.{run_marginal_analysis.__name__}")
@@ -505,11 +553,12 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_d
     func_logger.info(f"IQD for all {varname} data: {iqd: .2e}")
 
     # create output-directories if necessary
-    os.makedirs(plt_dir, exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
 
     # create histogram plot for all data
-    plt_fname = os.path.join(plt_dir, f"histogram_{varname}_all.png")
-    plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **opts)
+    plt_fname = os.path.join(plot_dir, f"histogram_{varname}_all.png")
+    plt_kwargs["title"] = "year"
+    plot_histograms(data_fcst, data_ref, plt_fname, labels, iqd, xlabel=f"{varname} [{unit}]", **plt_kwargs)
 
     # conditional quantile analysis for each season
     data_fcst_seas, data_ref_seas = data_fcst.groupby("time.season"), data_ref.groupby("time.season")
@@ -523,11 +572,12 @@ def run_marginal_analysis(data_fcst: xr.DataArray, data_ref: xr.DataArray, plt_d
 
         func_logger.info(f"IQD for {varname} data from season {sea}: {iqd_sea: .2e}")
 
-        plt_fname = os.path.join(plt_dir, f"histogram_{varname}_{sea}.png")
-        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **opts)
+        plt_fname = os.path.join(plot_dir, f"histogram_{varname}_{sea}.png")
+        plt_kwargs["title"] = sea
+        plot_histograms(data_fcst_sea, data_ref_sea, plt_fname, labels, iqd_sea, xlabel=f"{varname} [{unit}]", **plt_kwargs)
                            
 
-def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, labels: List[str], varname: str, var_unit: str,
+def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plot_dir: str, labels: List[str], varname: str, var_unit: str,
                           lonlat_dims: list_or_str = ["rlon", "rlat"], lcutoff: bool= True, re: float = 6371., **plt_kwargs):
     """
     Run spectral analysis, create power spectrum plot and save results into a netCDF-file.
@@ -536,7 +586,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
     Example: Spectral analysis for 2m temperature from downscaling and reference (ground truth) data.
     :param ds: xarray.Dataset with input data
     :param data_vars: List of variable names from ds for spectral analysis 
-    :param plt_dir: Directory to save plot files
+    :param plot_dir: Directory to save plot files
     :param labels: List of labels for each variable
     :param varname: Physical name of quantity
     :param var_unit: Physical unit of quantity
@@ -546,6 +596,9 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
     :param plt_kwargs: Additional keyword arguments for plotting that are parsed to the plot_power_spectra-method
     """
     func_logger = logging.getLogger(f"{logger_module_name}.{run_spectral_analysis.__name__}")
+    
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/")
+    os.makedirs(metric_dir, exist_ok=True)
 
     # check if number of vairables for spectral analysis and labels are equal
     ds_vars, labels = to_list(data_vars), to_list(labels)
@@ -568,15 +621,16 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
     ds_ps = get_spectrum_exps(ds, ds_vars, info, lcutoff=lcutoff, re=re) 
 
     # create plot
-    os.makedirs(plt_dir, exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
     colors = plt_kwargs.pop("colors", ["navy", "green"])
 
-    plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_all.png")
+    plt_fname = os.path.join(plot_dir, f"{varname}_power_spectrum_all.png")
+    plt_kwargs["title"] = "Power spectrum YEAR"
     plot_power_spectra(ds_ps, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
                        x_coord="wavenumber", **plt_kwargs)
     
     # save power spectrum to netCDF
-    fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_all.nc')
+    fname_nc = os.path.join(metric_dir, f'{varname}_power_spectrum_all.nc')
 
     func_logger.debug(f"Save power spectrum to {fname_nc}...")
     ds_ps.to_netcdf(fname_nc)
@@ -589,19 +643,20 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plt_dir: str, la
 
         ds_ps_sea = get_spectrum_exps(ds_sea, ds_vars, info, lcutoff=lcutoff, re=re)
 
-        plt_fname = os.path.join(plt_dir, f"{varname}_power_spectrum_{sea}.png")
+        plt_fname = os.path.join(plot_dir, f"{varname}_power_spectrum_{sea}.png")
+        plt_kwargs["title"] = f"Power spectrum {sea}"
         plot_power_spectra(ds_ps_sea, {varname: var_unit_spec}, labels, plt_fname, colors= colors,
                            x_coord="wavenumber", **plt_kwargs)
         
         # save power spectrum to netCDF
-        fname_nc = os.path.join(plt_dir, f'{varname}_power_spectrum_{sea}.nc')
+        fname_nc = os.path.join(metric_dir, f'{varname}_power_spectrum_{sea}.nc')
 
         func_logger.debug(f"Save power spectrum to {fname_nc}...")
         ds_ps_sea.to_netcdf(fname_nc)
         
 
 def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plt_dir: str, patch_size = (6, 6)):
+                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6)):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -611,7 +666,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     :param norm: Normalization object
     :param score_name: Name of score to compute feature importance
     :param data_loader_opt: Data loader options that will be parsed to the make_tf_dataset_allmem-method
-    :param plt_dir: Directory to save plot files
+    :param plot_dir: Directory to save plot files
     :param patch_size: Patch size for feature importance analysis
     """
     # get local logger
@@ -624,7 +679,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     
     # get reference score
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
-    score_file = os.path.join(plt_dir, "metric_files", f"eval_{score_name}_year.nc")
+    score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     ds_score = xr.open_dataset(score_file)
@@ -634,7 +689,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
 
     # plot feature importance scores in a box-plot with whiskers where each variable is a box
-    plt_fname = os.path.join(plt_dir, f"feature_importance_{score_name}.png")
+    plt_fname = os.path.join(plot_dir, f"feature_importance_{score_name}.png")
 
     func_logger.debug(f"Plot feature importance-analysis results into file '{plt_fname}'.")
     create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
@@ -711,14 +766,14 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
 
     return score_all
 
-def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
+def run_comparison_plots(ds, plot_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
     """
     Run comparison plots for a given number of samples. The samples will be picked based on the performance 
     of the downscaling model in terms of the provided score.
     For instance, for nsamples=100 and score_name='rmse', samples with an RMSE corresponding to
     the 0th, 1st, 2nd, ... 100th percentile will be selected.
     :param ds: xarray.Dataset providing the downscaled and reference/ground truth data
-    :param plt_dir: Directory to save plot files
+    :param plot_dir: Directory to save plot files
     :param score_name: Name of score to determine which samples to plot
     :param model_type: Type of model
     :param nsamples: Number of samples to plot
@@ -730,10 +785,11 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
     func_logger = logging.getLogger(f"{logger_module_name}.{run_comparison_plots.__name__}")
 
     # create output-directories if necessary
-    os.makedirs(plt_dir, exist_ok=True)
+    os.makedirs(plot_dir, exist_ok=True)
 
     # get score data
-    score_file = os.path.join(plt_dir, "..", "metric_files", f"eval_{score_name}_year.nc")
+    metric_dir = plot_dir.replace("/plots/", "/metric_files/").replace("/comparison_plots", "/temporal_evaluation")
+    score_file = os.path.join(metric_dir, f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
         raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
     
@@ -760,13 +816,55 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
         kwargs_now = kwargs.copy()
         date_str = (pd.to_datetime(t.values)).strftime("%Y%m%dT%H00")
         quantile_now = f"{(i+1) / nsamples:.3f}".replace(".", "p")
-        fname = os.path.join(plt_dir, f"{model_type}_{varname}_{date_str}_{score_name}_q{quantile_now}.png")
+        fname = os.path.join(plot_dir, f"{model_type}_{varname}_{date_str}_{score_name}_q{quantile_now}.png")
         if varname == "t2m" and seasonal_levels:
            kwargs_now["levels"] = get_season_t2m_levels(t.values)
+           kwargs_now["suptitle"] = f"{date_str} {score_name.upper()} q{quantile_now.replace('p', '.')}"
         pool.apply_async(plot_comparison_maps, (ds.sel({"time": t}) + offset, fname), kwargs_now, error_callback=errorhandler)
         
     pool.close()
     pool.join()
+
+def run_aggregate_scores(model, varname, metric_dir, metric_list, **kwargs):
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_aggregate_scores.__name__}")
+
+    # create output-directories if necessary
+    os.makedirs(metric_dir, exist_ok=True)
+
+    # load scores from precalculated metrics
+    scores_dict = {
+        "model": [],
+        "time": [],
+        "varname": [],
+        "score_name": [],
+        "value": [],
+    }
+    temporal_eval_metric_dir = metric_dir.replace("aggregate_scores", "temporal_evaluation")
+    for metric_iter in metric_list:
+        for time_agg in ["year", "MAM", "JJA", "SON", "DJF"]:
+            try:
+                score_iter = xr.open_dataset(os.path.join(temporal_eval_metric_dir, f"eval_{metric_iter}_{time_agg}.nc"))[f"{metric_iter}_mean"]
+                score_iter_mean = np.nanmean(score_iter)
+            except FileNotFoundError:
+                # set the aggregated value to nan if file is not calculated and log a warning
+                func_logger.warning(
+                    f"Metric file {os.path.join(temporal_eval_metric_dir, f'eval_{metric_iter}_{time_agg}.nc')} "
+                    f" for {model = } {time_agg = } {varname = } {metric_iter = } does"
+                    " not exist. Filling with NaN."
+                )
+                score_iter_mean = np.nan
+
+            scores_dict["model"].append(model)
+            scores_dict["time"].append(time_agg.upper())
+            scores_dict["varname"].append(varname)
+            scores_dict["score_name"].append(metric_iter)
+            scores_dict["value"].append(score_iter_mean)
+
+    scores_df = pd.DataFrame(scores_dict)
+    fname_csv = os.path.join(metric_dir, "scores.csv")
+    func_logger.debug(f"Saving scores to {fname_csv}...")
+    scores_df.to_csv(fname_csv)
 
 class TemporalEvaluation(AbstractMetricEvaluation):
     """
@@ -780,6 +878,9 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
+
+        # add varname to plotting kwargs
+        plt_kwargs["varname"] = self.varname
 
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
@@ -801,23 +902,28 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         if self.varname == "t2m":
             eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
                          "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                         }
-        elif self.varname == "wind":
-            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.5, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None}}
-                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}}
-        elif self.varname == "irradiance":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
-                         "bias": {"score_unit": "W/m^2", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "W/m^2", "value_range": (0.1, 0.3), "ref_line": None},
-                         "fss": {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]},
+        elif self.varname == "ws100m":
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
                         }
+        elif self.varname == "glob_rad":
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (50., 250.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "value_range": (-20., 35.), "ref_line": 0, "relative": False},
+                         "rmse_relative": {"score_unit": "1", "value_range": (0., 1.), "ref_line": None, "relative": True}, 
+                         "bias_relative": {"score_unit": "1", "value_range": (-0.5, 0.5), "ref_line": 0, "relative": True},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.2), "ref_line": 1.},
+                         "me_std": {"score_unit": "W/m^2", "value_range": (0., 70.), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None},
+                        }
+            if FSS_available:
+                eval_dict["fss"] = {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -840,13 +946,11 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         self.proj = proj
         
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
-        
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
-            _ = run_evaluation_spatial(score_engine, metric, plot_dir=os.path.join(self.plt_dir, f"{metric}_spatial"), 
+            _ = run_evaluation_spatial(score_engine, metric, plot_dir=self.plt_dir, 
                                        dims=self.spatial_dims, projection=self.proj, **self.model_info, 
                                        **metric_config, **plt_kwargs)
 
@@ -856,11 +960,20 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         If the variable for evaluation is unknown, eval_dict cannot be None.
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
-        if self.varname in ["t2m", "wind"]:
-            lvl_bias = np.arange(-2, 2.1, .1)
-            lvl_rmse =  np.arange(0., 3.1, 0.2)
-            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
-                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        lvl_bias = np.arange(-2, 2.1, .1)
+        lvl_rmse =  np.arange(0., 3.1, 0.2)
+        if self.varname == "t2m":
+            eval_dict = {"rmse": {"score_unit": "K", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "K", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "ws100m":
+            eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "glob_rad":
+            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False},
+                         "rmse_relative": {"score_unit": "1", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
+                         "bias_relative": {"score_unit": "1", "levels": lvl_bias, "cmap_name": "seismic", "relative": True}
+                        }
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
