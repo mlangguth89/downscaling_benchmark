@@ -165,6 +165,12 @@ def results_from_inference_lightning(model_base_dir: Union[Path, str], exp_name:
     # convert to xarray
     y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
 
+    # for the global radiance downscaling task, we need to rescale the data
+    if tar_varname == "glob_rad_pp_ratio_tar":
+        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        y_pred = y_pred * ds_test["tisr_tar"]
+        tar_varname = "glob_rad_pp_tar"
+    
     # write inference data to netCDf
     ncfile_out = nc_dir.joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
     func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")
@@ -492,8 +498,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
 
     return trained_model, model_info      
         
-
-def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str,**kwargs):
+def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **kwargs):
     """
     Create line plots of desired evaluation metric. Evaluation metric must have a time-dimension
     :param score_engine: Score engine object to comput evaluation metric
@@ -521,8 +526,28 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     nboots = kwargs.pop("nboots", 1000)
     block_length = kwargs.pop("block_length", 5)
 
+    # build score specific kwargs
+    # fss, rmse, bias, mse
+    score_kwargs = {key: kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
+    
+    func_logger.debug(kwargs)
+    if score_kwargs["relative"]:
+        score_suffix = "_relative"
+        score_unit = "1"
+    else:
+        score_suffix = ""
+
+    
+    score_all = score_engine(score_name, **score_kwargs)
+    
+    # include threshold value in naming style for fss
+    if score_name == "fss":
+        score_suffix = f"_thres_{score_kwargs['thres']}"
+
+    score_name = f"{score_name}{score_suffix}"
+    func_logger.debug(score_name)
+    
     func_logger.info(f"Start evaluation in terms of {score_name}")
-    score_all = score_engine(score_name)
 
     func_logger.info(f"Globally averaged {score_name}: {score_all.mean().values:.4f} {score_unit}, " +
                      f"standard deviation: {score_all.std().values:.4f}")  
@@ -531,11 +556,15 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_hourly_mean = score_hourly_all.mean()
 
     score_hourly_mean_b = bootstrap_grouped_hourly(score_hourly_all, score_hourly_mean, block_length, nboots)   
+    
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}"
+    fname = os.path.join(plot_dir, f"{fname_base}.png")
 
+    
     # create plots
     plot_metric_line(score_hourly_mean, score_hourly_mean_b.quantile(quantiles[0], dim="iboot"), score_hourly_mean_b.quantile(quantiles[1], dim="iboot"),
                      model_name, {score_name.upper(): score_unit},
-                     os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}.png"), **kwargs)
+                     fname, **kwargs)
 
     # save scores to netCDF
     fname_nc = os.path.join(metric_dir, f'eval_{score_name}_year.nc')
@@ -549,6 +578,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
     score_seas = score_all.groupby("time.season")
 
     for sea, score_sea in score_seas:
+        fname = os.path.join(plot_dir, f"{fname_base}_{sea}.png")
         score_sea_hh = score_sea.groupby("time.hour")
         score_sea_hh_mean = score_sea_hh.mean()
         score_sea_hh_mean_b = bootstrap_grouped_hourly(score_sea_hh, score_sea_hh_mean, block_length, nboots)  
@@ -558,7 +588,7 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         
         plot_metric_line(score_sea_hh_mean, score_sea_hh_mean_b.quantile(quantiles[0], dim="iboot"), score_sea_hh_mean_b.quantile(quantiles[1], dim="iboot"),
                          model_name, {score_name.upper(): score_unit},
-                         os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{sea}.png"), **kwargs)
+                         fname, **kwargs)
         
         # save scores to netCDF
         fname_nc = os.path.join(metric_dir, f'eval_{score_name}_{sea}.nc')
@@ -567,7 +597,6 @@ def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir
         ds_sea.to_netcdf(fname_nc)
 
     return score_all
-
 
 def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str, 
                            dims = ["rlat", "rlon"], **plt_kwargs):
@@ -581,32 +610,44 @@ def run_evaluation_spatial(score_engine, score_name: str, plot_dir: str,
     func_logger = logging.getLogger(f"{logger_module_name}.{run_evaluation_spatial.__name__}")
     
     os.makedirs(plot_dir, exist_ok=True)
-
     model_type = plt_kwargs.pop("model_type", "sha_wgan")
     # ad-hoc fix to remove unnecessary keyword arguments
     for key in ["model_longname", "nsubmodels", "model_dir", "hparams_dict"]:
         _ = plt_kwargs.pop(key, None)
-
-    score_all = score_engine(score_name)
-
+    
+    # build score specific kwargs
+    # fss, rmse, bias, mse
+    score_kwargs = {key: plt_kwargs.pop(key, None) for key in ["relative", "window", "thres"]}
+    score_all = score_engine(score_name, **score_kwargs)
+        
+    if score_kwargs["relative"]:
+        score_suffix = "_relative"
+        score_unit = "1"
+    else:
+        score_suffix = ""
+    
+    score_name = f"{score_name}{score_suffix}"
+    
+    fname_base = f"downscaling_{model_type}_{score_name.lower()}{score_suffix}"
     score_mean = score_all.mean(dim="time")
-    fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_avg_map.png")
+    fname = os.path.join(plot_dir, f"{fname_base}_avg_map.png")
     plot_score_map(score_mean, fname, dims=dims,
                      title=f"{score_name.upper()} (avg.)", **plt_kwargs)
 
     score_hourly_mean = score_all.groupby("time.hour").mean(dim=["time"])
-    for hh in range(24):
+    hours_in_data = score_hourly_mean.hour.values
+    for hh in hours_in_data:
         func_logger.debug(f"Evaluation for {hh:02d} UTC")
-        fname = os.path.join(plot_dir, f"downscaling_{model_type}_{score_name.lower()}_{hh:02d}_map.png")
+        fname = os.path.join(plot_dir, f"{fname_base}_{hh:02d}_map.png")
         plot_score_map(score_hourly_mean.sel({"hour": hh}), fname,
                        dims=dims, title=f"{score_name.upper()} {hh:02d} UTC", **plt_kwargs)
 
-    for hh in range(24):
+    for hh in hours_in_data:
         score_now = score_all.isel({"time": score_all.time.dt.hour == hh}).groupby("time.season").mean(dim="time")
         for sea in score_now["season"]:
             func_logger.debug(f"Evaluation for season '{str(sea.values)}' at {hh:02d} UTC")
             fname = os.path.join(plot_dir,
-                                 f"downscaling_{model_type}_{score_name.lower()}_{sea.values}_{hh:02d}_map.png")
+                                 f"{fname_base}_{sea.values}_{hh:02d}_map.png")
             plot_score_map(score_now.sel({"season": sea}), fname, dims=dims,
                            title=f"{score_name} {sea.values} {hh:02d} UTC", **plt_kwargs)
 
@@ -924,7 +965,7 @@ def run_comparison_plots(ds, plt_dir, score_name, model_type, nsamples = 200, of
 
     # run parallelized plotting
     nworkers = min(int(mp.cpu_count()/2), nsamples, 96)
-    pool = mp.Pool(processes=nworkers)
+    pool = Pool(processes=nworkers)
     func_logger.info(f"Start parallelized plotting of comparison plots for {nsamples} samples over {nworkers} workers...")
 
     def errorhandler(exc):
@@ -954,9 +995,16 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
+        
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
+            # fss needs a dedicated loop for multiple threshold inputs
+            if metric == "fss":
+                if isinstance(metric_config["thres"], list):
+                    thres_list = metric_config.pop("thres")
+                    for thres in thres_list:
+                        _ = run_evaluation_time(score_engine, metric, plot_dir=self.plt_dir, thres=thres, **metric_config, **self.model_info, **plt_kwargs)
+                    continue
             _ = run_evaluation_time(score_engine, metric, plot_dir=self.plt_dir, **metric_config, **self.model_info, **plt_kwargs)
 
     def get_default_config(self, eval_dict):
@@ -966,16 +1014,22 @@ class TemporalEvaluation(AbstractMetricEvaluation):
         :param eval_dict: Custom configuration dictionary. Can be None for known variables.
         """
         if self.varname == "t2m":
-            eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0},
+            eval_dict = {"rmse": {"score_unit": "K", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "K", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
                          "me_std": {"score_unit": "K", "value_range": (0.1, 0.3), "ref_line": None},
                          "ralsd": {"score_unit": "dB", "value_range": (0., 5.), "ref_line": None}}
         elif self.varname == "wind":
-            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None}, 
-                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0},
-                         "grad_amplitude": {"score_unit": "1", "value_range": (0.5, 1.1), "ref_line": 1.},
-                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.4), "ref_line": None}}
+            eval_dict = {"rmse": {"score_unit": "m/s", "value_range": (0., 3.), "ref_line": None, "relative": False}, 
+                         "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.1), "ref_line": 1.},
+                         "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None}}
+        elif self.varname == "glob_rad":
+            eval_dict = {"mae": {"score_unit": "W m**-2", "value_range": (0., 0.5), "ref_line": None, "relative": True},
+                         "rmse": {"score_unit": "W m**-2", "value_range": (0., 0.7), "ref_line": None, "relative": True}, 
+                         "bias": {"score_unit": "W m**-2", "value_range": (-0.25, 0.25), "ref_line": 0, "relative": True},
+                         "grad_amplitude": {"score_unit": "1", "value_range": (0., 1.05), "ref_line": 1.},
+                         "me_std": {"score_unit": "W m**-2", "value_range": (5, 100), "ref_line": None}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \
@@ -996,12 +1050,10 @@ class SpatialEvaluation(AbstractMetricEvaluation):
 
         self.spatial_dims = spatial_dims
         self.proj = proj
-
-    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
         
+    def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
         # get score engine
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
-
         # run evaluation for each metric
         for metric, metric_config in self.evaluation_dict.items():
             _ = run_evaluation_spatial(score_engine, metric, plot_dir=os.path.join(self.plt_dir, f"{metric}_spatial"), 
@@ -1017,8 +1069,13 @@ class SpatialEvaluation(AbstractMetricEvaluation):
         if self.varname in ["t2m", "wind"]:
             lvl_bias = np.arange(-2, 2.1, .1)
             lvl_rmse =  np.arange(0., 3.1, 0.2)
-            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r"}, 
-                         "bias": {"levels": lvl_bias, "cmap_name": "seismic"}}
+            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False}, 
+                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        elif self.varname == "glob_rad":
+            lvl_bias = np.arange(-.5, .5, .05)
+            lvl_rmse =  np.arange(0., 0.8, 0.05)
+            eval_dict = {"rmse": {"levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True}, 
+                         "bias": {"levels": lvl_bias, "cmap_name": "seismic", "relative": True}}
         else:
             if eval_dict is None:
                 raise ValueError(f"No default configuration available for variable {self.varname}. " + \

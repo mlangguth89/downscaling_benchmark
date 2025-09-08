@@ -118,7 +118,7 @@ def lightning_main(parser_args):
         ttrain_load = None
     
     if write_norm:
-        data_norm.save_norm_to_file(os.path.join(model_savedir, "norm.json"))
+        data_norm.save_norms_to_file(os.path.join(model_savedir, "norm.json"))
     
     # validation
     t0_val = timer()
@@ -155,6 +155,7 @@ def lightning_main(parser_args):
                       enable_progress_bar=True,
                       max_epochs=ds_obj_train.nfiles_merged*model.swinir.hparams['nepochs'],
                       check_val_every_n_epoch=ds_obj_train.nfiles_merged,
+                      gradient_clip_val=0.5,
                       num_nodes=1,
                       devices=4,
                       accelerator='cuda',

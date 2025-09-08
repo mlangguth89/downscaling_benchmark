@@ -45,9 +45,9 @@ datadir=/p/scratch/hclimrep/maelstrom/downscaling/downscaling_benchmark_dataset/
 model_basedir=../trained_models/
 outdir=${BASE_DIR}/trained_models/
 config_postprocess=../config/postprocessing/config_postprocess_t2m_test.json
-ckpt=epoch=563-step=142692.ckpt
+ckpt=epoch=599-step=151200.ckpt
 
-exp_name=ankit_swinir_128
+exp_name=ankit_swinir_new_lr_12_wihtout_zbranch_biasfree_conv_128
 dataset=benchmark_t2m
 
 # run job

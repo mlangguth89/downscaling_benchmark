@@ -459,7 +459,6 @@ def prepare_torch_dataset(datadir: str, dataset_name: str, ds_dict: dict, hparam
         bs_train = ds_dict["batch_size"]
         nepochs = hparams_dict["nepochs"]
 
-    print(stream_mode)
     
     if "*" in fname_or_pattern:                                             # do not load all data into memory
         ds_obj = StreamMonthlyNetCDF(stream_mode, datadir, fname_or_pattern, nfiles_merge=ds_dict["num_files"],
@@ -1078,7 +1077,6 @@ class StreamMonthlyNetCDF(object):
             self.all_vars = self.static_predictor_list + self.all_vars     # ordering important to ensure that predictors come first (cf. make_tf_dataset_allmem-method)!
             self.n_predictors += len(self.static_predictor_list) 
 
-        print("all_vars",self.all_vars)
         self.data_xy_dim = self.get_nxy_dim(ds_all) 
         # sanity check on shapes of predictors, predictands and static predictors depending on stream_mode
         self.check_data_shapes()    
@@ -1089,7 +1087,7 @@ class StreamMonthlyNetCDF(object):
         if not norm_obj:
             vars2norm = {**predictors, **static_predictors, **predictands}
             # norm_obj must be freshly instantiated (triggering later parameter retrieval)
-            self.data_norm = GeneralNormalizer(vars2norm, norms_dims)  # TO-DO: Allow for arbitrary normalization
+            self.data_norm = GeneralNormalizer(vars2norm, norm_dims)  # TO-DO: Allow for arbitrary normalization
             _ = self.data_norm.get_stats_from_data(ds_all)
             self.normalization_time = timer() - t0
         else:

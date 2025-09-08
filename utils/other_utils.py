@@ -547,7 +547,8 @@ def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
 
     # get variable-specific normalizer and perform denormalization
     norm_var = norm.get_normalizer_for_var(varname)
-
+    
+    print(varname)
     mout_xr = norm_var.denormalize(mout_xr, varname=varname)
 
     return mout_xr

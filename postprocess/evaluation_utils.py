@@ -1,4 +1,3 @@
-
 # SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
@@ -10,7 +9,7 @@ Collection of statistical evaluation methods used in postprocess.py.
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2024-04-19"
-__updated__ = "2024-09-03"
+__updated__ = "2025-05-16"
 
 from typing import Union, List
 import logging
@@ -166,7 +165,8 @@ def perform_block_bootstrap_metric(metric: da_or_ds, dim_name: str, block_length
     if nblocks < 10:
         err_mess = f"Less than 10 blocks are present with given block length {block_length:d}. Too less for bootstrapping."
         func_logger.error(err_mess, stack_info=True, exc_info=True)
-        raise ValueError(err_mess)
+        return None
+        #raise ValueError(err_mess)
 
     # precompute metrics of block
     for iblock in np.arange(nblocks):
@@ -463,5 +463,3 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
     da_permute = da_permute.transpose(*dims_orig)
 
     return da_permute
-                                 
-
