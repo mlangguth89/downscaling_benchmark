@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -8,7 +8,7 @@ Abstract class to perform normalization on data
 
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
-__update__ = "2023-01-31"
+__update__ = "2025-02-17"
 
 from abc import ABC, abstractmethod
 from typing import Union, List
@@ -41,10 +41,13 @@ class Normalize(ABC):
         # if not isinstance(data, xr.DataArray):
         #    raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
 
-        _ = self._check_norm_dims(data)
+        #_ = self._check_norm_dims(data)
         # do the computation
         norm_stats = self.get_required_stats(data, **stats)
-        norm_stats = Normalize.match_datatype(data, *norm_stats)
+        if norm_stats is None:     # normalizing method does not have data-dependant parameters
+            norm_stats = ()
+        else:
+            norm_stats = Normalize.match_datatype(data, *norm_stats)
         data_norm = self.normalize_data(data, *norm_stats)
 
         return data_norm
@@ -60,10 +63,13 @@ class Normalize(ABC):
         # if not isinstance(data, xr.DataArray):
         #    raise TypeError(f"Passed data must be a xarray.DataArray, but is of type {str(type(data))}.")
 
-        _ = self._check_norm_dims(data)
+        #_ = self._check_norm_dims(data)
         # do the computation
         norm_stats = self.get_required_stats(data, **stats)
-        norm_stats = Normalize.match_datatype(data, *norm_stats)
+        if norm_stats is None:     # normalizing method does not have data-dependant parameters
+            norm_stats = ()
+        else:
+            norm_stats = Normalize.match_datatype(data, *norm_stats)
         data_denorm = self.denormalize_data(data, *norm_stats)
 
         return data_denorm
@@ -207,4 +213,5 @@ class Normalize(ABC):
         Function to denormalize data.
         """
         pass
+
 

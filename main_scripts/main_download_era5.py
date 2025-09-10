@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2022 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -66,8 +66,10 @@ if __name__ == "__main__":
                         help="Start year of ERA5-data request.")
     parser.add_argument("--year_end", "-end", dest="end", type=int, default=2019,
                         help="End year of ERA5-data request.")
-    parser.add_argument("--nworkers", "-nw", dest="nowrkers", type=int, default=4,
+    parser.add_argument("--nworkers", "-nw", dest="nworkers", type=int, default=4,
                         help="Number of workers to download ERA5 data.")
+    parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, default="dummy_exp",
+                        help="Name of experiment for which data is downloaded.")
     parser.add_argument("--format", "-format", dest="format", type=str, default="netcdf",
                         help="Format of downloaded data.")
 

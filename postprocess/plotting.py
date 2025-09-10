@@ -1,7 +1,6 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
-
 """
 Methods for creating plots.
 """
@@ -9,7 +8,7 @@ Methods for creating plots.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-01-20"
-__update__ = "2024-04-16"
+__update__ = "2024-09-06"
 
 # for processing data
 import os
@@ -90,8 +89,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
     """
     # add nice coast- and borderlines
     ax_plot.coastlines(linewidth=0.75)
-    ax_plot.coastlines(linewidth=0.75)
-    ax_plot.add_feature(cartopy.feature.BORDERS)
+    ax_plot.add_feature(cartopy.feature.BORDERS, linewidth=0.75)
 
     # adjust extent and ticks as well as axis-label
     ax_plot.set_xticks(np.arange(0., 360. + 0.1, 5.))  # ,crs=projection_crs)
@@ -99,6 +97,7 @@ def decorate_plot(ax_plot, plot_xlabel=True, plot_ylabel=True, extent=[2., 18., 
 
     ax_plot.set_extent(extent)    # , crs=prj_crs)
     ax_plot.minorticks_on()
+    ax_plot.grid(True, linewidth=0.5, color="gray")
     ax_plot.tick_params(axis="both", which="both", direction="out", labelsize=fs)
 
     # some labels
@@ -119,6 +118,7 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     :param kwargs: valid keyword arguments are
                   - vars2plt: list of two variables to compare
                   - titles: list of plot titles for both variables
+                  - suptitle: suptitle for plot
                   - proj_data: cartopy projection-object for the data
                   - proj_plot: cartopy projection-object for the plotted domain
                   - dims: name of spatial coordinates, e.g. ["lat", "lon"]
@@ -126,9 +126,9 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
                   - fs: basic font size of labels
                   - figsize: figure size in inch
                   - levels: levels for plotting both variables
-                  - cbar_name: colorbar name used for plotting both variables
+                  - cmap_name: colormap name used for plotting both variables
                   - levels_diff: levels for the difference plot 
-                  - cbar_name_diff: colorbar name for the difference plots
+                  - cmap_name_diff: colormap name for the difference plots
                   - cbar_shrink: shrink-factor for the vertically aligned colorbar
                   - further valid arguments of ax.pcolormesh           
     """
@@ -137,6 +137,7 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     # check and get keyword arguments
     vars2plt = kwargs.pop("vars2plt", None)
     titles = kwargs.pop("titles", None)
+    suptitle = kwargs.pop("suptitle", None)
     proj_data = kwargs.pop("proj_data", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
                       
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
@@ -146,10 +147,10 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
 
     # get levels and colorbars for 'normal' data plots and difference plots
     levels = kwargs.pop("levels", np.arange(-22., 42.1, 2))
-    cbar_name = kwargs.pop("cbar_name", "jet")
+    cmap_name = kwargs.pop("cmap_name", "jet")
     levels_diff = kwargs.pop("levels_diff", np.arange(-5.25, 5.01, 0.5))
-    cbar_name_diff = kwargs.pop("cbar_name_diff", "PuOr_r")
-    cbar_shrink = .8
+    cmap_name_diff = kwargs.pop("cmap_name_diff", "PuOr_r")
+    cbar_shrink = .7
     
     labels = kwargs.pop("models",None)
 
@@ -178,7 +179,7 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
                                       f"must match number of titles ({len(titles)})."
     else:
         titles = [var.replace("_", " ").upper() for var in vars2plt]
-    
+
     # get coordinate data
     try:
         var_now = ds[0][vars2plt[0]]
@@ -191,13 +192,13 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)
 
     # get colormap
-    cmap, norm = get_cmap_norm(levels, cbar_name)
-    cmap_diff, norm_diff = get_cmap_norm(levels_diff, cbar_name_diff)
+    cmap, norm = get_cmap_norm(levels, cmap_name)
+    cmap_diff, norm_diff = get_cmap_norm(levels_diff, cmap_name_diff)
     
     # create plot objects
     fig, axs = plt.subplots(len(ds), 4, figsize=figsize, sharex=True, sharey=True, gridspec_kw={'width_ratios':[1,3.5,3.5,3.5]},
                             subplot_kw={"projection": proj_plot})
-
+        
     # perform plotting
     for i,ax_x in enumerate(axs):
         axs[i,0].text(0.5,0.5,labels[i],horizontalalignment='center',verticalalignment='center',transform=axs[i,0].transAxes,fontsize=24)
@@ -216,16 +217,26 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
                                          transform=proj_data, **kwargs)
                 axs[i,j+1].set_title(f"Difference between {labels[i]} and groundtruth", size=fs)
             
-            # custom plot apparance
-            axs[i,j+1] = decorate_plot(axs[i,j+1], extent=extent, fs=fs)
+            plt_data = ax.pcolormesh(lon_e, lat_e, data.values, cmap=cmap, norm=norm, transform=proj_data,
+                                    **kwargs)
+            ax.set_title(titles[i], size=fs)                
+        else:
+            diff = np.squeeze(ds[vars2plt[1]] - ds[vars2plt[0]])
+            plt_diff = ax.pcolormesh(lon_e, lat_e, diff.values, cmap=cmap_diff, norm=norm_diff,
+                                     transform=proj_data, **kwargs)
+            ax.set_title(f"Difference (avg. {np.nanmean(diff.values):.2f})", size=fs)
+        
+        # custom plot apparance
+        ax = decorate_plot(ax, plot_ylabel= i == 0, extent=extent, fs=fs)
     
+    plt.suptitle(suptitle, fontsize=fs, y=0.9)
     # add colorbars
     cbar = fig.colorbar(plt_data, ax=axs[0:len(ds),1:3], orientation="vertical", shrink=cbar_shrink,
             pad=-0.03, ticks=lvl[1::2], fraction=0.02)
     cbar.ax.tick_params(labelsize=fs-2)
     
-    cbar_diff = fig.colorbar(plt_diff, ax=axs[0:len(ds)], orientation="vertical", shrink=cbar_shrink*0.5,
-                             pad=0.02, ticks=lvl_diff[1::2], fraction=0.02)
+    cbar_diff = fig.colorbar(plt_diff, ax=axs[-1], orientation="vertical", shrink=cbar_shrink*2,
+                             pad=.04, ticks=lvl_diff[1::2], fraction=0.029)
     cbar_diff.ax.tick_params(labelsize=fs-2)
 
     # save plot and close figure
@@ -238,12 +249,13 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
         fig.savefig(plt_fname, bbox_inches="tight", dpi=300)
     plt.close(fig)
 
-    
-def plot_score_map(score, plt_fname, **kwargs):
+def plot_score_map(score: xr.DataArray, plt_fname: str, metric: dict, model_name: str, **kwargs):
     """
     Plots a score on a map.
     :param score: DataArray containing the score
     :param plt_fname: path to output filename
+    :param metric: Dictionary containing metric name and unit 
+    :param model_name: Name of model
     :param kwargs: valid keyword arguments are
                   - title: title of the plot
                   - proj_data: cartopy projection-object for the data
@@ -253,22 +265,22 @@ def plot_score_map(score, plt_fname, **kwargs):
                   - fs: basic font size of labels
                   - figsize: figure size in inch
                   - levels: levels for plotting the score
-                  - cbar_name: colorbar name used for plotting the score
+                  - cmap_name: colormap name used for plotting the score
                   - further valid arguments of ax.pcolormesh
     """
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_map_score.__name__}")
+    func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_score_map.__name__}")
 
     # get keyword arguments
     title = kwargs.pop("title", "Score")
     proj_data = kwargs.pop("proj_data", ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25))
     proj_plot = kwargs.pop("proj_plot", ccrs.PlateCarree())
     dims = kwargs.pop("dims", ["rlat", "rlon"])
-    extent = kwargs.pop("extent", [3., 16.5, 43., 51.5])
-    fs = kwargs.pop("fs", 16)
+    extent = kwargs.pop("extent", [3.2, 16.4, 43., 51.5])
+    fs = kwargs.pop("fs", 22)
     figsize = kwargs.pop("figsize", (12, 8))
     # get levels and colorbars 
     levels = kwargs.pop("levels", np.arange(-5.25, 5.01, 0.5))
-    cbar_name = kwargs.pop("cbar_name", "PuOr_r")
+    cmap_name = kwargs.pop("cmap_name", "PuOr_r")
 
     # auxiliary variables
     lvl = np.asarray(levels)
@@ -284,7 +296,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     lat_e, lon_e = np.arange(lat[0]-dy/2, lat[-1]+dy, dy), np.arange(lon[0]-dx/2, lon[-1]+dx, dx)  
 
     # get colormap
-    cmap, norm = get_cmap_norm(levels, cbar_name)
+    cmap, norm = get_cmap_norm(levels, cmap_name)
     # create plot objects
     fig, ax = plt.subplots(1, 1, figsize=figsize, subplot_kw={"projection": proj_plot})
 
@@ -296,8 +308,26 @@ def plot_score_map(score, plt_fname, **kwargs):
 
     ax.set_title(title, size=fs)
 
+    # add text with avg value
+    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+    avg_value = np.nanmean(score.values)
+    escaped_metric_name = metric_name.replace("_", r"\_")
+    unit = metric_unit if metric_unit != "1" else ""
+    label = rf"$\overline{{{escaped_metric_name}}}_{{{model_name}}} = {avg_value:.2f}\ {unit}$".rstrip(" ")
+
+    # add legend
+    ax.text(
+        0.02, 0.97,               # x, y in axis fraction coordinates
+        label,
+        transform=ax.transAxes,  # interpret as axes coords (0–1)
+        fontsize=fs-2,
+        verticalalignment='top',
+        horizontalalignment='left',
+        bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+    )
+
     # add colorbar
-    cax = fig.add_axes([0.92, 0.15, 0.02, 0.7])
+    cax = fig.add_axes([0.91, 0.12, 0.025, 0.75])
     cbar = fig.colorbar(plt1, cax=cax, orientation="vertical", ticks=lvl[1::2])
     cbar.ax.tick_params(labelsize=fs-2)
 
@@ -307,8 +337,7 @@ def plot_score_map(score, plt_fname, **kwargs):
     fig.savefig(plt_fname, bbox_inches="tight")
     plt.close(fig)
 
-
-def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Union[xr.DataArray,List[xr.DataArray]], data_down: Union[xr.DataArray,List[xr.DataArray]], model_name: Union[str,List[str]], metric: dict,
+def plot_metric_line(data: xr.DataArray, data_up: xr.DataArray, data_down: xr.DataArray, model_name: str, metric: dict,
                      plt_fname: str, varname: str = "T2m", x_coord: str = "hour", **kwargs):
     """
     Create line plots of 2D-metric data (e.g. metric plotted against time) 
@@ -322,6 +351,7 @@ def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Unio
     :param x_coord: Name of coordinate along which metric is plotted
     :param kwargs: Keyword arguments for plotting
                    Valid keys are:
+                    - title: title of the plot
                     - "linestyle": linestyle of plot, default: "k-"
                     - "error_color": color of error bounds, default: "blue"
                     - "value_range": range of y-axis, default: (0., 4.)
@@ -344,8 +374,9 @@ def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Unio
         
   
     # get some plot parameters
-    linestyle = kwargs.pop("linestyle", ["k-", "b-", "y-","r-"])
-    err_col = kwargs.pop("error_color", ["grey", "blue", "orange", "red"])
+    title = kwargs.pop("title", "Score")
+    linestyle = kwargs.pop("linestyle", "k-")
+    err_col = kwargs.pop("error_color", "blue")
     val_range = kwargs.pop("value_range", (0., 4.))
     fs = kwargs.pop("fs", 16)
     ref_line = kwargs.pop("ref_line", None)
@@ -354,32 +385,51 @@ def plot_metric_line(data: Union[xr.DataArray,List[xr.DataArray]], data_up: Unio
     save = kwargs.pop("savefig", True)
 
     fig, (ax) = plt.subplots(1, 1)
-    for i ,exp in enumerate(data):
-        ax.plot(data[i][x_coord].values, data[i].values, linestyle[i], label=model_name[i], **kwargs)
-        if data_up is not None:
-            ax.fill_between(data[i][x_coord].values, data_down[i].values, data_up[i].values, facecolor=err_col[i],
-                        alpha=0.2)
+
+    # plot data
+    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+    avg_value = np.nanmean(data.values)
+    escaped_metric_name = metric_name.replace("_", r"\_")
+    unit = metric_unit if metric_unit != "1" else ""
+    label = rf"$\overline{{{escaped_metric_name}}}_{{{model_name}}} = {avg_value:.2f}\ {unit}$".rstrip(" ")
+
+    ax.plot(data[x_coord].values, data.values, linestyle, **kwargs)
+    ax.fill_between(data[x_coord].values, data_down.values, data_up.values, facecolor=err_col,
+                    alpha=0.2)
     if ref_line is not None:
         nval = np.shape(data[0][x_coord].values)[0]
         ax.plot(data[0][x_coord].values, np.full(nval, ref_line), ref_linestyle)
     ax.set_ylim(*val_range)
+    ax.set_xlim(0, 23)
+    
     # label axis
     ax.set_xlabel("daytime [UTC]", fontsize=fs)
-    metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
     ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
     ax.legend(fontsize=fs-3, loc="upper right")
 
-    if show:
-        plt.show()
+    # add legend
+    ax.text(
+        0.98, 0.97,               # x, y in axis fraction coordinates
+        label,
+        transform=ax.transAxes,  # interpret as axes coords (0–1)
+        fontsize=fs-2,
+        verticalalignment='top',
+        horizontalalignment='right',
+        bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+    )
+    ax.set_title(title.upper(), size=fs)
 
-    if save:
-        # save plot and close figure
-        plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-        func_logger.info(f"Save plot in file '{plt_fname}'")
-        fig.savefig(plt_fname, bbox_inches="tight")
+    # enable grid
+    ax.grid(alpha=0.5)
+
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
+    fig.savefig(plt_fname, bbox_inches="tight")
+    plt.tight_layout()
+    fig.savefig(plt_fname)
     plt.close(fig)
-
 
 # write the create_box_plot function
 def create_box_plot(data, plt_fname: str, **plt_kwargs):
@@ -402,27 +452,27 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
                         - "labels": labels of boxes, default: None
                         - other valid arguments of plt.boxplot
     """    
-    func_logger = logging.getLogger(f"postprocess.{module_name}.{create_box_plot.__name__}")
+    func_logger = logging.getLogger(f"postpess.{module_name}.{create_box_plot.__name__}")
 
-    # get some plot parameters
-    val_range = plt_kwargs.get("value_range", [None])
-    widths = plt_kwargs.get("widths", None)
-    #colors = plt_kwargs.get("colors", None)
-    colors = plt_kwargs.pop("colors",['pink', 'lightblue', 'lightgreen','blue'])
-    fs = plt_kwargs.get("fs", 16)
-    ref_line = plt_kwargs.get("ref_line", 1.)
-    ref_linestyle = plt_kwargs.get("ref_linestyle", "k-")
-    title = plt_kwargs.get("title", "")
-    ylabel = plt_kwargs.get("ylabel", "")
-    xlabel = plt_kwargs.get("xlabel", "")
-    yticks = plt_kwargs.get("yticks", None)
-    labels = plt_kwargs.get("labels", None)
+    # get parametrs that should not be parsed to the boxplot-method 
+    figsize = plt_kwargs.pop("figsize", (12, 8))
+    val_range = plt_kwargs.pop("value_range", [None])
+    widths = plt_kwargs.pop("widths", .3)
+    colors = plt_kwargs.pop("colors","black")
+    fs = plt_kwargs.pop("fs", 16)
+    ref_line = plt_kwargs.pop("ref_line", 1.)
+    ref_linestyle = plt_kwargs.pop("ref_linestyle", "-")
+    title = plt_kwargs.pop("title", "")
+    ylabel = plt_kwargs.pop("ylabel", "")
+    xlabel = plt_kwargs.pop("xlabel", "")
+    yticks = plt_kwargs.pop("yticks", None)
+    labels = plt_kwargs.pop("labels", None)
     
     show = plt_kwargs.pop("show",False)
     savefig = plt_kwargs.pop("savefig",True)
     # create box whiskers plot with matplotlib
-    fig, ax = plt.subplots(figsize=(12, 8))
-    
+    fig, ax = plt.subplots(figsize=figsize)
+
     bp = plt.boxplot(data, widths=widths, labels=labels, patch_artist=True, **plt_kwargs)
     
     # modify fliers
@@ -465,6 +515,101 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     
     return True
 
+def plot_histograms(data1: xr.DataArray, data2: xr.DataArray, plt_fname: str, labels: List[str] = ["Sha WGAN", "COSMO REA6"], iqd: float = None, **kwargs):
+    """
+    Plot histograms of two data arrays side-by-side, e.g. the forecast/downscaled data and the ground truth.
+    :param ds: Dataset containing the data arrays to plot (must have two data arrays if vars2plt is not provided)
+    :param plt_fname: File name of plot
+    :param labels: List of labels for the two data arrays
+    :param iqd: Interquartile distance to be printed in the plot
+    :param kwargs: Keyword arguments for plotting
+                     Valid keys are:
+                        - title: title of plot, default: None
+                        - bin_width: width of bins, default: 1
+                        - bin_range: range of bins, default: None
+                        - fs: font size of labels, default: 16
+                        - figsize: figure size in inch, default: (9, 6)
+                        - xlabel: label of x-axis, default: "data"
+                        - colors: list of colors for each data array, default: ["navy", "green"]
+                        - yscale: scale of y-axis, default: "log"
+                        - other valid arguments of ax.bar
+    """
+    func_logger = logging.getLogger(f"postpess.{module_name}.{plot_histograms.__name__}")
+    
+    # get keyword parameters
+    title = kwargs.pop("title", None)
+    bin_width = kwargs.pop("bin_width", 1)
+    bin_range = kwargs.pop("bin_width", None)  # will be deduced automatically by default
+    fs = kwargs.pop("fs", 16)
+    figsize = kwargs.pop("figsize", (9, 6))
+    xlabel = kwargs.pop("xlabel", "data")
+    colors = kwargs.pop("colors", ["navy", "green"])
+    yscale = kwargs.pop("yscale", "log")     
+    
+    if not bin_range:
+        min_val, max_val = int(min(data1.min(), data2.min())), int(max(data1.max(), data2.max())) + bin_width + 1
+        bin_range = (min_val, max_val)
+        
+    bin_ranges = np.arange(*bin_range, bin_width)
+    
+    das = [data1, data2]
+    counts, edges = [], []
+    
+    # generate histogram data
+    for da in das:
+        counts_now, edges_now = np.histogram(da, bins=bin_ranges)
+        counts.append(counts_now), edges.append(edges_now)
+        
+    # make plot object
+    fig, ax = plt.subplots(1, 1, figsize=figsize)
+    
+    # define width of bars and get their positions
+    edges_ref = edges[0]
+    bar_width = (edges_ref[1] - edges_ref[0]) / 2.5
+     
+    positions = [edges_ref[:-1], edges_ref[:-1] + bar_width]  # Left edge of each bin for first bar and shifted second bar to the right
+    
+    # Plot the histograms side-by-side
+    for i, _ in enumerate(das):
+        ax.bar(positions[i], counts[i], width=bar_width, color=colors[i], alpha=0.7, label=labels[i], **kwargs)
+        
+    # configure axis and add labels 
+    ax.set_xlabel(xlabel, fontsize=fs)
+    ax.set_ylabel('Counts', fontsize=fs)
+    ax.set_yscale(yscale)
+    ax.tick_params(axis='both', which='major', labelsize=fs-2)
+    # add title if desired
+    if title:
+        ax.set_title(title.upper(), fontsize=fs)
+        
+    ax.legend(fontsize=fs-2, loc="upper right")
+    
+    # adjust yscale to ensure that enough space for legend is available
+    if yscale == "log":
+        ymax_auto = int(np.log10(ax.get_ylim()[1])) 
+        ymax = np.power(10, ymax_auto + 2)
+    else:
+        ymax = ax.get_ylim()[1]*1.2
+    
+    ax.set_ylim(None, ymax)
+        
+    # add IQD-value
+    if iqd:
+        ax.text(
+            0.02, 0.97,               # x, y in axis fraction coordinates
+            f"IQD = {iqd:.2e}",
+            transform=ax.transAxes,  # interpret as axes coords (0–1)
+            fontsize=fs-2,
+            verticalalignment='top',
+            horizontalalignment='left',
+            bbox=dict(boxstyle='round', facecolor='white', alpha=1, edgecolor='gray')
+        )
+        
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    func_logger.info(f"Save plot in file '{plt_fname}'")
+    fig.savefig(plt_fname, bbox_inches="tight")
+    plt.close(fig)
 
 def plot_skills(data:xr.Dataset, plt_fname, labels=["U-Net (Sha)", "WGAN (Sha)", "DeepRU", "SwinIR"], metric="RMSE",**kwargs):
     
@@ -520,12 +665,14 @@ def plot_power_spectra(ds_ps: Union[xr.Dataset,List[xr.Dataset]], var_info: dict
     :param x_coord: Name of coordinate along which spectrum is plotted
     :param kwargs: Keyword arguments for plotting
                    Valid keys are:
-                     - "linestyle": linestyle of plot, default: "-"
-                     - "linewidth": linewidth of plot, default: 2.
-                     - "colors": list of colors for each experiment, default: nexps*["blue"]
-                     - "fs": font size of labels, default: 16
+                     - title: title of the plot
+                     - linestyle: linestyle of plot, default: "-"
+                     - linewidth: linewidth of plot, default: 2.
+                     - colors: list of colors for each experiment, default: nexps*["blue"]
+                     - fs: font size of labels, default: 16
                      - other valid arguments of ax.plot
     """
+    func_logger = logging.getLogger(f"postpess.{module_name}.{plot_power_spectra.__name__}")
 
     # auxiliary variables
     exps = list(ds_ps.data_vars)
@@ -533,6 +680,7 @@ def plot_power_spectra(ds_ps: Union[xr.Dataset,List[xr.Dataset]], var_info: dict
     assert nexps == len(labels), "Number of labels must match number of experiments"
 
     # get some plot parameters
+    title = kwargs.pop("title", "Power spectrum")
     linestyle = kwargs.pop("linestyle", "-")
     lw = kwargs.pop("linewidth", 2.)
     cols = kwargs.pop("colors", nexps*["blue","red","green","brown"])
@@ -549,11 +697,14 @@ def plot_power_spectra(ds_ps: Union[xr.Dataset,List[xr.Dataset]], var_info: dict
     ax.set_yscale("log")
     ax.set_title(f"")
     # label axis
-    ax.set_xlabel("wavenumber", fontsize=fs)
+    ax.set_xlabel("Wavenumber", fontsize=fs)
     var_name, spectrum_unit = list(var_info.keys())[0], list(var_info.values())[0]
     ax.set_ylabel(f"Spectral power {var_name} [{spectrum_unit}]", fontsize=fs)
     ax.tick_params(axis="both", which="both", direction="out", labelsize=fs-2)
     ax.legend(fontsize=fs-2)
+    ax.set_title(title, size=fs)
+    ax.grid(True, linewidth=0.5, color="gray", alpha=0.75)
+    ax.grid(True, which="minor", linewidth=0.25, color="gray", alpha=0.75)
     
     if show:
         plt.show()
@@ -561,23 +712,23 @@ def plot_power_spectra(ds_ps: Union[xr.Dataset,List[xr.Dataset]], var_info: dict
     if savefig:
         # save plot and close figure
         plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
-        print(f"Save plot in file '{plt_fname}'")
+        func_logger.info(f"Save plot in file '{plt_fname}'")
         plt.tight_layout()
         fig.savefig(plt_fname)
     plt.close(fig)
 
-def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, opt: dict = {}):
+def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray, plt_fname: str, **kwargs):
     """
     Creates conditional quantile plot
     :param quantile_panel: quantile panel created by calculate_cond_quantiles
     :param data_marginal: data array for which histogram will be plotted
     :param plt_fname: name of the plot-file to be created
-    :param opt: options to customize the plot
+    :param kwargs: options to customize the plot
                 Valid keys are:
-                - "figsize": tuple with dimensions of figure, default: (12, 6)
-                - "fs_title": font size of title, default: 16)
-                - "fs_axis_label": font size of axis labels, default: fs_title-2
-                - "plt_title": title of plot, default: ""
+                - title: title of plot, default: ""
+                - figsize: tuple with dimensions of figure, default: (12, 6)
+                - fs_title: font size of title, default: 16)
+                - fs_axis_label: font size of axis labels, default: fs_title-2
     :return:
     """
     func_logger = logging.getLogger(f"postprocess.{module_name}.{plot_cond_quantile.__name__}") 
@@ -591,8 +742,8 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     if list(quantile_panel.coords) != ["bin_center", "quantile"]:
         raise ValueError("The coordinates of quantile_panel must be ['bin_center', 'quantile']. Use calculate_cond_quantiles to calculate them.")
 
-    if opt is None:
-        opt = {}
+    if kwargs is None:
+        kwargs = {}
 
     func_logger.info(f"Start creating conditional quantile plot in file '{plt_fname}'")
 
@@ -624,10 +775,10 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     lw_all[int(nquantiles/2)] = 1.5
 
     # start plotting
-    figsize = opt.get("figsize", (12, 6))
-    fs_title = opt.get("fs_axis_title", 16)
-    fs_label = opt.get("fs_axis_label", fs_title-2)
-    plt_title = opt.get("plt_title", "")
+    title = kwargs.get("title", "Q-Q plot")
+    figsize = kwargs.get("figsize", (7, 5))
+    fs_title = kwargs.get("fs_axis_title", 16)
+    fs_label = kwargs.get("fs_axis_label", fs_title-2)
     fig, ax = plt.subplots(figsize=figsize)
 
     # plot reference line
@@ -654,11 +805,13 @@ def plot_cond_quantile(quantile_panel: xr.DataArray, data_marginal: xr.DataArray
     # ensure that histogram extends to the lower half of the plot
     y2_max_power = int(np.log10(ax2.get_ylim()[1]))
     ax2.set(ylim=(1.e00, np.power(10, y2_max_power*4)), yticks=np.logspace(0, y2_max_power+1, y2_max_power+2)) 
-    ax2.set_title(plt_title)
+    ax2.set_title(title.upper(), fontsize=fs_title)
 
     ax.tick_params(axis="both", labelsize=fs_label)
     ax2.tick_params(axis="both", labelsize=fs_label)
 
+    ax.grid(True, linewidth=0.5, alpha=0.5)
+    plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close("all")
 

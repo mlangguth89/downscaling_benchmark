@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
+#
+# SPDX-License-Identifier: MIT
+
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-14"
@@ -162,7 +166,7 @@ class CDO(RunTool):
         if not known_operators[-1]:
             known_operators = known_operators[:-1]
 
-        known_operators.extend(["-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
+        known_operators.extend(["-L", "-f", "-z", "-v", "-V", "-O", "-s", "--eccodes", "--reduce_dim"])
 
         return known_operators
 

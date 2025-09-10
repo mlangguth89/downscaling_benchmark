@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -9,11 +9,12 @@ Model engine to get and instantiate known models.
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-15"
-__update__ = "2024-03-21"
+__update__ = "2025-03-28"
 
 # import modules
 from unet_model import Sha_UNet, DeepRU_UNet
-from wgan_model import WGAN, Critic_Simple
+from wgan_model import Sha_WGAN, Critic_Simple
+from harris_wgan_model import Harris_WGAN, GeneratorHarris, CriticHarris
 from other_utils import to_list
 
 class ModelEngine(object):
@@ -34,9 +35,10 @@ class ModelEngine(object):
 
     known_models = {"sha_unet": (Sha_UNet,),
                     "deepru": (DeepRU_UNet,),
-                    "sha_wgan": (WGAN, Sha_UNet, Critic_Simple)}
+                    "sha_wgan": (Sha_WGAN, Sha_UNet, Critic_Simple),
+                    "harris_wgan": (Harris_WGAN, GeneratorHarris, CriticHarris)}
     
-    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN"]
+    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN"]
     
     assert len(known_models) == len(long_names), f"Conflicting number of known_models ({len(known_models)})" + \
                                                  f" and long_names ({len(long_names)})."
@@ -66,6 +68,9 @@ class ModelEngine(object):
             else:
                 submodels = model_list[1:]
                 model = target_model(*submodels, **model_args)
+
+                # Fix to ensure that correct modelname is set
+                model.modelname = self.modelname
         except Exception as e:
             err_str = str(e)
             raise RuntimeError(f"Failed to instantiate the model. The following error occured: \n {err_str}")

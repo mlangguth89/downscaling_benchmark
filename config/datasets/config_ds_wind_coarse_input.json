@@ -1,0 +1,13 @@
+{
+  "num_files": 22,
+  "norm_dims": ["time", "rlat_in", "rlon_in", "rlat_tar", "rlon_tar"],
+  "batch_size": 16,
+  "steps_per_epoch": 4012,
+  "varname_z": {"hsurf_tar": "zscore"},
+  "predictands": {"ws_100m_tar": "log_zscore"},
+  "predictors": {"msl_in": "zscore", "blh_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "z_pl700_in": "zscore",
+	         "z_pl850_in": "zscore", "z_pl500_in": "zscore", "ws100m_in": "log_zscore", "ws_ml137_in": "log_zscore",
+		 "ws_ml135_in": "log_zscore", "ws_ml131_in": "log_zscore", "ws_ml127_in": "log_zscore", 
+		 "ws_ml122_in": "log_zscore", "ws_ml115_in": "log_zscore"},
+  "static_predictors": {"hsurf_tar": "zscore", "fr_land_tar": "zscore"}
+}

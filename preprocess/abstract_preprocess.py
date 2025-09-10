@@ -1,15 +1,15 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
-__update__ = "2022-04-29"
+__update__ = "2024-07-26"
 
 import os, glob
 from abc import ABC
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 from collections import OrderedDict
 import logging
 import numpy as np
@@ -25,7 +25,7 @@ class AbstractPreprocessing(ABC):
     Abstract class for preprocessing
     """
     def __init__(self, name_preprocess: str, source_dir_in: str, source_dir_out: str, predictors: dict,
-                 predictands: dict, target_dir: str):
+                 predictands: dict, target_dir: str, upscale_source: bool = True):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
@@ -35,6 +35,7 @@ class AbstractPreprocessing(ABC):
         :param predictors: dictionary defining predictors for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param predictands: dictionary defining predictands for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param target_dir: directory to store preprocessed data
+        :param upscale_source: boolean to upscale (bi-linearly) coarse-grained input data on target grid 
         """
         method = AbstractPreprocessing.__init__.__name__
         # sanity check
@@ -54,6 +55,7 @@ class AbstractPreprocessing(ABC):
         self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
+        self.upscale_source = upscale_source
         self.downscaling_task = "real"
         if self.source_dir_in == self.source_dir_out:
             self.downscaling_task = "pure"
@@ -140,30 +142,54 @@ class AbstractPreprocessing(ABC):
         return target_dir
 
     @staticmethod
-    def merge_two_netcdf(nc1: str, nc2: str, nc_tar: str, merge_dim: str ="time"):
+    def merge_multiple_netcdf(nc_files: list, nc_tar: str, merge_dim: str = "time"):
         """
-        Merge datasets from two netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in both
-        datasets must not coincide, but can overlap. The data will then be merged for the intersection of both datums.
-        :param nc1: path to first netCDF-file to merge; dataset must include dimension merge_dim
-        :param nc2: path to second netCDF-file to merge; dataset must include dimension merge_dim
-        :param merge_dim: name of dimension along which datsets will be merged
-        :param nc_tar: path to netCDf-file of merged dataset
+        Merge datasets from multiple netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in 
+        all datasets must not coincide, but can overlap. The data will then be merged for the intersection of all datums.
+        
+        :param nc_files: list of paths to netCDF-files to merge; each dataset must include dimension merge_dim
+        :param nc_tar: path to netCDF-file of merged dataset
+        :param merge_dim: name of dimension along which datasets will be merged
         :return stat: status if merging was successful
         """
-        ds1, ds2 = xr.open_dataset(nc1), xr.open_dataset(nc2)
+        datasets = [xr.open_dataset(nc) for nc in nc_files]
+        
+        # Collect the intersection of all time dimensions
+        joint_times = set(datasets[0][merge_dim].values)
+        for ds in datasets[1:]:
+            joint_times &= set(ds[merge_dim].values)
+        
+        joint_times = sorted(list(joint_times))
 
-        times1, times2 = list(ds1[merge_dim].values), list(ds2[merge_dim].values)
-        joint_times = sorted(list(set(times1) & set(times2)))
-
-        stat = True
-        #try:
-        if not joint_times: raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
-        ds_merged = xr.merge([ds1.sel({merge_dim: joint_times}), ds2.sel({merge_dim: joint_times})])
+        if not joint_times:
+            raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
+        
+        # Select the intersection of the datasets
+        ds_merged = xr.merge([ds.sel({merge_dim: joint_times}) for ds in datasets])
+        
+        # Save the merged dataset to a new netCDF file
         ds_merged.to_netcdf(nc_tar)
-        #except:
-        #    stat = False
+        
+        return True
+    
+    @staticmethod
+    def rename_variables(nc_file, rename_dict: Dict):
+        """
+        Rename variables in netCDf-file.
+        Can also be used for coordinate variables since their renaming with NCO's ncrename is notoriously buggy, 
+        see also: https://nco.sourceforge.net/nco.html#bug_nc4_rename. 
+        Note that variables can also be 
+        :param nc_file: path to netCDF-file
+        :param rename_dict: dictionary for renaming coordinates/variables (cf. xarray's rename-method)
+        """
+        # read data and rename variables/coordinates
+        ds = xr.open_dataset(nc_file)
+        ds = ds.rename(rename_dict)
 
-        return stat
+        # delete existing file to create updated netCDF-file
+        os.remove(nc_file)
+        ds.to_netcdf(nc_file)
+
 
     @staticmethod
     def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
@@ -199,12 +225,11 @@ class AbstractPreprocessing(ABC):
 
         try:
             ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))
-            stat = True
         except RuntimeError as err:
             print("Could not rename all parsed variables: {0}".format(",".join(varnames)))
             raise err
 
-        return stat
+        return True
 
     @classmethod
     def print_implement_err(cls, method):
@@ -310,9 +335,9 @@ class CDOGridDes(ABC):
 
         # get parameters for auxiliary grid description files
         if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n, prefac_first = 2, -(downscaling_fac+1)/2
+            add_n, prefac_first = 2, -(downscaling_fac+1)/2.
         else:
-            add_n, prefac_first = 0, (downscaling_fac-1)/2
+            add_n, prefac_first = 0, (downscaling_fac-1)/2.
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 

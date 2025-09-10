@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
 __author__ = "Michael Langguth"
 __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2023-12-11"
-__update__ = "2024-04-11"
+__update__ = "2024-09-16"
 
 # import modules
 import os
@@ -47,7 +47,7 @@ class AbstractModelClass(ABC):
         """Predefine internal attributes for model and loss."""
         make_keras_pickable()
         self.__model = None
-        self.model_name = self.__class__.__name__
+        self.modelname = self.__class__.__name__
         self.__custom_objects = {}
         self.__fit_options = {}
         self.__allowed_compile_options = {'optimizer': None,
@@ -73,6 +73,19 @@ class AbstractModelClass(ABC):
         self.model.history = hist
         if compile is True:
             self.model.compile(**self.compile_options)
+
+    def load_inference_model(self, model_dir: str, compile: bool = False) -> keras.Model:
+        """
+        Load a model from a given directory.
+
+        :param model_dir: directory where the model is saved
+        :param compile: if True, the model will be compiled with the compile options
+        :return: the loaded model
+        """
+        model = keras.models.load_model(model_dir, custom_objects=self.custom_objects)
+        if compile is True:
+            model.compile(**self.compile_options)
+        return model
 
     def __getattr__(self, name: str) -> Any:
         """
@@ -342,11 +355,12 @@ class AbstractModelClass(ABC):
             kwargs.update(kwargs["Padding2D"].allowed_paddings)
         self.custom_objects = kwargs
 
-    def save_hparams_to_json(self):
+    def save_hparams_to_json(self, fname: str):
         """
         Save hyperparameters to json file und savedir.
+        :param fname: filename to save hyperparameters
         """
-        with open(os.path.join(self.savedir, f"config_{self.model_name.lower()}.json"), "w") as f:
+        with open(fname, "w") as f:
             json.dump(self.hparams, f)
 
     def count_params(self):

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -51,12 +51,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
     const_vars = ["z", "lsm"]
 
     def __init__(self, in_datadir: str, tar_datadir: str, out_dir: str, in_constfile: str, tar_constfile: str,
-                 grid_des_tar: str, predictors: dict, predictands: dict, downscaling_fac: int = 4):
+                 grid_des_tar: str, predictors: dict, predictands: dict, upscale_source: bool = True, downscaling_fac: int = 4):
         """
         Initialize class for ERA5-to-COSMO REA6 downscaling class.
         """
         # initialize from ERA5-to-IFS class (parent class)
-        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands,
+        super().__init__(in_datadir, tar_datadir, out_dir, in_constfile, grid_des_tar, predictors, predictands, upscale_source,
                          downscaling_fac)
 
         self.name_preprocess = "preprocess_ERA5_to_CREA6"
@@ -65,7 +65,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not os.path.isfile(tar_constfile):
             raise FileNotFoundError("Could not find file with invariant data '{0}'.".format(tar_constfile))
         self.constfile_tar = tar_constfile
-        self.era5_sfc_vars, self.era5_ml_vars = self.organize_predictors(predictors)
+        self.era5_sfc_vars, self.era5_ml_vars, self.era5_pl_vars = self.organize_predictors(predictors)
         self.crea6_sfc_vars, self.crea6_const_vars = self.organize_predictands(predictands)
         
         self.all_predictors = self.get_predictor_varnames(predictors)     # mlvars_era5 is a dictionary
@@ -156,7 +156,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
     @staticmethod
     def organize_predictors(predictors: dict) -> Tuple[List, dict]:
-        known_vartypes = ["sf", "ml"]
+        known_vartypes = ["sf", "ml", "pl"]
 
         pred_vartypes = list(predictors.keys())
         lpred_vartypes = [pred_vartype in known_vartypes for pred_vartype in pred_vartypes]
@@ -165,7 +165,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             raise ValueError("The following variables types in the predictor-dictionary are unknown: {0}"
                              .format(", ".join(unknown_vartypes)))
 
-        sfvars, mlvars = predictors.get("sf", None), predictors.get("ml", None)
+        sfvars, mlvars, plvars = predictors.get("sf", None), predictors.get("ml", None), predictors.get("pl", None)
 
         # some checks (level information redundant for surface-variables)
         if sfvars:
@@ -189,7 +189,21 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
             if not all([all([isinstance(v, (int, float)) for v in mlvars[k]]) for k in mlvars.keys()]):
                 raise TypeError("All values of mlvars must be lists of numbers.")
 
-        return sfvars, mlvars
+        if plvars:
+            # plvars must be a dictionary with variable names as keys and model-levels as values
+            if not isinstance(plvars, dict):
+                raise TypeError("plvars must be a dictionary with variable names as keys and model-levels as values.")
+            # check if all keys are strings
+            if not all([isinstance(k, str) for k in plvars.keys()]):
+                raise TypeError("All keys of plvars must be strings.")
+            # check if all values are lists
+            if not all([isinstance(v, list) for v in plvars.values()]):
+                raise TypeError("All values of plvars must be lists.")
+            # check if all values are list of numbers
+            if not all([all([isinstance(v, (int, float)) for v in plvars[k]]) for k in plvars.keys()]):
+                raise TypeError("All values of plvars must be lists of numbers.")            
+
+        return sfvars, mlvars, plvars
 
     @staticmethod
     def organize_predictands(predictands: dict) -> Tuple[List, List]:
@@ -245,8 +259,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         """
         Retrieve the predictor data from the monthly ERA5-datafiles.
         """
-        cdo = PreprocessERA5toCREA6.cdo
-
         year_month_str = year_month.strftime("%Y-%m")   
 
         lfail = False
@@ -266,9 +278,19 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         # process multi-level variables of ERA5 (predictors)
         if self.era5_ml_vars and not lfail:
             logger.info(f"Process model level variables for {year_month_str} of ERA5.")
-            nwarn, file2merge = self.run_preproc_func(self.process_era5_ml, [era5_dir, year_month, dest_dir],
+            nwarn, file2merge = self.run_preproc_func(self.process_era5_vl, [era5_dir, year_month, dest_dir, "ml"],
                                                       {}, logger, nwarn, max_warn)
             
+            if file2merge:
+                filelist.append(file2merge)
+            else:
+                lfail = True   # skip month if some data is missing
+
+        # process pressure-level variables of ERA5 (predictors)
+        if self.era5_pl_vars and not lfail:
+            logger.info(f"Process pressure level variables for {year_month_str} of ERA5.")
+            nwarn, file2merge = self.run_preproc_func(self.process_era5_vl, [era5_dir, year_month, dest_dir, "pl"],
+                                                      {}, logger, nwarn, max_warn)
             if file2merge:
                 filelist.append(file2merge)
             else:
@@ -281,9 +303,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
                 # just rename file
                 logger.info("Rename temporary ERA5-file to monthly netCDF-file '{0}'".format(monthly_file))
                 os.rename(filelist[0], monthly_file)
+                filelist.pop(0)
             else:
                 logger.info("Merge temporary ERA5-files to hourly netCDF-file '{0}'".format(monthly_file))
-                cdo.run(filelist + [monthly_file], OrderedDict([("merge", "")]))
+                _ = self.merge_multiple_netcdf(filelist, monthly_file)
         
         if os.path.isfile(monthly_file):
             remove_files(filelist, lbreak=True)
@@ -307,8 +330,6 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         :return: path to processed netCDF-datafile and updated number of warnings
         """
         cdo  = PreprocessERA5toCREA6.cdo
-        #ncrename = PreprocessERA5toCREA6.ncrename
-        #ncap2, ncks = PreprocessERA5toCREA6.ncap2, PreprocessERA5toCREA6.ncks
 
         date_str, date_str2 = date2op.strftime("%Y-%m"), date2op.strftime("%Y%m")
         final_file = os.path.join(dest_dir, f"preproc_crea6_{date_str}.nc")
@@ -326,6 +347,10 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if self.crea6_sfc_vars:
             for var in self.crea6_sfc_vars:    # TBD: Put the following into a callable object to accumulate nwarn and filelist
                 dfile_in = os.path.join(dirin, "2D", var.upper(), f"{var.upper()}.2D.{date_str2}.grb")
+                ## check if grib- or netcdf-file is available
+                #if not os.path.isfile(dfile_in):
+                #    dfile_in = dfile_in.replace(".grb", ".nc")
+
                 nwarn, file2merge = self.run_preproc_func(self.process_crea6_2d, [dfile_in, dest_dir, date_str, gdes_tar],
                                                           {}, logger, nwarn, max_warn)
 
@@ -347,15 +372,13 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         else:
             # merge the data
             cdo.run(filelist + [final_file], OrderedDict([("merge", "")]))
-            ## replicate constant data over all timesteps
-            #for const_var in const_vars:
-            #    ncap2.run([final_file, final_file], OrderedDict([("-A", ""),
-            #                                                     ("-s", f"{const_var}z[time,rlat,rlon]={const_var}")]))
-            #    ncks.run([final_file, final_file], OrderedDict([("-O", ""), ("-x", ""), ("-v", const_var)]))
-            #    ncrename.run([final_file], OrderedDict([("-v", f"{const_var}z,{const_var}")]))
 
             # rename variables
             self.add_varname_suffix(final_file, self.all_predictands, "_tar")
+
+            # rename dimension of COSMO REA6-data for clarity if source data is not upscaled
+            if not self.upscale_source: 
+                self.rename_variables(final_file, {"rlat": "rlat_tar", "rlon": "rlon_tar"})
 
         return final_file, nwarn
 
@@ -388,6 +411,7 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # choose variables of interest
         cdo.run([sf_file, ftmp_era5], OrderedDict([("-selname", ",".join(sfvars_dyn))]))
+        print(sfvars_dyn)
 
         if sfvars_stat:
             ftmp_era5_2 = os.path.join(tmp_dir, "era5_invar.nc")
@@ -404,51 +428,53 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return fera5_now
     
-    def process_era5_ml(self, dirin_era5: str, year_month, tmp_dir: str) -> str:
+    def process_era5_vl(self, dirin_era5: str, year_month, tmp_dir: str, vl_type: str) -> str:
         """
         Process multi-level data from ERA5 files by renaming variables
         :param dirin_era5: input directory of ERA5-dataset 
         :param year_month: Date for which data should be processed
         :param tmp_dir: temporary directory to store intermediate files
+        :param vl_type: type of vertical level for which data should be processed ("ml" or "pl")
         :return: path to processed netCDF-datafile
         """
+        assert vl_type in ["ml", "pl"], "vlvl_type must be either 'ml' or 'pl'."
+
+        vl_vars_dict = self.era5_ml_vars if vl_type == "ml" else self.era5_pl_vars
+
         cdo = self.cdo
-        ncrename = self.ncrename
 
         year_month_str = year_month.strftime("%Y-%m")   
 
         # check if ERA5 data file is available
-        ml_file = os.path.join(dirin_era5, f"era5_{year_month_str}.nc")
-        if not os.path.isfile(ml_file):
-            raise FileNotFoundError(f"Could not find ERA5 data file {ml_file}.")
+        vl_file = os.path.join(dirin_era5, f"era5_{year_month_str}.nc")
+        if not os.path.isfile(vl_file):
+            raise FileNotFoundError(f"Could not find ERA5 data file {vl_file}.")
         
-        tmp_patt = os.path.join(tmp_dir, f"era5_{year_month_str}_ml")
+        tmp_patt = os.path.join(tmp_dir, f"era5_{year_month_str}_{vl_type}")
 
         # get list of all unique model levels
-        ml_list = list(set([ml for ml_list in self.era5_ml_vars.values() for ml in ml_list]))
-        mlvars_str = ",".join(self.era5_ml_vars.keys())
+        vl_list = list(set([vl for vl_list in vl_vars_dict.values() for vl in vl_list]))
+        vlvars_str = ",".join(vl_vars_dict.keys())
 
         # split levels into files
-        cdo.run([ml_file, tmp_patt], OrderedDict([("--reduce_dim", ""), ("-splitlevel", ""), ("-selname", mlvars_str)]))
+        cdo.run([vl_file, tmp_patt], OrderedDict([("-L", ""), ("--reduce_dim", ""), ("-splitlevel", ""), ("-selname", vlvars_str)]))
 
         # rename variables in each file
         ftmp_list = []
-        for ml in ml_list:
-            ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_ml{ml:06d}.nc")
+        for vl in vl_list:
+            ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_{vl_type}{vl:06d}.nc")
             if not os.path.isfile(ftmp_era5):
                 raise FileNotFoundError(f"Could not find required file '{ftmp_era5}'.")
 
             # choose variables of interest
-            vars_now = [var for var, ml_list in self.era5_ml_vars.items() if ml in ml_list]
+            vars_now = [var for var, vl_list in vl_vars_dict.items() if vl in vl_list]
 
-            rename_list = [("-v", f"{var},{var}{ml:d}") for var in vars_now]
-            ncrename.run([ftmp_era5], OrderedDict(rename_list))
-
+            self.add_varname_suffix(ftmp_era5, vars_now, f"_{vl_type}{vl:d}")
             ftmp_list.append(ftmp_era5)
 
         # merge all files
-        ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_ml.nc")
-        cdo.run([f"{tmp_patt}*", ftmp_era5], OrderedDict([("-O", ""), ("merge", "")]))
+        ftmp_era5 = os.path.join(tmp_dir, f"era5_{year_month_str}_{vl_type}.nc")
+        _ = self.merge_multiple_netcdf(ftmp_list, ftmp_era5)
 
         # remove temporary files
         remove_files(ftmp_list, lbreak=False)
@@ -476,7 +502,11 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         # sanity check
         if not os.path.isfile(file_2d):
-            FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+            # check if netCDF-file is alternatively available
+            file_2d = file_2d.replace(".grb", ".nc")
+            if not os.path.isfile(file_2d):
+                FileNotFoundError(f"Could not find required COSMO-REA6 file '{file_2d}'.")
+        
         # retrieve variable name back from path to file
         var = os.path.basename(os.path.dirname(file_2d))
         dfile_out = os.path.join(target_dir, f"{var}_{date_str}.nc")
@@ -489,11 +519,12 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         cdo.run([file_2d, dfile_out], OrderedDict([("--reduce_dim", ""), ("-f nc", ""), ("copy", ""),
                                                    ("-sellonlatbox", lonlatbox_str), ("-remapcon", gdes_tar.file)]))
 
-        # rename varibale in resulting file (must be done in hacky manner)
-        varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
-        varname = varname.lstrip("'b").split("\\n")[0].strip()
+        # rename varibale in resulting file for grib-files where they may appear as var11 or similar (must be done in hacky manner)
+        if file_2d.endswith(".grb"):
+            varname = str(sp.check_output(f"cdo showname {dfile_out}", shell=True))
+            varname = varname.lstrip("'b").split("\\n")[0].strip()
 
-        ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
+            ncrename.run([dfile_out], OrderedDict([("-v", f"{varname},{var}")]))
 
         return dfile_out
 
@@ -527,15 +558,15 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
 
         return dfile_out
     
-    def remap_and_merge_data(self, file_in: str, file_tar: str, final_file: str, gdes_coarse: str, gdes_tar: str,
+    def remap_and_merge_data(self, file_in: str, file_tar: str, final_file: str, fgdes_coarse: str, fgdes_tar: str,
                              nwarn: int, max_warn: int) -> int:
         """
         Perform the remapping step on the predictor data and finally merge it with the predictand data
         :param file_in: netCDF-file with predictor data
         :param file_tar: netCDF-file with predictand data
         :param final_file: name of the resulting merged netCDF-file
-        :param gdes_coarse: CDO grid description file corresponding to the coarse-grained predictor data
-        :param gdes_tar: CDO grid description file corresponding to the high-resolved predictand data
+        :param fgdes_coarse: CDO grid description file corresponding to the coarse-grained predictor data
+        :param fgdes_tar: CDO grid description file corresponding to the high-resolved predictand data
         :param nwarn: current number of issued warnings
         :param max_warn: maximum allowed number of warnings
         :return: updated nwarn and resulting merged netCDF-file
@@ -545,32 +576,48 @@ class PreprocessERA5toCREA6(PreprocessERA5toIFS):
         if not file_in.endswith(".nc"):
             raise ValueError(f"Input data-file '{file_in}' must be a netCDF-file.")
         file_in_coa = file_in.replace(".nc", "_coa.nc")
-        file_in_hres = file_in.replace(".nc", "_hres.nc")
+        file_in_merge = file_in.replace(".nc", "_merge.nc")
 
         # remap coarse ERA5-data
-        cdo.run([file_in, file_in_coa], OrderedDict([("-remapcon", gdes_coarse)]))
-        # bi-linear interpolation onto target grid
-        cdo.run([file_in_coa, file_in_hres], OrderedDict([("-remapbil", gdes_tar)]))
+        cdo.run([file_in, file_in_coa], OrderedDict([("-remapcon", fgdes_coarse)]))
+    
+        if self.upscale_source: 
+            # bi-linear interpolation onto target grid
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("-remapbil", fgdes_tar)]))
+        else: 
+            # keep coarse-grained grid, but slice data and rename dimensions
+            # To-Do: Dependency on lextrapolate-flag of create_coarsened_grid_des-method
+            #        Slicing is only required if lextrapolate is True when creating the grid description of the coarse-grained input data
+            #        So far, this is hard-coded in the parent class (cf. l.91 in preprocess_data_era5_to_ifs.py)
+            
+            # Obtain number of grid points for slicing
+            gdes_coa = CDOGridDes(fgdes_coarse)
+            nx, ny = int(gdes_coa.grid_des_dict["xsize"]), int(gdes_coa.grid_des_dict["ysize"])
+
+            cdo.run([file_in_coa, file_in_merge], OrderedDict([("selindexbox", f"2,{nx-1:d},2,{ny-1:d}")]))
+            # rename dimension of ERA5-data
+            self.rename_variables(file_in_merge, {"rlat": "rlat_in", "rlon": "rlon_in"})
 
         # merge input and target data
-        stat = self.merge_two_netcdf(file_in_hres, file_tar, final_file)
+        stat = self.merge_multiple_netcdf([file_in_merge, file_tar], final_file)
 
         if not (stat and os.path.isfile(final_file)):
             nwarn = max_warn + 1
         else:
-            #remove_files([file_in_coa, file_in_hres, file_tar], lbreak=True)
-            # keep file with data that has not been bilinearly interpolated
-            remove_files([file_in_hres, file_tar], lbreak=True)
+            remove_files([file_in_coa, file_in_merge, file_tar], lbreak=True)
 
         return nwarn
     
     @staticmethod
     def get_predictor_varnames(var_dict):
         all_varnames = list(var_dict.get("sf", []))
-        mlvars = var_dict.get("ml", {})
 
-        for mlvar in mlvars:
-            levels = var_dict["ml"].get(mlvar)
-            all_varnames += [f"{mlvar}{lvl}" for lvl in levels]
+        lvl_types = ["ml", "pl"]
+        for vl in lvl_types:
+            vlvars = var_dict.get(vl, {})
+
+            for vlvar in vlvars:
+                levels = var_dict[vl].get(vlvar)
+                all_varnames += [f"{vlvar}_{vl}{lvl}" for lvl in levels]
 
         return all_varnames

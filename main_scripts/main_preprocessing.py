@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
 
@@ -14,12 +14,10 @@ Main script to preprocess data for downscaling applications in MAELSTROM.
 import argparse
 import json as js
 import datetime as dt
-from preprocess_data_unet_tier1 import Preprocess_Unet_Tier1
 from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 from preprocess_data_era5_to_crea6 import PreprocessERA5toCREA6
 
-known_methods = {"Unet_Tier1": Preprocess_Unet_Tier1,
-                 "ERA5_to_IFS": PreprocessERA5toIFS,
+known_methods = {"ERA5_to_IFS": PreprocessERA5toIFS,
                  "ERA5_to_CREA6": PreprocessERA5toCREA6}
 
 def main():
@@ -52,6 +50,8 @@ def main():
                         help="Months of data to be preprocessed.")
     parser.add_argument("--grid_description_target", "-grid_des_tar", dest="grid_des_tar", type=str, required=True,
                         help="Grid description file to define domain of interest (target domain).")
+    parser.add_argument("--upscale_source", "-up_src", dest="upscale_source", default=False, action="store_true",
+                        help="Flag to upscale coarse-grained input data onto target grid when preprocessing.")
     parser.add_argument("--preprocess_method", "-method", dest="method", type=str, required=True,
                         help="Preprocessing method to generate dataset for training, validation and testing.")
     parser.add_argument("--downscaling_factor", "-down_fac", dest="downscaling_fac", type=int, default=None, 

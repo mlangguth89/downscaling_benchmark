@@ -1,7 +1,6 @@
-# SPDX-FileCopyrightText: 2024 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC)
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
-
 """
 Class for calculating scores.
 """
@@ -9,12 +8,18 @@ Class for calculating scores.
 __email__ = "m.langguth@fz-juelich.de"
 __author__ = "Michael Langguth"
 __date__ = "2022-Xx-XX"
-__update__ = "2024-03-25"
+__update__ = "2024-09-06"
 
 from typing import List
+import logging
 import numpy as np
 import xarray as xr
 from skimage.util import view_as_blocks
+from evaluation_utils import get_spectrum
+
+# auxiliary variable for logger
+logger_module_name = f"__main__.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 
 class Scores:
     """
@@ -33,7 +38,12 @@ class Scores:
                              "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
                              "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
                              "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
-                             "me_std": self.calc_mestd}
+                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
+            "iqd": self.calc_iqd,
+            "fss": self.calc_fss,
+            "rmse_relative": self.calc_rmse,
+            "bias_relative": self.calc_bias,
+        }
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
@@ -161,8 +171,11 @@ class Scores:
         Similar to MAE, but provides just a number divided by number of samples along average dimensions.
         :return: L1-error 
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
+        
         if kwargs:
-            print("Passed keyword arguments to calc_l1 are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_l1 are without effect.")   
 
         l1 = np.sum(np.abs(self.data_fcst - self.data_ref))
 
@@ -177,8 +190,11 @@ class Scores:
         Similar to RMSE, but provides just a number divided by number of samples along average dimensions.
         :return: L2-error 
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
+        
         if kwargs:
-            print("Passed keyword arguments to calc_l2 are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_l2 are without effect.")    
 
         l2 = np.sum(np.square(self.data_fcst - self.data_ref))
 
@@ -187,33 +203,76 @@ class Scores:
 
         return l2
     
-    def calc_mae(self, **kwargs):
+    def calc_mae(self, relative: bool = False, **kwargs):
         """
         Calculate mean absolute error (MAE) of forecast data w.r.t. reference data
         :return: MAE averaged over provided dimensions
         """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mae.__name__}")
+
         if kwargs:
-            print("Passed keyword arguments to calc_mae are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_mae are without effect.")    
 
         mae = np.abs(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
+        if relative:
+            func_logger.info(f"kwarg {relative = } => calculating relative mae.")
+            mae = mae / self.data_ref.mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute mae.")
+
         return mae
 
-    def calc_mse(self, **kwargs):
+    def calc_mse(self, relative: bool = False, **kwargs):
         """
         Calculate mse of forecast data w.r.t. reference data
-        :return: averaged mse for each batch example, [batch,fore_hours]
+        :param relative: when True, calculates the relative MSE, otherwise absolute
+        :return: MSE
         """
-        if kwargs:
-            print("Passed keyword arguments to calc_mse are without effect.")
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_mse.__name__}"
+        )
 
+        if kwargs:
+            func_logger.debug(
+                "Passed keyword arguments to calc_mse are without effect."
+            )
+
+        # calculate mse
         mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+        
+        if relative:
+            func_logger.info(f"kwarg {relative = } => calculating relative mse.")
+            mse = mse / np.square(self.data_ref.mean(dim=self.avg_dims))
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute mse.")
 
         return mse
 
-    def calc_rmse(self, **kwargs):
+    def calc_rmse(self, relative: bool = False, **kwargs):
+        """
+        Calculate rmse of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative RMSE, otherwise absolute
+        :return: RMSE
+        """
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
-        rmse = np.sqrt(self.calc_mse(**kwargs))
+        if kwargs:
+            func_logger.debug(
+                "Passed keyword arguments to calc_rmse are without effect."
+            )
+
+        if not relative:
+            func_logger.info(f"kwarg {relative = } => calculating absolute rmse.")
+            rmse = np.sqrt(self.calc_mse())
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating relative rmse.")
+            rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
     
@@ -236,12 +295,30 @@ class Scores:
 
         return acc
 
-    def calc_bias(self, **kwargs):
+    def calc_bias(self, relative: bool = False, **kwargs):
+        """
+        Calculate bias of forecast data w.r.t. reference data
+        :param relative: when True, calculates the relative bias, otherwise absolute
+        :return: bias
+        """
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_bias.__name__}"
+        )
 
         if kwargs:
-            print("Passed keyword arguments to calc_bias are without effect.")
+            func_logger.debug(
+                "Passed keyword arguments to calc_bias are without effect."
+            )
 
+        # calculate bias
         bias = (self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
+
+        if relative:
+            func_logger.info(f"kwarg {relative = } => calculating relative bias.")
+            bias = bias / self.data_ref.mean(dim=self.avg_dims)
+        else:
+            func_logger.info(f"kwarg {relative = } => calculating absolute bias.")
 
         return bias
 
@@ -324,79 +401,8 @@ class Scores:
             ratio_spat_variability = ratio_spat_variability.mean(dim=avg_dims)
 
         return ratio_spat_variability
-    
-    def calc_iqd(self, xnodes=None, nh=0, lfilter_zero=True):
-        """
-        Calculates squared integrated distance between simulation and observational data.
-        Method: Retrieves the empirical CDF, calculates CDF(xnodes) for both data sets and
-                then uses the squared differences at xnodes for trapezodial integration.
-                Note, that xnodes should be selected in a way, that CDF(xvalues) increases
-                more or less continuously by ~0.01 - 0.05 for increasing xnodes-elements
-                to ensure accurate integration.
 
-        :param data_simu : 1D-array of simulation data
-        :param data_obs  : 1D-array of (corresponding) observational data
-        :param xnodes    : x-values used as nodes for integration (optional, automatically set if not given
-                           according to stochastic properties of precipitation data)
-        :param nh        : accumulation period (affects setting of xnodes)
-        :param lfilter_zero: Flag to filter out zero values from CDF calculation
-        :return: integrated quadrated distance between CDF of data_simu and data_obs
-        """
-
-        data_simu = self.data_fcst.values.flatten()
-        data_obs = self.data_ref.values.flatten() 
-
-        # Scarlet: because data_simu and data_obs are flattened anyway this is not needed
-        #if np.ndim(data_simu) != 1 or np.ndim(data_obs) != 1:
-        #    raise ValueError("Input data arrays must be 1D-arrays.")
-
-        if xnodes is None:
-            if nh == 1:
-                xnodes = [0., 0.005, 0.01, 0.015, 0.025, 0.04, 0.06, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6,
-                          0.8, 1., 1.25, 1.5, 1.8, 2.4, 3., 3.75, 4.5, 5.25, 6., 7., 9., 12., 20., 30., 50.]
-            elif 1 < nh <= 6:
-                ### obtained manually based on observational data between May and July 2017
-                ### except for the first step and the highest node-values,
-                ### CDF is increased by 0.03 - 0.05 with every step ensuring accurate integration
-                xnodes = [0.00, 0.005, 0.01, 0.02, 0.04, 0.07, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.7, 0.9, 1.15, 1.5, 1.9, 2.4,
-                         3., 4., 5., 6., 7.5, 10., 15., 25., 40., 60.]
-            else:
-                xnodes = [0.00, 0.01, 0.02, 0.035, 0.05, 0.075, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 1., 1.3, 1.7, 2.1, 2.5,
-                          3., 3.5, 4., 4.75, 5.5, 6.3, 7.1, 8., 9., 10., 12.5, 15., 20., 25., 35., 50., 70., 100.]
-
-        data_simu_filt = data_simu[~np.isnan(data_simu)]
-        data_obs_filt = data_obs[~np.isnan(data_obs)]
-        if lfilter_zero:
-            data_simu_filt = np.sort(data_simu_filt[data_simu_filt > 0.])
-            data_obs_filt  = np.sort(data_obs_filt[data_obs_filt > 0.])
-        else:
-            data_simu_filt = np.sort(data_simu_filt)
-            data_obs_filt  = np.sort(data_obs_filt)
-
-        nd_points_simu = np.shape(data_simu_filt)[0]
-        nd_points_obs  = np.shape(data_obs_filt)[0]
-
-        prob_simu = 1. * np.arange(nd_points_simu)/ (nd_points_simu - 1)
-        prob_obs  = 1. * np.arange(nd_points_obs)/ (nd_points_obs -1)
-
-        cdf_simu = self.get_cdf_of_x(data_simu_filt,prob_simu)
-        cdf_obs  = self.get_cdf_of_x(data_obs_filt,prob_obs)
-
-        yvals_simu = cdf_simu(xnodes)
-        yvals_obs  = cdf_obs(xnodes)
-
-        if yvals_obs[-1] < 0.999:
-            print("CDF of last xnodes {0:5.2f} for observation data is smaller than 99.9%." +
-                  "Consider setting xnodes manually!")
-
-        if yvals_simu[-1] < 0.999:
-            print("CDF of last xnodes {0:5.2f} for simulation data is smaller than 99.9%." +
-                  "Consider setting xnodes manually!")
-
-        # finally, perform trapezodial integration
-        return np.trapz(np.square(yvals_obs - yvals_simu), xnodes)
-
-    def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List):
+    def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List, **kwargs):
         """
         Calculates stable equitable error in probabiliyt space (SEEPS), see Rodwell et al., 2011
         :param seeps_weights: SEEPS-parameter matrix to weight contingency table elements
@@ -449,11 +455,92 @@ class Scores:
         seeps_values = seeps_values_all.mean(dim=self.avg_dims)
 
         return seeps_values
+    
+    def calc_ralsd(self, lonlat_dims: List[str] = ["rlon", "rlat"], lcutoff: bool = True, re: float = 6371.e3, **kwargs):
+        """
+        Calculate radially averaged log-spectral distance (RALSD) between forecast and reference data (see Eq. 8 in Harris et al., 2022, DOI: 10.1029/2022MS003120).
+        Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
+        :param lonlat_dims: list of longitude and latitude dimensions
+        :param lcutoff: flag to apply low-pass filter to spectral data
+        :param re: radius of the spherical Earth
+        :return: RALSD values
+        """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
 
-    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True):
+        # perform spectral analysis for reference and forecast data
+        ps_ref = get_spectrum(self.data_ref, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+        ps_fcst = get_spectrum(self.data_fcst, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+
+        # get number of bins...
+        nbins = np.shape(ps_ref)[-1]
+
+        # ...and calculate RALSD
+        ralsd = np.sqrt(np.sum(np.square(10.*np.log10(ps_ref/ps_fcst)), axis=-1)/nbins)
+
+        # convert to xarray DataArray
+        dims = [dim for dim in self.data_dims if dim not in lonlat_dims]
+        ralsd = xr.DataArray(ralsd, coords={dim: self.data_fcst[dim] for dim in dims}, dims=dims)
+
+        avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
+
+        if avg_dims != self.avg_dims:
+            func_logger.debug(f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}")
+
+
+        # apply further averaging if requested
+        if len(avg_dims) > 0:
+            ralsd = ralsd.mean(dim=avg_dims)
+
+        return ralsd
+    
+    def calc_iqd(self, align_join: str = "exact", steps: int = 1000, **kwargs) -> xr.DataArray:
+        """
+        Calculate the Integrated Quadratic Distance (IQD) between the forecast and reference data in CDF space.
+
+        :param align_join (str, optional): How to align the datasets, cf. join-parameter of xarray.align-method
+        :return: The Integrated Quadratic Distance.
+        """
+        # get local logger
+        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_iqd.__name__}")
+
+        # IQD evaluates the marginal distribution of the data and thus collapes existing dimensions
+        # There, averaging is not meaningful here
+        if self.avg_dims and self.avg_dims != []:
+            func_logger.debug(f"Parsed averaging dimensions ({', '.join(self.avg_dims)}) are ignored.")
+
+        # Align the arrays and sort the data incl. falttening
+        forecast, reference = xr.align(self.data_fcst, self.data_ref, join=align_join)
+        
+        forecast, reference = np.sort(forecast, axis=None), np.sort(reference, axis=None)
+
+        # get empirical CDF-functions for forecast and reference data
+        npoints = len(forecast)
+        cdf_val = 1. * np.arange(npoints)/ (npoints - 1)
+
+        cdf_fcst = self.get_cdf_of_x(forecast, cdf_val)
+        cdf_ref = self.get_cdf_of_x(reference, cdf_val)
+
+        # get integration points        
+        min_val, max_val = min(reference[0], forecast[0]), max(reference[-1], forecast[-1])
+        
+        xnodes = np.linspace(min_val, max_val, num=steps)
+        
+        # calculate CDF at integration ponts...
+        cdf_fcst_x = cdf_fcst(xnodes)
+        cdf_ref_x = cdf_ref(xnodes)  
+
+        # ...and integrate squared difference for IQD
+        iqd = np.trapz(np.square(cdf_ref_x - cdf_fcst_x), xnodes)
+
+        return iqd
+
+
+    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True, **kwargs):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
+        Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
         :param scalar_field: scalar field as data array with latitude and longitude as coordinates
         :param order: order of spatial differential operator
         :param r_e: radius of the sphere
@@ -483,8 +570,51 @@ class Scores:
 
         return var_diff_amplitude
 
+    def calc_fss(
+        self,
+        lonlat_dims: List[str] = ["rlon", "rlat"],
+        window: tuple[int, int] = (8, 8),
+        thres: float = 0.5,
+        **kwargs,
+    ):
+        """
+        Calculates the Fractions Skill Score (FSS) between forecast and reference data.
+        Note that no averaging over the spatial dimensions is possible since
+        the FSS is calculated across spatially sliding windows.
+        :param lonlat_dims: list of longitude and latitude dimensions
+        :param window: size of spatially sliding window (height, width)
+        :param thres: threshold to define events
+        :return: fss-values
+        """
+        # import inside function because it needs a specific env for postprocessing only
+        from scores.spatial import fss_2d
+        # get local logger
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
-    def check_for_coords(self, coord_names_data, dim_query: str, return_index: bool = False):
+        avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
+
+        if avg_dims != self.avg_dims:
+            func_logger.debug(
+                f"Only apply averaging over the follwoing dimensions: {', '.join(avg_dims)}"
+            )
+        func_logger.debug(avg_dims)
+        func_logger.debug(lonlat_dims)
+        fss = fss_2d(
+            self.data_fcst,
+            self.data_ref,
+            event_threshold=thres,
+            window_size=window,
+            spatial_dims=lonlat_dims,
+            reduce_dims=avg_dims,
+            zero_padding=False,
+        )
+
+        return fss
+
+    def check_for_coords(
+        self, coord_names_data, dim_query: str, return_index: bool = False):
         """
         Check if one of the known geographical coordinates is part of the passed list.
         :param coord_names_data: list of coordinate names
@@ -518,4 +648,5 @@ class Scores:
         :return: lambda function converting arbitrary input values to corresponding CDF value
         """
         return lambda xin: np.interp(xin, sample_in, prob_in)
+    
 

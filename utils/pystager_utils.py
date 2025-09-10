@@ -1,10 +1,6 @@
-# ********** Info **********
-# @Creation: 2021-07-25
-# @Update: 2021-07-27
-# @Author: Michael Langguth, based on work by Amirpasha Mozaffari
-# @Site: Juelich supercomputing Centre (JSC) @ FZJ
-# @File: pystager_utils.py
-# ********** Info **********
+# SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
+#
+# SPDX-License-Identifier: MIT
 
 import sys, os
 # The script must be executed with the mpi4py-module to ensure that the job gets aborted when an error is risen
