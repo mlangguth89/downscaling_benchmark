@@ -148,6 +148,7 @@ def plot_comparison_maps(ds: Union[xr.Dataset,List[xr.Dataset]], plt_fname: str,
     # get levels and colorbars for 'normal' data plots and difference plots
     levels = kwargs.pop("levels", np.arange(-22., 42.1, 2))
     cmap_name = kwargs.pop("cmap_name", "jet")
+    cmap_name = kwargs.pop("cmap_name", "jet")
     levels_diff = kwargs.pop("levels_diff", np.arange(-5.25, 5.01, 0.5))
     cmap_name_diff = kwargs.pop("cmap_name_diff", "PuOr_r")
     cbar_shrink = .7
