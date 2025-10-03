@@ -57,8 +57,10 @@ try:
     from collections import Iterable
 except ImportError:
     from typing import Iterable
+from skimage.util.shape import view_as_blocks
 
 str_or_List = Union[List, str]
+logger_module_name = f"other_utils.{__name__}"
 
 
 def config_logger(logger, logfile: str, log_level_file=logging.DEBUG, log_level_console=logging.INFO, remove_existing_file: bool = True):
@@ -575,3 +577,71 @@ def get_batch_size_mb(shape_in, batch_size):
     :return: memory footprint of a batch of data
     """
     return np.prod(shape_in) * batch_size * 4 / 1.e+06
+
+def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
+    """
+    Permutes sample in a spatio-temporal way following the method of Breiman (2001). 
+    The concrete implementation follows Höhlein et al., 2020 with spatial permutation based on patching.
+    Note that the latter allows to handle time-invariant data.
+    :param da_orig: original sample. Must be 3D with a 'time'-dimension 
+    :param patch_size: tuple for patch size
+    :return: spatio-temporally permuted sample 
+    """
+    # get local logger
+    func_logger = logging.getLogger(f"{logger_module_name}.{sample_permut_xyt.__name__}")
+
+    try:
+        assert da_orig.ndim == 3, f"da_orig must be a 3D-array, but has {da_orig.ndim} dimensions."
+    except AssertionError as e:
+        func_logger.error(e, stack_info=True, exc_info=True)
+        raise e
+
+    coords_orig = da_orig.coords
+    dims_orig = da_orig.dims
+    sh_orig = da_orig.shape
+
+    # temporal permutation
+    func_logger.info(f"Start spatio-temporal permutation for sample with shape {sh_orig}.")
+
+    ntimes = len(da_orig["time"])
+    if dims_orig[0] != "time":
+        da_orig = da_orig.transpose("time", ...)
+        coords_now, dims_now, sh_now = da_orig.coords, da_orig.dims, da_orig.shape
+    else:
+        coords_now, dims_now, sh_now = coords_orig, dims_orig, sh_orig
+
+    da_permute = np.random.permutation(da_orig).copy()
+    da_permute = xr.DataArray(da_permute, coords=coords_now, dims=dims_now)
+
+    # spatial permutation with patching
+    # time must be last dimension (=channel dimension)
+    sh_aux = da_permute.transpose(..., "time").shape
+
+    # Note that the order of x- and y-coordinates does not matter here
+    da_patched = view_as_blocks(da_permute.transpose(..., "time").values, block_shape=(*patch_size, ntimes))
+
+    # convert to DataArray
+    sh = da_patched.shape
+    dims = ["pat_x", "pat_y", "dummy", "ix", "iy", "time"]
+
+    da_patched = xr.DataArray(da_patched, coords={dims[0]: np.arange(sh[0]), dims[1]: np.arange(sh[1]), "dummy": range(1),
+                                                  dims[3]: np.arange(sh[3]), dims[4]: np.arange(sh[4]), "time": da_permute["time"]}, 
+                              dims=dims)
+    
+    # stack xy-patches and permute
+    da_patched = da_patched.stack({"pat_xy": ["pat_x", "pat_y"]})
+    da_patched[...] = np.random.permutation(da_patched.transpose()).transpose()
+    
+    # unstack
+    da_patched = da_patched.unstack().transpose(*dims)
+
+    # revert view_as_blocks-opertaion
+    da_patched = da_patched.values.transpose([0, 3, 1, 4, 2, 5]).reshape(sh_aux)
+    
+    # write data back on da_permute
+    da_permute[...] = np.moveaxis(da_patched, 2, 0)
+
+    # transpose to original dimension ordering if required
+    da_permute = da_permute.transpose(*dims_orig)
+
+    return da_permute
