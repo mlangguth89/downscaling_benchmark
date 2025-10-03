@@ -16,7 +16,6 @@ import glob
 from typing import Union, List, Dict
 from pathlib import Path
 import json as js
-from timeit import default_timer as timer
 import logging
 import gc
 import multiprocessing as mp
@@ -66,86 +65,6 @@ def results_from_file(nc_file, varname, model_name):
     model_info = {"model_type": model_name.replace(" ", "_").lower(), "model_longname": model_name}
 
     return ds_out, model_info
-
-def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch: Union[str, int], model_type: str = None):
-    """
-    Get trained model from model base directory and output base directory
-    :param model_base: Base directory of model
-    :param exp_name: Experiment name
-    :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
-    :param model_type: Model type
-    :return: Trained model for inference and model information as dictionary
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{get_trained_model.__name__}")
-
-    if isinstance(last_or_epoch, str):
-        assert last_or_epoch in ["best", "last"], f"Invalid value '{last_or_epoch}' for last_or_epoch. Must be 'best' or 'last'."
-        add_str = f"_{last_or_epoch}"
-    elif isinstance(last_or_epoch, int):
-        add_str = f"_epoch{last_or_epoch:05d}"
-    else:
-        raise ValueError(f"Invalid type '{type(last_or_epoch)}' for last_or_epoch. Must be str or int.")
-
-    model_dir = Path(model_base).joinpath(f"{exp_name}{add_str}")
-
-    def modelinfo_from_expname(expname: str):
-        model_type = None
-
-        for known_model in ModelEngine.known_models:
-            if known_model in expname:
-                model_type = known_model
-
-        if not model_type: raise ValueError(f"Could not infer known model from experiment name '{expname}'")
-        
-        model_instance = ModelEngine(model_type)
-        nsubmodels = len(model_instance.model) - 1
-        
-        return (model_instance, model_type, model_instance.model_longname, nsubmodels)
-
-    if model_type:
-        func_logger.debug(f"Get model info from parsed model type '{model_type}'")
-
-        model_instance = ModelEngine(model_type)
-        model_longname = model_instance.model_longname
-        nsubmodels = len(model_instance.model) - 1 
-        model_info = {"model_type": model_type, "model_longname": model_instance.model_longname,
-                      "nsubmodels": len(model_instance.model) - 1}
-    else:
-        func_logger.debug(f"Try to infer model info from parsed experiment name '{exp_name}'")
-
-        model_instance, model_type, model_longname, nsubmodels = modelinfo_from_expname(exp_name)
-
-    # read configuration files
-    md_config_pattern = f"config_{model_type}.json"
-    md_config_file = glob.glob(str(model_base.joinpath(md_config_pattern)))
-
-    if not md_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for model '{md_config_pattern}' " +
-                                f"under '{model_base}'")
-    else:
-        with open(md_config_file[0]) as mdf:
-            func_logger.info(f"Read model configuration file '{md_config_file[0]}'.")
-            hparams_dict = js.load(mdf)
-            func_logger.debug(hparams_dict)
-    
-    #hparams_dict["batch_size"] = 36
-    #hparams_dict["batch_size"] = 19
-
-    model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
-                  "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
-
-    # initialize model with dummy-values for shape_in and varnames_tar as they are obtained when loading saved model
-    # Note: shape_in = None triggers dummy-values of shape_in in model classes
-    vars_tar_dummy = ["dummy1", "dummy2"] if finditem(model_info["hparams_dict"], "z_branch", False) else "dummy"
-    trained_model = model_instance(None, vars_tar_dummy, hparams_dict, model_base, exp_name)
-
-    # ...and load checkpointed model
-    func_logger.info(f"Load model '{exp_name}' from {model_dir}")
-    trained_model = trained_model.load_inference_model(model_dir)
-    func_logger.info(f"Model was loaded successfully.")
-
-    return trained_model, model_info      
 
 
 def run_evaluation_time(score_engine, score_name: str, score_unit: str, plot_dir: str, **kwargs):
