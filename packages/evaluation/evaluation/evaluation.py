@@ -27,9 +27,9 @@ import cartopy.crs as ccrs
 from scores.spatial import fss_2d
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles, convert_to_xarray, check_str_in_list, finditem, to_list
+from evaluation_utils import bootstrap_grouped_hourly, get_spectrum_exps, calculate_cond_quantiles, convert_to_xarray, check_str_in_list, finditem, to_list
 
-from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
+from plotting import plot_metric_line, plot_score_map, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, plot_histograms, get_season_t2m_levels
 
 FSS_available = True
@@ -424,118 +424,7 @@ def run_spectral_analysis(ds: xr.Dataset, data_vars: List[str], plot_dir: str, l
 
         func_logger.debug(f"Save power spectrum to {fname_nc}...")
         ds_ps_sea.to_netcdf(fname_nc)
-        
 
-def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6)):
-    """
-    Run feature importance analysis and create box-plot of results
-    :param ds: Unnormalized xr.Dataset with predictors and target variable
-    :param predictors: List of predictor names for which feature importance analysis should be run
-    :param varname_tar: Name of target variable
-    :param model: Model object
-    :param norm: Normalization object
-    :param score_name: Name of score to compute feature importance
-    :param data_loader_opt: Data loader options that will be parsed to the make_tf_dataset_allmem-method
-    :param plot_dir: Directory to save plot files
-    :param patch_size: Patch size for feature importance analysis
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
-    
-    # get feature importance scores
-    func_logger.debug(f"Start feature importance analysis for {score_name}...")
-    feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
-                                        patch_size=patch_size)
-    
-    # get reference score
-    func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
-    score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
-    if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
-    ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}"] 
-
-    rel_changes = feature_scores / ref_score
-    max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
-
-    # plot feature importance scores in a box-plot with whiskers where each variable is a box
-    plt_fname = os.path.join(plot_dir, f"feature_importance_{score_name}.png")
-
-    func_logger.debug(f"Plot feature importance-analysis results into file '{plt_fname}'.")
-    create_box_plot(rel_changes.T, plt_fname, **{"title": f"Feature Importance ({score_name.upper()})", "ref_line": 1., "widths": .3, 
-                                                 "xlabel": "Predictors", "ylabel": f"Rel. change {score_name.upper()}", "labels": predictors, 
-                                                 "yticks": range(1, max_rel_change), "colors": "b"})
-
-    return feature_scores
-
-def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                       data_loader_opt: dict, patch_size = (8, 8)):
-    """
-    Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
-    :param ds: The unnormalized (test-)dataset
-    :param predictors: List of predictor variables for which feature importance analysis should be run
-    :param varname_tar: Name of target variable
-    :param model: Trained model for inference
-    :param norm: Normalization object
-    :param score_name: Name of metric-score to be calculated
-    :param data_loader_opt: Dictionary providing options for the make_tf_dataset_allmem-method
-    :param patch_size: Tuple for patch size during spatio-temporal permutation
-    :return score_all: DataArray with scores for all predictor variables
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{feature_importance.__name__}")
-
-    # sanity checks
-    _ = check_str_in_list(list(ds.data_vars), predictors)
-    #try:
-    #    assert ds.dims[0] == "time", f"First dimension of the data must be a time-dimensional, but is {ds.dims[0]}."
-    #except AssertionError as e:
-    #    func_logger.error(e, stack_info=True, exc_info=True)
-    #    raise e
-
-    ntimes = len(ds["time"])
-
-    # get ground truth data and underlying metadata
-    ground_truth = ds[varname_tar].copy() 
-    # normalize dataset
-    ds = norm.normalize(ds)   
-
-    # initialize score-array
-    score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
-                             dims=["predictor", "time"])
-
-    for var in predictors:
-        func_logger.info(f"Run sample importance analysis for {var}...")
-        # get copy of sample array
-        ds_copy = ds.copy(deep=True)
-        # permute sample
-        da_now = ds[var].copy()
-        if "time" not in da_now.dims:
-            da_now = da_now.expand_dims({"time": ds_copy["time"]}, axis=0)
-        da_permut = sample_permut_xyt(da_now, patch_size=patch_size)
-        ds_copy[var] = da_permut
-        
-        # get TF dataset
-        func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        stream_mode = data_loader_opt.pop("stream_mode")
-        tfds_test = make_tf_dataset_allmem(stream_mode, ds_copy, **data_loader_opt)
-
-        # predict
-        func_logger.info(f"Run inference with permuted sample for {var}...")
-        y_pred = model.predict(tfds_test, verbose=2)
-
-        # convert to xarray
-        y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
-
-        # calculate score
-        func_logger.info(f"Calculate score for permuted samples of {var}...")
-        score_engine = Scores(y_pred, ground_truth, dims=ground_truth.dims[1::])
-        score_all.loc[{"predictor": var}] = score_engine(score_name)
-
-        #free_mem([da_copy, da_permut, tfds_test, y_pred, score_engine])
-
-    return score_all
 
 def run_comparison_plots(ds, plot_dir, score_name, model_type, nsamples = 200, offset = 0., seasonal_levels: bool = True, **kwargs):
     """
