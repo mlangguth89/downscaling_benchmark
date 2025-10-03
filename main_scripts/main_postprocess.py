@@ -24,7 +24,6 @@ import cartopy.crs as ccrs
 from evaluation import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
                         run_feature_importance, run_spectral_analysis, run_marginal_analysis, run_comparison_plots, run_aggregate_scores
 from evaluation_utils import config_logger
-#from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
