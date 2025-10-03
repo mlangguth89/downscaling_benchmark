@@ -52,9 +52,9 @@ dataset=benchmark_t2m
 results_nc=<path_results>
 
 # run job
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py \
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_evaluation.py \
     --output_base_directory ${outdir} \
-    --configuration_postprocess ${config_evaluation} \
+    --configuration_evaluation ${config_evaluation} \
     -exp_name ${exp_name} provided_results \
     --results_netcdf ${results_nc} \
     --model_name "${model_name}"
