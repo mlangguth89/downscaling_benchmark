@@ -11,12 +11,15 @@ __author__ = "Michael Langguth"
 __date__ = "2024-04-19"
 __updated__ = "2025-05-16"
 
-from typing import Union, List
+import os
+import sys
+from typing import Union, List, Any
 import logging
 import numpy as np
 import xarray as xr
 from skimage.util.shape import view_as_blocks
-from other_utils import to_list
+
+str_or_List = Union[List, str]
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
@@ -463,5 +466,161 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
     da_permute = da_permute.transpose(*dims_orig)
 
     return da_permute
-                                 
 
+
+def merge_dicts(default_dict, user_dict, recursive=True):
+    """
+    Merge two dictionaries, ensuring that all default keys are set.
+    Recursive strategy is optional.
+    :param default_dict: Dictionary with default values.
+    :param user_dict: Dictionary with user-specified values.
+    :param recursive: If True, recursively merge nested dictionaries.
+    :return: Merged dictionary.
+    """
+    merged_dict = default_dict.copy()
+
+    for key, value in user_dict.items():
+        if key not in merged_dict:
+            raise KeyError(f"Key '{key}' not found in the default dictionary.")
+
+        default_value = merged_dict.get(key)
+
+        if isinstance(value, dict) and isinstance(default_value, dict) and recursive:
+            merged_dict[key] = merge_dicts(default_value, value)
+        else:
+            if default_value is not None:
+                expected_type = type(default_value)
+
+                # Convert lists/tuples to match the expected type
+                if isinstance(value, (list, tuple)) and isinstance(default_value, (list, tuple)):
+                    value = tuple(value) if isinstance(default_value, tuple) else list(value)
+
+                assert isinstance(value, expected_type), \
+                    f"Type mismatch for key '{key}': Expected {expected_type}, got {type(value)}"
+
+            merged_dict[key] = value
+
+    return merged_dict
+
+
+def to_list(obj: Any) -> List:
+    """
+    Method from MLAIR!
+    Transform given object to list if obj is not already a list. Sets are also transformed to a list
+    :param obj: object to transform to list
+    :return: list containing obj, or obj itself (if obj was already a list)
+    """
+    if isinstance(obj, (set, tuple)):
+        obj = list(obj)
+    elif not isinstance(obj, list):
+        obj = [obj]
+    return obj
+
+
+def convert_to_xarray(mout_np, norm, varname, coords, dims, z_branch=False):
+    """
+    Converts numpy-array of model output to xarray.DataArray and performs denormalization.
+    :param mout_np: numpy-array of model output
+    :param norm: normalization object
+    :param varname: name of variable
+    :param coords: coordinates of target data
+    :param dims: dimensions of target data
+    :param z_branch: flag for z-branch
+    :return: xarray.DataArray of model output with denormalized data
+    """
+    if z_branch:
+        # slice data to get first channel only
+        if isinstance(mout_np, list): mout_np = mout_np[0]
+        mout_xr = xr.DataArray(mout_np[..., 0].squeeze(), coords=coords, dims=dims, name=varname)
+    else:
+        # no slicing required
+        mout_xr = xr.DataArray(mout_np.squeeze(), coords=coords, dims=dims, name=varname)
+
+    # get variable-specific normalizer and perform denormalization
+    norm_var = norm.get_normalizer_for_var(varname)
+
+    mout_xr = norm_var.denormalize(mout_xr, varname=varname)
+
+    return mout_xr
+
+
+def check_str_in_list(list_in: List, str2check: str_or_List, labort: bool = True, return_ind: bool = False):
+    """
+    Checks if all strings are found in list
+    :param list_in: input list
+    :param str2check: string or list of strings to be checked if they are part of list_in
+    :param labort: Flag if error will be risen in case of missing string in list
+    :param return_ind: Flag if index for each string found in list will be returned
+    :return: True if existence of all strings was confirmed, if return_ind is True, the index of each string in list is
+             returned as well
+    """
+    stat = False
+    if isinstance(str2check, str):
+        str2check = [str2check]
+    elif isinstance(str2check, list):
+        assert np.all([isinstance(str1, str) for str1 in str2check]), "Not all elements of str2check are strings"
+    else:
+        raise ValueError("str2check-argument must be either a string or a list of strings")
+
+    stat_element = [True if str1 in list_in else False for str1 in str2check]
+
+    if np.all(stat_element):
+        stat = True
+    else:
+        print("The following elements are not part of the input list:")
+        inds_miss = np.where(list(~np.array(stat_element)))[0]
+        for i in inds_miss:
+            print("* index {0:d}: {1}".format(i, str2check[i]))
+        if labort:
+            raise ValueError("Could not find all expected strings in list.")
+    # return
+    if stat and not return_ind:
+        return stat
+    elif stat:
+        return stat, [list_in.index(str_curr) for str_curr in str2check]
+    else:
+        return stat, []
+
+
+def finditem(d, key, default=None):
+    """
+    Return a value corresponding to the specified key in the (possibly
+    nested) dictionary d. If there is no item with that key, return
+    default.
+    :param d: the potentially nested dictionary
+    :param key: the key to find
+    :param default: default value for the key
+    """
+    stack = [iter(d.items())]
+    while stack:
+        for k, v in stack[-1]:
+            if isinstance(v, dict):
+                stack.append(iter(v.items()))
+                break
+            elif k == key:
+                return v
+        else:
+            stack.pop()
+    if default is not None:
+        return default
+    else: 
+        raise KeyError(f"Key {key} has not been found in dictionary")
+
+def config_logger(logger, logfile: str, log_level_file=logging.DEBUG, log_level_console=logging.INFO, remove_existing_file: bool = True):
+
+    if remove_existing_file and os.path.isfile(logfile):
+        os.remove(logfile)
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+
+    fh = logging.FileHandler(logfile)
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(log_level_console)
+    fh.setLevel(log_level_file)
+
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh), logger.addHandler(ch)
+
+    return logger

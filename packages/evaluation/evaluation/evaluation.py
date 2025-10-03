@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 """
-Contains all methods and classes used in main_postrprocess.py.
+Contains all methods and classes used in main_evaluation.py.
 """
 
 __author__ = "Michael Langguth"
@@ -25,8 +25,8 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import cartopy.crs as ccrs
-from all_normalizations import GeneralNormalizer
 try:
+    from all_normalizations import GeneralNormalizer
     from handle_data_class import prepare_dataset, make_tf_dataset_allmem
     from model_engine import ModelEngine
 except (ModuleNotFoundError, NameError):
@@ -42,10 +42,10 @@ except ImportError:
     FSS_available = False
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
-from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles
+from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles, convert_to_xarray, check_str_in_list, finditem, to_list
+
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, plot_histograms, get_season_t2m_levels
-from other_utils import convert_to_xarray, check_str_in_list, finditem, to_list
 
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]

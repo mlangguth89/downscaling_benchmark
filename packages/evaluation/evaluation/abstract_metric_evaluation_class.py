@@ -11,7 +11,7 @@ import os
 from abc import ABC
 from typing import List, Dict
 import logging
-from other_utils import merge_dicts
+from evaluation_utils import merge_dicts
 
 class AbstractMetricEvaluation(ABC):
 
