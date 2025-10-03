@@ -21,8 +21,7 @@ import json as js
 import gc
 import xarray as xr
 import cartopy.crs as ccrs
-from evaluation import results_from_inference, results_from_file, TemporalEvaluation, SpatialEvaluation, run_cond_quantile_analysis, \
-                        run_feature_importance, run_spectral_analysis, run_marginal_analysis, run_comparison_plots, run_aggregate_scores
+from inference import results_from_inference, run_feature_importance
 from other_utils import config_logger
 #from other_utils import free_mem
 
@@ -38,12 +37,12 @@ def main(parser_args):
     plt_basedir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
 
     # load configuration for postprocessing
-    conf_postprocess = js.load(parser_args.conf_postprocess)
+    conf_inference = js.load(parser_args.conf_inference)
 
     # get some variables for convenience
-    varname = conf_postprocess["varname"]
-    unit = conf_postprocess["unit"]
- 
+    varname = conf_inference["varname"]
+    unit = conf_inference["unit"]
+
     # get data from inference or from data file
     if parser_args.mode == "inference":
         if parser_args.last:
@@ -68,7 +67,7 @@ def main(parser_args):
         ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, plt_dir,
                                                     varname, parser_args.model_type, last_or_epoch, parser_args.dataset, parser_args.ens_mem)
     # run feature importance analysis if specified
-    if conf_postprocess.get("do_feature_importance", False) and parser_args.mode == "inference":
+    if conf_inference.get("do_feature_importance", False) and parser_args.mode == "inference":
         # To-DO: make executable
         logger.info("Start feature importance analysis...")
         t0_fi = timer()
@@ -77,7 +76,7 @@ def main(parser_args):
 
         # load test dataset
         ds_test = xr.open_dataset(test_info["file"])
-        conf_fi = conf_postprocess["config_feature_importance"]
+        conf_fi = conf_inference["config_feature_importance"]
 
         # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
         varname_tar = test_info["all_predictands"][0]
