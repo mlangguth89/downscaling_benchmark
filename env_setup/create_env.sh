@@ -115,21 +115,21 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   # expand PYTHONPATH
   export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/utils:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/handle_data:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/models:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/preprocess:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/inference:$PYTHONPATH >> "${activate_virt_env}"
 
   # ...and ensure that this also done when the
   echo "" >> "${activate_virt_env}"
   echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
   echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/utils:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/models:\$PYTHONPATH " >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/handle_data:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/inference:\$PYTHONPATH" >> "${activate_virt_env}"
 
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
   deactivate
