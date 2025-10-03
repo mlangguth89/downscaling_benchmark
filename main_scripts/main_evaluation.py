@@ -36,8 +36,8 @@ def main(parser_args):
     # set up basic output directory
     plt_basedir = os.path.join(parser_args.output_base_dir, parser_args.exp_name)
 
-    # load configuration for postprocessing
-    conf_postprocess = js.load(parser_args.conf_postprocess)    
+    # load configuration for evaluation
+    conf_postprocess = js.load(parser_args.conf_evaluation)
 
     # get some variables for convenience
     varname = conf_postprocess["varname"]
