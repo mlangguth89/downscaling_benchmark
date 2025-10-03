@@ -79,7 +79,7 @@ fi
 if [[ "${HOST_NAME}" == hdfml* || "${HOST_NAME}" == *jwlogin* || "${HOST_NAME}" == jrlogin* ]]; then
   # unset PYTHONPATH to ensure that system-realted paths are not set
   unset PYTHONPATH
-  modules_file="modules_jsc_scores.sh"
+  modules_file="modules_jsc_evaluation.sh"
 else
   echo "${SCR_SETUP}ERROR: Model only runs on HDF-ML, Juwels (Booster) and JURECA."
   return
@@ -108,7 +108,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   echo "${SCR_SETUP}Appending PYTHONPATH on ${MACHINE} for Python version ${PY_VERSION} to ensure proper set-up..."
 
-  req_file=${SETUP_DIR}/requirements_scores.txt
+  req_file=${SETUP_DIR}/requirements_evaluation.txt
 
   # Without the environmental variables set above, we need to install wheel and explictly set the target directory
   pip3 install --no-cache-dir -r "${req_file}"
