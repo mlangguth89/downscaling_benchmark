@@ -212,18 +212,6 @@ def main(parser_args):
 
 if __name__ == "__main__":
     
-    def ens_mem_type(val: Any):
-        """
-        Check if parsed value is either None, a 'mean'-string or parseable as an integer.
-        """
-        if val is None or val == "mean":
-            return val
-        try:
-            return int(val)
-        except:
-            raise argparse.ArgumentTypeError(
-                f"Invalid value: {value}. Expected None, 'mean', or an integer.")
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
                         help="Directory where results in form of plots are stored.")
