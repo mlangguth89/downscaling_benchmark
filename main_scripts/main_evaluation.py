@@ -215,32 +215,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
                         help="Directory where results in form of plots are stored.")
-    parser.add_argument("--configuration_postprocess", "--conf_postprocess", dest="conf_postprocess", type=argparse.FileType("r"), required=True,
-                        help="JSON-file to configure postprocessing.")
+    parser.add_argument("--configuration_evaluation", "--conf_evaluation", dest="conf_evaluation", type=argparse.FileType("r"), required=True,
+                        help="JSON-file to configure evaluation.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                                   help="Name of the experiment/trained model to postprocess.")
     
     # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
     subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
-
-    parser_inference = subparsers.add_parser("inference", help="Perform inference on trained model.")
-    parser_inference.add_argument("--data_directory", "-data_dir", dest="data_dir", type=str, required=True,
-                                  help="Directory where test dataset (netCDF-file) is stored.")
-    parser_inference.add_argument("--model_base_directory", "-model_base_dir", dest="model_base_dir", type=str, required=True,
-                                  help="Base directory where trained models are saved.")
-    parser_inference.add_argument("--downscaling_dataset", "-dataset", dest="dataset", type=str, required=True,
-                                  help="Name of dataset to be used for downscaling model.")
-    parser_inference.add_argument("--model_type", "-model_type", dest="model_type", default=None,
-                                  help="Name of model architecture. Only required if custom model architecture is not" +
-                                       "implemented in get_model_info-function (see postprocess.py)")
-    parser_inference.add_argument("--ensemble_member", "-ens_mem", dest="ens_mem", default=None, type=ens_mem_type,
-                                  help="Ensemble member to evaluate. Only required for models with ensemble output during inference.")
-    
-    group = parser_inference.add_mutually_exclusive_group()
-    group.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
-                       help="Flag for evaluating last instead of best checkpointed model")
-    group.add_argument("--epoch", "-epoch", dest="epoch", type=int,
-                       help="Epoch number to evaluate a specific checkpointed model")
 
     parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
     parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
