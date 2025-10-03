@@ -3,17 +3,17 @@
   "unit": "W m**-2",
   "do_evaluation_time": true,
   "config_evaluation_time": {},
-  "do_evaluation_spatial": true,
+  "do_evaluation_spatial": false,
   "config_evaluation_spatial": {},
-  "do_spectral_analysis": true,
+  "do_spectral_analysis": false,
   "config_spectral_analysis": {},
-  "do_cond_quantile_analysis": true,
+  "do_cond_quantile_analysis": false,
   "config_cond_quantile_analysis": {
     "factorization": "calibration_refinement"
   },
-  "do_marginal_analysis": true,
+  "do_marginal_analysis": false,
   "config_marginal_analysis": {},
-  "do_comparison_plots": true,
+  "do_comparison_plots": false,
   "config_comparison_plots": {
     "score_name": "rmse_relative",
     "nsamples": 100,
@@ -61,6 +61,6 @@
   "config_feature_importance": {
     "score_name": "rmse_relative"
   },
-  "do_aggregate_scores": true,
+  "do_aggregate_scores": false,
   "config_aggregate_scores": {}
 }
