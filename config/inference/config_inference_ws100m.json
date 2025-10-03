@@ -1,0 +1,8 @@
+{
+  "varname": "ws100m",
+  "unit": "m/s",
+  "do_feature_importance": true,
+  "config_feature_importance": {
+    "score_name": "rmse"
+  }
+}
