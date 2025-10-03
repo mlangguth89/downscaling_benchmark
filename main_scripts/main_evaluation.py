@@ -146,32 +146,6 @@ def main(parser_args):
 
         logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
 
-    # run feature importance analysis if specified
-    if conf_postprocess.get("do_feature_importance", False) and parser_args.mode == "inference":
-        # To-DO: make executable
-        logger.info("Start feature importance analysis...")
-        t0_fi = timer()
-        
-        plt_dir_importance = os.path.join(plt_dir, "feature_importance")
-
-        # load test dataset
-        ds_test = xr.open_dataset(test_info["file"])
-        conf_fi = conf_postprocess["config_feature_importance"]
-
-        # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
-        varname_tar = test_info["all_predictands"][0]
-        # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
-        #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
-        data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
-                            "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
-                            "lrepeat": False, "drop_remainder": False,"lshuffle": False}
-                             
-        all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
-
-        _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
-                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)))
-        
-        logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
     
     # aggregate scores
     if conf_postprocess.get("do_aggregate_scores", False):
