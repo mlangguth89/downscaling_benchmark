@@ -41,23 +41,20 @@ fi
 
 # data-directories
 # Note template uses Tier2-dataset. Adapt accordingly for other datasets.
-datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/with_snow/
+# datadir=/p/scratch/deepacf/maelstrom/maelstrom_data/ap5/downscaling_benchmark_dataset/benchmark_t2m/dataset/with_snow/
 model_basedir=../trained_models/
 outdir=../results/
-config_postprocess=../config/config_postprocess_t2m_test.json
-
+model_name="Harris WGAN"
+config_evaluation=../config/evaluation/config_evaluation_t2m.json
 exp_name=<my_exp>
 dataset=benchmark_t2m
+# inference data provided from netcdf-file
+results_nc=<path_results>
 
 # run job
-# data inference with trained model of this framework
-srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py --output_base_directory ${outdir} --configuration_postprocess ${config_postprocess} -exp_name ${exp_name} inference \
-                                                                   -model_base_dir ${model_basedir} -data_dir ${datadir} -dataset ${dataset}
-
-## data provided from netcdf-file
-#results_nc=<path_results>
-#
-#srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py --output_base_directory ${outdir} --configuration_postprocess ${config_postprocess} -exp_name ${exp_name} provided_results \
-#                                                                    --results_netcdf ${results_nc} --model_name "${model_name}"
-#                                                                    -output_base_dir ${outdir} -exp_name ${exp_name} -dataset ${dataset}
-
+srun --overlap python3 ${BASE_DIR}/main_scripts/main_postprocess.py \
+    --output_base_directory ${outdir} \
+    --configuration_postprocess ${config_evaluation} \
+    -exp_name ${exp_name} provided_results \
+    --results_netcdf ${results_nc} \
+    --model_name "${model_name}"
