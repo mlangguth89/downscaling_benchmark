@@ -25,21 +25,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 import cartopy.crs as ccrs
-try:
-    from all_normalizations import GeneralNormalizer
-    from handle_data_class import prepare_dataset, make_tf_dataset_allmem
-    from model_engine import ModelEngine
-except (ModuleNotFoundError, NameError):
-    # skip import when running postprocessing with different env
-    print(
-        "Warning: inference is not possible within the postprocessing environment, because of the missing Tensorflow package")
-    pass
-try:
-    from scores.spatial import fss_2d
-    FSS_available = True
-except ImportError:
-    # FSS is not available in the postprocessing environment
-    FSS_available = False
+from scores.spatial import fss_2d
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from scores_class import Scores
 from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_spectrum_exps, calculate_cond_quantiles, convert_to_xarray, check_str_in_list, finditem, to_list
@@ -47,149 +33,15 @@ from evaluation_utils import bootstrap_grouped_hourly, sample_permut_xyt, get_sp
 from plotting import plot_metric_line, plot_score_map, create_box_plot, plot_power_spectra, plot_cond_quantile, \
                      plot_comparison_maps, plot_histograms, get_season_t2m_levels
 
+FSS_available = True
 # basic data types
 da_or_ds = Union[xr.DataArray, xr.Dataset]
 list_or_str = Union[List[str], str]
 
 # auxiliary variable for logger
-logger_module_name = f"main_postprocess.{__name__}"
+logger_module_name = f"main_evaluation.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
-def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data_dir: Union[Path, str], out_dir: Union[Path, str],
-                           varname: str, model_type: str, last_or_epoch: Union[str, int], dataset: str, ens_member: Union[str, int] = None):
-    """
-    Run inference on trained model, convert output to xarray.DataArray and save results to disc.
-    :param model_base_dir: Base directory where trained models are stored
-    :param exp_name: Experiment name
-    :param data_dir: Directory where testdata is stored
-    :param out_dir: Output directory where results are stored in a netCDF-file
-    :param varname: Name of variable that was downscaled
-    :param model_type: Type of model (if None, model type is inferred from experiment name)
-    :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
-    :param dataset: Name of dataset
-    """
-    # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{results_from_inference.__name__}")
-
-    # construct model directory path and infer model type
-    model_base = Path(model_base_dir).joinpath(exp_name)
-
-    # get trained model for inference
-    trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type)
-
-    # read configuration files
-    ds_config_pattern = f"config_ds_{dataset}.json"
-    ds_config_file = glob.glob(os.path.join(model_base, ds_config_pattern))
-    if not ds_config_file:
-        raise FileNotFoundError(f"Could not find expected configuration file for dataset '{ds_config_pattern}' " +
-                                f"under '{model_base}'")
-    else:
-        with open(ds_config_file[0]) as dsf:
-            func_logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
-            ds_dict = js.load(dsf)
-            func_logger.debug(ds_dict)
-
-    #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    func_logger.info(f"Start postprocessing at...")
-
-    ### Run inference on trained model
-    # get normalization object and preprare test dataset
-    t0_preproc = timer()
-    func_logger.info(f"Start preparing test dataset...")
-
-    # prepare normalization
-    js_norm = Path(model_base).joinpath("norm.json")
-    func_logger.debug("Read normalization file for subsequent data transformation.")
-    # get normalization methods for all variables of interest
-    predictands = ds_dict["predictands"]
-    if finditem(model_info["hparams_dict"], "z_branch", False):
-        predictands = {**predictands, **ds_dict["varname_z"]}
-
-    norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
-                    **ds_dict.get("static_predictors", {}), **predictands}
-    
-    # Initialize normalization object and read normalization parameters from file
-    data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
-    data_norm.read_norms_from_file(js_norm)
-
-    #ds_dict["batch_size"] = 36
-    #ds_dict["batch_size"] = 19
-    
-    # get dataset pipeline for inference    
-    tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
-                                           shuffle=False, lrepeat=False, drop_remainder=False) 
-    
-    # add further information to test_info (for later processing)
-    test_info["ds_dict"] = ds_dict
-    test_info["trained_model"] = trained_model
-    test_info["model_info"] = model_info
-
-    # get ground truth data
-    # To-Do: Enable handling of multiple target variables (e.g. wind vectors)
-    tar_varname = list(test_info["all_predictands"].keys())[0]
-    func_logger.info(f"Variable {tar_varname} serves as ground truth data.")
-
-    # get ground truth data
-    ds_test = xr.open_dataset(test_info["file"])
-    # rename coordinates and dimensions of target data for consistency
-    dims_new = [dim.replace("_tar", "") for dim in ds_test[tar_varname].dims]
-    ds_test = ds_test.rename({old: new for old, new in zip(ds_test[tar_varname].dims, dims_new) if old != new})
-    coords, dims = ds_test[tar_varname].squeeze().coords, ds_test[tar_varname].squeeze().dims
-
-    # start inference
-    func_logger.info(f"Preparation of test dataset finished after {timer() - t0_preproc:.2f}s. " +
-                      "Start inference on trained model...")
-    t0_infer = timer()
-    y_pred = trained_model.predict(tfds_test, verbose=2)
-
-    func_logger.info(f"Inference on test dataset finished. Start denormalization of output data...")
-    
-    # clean-up to reduce memory footprint
-    del tfds_test
-    gc.collect()
-
-    if isinstance(y_pred, list): y_pred = y_pred[0]
-
-    ### Post-process results from test dataset
-    # average over ensemble members or select specific member
-    if np.ndim(y_pred) == 5:
-        ens_out = True
-        if ens_member == "mean":
-            y_pred = np.mean(y_pred, axis=-1)
-        else:
-            assert isinstance(ens_member, int), f"Invalid value '{ens_member}' for ens_member. Must be 'mean' or integer."
-            y_pred = y_pred[..., ens_member]
-    else:
-        ens_out = False
-
-    # convert to xarray
-    y_pred = convert_to_xarray(y_pred, data_norm, tar_varname, coords, dims, finditem(model_info["hparams_dict"], "z_branch", False))
-
-    # for the global radiance downscaling task, we need to rescale the data
-    if tar_varname == "glob_rad_pp_ratio_tar":
-        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
-        y_pred = y_pred * ds_test["tisr_tar"]
-        tar_varname = "glob_rad_pp_tar"
-
-    # write inference data to netCDf
-    ncfile_out = Path(out_dir).joinpath(f"downscaled_{varname}_{model_info['model_type']}.nc")
-    func_logger.info(f"Write inference data to netCDF-file '{str(ncfile_out)}'")
-
-    ds_out = xr.Dataset({f"{varname}_ref": ds_test[tar_varname].squeeze().astype("float32"), f"{varname}_fcst": y_pred}, 
-                        coords=coords) 
-    # add attributes such as model_type and from which model the data was generated and used ds_dict
-    # This is also relevant for later processing (e,g. when doing feature importance analysis)
-    ds_out.attrs["model_path"] = str(model_info["model_dir"])
-
-    # add ensemble member information for probabilistic models
-    if ens_out:
-        ds_out.attrs["ensemble_output"] = ens_member if ens_member == "mean" else f"member {ens_member}"
-        
-    ds_out.to_netcdf(str(ncfile_out))
-
-    func_logger.info(f"Output data on test dataset successfully processed in {timer()-t0_infer:.2f}s. Start evaluation...")
-
-    return ds_out, test_info
 
 def results_from_file(nc_file, varname, model_name):
     """
