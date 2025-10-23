@@ -911,7 +911,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "bias": {"score_unit": "m/s", "value_range": (-1., 1.), "ref_line": 0, "relative": False},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.7, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "m/s", "value_range": (0.1, 0.3), "ref_line": None},
-                         "ralsd": {"score_unit": "dB", "value_range": (0., 7.), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 9.), "ref_line": None},
                         }
         elif self.varname == "glob_rad":
             eval_dict = {"rmse": {"score_unit": "W/m^2", "value_range": (50., 250.), "ref_line": None, "relative": False}, 
@@ -920,7 +920,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                          "bias_relative": {"score_unit": "1", "value_range": (-0.5, 0.5), "ref_line": 0, "relative": True},
                          "grad_amplitude": {"score_unit": "1", "value_range": (0.3, 1.2), "ref_line": 1.},
                          "me_std": {"score_unit": "W/m^2", "value_range": (0., 70.), "ref_line": None},
-                         "ralsd": {"score_unit": "dB", "value_range": (0., 20.), "ref_line": None},
+                         "ralsd": {"score_unit": "dB", "value_range": (0., 22.), "ref_line": None},
                         }
             if FSS_available:
                 eval_dict["fss"] = {"score_unit": "1", "value_range": (0, 1.), "ref_line": 0.5, "window": (4, 4), "thres": [50, 100, 300, 500]}
