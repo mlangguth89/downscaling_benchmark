@@ -91,7 +91,10 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
     data_norm.read_norms_from_file(js_norm)
 
-    #ds_dict["batch_size"] = 36
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        ds_dict["batch_size"] = 36
     #ds_dict["batch_size"] = 19
     
     # get dataset pipeline for inference    
@@ -233,7 +236,10 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
             hparams_dict = js.load(mdf)
             func_logger.debug(hparams_dict)
     
-    #hparams_dict["batch_size"] = 36
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        hparams_dict["batch_size"] = 36
     #hparams_dict["batch_size"] = 19
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
