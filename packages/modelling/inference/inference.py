@@ -95,7 +95,6 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     if model_type == "harris_wgan":
         func_logger.info("Adjust batch size for Harris WGAN model.")
         ds_dict["batch_size"] = 36
-    #ds_dict["batch_size"] = 19
     
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
@@ -240,7 +239,6 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     if model_type == "harris_wgan":
         func_logger.info("Adjust batch size for Harris WGAN model.")
         hparams_dict["batch_size"] = 36
-    #hparams_dict["batch_size"] = 19
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
