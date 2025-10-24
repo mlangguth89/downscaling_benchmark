@@ -6,6 +6,12 @@
   "batch_size": 16,
   "decay_start": 2,
   "decay_end": 5,
-  "hparams_generator": {"lr": 1e-05, "lr_end": 1e-06, "channels_start": 128},
-  "hparams_critic": {"lr": 5e-07}
+  "hparams_generator": {
+    "lr": 1e-05,
+    "lr_end": 1e-06,
+    "channels_start": 128
+  },
+  "hparams_critic": {
+    "lr": 5e-07
+  }
 }
