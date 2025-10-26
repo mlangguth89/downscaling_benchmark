@@ -32,15 +32,8 @@ class InferenceScores:
         :param data_fcst: forecast data to evaluate
         :param data_ref: reference or ground truth data
         """
-        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias,
-                             "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
-                             "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
-                             "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
-                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
-            "iqd": self.calc_iqd,
-            "fss": self.calc_fss,
+        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse,
             "rmse_relative": self.calc_rmse,
-            "bias_relative": self.calc_bias,
         }
         self.data_fcst = data_fcst
         self.data_dims = list(self.data_fcst.dims)
