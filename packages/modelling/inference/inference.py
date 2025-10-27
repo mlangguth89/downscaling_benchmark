@@ -335,6 +335,7 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
     score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
                              dims=["predictor", "time"])
 
+    stream_mode = data_loader_opt.pop("stream_mode")
     for var in predictors:
         func_logger.info(f"Run sample importance analysis for {var}...")
         # get copy of sample array
@@ -348,7 +349,6 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        stream_mode = data_loader_opt.pop("stream_mode")
         tfds_test = make_tf_dataset_allmem(stream_mode, ds_copy, **data_loader_opt)
 
         # predict
