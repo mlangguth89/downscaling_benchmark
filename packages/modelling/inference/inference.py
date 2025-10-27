@@ -256,7 +256,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     return trained_model, model_info
 
 def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6)):
+                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6), model_type: str = None):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -300,7 +300,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
 
 
 def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                       data_loader_opt: dict, patch_size = (8, 8)):
+                       data_loader_opt: dict, patch_size = (8, 8), model_type: str = None):
     """
     Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
     :param ds: The unnormalized (test-)dataset

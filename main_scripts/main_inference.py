@@ -89,7 +89,7 @@ def main(parser_args):
         all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
         _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
-                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)))
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (4, 4)), parser_args.model_type)
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
 
