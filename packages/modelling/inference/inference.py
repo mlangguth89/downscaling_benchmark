@@ -256,7 +256,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     return trained_model, model_info
 
 def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6), model_type: str = None):
+                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6), model_type: str = None, varname: str = None):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -268,6 +268,8 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     :param data_loader_opt: Data loader options that will be parsed to the make_tf_dataset_allmem-method
     :param plot_dir: Directory to save plot files
     :param patch_size: Patch size for feature importance analysis
+    :param model_type: Model type
+    :param varname: Name of downscaled variable (for reference score file path)
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
@@ -285,9 +287,15 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
     score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
-    ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}"] 
+        func_logger.warning(f"File {score_file} not found. Calculating rmse now...")
+        # load existing data from inference
+        ncfile_out = Path(plot_dir, "..").joinpath(f"downscaled_{varname}_{model_type}.nc")
+        ds_out = xr.open_dataset(ncfile_out)
+        score_engine = InferenceScores(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], dims=ds_out["ref"].dims[1::])
+        ref_score = score_engine(score_name)
+    else:
+        ds_score = xr.open_dataset(score_file)
+        ref_score = ds_score[f"{score_name}"] 
 
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
