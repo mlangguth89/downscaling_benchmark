@@ -85,14 +85,14 @@ def main(parser_args):
         conf_fi = conf_inference["config_feature_importance"]
 
         # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
-        varname_tar = test_info["all_predictands"][0]
+        varname_tar = list(test_info["all_predictands"].keys())[0]
         # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
         #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
         data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
                             "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
                             "lrepeat": False, "drop_remainder": False,"lshuffle": False}
                              
-        all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
+        all_predictors = test_info["predictors"] | test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
         _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
                                    test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (4, 4)), parser_args.model_type, varname)
