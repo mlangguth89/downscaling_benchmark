@@ -279,8 +279,8 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     # get feature importance scores
     func_logger.debug(f"Start feature importance analysis for {score_name}...")
     feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
-                                        patch_size=patch_size)
-    
+                                        patch_size=patch_size, model_type=model_type)
+
     # get reference score
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
     score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
