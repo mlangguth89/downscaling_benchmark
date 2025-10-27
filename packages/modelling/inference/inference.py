@@ -335,6 +335,11 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
     score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
                              dims=["predictor", "time"])
 
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        data_loader_opt["batch_size"] = 36
+
     stream_mode = data_loader_opt.pop("stream_mode")
     for var in predictors:
         func_logger.info(f"Run sample importance analysis for {var}...")
