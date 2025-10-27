@@ -272,6 +272,10 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
     
+    # sanity check predictor type
+    if isinstance(predictors, dict):
+        predictors = list(predictors.keys())
+
     # get feature importance scores
     func_logger.debug(f"Start feature importance analysis for {score_name}...")
     feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
