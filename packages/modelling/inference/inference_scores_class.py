@@ -39,7 +39,7 @@ class InferenceScores:
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
         self.avg_dims = dims
-        self.knwon_geodims = {"lat_dims": ["rlat", "lat", "latitude"], "lon_dims": ["rlon", "lon", "longitude"]}
+        self.known_geodims = {"lat_dims": ["rlat", "lat", "latitude"], "lon_dims": ["rlon", "lon", "longitude"]}
 
     def __call__(self, score_name, **kwargs):
         try:

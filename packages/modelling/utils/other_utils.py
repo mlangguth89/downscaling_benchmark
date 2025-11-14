@@ -635,7 +635,7 @@ def sample_permut_xyt(da_orig: xr.DataArray, patch_size:tuple = (8, 8)):
     # unstack
     da_patched = da_patched.unstack().transpose(*dims)
 
-    # revert view_as_blocks-opertaion
+    # revert view_as_blocks-operation
     da_patched = da_patched.values.transpose([0, 3, 1, 4, 2, 5]).reshape(sh_aux)
     
     # write data back on da_permute

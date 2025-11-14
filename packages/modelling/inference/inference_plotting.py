@@ -41,7 +41,7 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     """    
     func_logger = logging.getLogger(f"postpess.{module_name}.{create_box_plot.__name__}")
 
-    # get parametrs that should not be parsed to the boxplot-method 
+    # get parameters that should not be parsed to the boxplot-method 
     figsize = plt_kwargs.pop("figsize", (12, 8))
     val_range = plt_kwargs.pop("value_range", [None])
     widths = plt_kwargs.pop("widths", .3)
