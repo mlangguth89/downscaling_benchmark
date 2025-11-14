@@ -22,7 +22,7 @@ module_name = os.path.basename(__file__).rstrip(".py")
 def create_box_plot(data, plt_fname: str, **plt_kwargs):
     """
     Create box plot of feature importance scores
-    :param feature_scores: Feature importance scores with predictors as firstdimension and time as second dimension
+    :param feature_scores: Feature importance scores with predictors as first dimension and time as second dimension
     :param plt_fname: File name of plot
     :param plt_kwargs: Keyword arguments for plotting
                        Valid keys are:
@@ -41,7 +41,7 @@ def create_box_plot(data, plt_fname: str, **plt_kwargs):
     """    
     func_logger = logging.getLogger(f"postpess.{module_name}.{create_box_plot.__name__}")
 
-    # get parametrs that should not be parsed to the boxplot-method 
+    # get parameters that should not be parsed to the boxplot-method 
     figsize = plt_kwargs.pop("figsize", (12, 8))
     val_range = plt_kwargs.pop("value_range", [None])
     widths = plt_kwargs.pop("widths", .3)

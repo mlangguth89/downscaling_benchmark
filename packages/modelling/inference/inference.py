@@ -148,7 +148,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
 
     # for the global radiance downscaling task, we need to rescale the data
     if tar_varname == "glob_rad_pp_ratio_tar":
-        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        func_logger.info("Re-scale global_rad_pp_ratio to global_rad_pp.")
         y_pred = y_pred * ds_test["tisr_tar"]
         tar_varname = "glob_rad_pp_tar"
 
