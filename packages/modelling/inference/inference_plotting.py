@@ -22,7 +22,7 @@ module_name = os.path.basename(__file__).rstrip(".py")
 def create_box_plot(data, plt_fname: str, **plt_kwargs):
     """
     Create box plot of feature importance scores
-    :param feature_scores: Feature importance scores with predictors as firstdimension and time as second dimension
+    :param feature_scores: Feature importance scores with predictors as first dimension and time as second dimension
     :param plt_fname: File name of plot
     :param plt_kwargs: Keyword arguments for plotting
                        Valid keys are:
