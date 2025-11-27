@@ -27,12 +27,166 @@ except:
 from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
 from model_utils import check_config_ckpt, setup_horovod_devices, check_horovod
-from handle_data_class import prepare_dataset
+from handle_data_class import prepare_dataset, prepare_torch_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict, finditem
 
 # Open issues:
 # * nepochs and, if required, d_steps  must be parsed with hparams_dict as model is uninstantiated at this point and thus no default parameters
 #   are available
+
+#import torch module
+import torch
+from swinir_lightning_model import SwinIR
+
+#import for lightning_modules
+from swinir_lightning_model import SwinIRLightning
+from pytorch_lightning import Trainer,seed_everything
+from pytorch_lightning.plugins.environments import SLURMEnvironment
+from pytorch_lightning.loggers import WandbLogger
+import random
+
+def lightning_main(parser_args):
+
+    random_seed = parser_args.seed
+    seed_everything(random_seed,workers=True)
+
+    # start timing
+    to = timer()
+    
+    # Get some basic directories and flags
+    datadir = parser_args.input_dir
+    outdir = parser_args.output_dir
+    job_id = parser_args.id
+    dataset = parser_args.dataset.lower()
+    js_norm = parser_args.js_norm
+
+    # initialize checkpoint-directory path for saving the model
+    model_savedir = os.path.join(outdir, parser_args.exp_name)
+
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
+    wandb_logger = WandbLogger(project="downscaling",
+                                name= parser_args.exp_name,
+                                log_model=True)
+
+    # read configuration files for model and dataset
+    with parser_args.conf_ds as dsf:
+        ds_dict = js.load(dsf)
+
+    with parser_args.conf_md as mdf:
+        hparams_dict = js.load(mdf)
+
+    # get normalization object if corresponding JSON-file is parsed
+    if js_norm:
+        # get normalization methods for all variables of interest
+        predictands = ds_dict["predictands"]
+        if finditem(hparams_dict, "z_branch", False):
+            predictands = {**predictands, **ds_dict["varname_z"]}
+
+        norm_config = {**ds_dict["predictors"], **ds_dict.get("var_tar2in", {}), 
+                       **ds_dict.get("static_predictors", {}), **predictands}
+        
+        # Initialize normalization object and read normalization parameters from file
+        data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
+        data_norm.read_norms_from_file(js_norm)
+        norm_dims, write_norm = None, False
+    else:
+        data_norm, write_norm = None, True
+        norm_dims = ds_dict["norm_dims"]   
+
+    # get torch dataset objects for training and validation data
+    # training
+    t0_train = timer
+    torch_train_dataloader, train_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "train", norm_obj=data_norm, norm_dims=norm_dims,seed=random_seed) 
+
+    
+    data_norm, shape_in, nsamples, tfds_train_size = (train_info["data_norm"], train_info["shape_in"], 
+                                                     train_info["nsamples"], train_info["dataset_size"])
+    ds_obj_train = train_info.get("ds_obj", None)
+
+    # Tracking training data preparation time if all data is already loaded into memory
+    if ds_obj_train is None:
+        ttrain_load = timer() - t0_train
+        print(f"Training data loading time: {ttrain_load:.2f}s.")
+    else:
+        # training data will be loaded on-the-fly
+        ttrain_load = None
+    
+    if write_norm:
+        data_norm.save_norms_to_file(os.path.join(model_savedir, "norm.json"))
+    
+    # validation
+    t0_val = timer()
+    torch_val_dataloader, val_info = prepare_torch_dataset(datadir, dataset, ds_dict, hparams_dict, "val", ds_dict["predictands"], 
+                                         norm_obj=data_norm,seed=random_seed) 
+    
+    ds_obj_val = val_info.get("ds_obj", None)
+    
+    # Tracking validation data preparation time if all data is already loaded into memory
+    if ds_obj_val is None:
+        tval_load = timer() - t0_val
+        print(f"Validation data loading time: {tval_load:.2f}s.")
+    else:
+        # validation data will be loaded on-the-fly
+        tval_load = None
+
+    print("Finished data preparation")
+    
+    os.makedirs(model_savedir, exist_ok=True)
+    filelist, filelist_new = [parser_args.conf_ds.name, parser_args.conf_md.name], [f"config_ds_{dataset}.json", f"config_{parser_args.model}.json"]
+    if not write_norm:
+        filelist.append(js_norm), filelist_new.append(os.path.basename(js_norm))
+    
+    copy_filelist(filelist, model_savedir, filelist_new)
+
+    # instantiate model...
+    model = SwinIRLightning(shape_in, list(train_info["all_predictands"].keys()), hparams_dict, model_savedir, parser_args.exp_name)
+
+    wandb_logger.watch(model)  
+    
+    #args to be passed, currently magic numbers are used 
+    trainer = Trainer(enable_model_summary=True,
+                      enable_progress_bar=True,
+                      max_epochs=ds_obj_train.nds*model.swinir.hparams['nepochs'],
+                      check_val_every_n_epoch=ds_obj_train.nds,
+                      gradient_clip_val=0.5,
+                      num_nodes=1,
+                      devices=4,
+                      accelerator='cuda',
+                      strategy='ddp',
+                      precision=16,
+                      sync_batchnorm=True,
+                      plugins=[SLURMEnvironment()],
+                      logger=wandb_logger)
+
+    trainer.fit(model,
+            torch_train_dataloader,
+            torch_val_dataloader,
+            ckpt_path=parser_args.ckpt_path)
+    
+    
+    if not ttrain_load:
+        ttrain_load = sum(ds_obj_train.reading_times) #+ tval_load
+        print(f"Training data loading time: {ttrain_load:.2f}s.")
+        print(f"Average throughput: {ds_obj_train.ds_proc_size / 1.e+06 / training_times['Total training time']:.3f} MB/s")
+
+    # save trained model
+    t0_save = timer()
+
+    model_savedir_last = os.path.join(model_savedir, f"{parser_args.exp_name}_last")
+    model.save(filepath=model_savedir_last)
+    
+    # final timing
+    tend = timer()
+    saving_time = tend - t0_save
+    tot_run_time = tend - t0
+    print(f"Model saving time: {saving_time:.2f}s")
+    print(f"Total runtime: {tot_run_time:.1f}s")
+    # some statistics on memory usage
+    print_gpu_usage("Final GPU memory: ")
+    print_cpu_usage("Final CPU memory: ")
+
+    print("Finished job at {0}".format(dt.strftime(dt.now(), "%Y-%m-%d %H:%M:%S")))
+    print("**************************************************************************")
 
 def main(parser_args):
     # start timing
@@ -251,6 +405,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_path", "-ckpt_path", dest="ckpt_path", type=str, default=None,
                         help="Filepath to the checkpoint to resume training")
 
+    parser.add_argument("--seed","-seed",type=int,help="seed number",default=32)
     args = parser.parse_args()
-    main(args)
+    lightning_main(args)
   

@@ -20,3 +20,4 @@ ml TensorFlow/2.6.0-CUDA-11.5
 ml Horovod/0.24.3
 ml Cartopy/0.20.0
 ml Graphviz/2.49.3
+ml unload typing-extensions
