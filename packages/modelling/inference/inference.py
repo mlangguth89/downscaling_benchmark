@@ -291,7 +291,7 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
         # load existing data from inference
         ncfile_out = Path(plot_dir, "..").joinpath(f"downscaled_{varname}_{model_type}.nc")
         ds_out = xr.open_dataset(ncfile_out)
-        score_engine = InferenceScores(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], dims=ds_out["ref"].dims[1::])
+        score_engine = InferenceScores(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], dims=ds_out[f"{varname}_ref"].dims[1::])
         ref_score = score_engine(score_name)
     else:
         ds_score = xr.open_dataset(score_file)
