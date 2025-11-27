@@ -449,7 +449,7 @@ class Harris_WGAN_Model(keras.Model):
             # ensemble stacked in an additional dimension at the end
             noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
-        noise_iter = noise[0:self._batch_size:, ...]
+        noise_iter = noise[0:self._batch_size, ...]
         noise_0 = noise_iter[..., 0]
         gen_in = [cond] + [const] + [noise_0]
         gen_data = self.generator.model(gen_in, training=True)
@@ -613,7 +613,7 @@ class Harris_WGAN(Sha_WGAN):
                          and the number of static high-resolution predictors, respectively.
         :param hparams: Dictionary of custom hyperparameters.
         :param varnames_tar: List of target variable names.
-        :param savedir: Drectory to save the model.
+        :param savedir: Directory to save the model.
         :param expname: The name of the experiment.
         :param with_horovod: Whether to use Horovod for distributed training.
         :param batch_size: The batch size from dataset configuration (required for training).
@@ -778,7 +778,7 @@ class Harris_WGAN(Sha_WGAN):
         # load saved models
         generator = keras.models.load_model(gen_dir, compile=False)
         
-        # construct noise genartor required for ensemble 
+        # construct noise generator required for ensemble 
         noise_gen = NoiseGenerator(list(generator.get_layer(name='noise_input').input_shape[0][1:]), batch_size)
 
         hparams_wgan_only = self.hparams.copy()
