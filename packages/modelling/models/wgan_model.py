@@ -285,7 +285,7 @@ class Sha_WGAN_Model(keras.Model):
 class Sha_WGAN(AbstractModelClass):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str,
-                 with_horovod: bool = False):
+                 with_horovod: bool = False, **kwargs):
         """
         Imsantiate a Wasserstein GAN (WGAN) model.
         :param generator: generator model returning the downsampled data
@@ -296,6 +296,7 @@ class Sha_WGAN(AbstractModelClass):
         :param savedir: directory to save the model
         :param expname: name of the experiment
         :param with_horovod: whether to use horovod for distributed training
+        :param kwargs: additional keyword arguments (ignored)
         """
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [8, 8, 8]
@@ -503,7 +504,7 @@ class Sha_WGAN(AbstractModelClass):
 
     
 
-    def load_inference_model(self, model_dir, format="tf"):
+    def load_inference_model(self, model_dir, format="tf", **kwargs):
             
         # construct directories to generator- and critic model from model directory
         model_dir = Path(model_dir)

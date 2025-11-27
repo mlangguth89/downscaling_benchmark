@@ -144,8 +144,10 @@ def main(parser_args):
 
     # instantiate model...
     # Note: Parse varnames from train_info since list of varnames might get updated depending on model and dataset configuration
+    # Pass batch_size from dataset config for models that require it (e.g., Harris WGAN)
+    model_config = {**dist_model_config, "batch_size": ds_dict["batch_size"]}
     model = model_instance(shape_in, list(train_info["all_predictands"].keys()), hparams_dict, model_savedir, parser_args.exp_name, 
-                           **dist_model_config) 
+                           **model_config) 
 
     # ... compile
     model.compile(**model.compile_options)

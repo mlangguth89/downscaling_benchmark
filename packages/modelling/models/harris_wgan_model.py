@@ -298,12 +298,13 @@ class NoiseGenerator(object):
     
 
 class Harris_WGAN_Model(keras.Model):
-    def __init__(self, generator, critic, hparams, expname, noise_gen=None):
+    def __init__(self, generator, critic, hparams, expname, batch_size=None, noise_gen=None):
         super().__init__()
         self.generator = generator
         self.critic = critic
         self.hparams = hparams
         self._expname = expname
+        self._batch_size = batch_size
         self.noise_gen = noise_gen
         if self.hparams["noise_input"]:
             self.noise_amplitude = 1.
@@ -314,15 +315,21 @@ class Harris_WGAN_Model(keras.Model):
         if noise_gen:
             assert isinstance(noise_gen, NoiseGenerator), "Parsed noise_gen must be an instance of the NoiseGenerator-class"
         
-    def compile(self, optimizer, loss, **kwargs):
+    def compile(self, optimizer, loss, batch_size=None, **kwargs):
         super().compile(**kwargs)
         self.c_optimizer, self.g_optimizer = optimizer
+        
+        # Use batch_size from compile argument, instance attribute, or raise error
+        if batch_size is not None:
+            self._batch_size = batch_size
+        if self._batch_size is None:
+            raise ValueError("batch_size must be provided either during model initialization or compile()")
         
         # losses
         if not self.noise_gen:        
             self.noise_gen = NoiseGenerator(
                 self.generator._input_shape["lo_res_inputs"][:2]+[self.hparams["noise_channels"]],
-                self.hparams["batch_size"]*(self.hparams["d_steps"] + 1)
+                self._batch_size*(self.hparams["d_steps"] + 1)
             )
 
         # losses
@@ -346,7 +353,7 @@ class Harris_WGAN_Model(keras.Model):
         for i in range(self.hparams["d_steps"]):
             with tf.GradientTape() as tape_critic:
                 
-                ist, ie = i * self.hparams["batch_size"], (i + 1) * self.hparams["batch_size"]
+                ist, ie = i * self._batch_size, (i + 1) * self._batch_size
                 cond_iter = cond[ist:ie, ...]
                 const_iter = const[ist:ie, ...]
                 sample_iter = sample[ist:ie, ...]
@@ -375,10 +382,10 @@ class Harris_WGAN_Model(keras.Model):
         # train generator
         with tf.GradientTape() as tape_generator:
             # generate (downscaled) data
-            cond_iter = cond[-self.hparams["batch_size"]:, ...]
-            const_iter = const[-self.hparams["batch_size"]:, ...]
-            noise_iter = noise[-self.hparams["batch_size"]:, ...]
-            sample_iter = sample[-self.hparams["batch_size"]:, ...]
+            cond_iter = cond[-self._batch_size:, ...]
+            const_iter = const[-self._batch_size:, ...]
+            noise_iter = noise[-self._batch_size:, ...]
+            sample_iter = sample[-self._batch_size:, ...]
 
             # train generator for each ensemble member
             noise_iter_k = noise_iter[..., 0]
@@ -442,7 +449,7 @@ class Harris_WGAN_Model(keras.Model):
             # ensemble stacked in an additional dimension at the end
             noise = tf.stack([self.noise_gen(std=self.noise_amplitude) for _ in range(self.hparams["ensemble_size"] + 1)], axis=-1)
         
-        noise_iter = noise[0:self.hparams["batch_size"]:, ...]
+        noise_iter = noise[0:self._batch_size:, ...]
         noise_0 = noise_iter[..., 0]
         gen_in = [cond] + [const] + [noise_0]
         gen_data = self.generator.model(gen_in, training=True)
@@ -595,7 +602,7 @@ class Harris_WGAN_Model(keras.Model):
 class Harris_WGAN(Sha_WGAN):
     
     def __init__(self, generator: AbstractModelClass, critic: AbstractModelClass, shape_in: List, hparams: dict,
-                 varnames_tar: List, savedir: str, expname: str, with_horovod: bool = False):
+                 varnames_tar: List, savedir: str, expname: str, with_horovod: bool = False, batch_size: int = None):
         """
         Initialize the Harris_WGAN model class.
         !!! Note: Inherits from Sha_WGAN and overwrites methods when necessary only !!!
@@ -609,9 +616,13 @@ class Harris_WGAN(Sha_WGAN):
         :param savedir: Drectory to save the model.
         :param expname: The name of the experiment.
         :param with_horovod: Whether to use Horovod for distributed training.
+        :param batch_size: The batch size from dataset configuration (required for training).
         """        
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
             shape_in = [1, 1, 1, 1]
+        
+        # Store batch_size before calling super().__init__ as it's needed for model setup
+        self._batch_size = batch_size
 
         super().__init__(generator, critic, shape_in, hparams, varnames_tar, savedir, expname, with_horovod)
 
@@ -703,7 +714,7 @@ class Harris_WGAN(Sha_WGAN):
         hparams_wgan_only.pop("hparams_generator")
                 
         # ...and create Harris_WGAN model instance
-        self.model = Harris_WGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname)
+        self.model = Harris_WGAN_Model(gen_model, critc_model, hparams_wgan_only, self._expname, batch_size=self._batch_size)
 
         return gen_model, critc_model
 
@@ -739,7 +750,20 @@ class Harris_WGAN(Sha_WGAN):
         return lr_scheduler
 
 
-    def load_inference_model(self, model_dir, format="tf"):
+    def load_inference_model(self, model_dir, format="tf", batch_size=None):
+        """
+        Load a trained Harris WGAN model for inference.
+        
+        :param model_dir: Directory where the model is saved.
+        :param format: Format of the saved model ('tf' or 'h5').
+        :param batch_size: Batch size for inference (required for noise generation).
+        :return: Harris_WGAN_Model instance for inference.
+        """
+        # Use provided batch_size or fall back to instance attribute
+        if batch_size is None:
+            batch_size = self._batch_size
+        if batch_size is None:
+            raise ValueError("batch_size must be provided for inference either during model initialization or as argument to load_inference_model()")
             
         # construct directories to generator- and critic model from model directory
         model_dir = Path(model_dir)
@@ -755,7 +779,7 @@ class Harris_WGAN(Sha_WGAN):
         generator = keras.models.load_model(gen_dir, compile=False)
         
         # construct noise genartor required for ensemble 
-        noise_gen = NoiseGenerator(list(generator.get_layer(name='noise_input').input_shape[0][1:]), self.hparams["batch_size"])
+        noise_gen = NoiseGenerator(list(generator.get_layer(name='noise_input').input_shape[0][1:]), batch_size)
 
         hparams_wgan_only = self.hparams.copy()
         hparams_wgan_only.pop("hparams_critic")
@@ -763,7 +787,7 @@ class Harris_WGAN(Sha_WGAN):
         
         # get construct model for inference exposing predict-method
         # Note the predict-step makes use of the generator only. Thus, the critic model is not needed here
-        wgan_model = Harris_WGAN_Model(generator, None, hparams_wgan_only, expname, noise_gen=noise_gen)
+        wgan_model = Harris_WGAN_Model(generator, None, hparams_wgan_only, expname, batch_size=batch_size, noise_gen=noise_gen)
         
         return wgan_model
 
@@ -772,7 +796,7 @@ class Harris_WGAN(Sha_WGAN):
         """
         Note: Hyperparameter defaults taken from 1) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/local_config.yaml and 2) https://github.com/ECMWFCode4Earth/tesserugged/blob/master/dev/gan/dsrnngan/models.py
         """
-        self.hparams_default = {"batch_size": 2, "nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
+        self.hparams_default = {"nepochs": 30, "lr_decay": False, "decay_start": 3, "decay_end": 20, "stream_mode": "lo_input",
                                 "l_embed": False, "ds_steps": [4,], "d_steps": 5, "recon_weight": 1000., "gp_weight": 10., "optimizer": "adam", 
                                 "lcheckpointing": True, "learlystopping": False, "recon_loss": "ensmeanMSE", "ensemble_size": 8, "noise_input": True,
                                 "noise_channels": 4, "hparams_generator": {}, "hparams_critic": {} }

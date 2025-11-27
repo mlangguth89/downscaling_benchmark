@@ -207,7 +207,7 @@ class UNetModelBase:
 
 class Sha_UNet(AbstractModelClass):
     
-    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False, with_horovod: bool = False):
+    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, concat_out: bool = False, with_horovod: bool = False, **kwargs):
         
         self.dummy_shape = [8, 8, 1]    
         if not shape_in:                    # shape_in can be None when loading model for inference -> set dummy-value to allow model construction
@@ -395,7 +395,7 @@ class Sha_UNet(AbstractModelClass):
 
 class DeepRU_UNet(Sha_UNet):
     
-    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str):
+    def __init__(self, shape_in: List, hparams: dict, varnames_tar: List, savedir: str, expname: str, **kwargs):
         
         # get building blocks for U-Net
         building_blocks = UNetModelBase()

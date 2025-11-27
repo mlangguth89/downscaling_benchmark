@@ -53,10 +53,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     # construct model directory path and infer model type
     model_base = Path(model_base_dir).joinpath(exp_name)
 
-    # get trained model for inference
-    trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type)
-
-    # read configuration files
+    # read dataset configuration files first (needed for batch_size)
     ds_config_pattern = f"config_ds_{dataset}.json"
     ds_config_file = glob.glob(os.path.join(model_base, ds_config_pattern))
     if not ds_config_file:
@@ -67,6 +64,10 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
             func_logger.info(f"Read dataset configuration file '{ds_config_file[0]}'.")
             ds_dict = js.load(dsf)
             func_logger.debug(ds_dict)
+
+    # get trained model for inference (pass batch_size from dataset config)
+    trained_model, model_info = get_trained_model(model_base, exp_name, last_or_epoch, model_type, 
+                                                   batch_size=ds_dict["batch_size"])
 
     #logger.info(f"Start postprocessing at {dt.now().strftime('%Y-%m-%d %H:%M:%S')}")
     func_logger.info(f"Start postprocessing at...")
@@ -91,11 +92,6 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
     data_norm.read_norms_from_file(js_norm)
 
-    # hacky fix for Harris WGAN batch size
-    if model_type == "harris_wgan":
-        func_logger.info("Adjust batch size for Harris WGAN model.")
-        ds_dict["batch_size"] = 36
-    
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
                                            shuffle=False, lrepeat=False, drop_remainder=False) 
@@ -173,13 +169,14 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     return ds_out, test_info
 
 
-def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch: Union[str, int], model_type: str = None):
+def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch: Union[str, int], model_type: str = None, batch_size: int = None):
     """
     Get trained model from model base directory and output base directory
     :param model_base: Base directory of model
     :param exp_name: Experiment name
     :param last_or_epoch: Flag to either use last or best checkpointed model or the checkpointed model from a specific epoch  
     :param model_type: Model type
+    :param batch_size: Batch size from dataset configuration (required for models like Harris WGAN)
     :return: Trained model for inference and model information as dictionary
     """
     # get local logger
@@ -234,23 +231,19 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
             func_logger.info(f"Read model configuration file '{md_config_file[0]}'.")
             hparams_dict = js.load(mdf)
             func_logger.debug(hparams_dict)
-    
-    # hacky fix for Harris WGAN batch size
-    if model_type == "harris_wgan":
-        func_logger.info("Adjust batch size for Harris WGAN model.")
-        hparams_dict["batch_size"] = 36
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
 
     # initialize model with dummy-values for shape_in and varnames_tar as they are obtained when loading saved model
     # Note: shape_in = None triggers dummy-values of shape_in in model classes
+    # Pass batch_size for models that require it (e.g., Harris WGAN)
     vars_tar_dummy = ["dummy1", "dummy2"] if finditem(model_info["hparams_dict"], "z_branch", False) else "dummy"
-    trained_model = model_instance(None, vars_tar_dummy, hparams_dict, model_base, exp_name)
+    trained_model = model_instance(None, vars_tar_dummy, hparams_dict, model_base, exp_name, batch_size=batch_size)
 
     # ...and load checkpointed model
     func_logger.info(f"Load model '{exp_name}' from {model_dir}")
-    trained_model = trained_model.load_inference_model(model_dir)
+    trained_model = trained_model.load_inference_model(model_dir, batch_size=batch_size)
     func_logger.info(f"Model was loaded successfully.")
 
     return trained_model, model_info
@@ -346,11 +339,6 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
     # initialize score-array
     score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
                              dims=["predictor", "time"])
-
-    # hacky fix for Harris WGAN batch size
-    if model_type == "harris_wgan":
-        func_logger.info("Adjust batch size for Harris WGAN model.")
-        data_loader_opt["batch_size"] = 36
 
     stream_mode = data_loader_opt.pop("stream_mode")
     for var in predictors:

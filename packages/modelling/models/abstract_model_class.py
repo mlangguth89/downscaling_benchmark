@@ -74,12 +74,13 @@ class AbstractModelClass(ABC):
         if compile is True:
             self.model.compile(**self.compile_options)
 
-    def load_inference_model(self, model_dir: str, compile: bool = False) -> keras.Model:
+    def load_inference_model(self, model_dir: str, compile: bool = False, **kwargs) -> keras.Model:
         """
         Load a model from a given directory.
 
         :param model_dir: directory where the model is saved
         :param compile: if True, the model will be compiled with the compile options
+        :param kwargs: additional keyword arguments (for subclass compatibility)
         :return: the loaded model
         """
         model = keras.models.load_model(model_dir, custom_objects=self.custom_objects)
