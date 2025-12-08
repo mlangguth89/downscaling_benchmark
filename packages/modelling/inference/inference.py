@@ -235,8 +235,10 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
     data_norm = GeneralNormalizer(norm_config, ds_dict["norm_dims"])
     data_norm.read_norms_from_file(js_norm)
 
-    #ds_dict["batch_size"] = 36
-    #ds_dict["batch_size"] = 19
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        ds_dict["batch_size"] = 36
     
     # get dataset pipeline for inference    
     tfds_test, test_info = prepare_dataset(data_dir, dataset, ds_dict, model_info["hparams_dict"], "test", norm_obj=data_norm, 
@@ -290,7 +292,7 @@ def results_from_inference(model_base_dir: Union[Path, str], exp_name: str, data
 
     # for the global radiance downscaling task, we need to rescale the data
     if tar_varname == "glob_rad_pp_ratio_tar":
-        func_logger.info("Re-scale global_rad_pp_ration to global_rad_pp.")
+        func_logger.info("Re-scale global_rad_pp_ratio to global_rad_pp.")
         y_pred = y_pred * ds_test["tisr_tar"]
         tar_varname = "glob_rad_pp_tar"
 
@@ -454,8 +456,10 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
             hparams_dict = js.load(mdf)
             func_logger.debug(hparams_dict)
     
-    #hparams_dict["batch_size"] = 36
-    #hparams_dict["batch_size"] = 19
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        hparams_dict["batch_size"] = 36
 
     model_info = {"model_dir": model_dir, "model_type": model_type, "model_longname": model_longname,
                   "nsubmodels": nsubmodels, "hparams_dict": hparams_dict}
@@ -516,7 +520,7 @@ def run_feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, va
     return feature_scores
 
 def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6)):
+                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6), model_type: str = None, varname: str = None):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -528,22 +532,34 @@ def run_feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar:
     :param data_loader_opt: Data loader options that will be parsed to the make_tf_dataset_allmem-method
     :param plot_dir: Directory to save plot files
     :param patch_size: Patch size for feature importance analysis
+    :param model_type: Model type
+    :param varname: Name of downscaled variable (for reference score file path)
     """
     # get local logger
     func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
     
+    # sanity check predictor type
+    if isinstance(predictors, dict):
+        predictors = list(predictors.keys())
+
     # get feature importance scores
     func_logger.debug(f"Start feature importance analysis for {score_name}...")
     feature_scores = feature_importance(ds, predictors, varname_tar, model, norm, score_name, data_loader_opt, 
-                                        patch_size=patch_size)
-    
+                                        patch_size=patch_size, model_type=model_type)
+
     # get reference score
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
     score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
-    ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}"] 
+        func_logger.warning(f"File {score_file} not found. Calculating rmse now...")
+        # load existing data from inference
+        ncfile_out = Path(plot_dir, "..").joinpath(f"downscaled_{varname}_{model_type}.nc")
+        ds_out = xr.open_dataset(ncfile_out)
+        score_engine = InferenceScores(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], dims=ds_out[f"{varname}_ref"].dims[1::])
+        ref_score = score_engine(score_name)
+    else:
+        ds_score = xr.open_dataset(score_file)
+        ref_score = ds_score[f"{score_name}"] 
 
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
@@ -635,7 +651,7 @@ def feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, varnam
     return score_all
 
 def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                       data_loader_opt: dict, patch_size = (8, 8)):
+                       data_loader_opt: dict, patch_size = (8, 8), model_type: str = None):
     """
     Run featiure importance analysis based on permutation method (see signature of sample_permut_xyt-method)
     :param ds: The unnormalized (test-)dataset
@@ -670,6 +686,12 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
     score_all = xr.DataArray(np.zeros((len(predictors), ntimes)), coords={"predictor": predictors, "time": ds["time"]},
                              dims=["predictor", "time"])
 
+    # hacky fix for Harris WGAN batch size
+    if model_type == "harris_wgan":
+        func_logger.info("Adjust batch size for Harris WGAN model.")
+        data_loader_opt["batch_size"] = 36
+
+    stream_mode = data_loader_opt.pop("stream_mode")
     for var in predictors:
         func_logger.info(f"Run sample importance analysis for {var}...")
         # get copy of sample array
@@ -683,7 +705,6 @@ def feature_importance(ds: xr.Dataset, predictors: list_or_str, varname_tar: str
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        stream_mode = data_loader_opt.pop("stream_mode")
         tfds_test = make_tf_dataset_allmem(stream_mode, ds_copy, **data_loader_opt)
 
         # predict

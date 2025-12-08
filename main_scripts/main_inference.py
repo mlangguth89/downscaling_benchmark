@@ -133,7 +133,13 @@ def main(parser_args):
         # To-DO: make executable
         logger.info("Start feature importance analysis...")
         t0_fi = timer()
-        
+
+        plt_dir = os.path.join(plt_basedir, f"epoch_{last_or_epoch}")
+        if parser_args.ens_mem is not None:
+            plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
+
+        # create output-directory and initialze logger    
+        os.makedirs(plt_dir, exist_ok=True)
         plt_dir_importance = os.path.join(plt_dir, "feature_importance")
 
         # load test dataset
@@ -141,17 +147,17 @@ def main(parser_args):
         conf_fi = conf_inference["config_feature_importance"]
 
         # To-Do: allow for multiple target variables, e.g. for downscaling of wind components
-        varname_tar = test_info["all_predictands"][0]
+        varname_tar = list(test_info["all_predictands"].keys())[0]
         # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
         #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
         data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
                             "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
                             "lrepeat": False, "drop_remainder": False,"lshuffle": False}
                              
-        all_predictors = test_info["predictors"] + test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
+        all_predictors = test_info["predictors"] | test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
         _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
-                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)))
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (4, 4)), parser_args.model_type, varname)
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
 

@@ -25,7 +25,7 @@ BASE_DIR=$(dirname "${WORK_DIR}")
 VENV_DIR=${BASE_DIR}/virtual_envs/
 VIRT_ENV_NAME=<my_venv>
 
-# Loading mouldes
+# Loading modules
 source ../env_setup/modules_jsc_evaluation.sh
 # Activate virtual environment if needed (and possible)
 if [ -z ${VIRTUAL_ENV} ]; then
