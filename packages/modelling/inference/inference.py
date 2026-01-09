@@ -477,7 +477,7 @@ def get_trained_model(model_base: Union[Path, str], exp_name: str, last_or_epoch
     return trained_model, model_info
 
 def run_feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, varname_tar: str, model, norm, score_name: str,
-                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6)):
+                           data_loader_opt: dict, plot_dir: str, patch_size = (6, 6), model_type: str = None, varname: str = None):
     """
     Run feature importance analysis and create box-plot of results
     :param ds: Unnormalized xr.Dataset with predictors and target variable
@@ -491,7 +491,7 @@ def run_feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, va
     :param patch_size: Patch size for feature importance analysis
     """
     # get local logger
-    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance.__name__}")
+    func_logger = logging.getLogger(f"{logger_module_name}.{run_feature_importance_lightning.__name__}")
     
     # get feature importance scores
     func_logger.debug(f"Start feature importance analysis for {score_name}...")
@@ -502,9 +502,15 @@ def run_feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, va
     func_logger.debug(f"Retrieve reference score to finish feature importance analysis...")
     score_file = os.path.join(plot_dir.replace("/plots/", "/metric_files/"), f"eval_{score_name}_year.nc")
     if not os.path.exists(score_file):
-        raise FileNotFoundError(f"File {score_file} not found. Run run_evaluation_time-method for score '{score_name}' first.")
-    ds_score = xr.open_dataset(score_file)
-    ref_score = ds_score[f"{score_name}"] 
+        func_logger.warning(f"File {score_file} not found. Calculating rmse now...")
+        # load existing data from inference
+        ncfile_out = Path(plot_dir, "..").joinpath(f"downscaled_{varname}_{model_type}.nc")
+        ds_out = xr.open_dataset(ncfile_out,engine="netcdf4")
+        score_engine = InferenceScores(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], dims=ds_out[f"{varname}_ref"].dims[1::])
+        ref_score = score_engine(score_name)
+    else:
+        ds_score = xr.open_dataset(score_file)
+        ref_score = ds_score[f"{score_name}"] 
 
     rel_changes = feature_scores / ref_score
     max_rel_change = int(np.ceil(np.amax(rel_changes) + 1.))
@@ -616,6 +622,7 @@ def feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, varnam
             devices=1,
             accelerator="cuda")
     
+    stream_mode = data_loader_opt.pop("stream_mode")
     for var in predictors:
         func_logger.info(f"Run sample importance analysis for {var}...")
         # get copy of sample array
@@ -629,7 +636,7 @@ def feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, varnam
         
         # get TF dataset
         func_logger.info(f"Set-up data pipeline with permuted sample for {var}...")
-        stream_mode = data_loader_opt.pop("stream_mode")
+
         tfds_test = make_torch_dataloader_allmem(stream_mode, ds_copy, **data_loader_opt)
 
         # predict
@@ -638,7 +645,6 @@ def feature_importance_lightning(ds: xr.Dataset, predictors: list_or_str, varnam
         
         y_pred = torch.cat(y_pred)
         # convert to xarray
-        print("shape at line 624", y_pred.shape, "varname_tar", varname_tar, ground_truth.coords, ground_truth.dims)
         y_pred = convert_to_xarray(y_pred, norm, varname_tar, ground_truth.coords, ground_truth.dims, True)
 
         # calculate score

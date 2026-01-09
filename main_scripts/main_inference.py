@@ -71,7 +71,8 @@ def main_lightning(parser_args):
         t0_fi = timer()
         
         plt_dir_importance = os.path.join(plt_dir, "feature_importance")
-
+        os.makedirs(plt_dir_importance, exist_ok=True)
+        
         # load test dataset
         ds_test = xr.open_dataset(test_info["file"])
         conf_fi = conf_inference["config_feature_importance"]
@@ -87,7 +88,7 @@ def main_lightning(parser_args):
         all_predictors = list(test_info["predictors"].keys()) + list(test_info["static_predictors"].keys()) if test_info["static_predictors"] is not None else list(test_info["predictors"].keys())
 
         _ = run_feature_importance_lightning(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
-                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)))
+                                   test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (8, 8)), parser_args.model_type, varname)
         
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
 
