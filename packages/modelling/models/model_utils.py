@@ -177,6 +177,14 @@ def make_keras_pickable():
         return (unpack, (model, training_config, weights))
 
     cls = Model
-    cls.__reduce__ = __reduce__
+    cls.__reduce__ = __reduce_
+
+
+def is_keras_model(model_type):
+    keras_models = ["sha_unet","deepru","sha_wgan","harris_wgan"]
+    lightning_models = ["swinir"]
+
+    return (model_type in keras_models)
+      
 
 

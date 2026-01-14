@@ -26,7 +26,7 @@ except:
     pass
 from all_normalizations import GeneralNormalizer
 from model_engine import ModelEngine
-from model_utils import check_config_ckpt, setup_horovod_devices, check_horovod
+from model_utils import check_config_ckpt, setup_horovod_devices, check_horovod, is_keras_model
 from handle_data_class import prepare_dataset, prepare_torch_dataset
 from other_utils import print_gpu_usage, print_cpu_usage, copy_filelist, get_training_time_dict, finditem
 
@@ -407,5 +407,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--seed","-seed",type=int,help="seed number",default=32)
     args = parser.parse_args()
-    lightning_main(args)
+    
+    is_keras = is_keras_model(args.model)
+    main(args) if is_keras else lightning_main(args)
   

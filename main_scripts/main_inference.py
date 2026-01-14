@@ -23,13 +23,14 @@ import xarray as xr
 import cartopy.crs as ccrs
 from inference import results_from_inference, results_from_inference_lightning,  run_feature_importance, run_feature_importance_lightning
 from other_utils import config_logger
+from model_utils import is_keras_model
 #from other_utils import free_mem
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
 logger.setLevel(logging.DEBUG)
 
-def main_lightning(parser_args):
+def lightning_main(parser_args):
 
     ### Preparation ###
     t0 = timer()
@@ -208,6 +209,8 @@ if __name__ == "__main__":
     group.add_argument("--ckpt", "-ckpt", dest="ckpt",
                        help="ckpt to evaluate a specific checkpointed model")
     args = parser.parse_args()
-    #main(args)
-    main_lightning(args)
+    
+    is_keras = is_keras_model(args.model_type)
+    main(args) if is_keras else lightning_main(args)
+    
 
