@@ -177,7 +177,7 @@ def make_keras_pickable():
         return (unpack, (model, training_config, weights))
 
     cls = Model
-    cls.__reduce__ = __reduce_
+    cls.__reduce__ = __reduce__
 
 
 def is_keras_model(model_type):
