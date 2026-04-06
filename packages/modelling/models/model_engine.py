@@ -15,6 +15,7 @@ __update__ = "2025-03-28"
 from unet_model import Sha_UNet, DeepRU_UNet
 from wgan_model import Sha_WGAN, Critic_Simple
 from harris_wgan_model import Harris_WGAN, GeneratorHarris, CriticHarris
+from swinir_lightning_model import SwinIRLightning
 from other_utils import to_list
 
 class ModelEngine(object):
@@ -36,9 +37,10 @@ class ModelEngine(object):
     known_models = {"sha_unet": (Sha_UNet,),
                     "deepru": (DeepRU_UNet,),
                     "sha_wgan": (Sha_WGAN, Sha_UNet, Critic_Simple),
-                    "harris_wgan": (Harris_WGAN, GeneratorHarris, CriticHarris)}
+                    "harris_wgan": (Harris_WGAN, GeneratorHarris, CriticHarris),
+                    "swinir": (SwinIRLightning,)}
     
-    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN"]
+    long_names = ["Sha U-Net", "DeepRU", "Sha WGAN", "Harris WGAN","SWINIR"]
     
     assert len(known_models) == len(long_names), f"Conflicting number of known_models ({len(known_models)})" + \
                                                  f" and long_names ({len(long_names)})."

@@ -180,3 +180,11 @@ def make_keras_pickable():
     cls.__reduce__ = __reduce__
 
 
+def is_keras_model(model_type):
+    keras_models = ["sha_unet","deepru","sha_wgan","harris_wgan"]
+    lightning_models = ["swinir"]
+
+    return (model_type in keras_models)
+      
+
+
