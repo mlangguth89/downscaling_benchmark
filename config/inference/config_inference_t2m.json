@@ -1,8 +1,8 @@
 {
-  "varname": "t2m",
-  "unit": "K",
-  "do_feature_importance": true,
-  "config_feature_importance": {
-    "score_name": "rmse"
-  }
+    "varname": "t2m",
+    "unit": "K",
+    "do_feature_importance": true,
+    "config_feature_importance": {
+        "score_name": "rmse"
+    }
 }

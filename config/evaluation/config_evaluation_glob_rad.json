@@ -1,66 +1,37 @@
 {
-  "varname": "glob_rad",
-  "unit": "W m**-2",
-  "do_evaluation_time": true,
-  "config_evaluation_time": {},
-  "do_evaluation_spatial": true,
-  "config_evaluation_spatial": {},
-  "do_spectral_analysis": true,
-  "config_spectral_analysis": {},
-  "do_cond_quantile_analysis": true,
-  "config_cond_quantile_analysis": {
-    "factorization": "calibration_refinement"
-  },
-  "do_marginal_analysis": true,
-  "config_marginal_analysis": {},
-  "do_comparison_plots": true,
-  "config_comparison_plots": {
-    "score_name": "rmse_relative",
-    "nsamples": 100,
-    "cmap_name": "bwr",
-    "cmap_name_diff": "bwr",
-    "levels": [
-      0,
-      10,
-      25,
-      50,
-      75,
-      100,
-      150,
-      200,
-      250,
-      300,
-      400,
-      500,
-      600,
-      700,
-      800,
-      900,
-      1000
-    ],
-    "levels_diff": [
-      -200,
-      -175,
-      -150,
-      -125,
-      -100,
-      -75,
-      -50,
-      -25,
-      0,
-      25,
-      50,
-      75,
-      100,
-      125,
-      150,
-      200
-    ]
-  },
-  "do_feature_importance": false,
-  "config_feature_importance": {
-    "score_name": "rmse_relative"
-  },
-  "do_aggregate_scores": true,
-  "config_aggregate_scores": {}
+    "varname": "glob_rad",
+    "unit": "W m**-2",
+    "do_evaluation_time": true,
+    "config_evaluation_time": {},
+    "do_evaluation_spatial": true,
+    "config_evaluation_spatial": {},
+    "do_spectral_analysis": true,
+    "config_spectral_analysis": {},
+    "do_cond_quantile_analysis": true,
+    "config_cond_quantile_analysis": {
+        "factorization": "calibration_refinement"
+    },
+    "do_marginal_analysis": true,
+    "config_marginal_analysis": {},
+    "do_comparison_plots": true,
+    "config_comparison_plots": {
+        "score_name": "rmse_relative",
+        "nsamples": 100,
+        "cmap_name": "bwr",
+        "cmap_name_diff": "bwr",
+        "levels": [
+            0, 10, 25, 50, 75, 100, 150, 200, 250, 300, 400, 500, 600, 700, 800,
+            900, 1000
+        ],
+        "levels_diff": [
+            -200, -175, -150, -125, -100, -75, -50, -25, 0, 25, 50, 75, 100,
+            125, 150, 200
+        ]
+    },
+    "do_feature_importance": false,
+    "config_feature_importance": {
+        "score_name": "rmse_relative"
+    },
+    "do_aggregate_scores": true,
+    "config_aggregate_scores": {}
 }

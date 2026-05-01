@@ -20,7 +20,7 @@ check_argin() {
         #  exp_id=${argin#"-exp_id="}
         if [[ $argin == *"-lcontainer"* ]]; then
 	        bool_container=1
-        fi  
+        fi
     done
     if [[ -z "${bool_container}" ]]; then
         bool_container=0
@@ -139,7 +139,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   echo "${SCR_SETUP}Entering virtual environment ${VENV_DIR} to install required Python modules..."
   source "${activate_virt_env}"
- 
+
   # get machine and PYTHON-version
   MACHINE=$(hostname -f | cut -d. -f2)
   if [[ "${HOST}" == jwlogin2[2-4] ]]; then
@@ -154,7 +154,7 @@ if [[ "$ENV_EXIST" == 0 ]]; then
   pip3 install --no-cache-dir -r "${req_file}"
 
   # expand PYTHONPATH
-  export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> ${activate_virt_env} 
+  export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> ${activate_virt_env}
   export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> ${activate_virt_env}

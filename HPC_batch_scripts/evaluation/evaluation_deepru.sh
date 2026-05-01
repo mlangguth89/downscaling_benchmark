@@ -23,7 +23,7 @@ BASE_DIR=$(dirname $(dirname "${WORK_DIR}"))
 ###############################################################################
 ### PLEASE ADAPT THE FOLLOWING LINES FOR YOUR VENV AND PER VARIABLE AND PATHS
 
-# Name of virtual environment 
+# Name of virtual environment
 VENV_DIR=${BASE_DIR}/virtual_envs/
 VIRT_ENV_NAME=VENV_NAME  # PLEASE ADAPT
 
