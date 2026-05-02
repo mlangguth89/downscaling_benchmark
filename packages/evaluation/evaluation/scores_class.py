@@ -10,12 +10,13 @@ __author__ = "Michael Langguth"
 __date__ = "2022-Xx-XX"
 __update__ = "2024-09-06"
 
-from typing import List
 import logging
+from typing import List
+
 import numpy as np
 import xarray as xr
-from skimage.util import view_as_blocks
 from evaluation_utils import get_spectrum
+from skimage.util import view_as_blocks
 
 # auxiliary variable for logger
 logger_module_name = f"__main__.{__name__}"
@@ -26,19 +27,34 @@ class Scores:
     Class to calculate scores and skill scores.
     """
 
-    known_geodims = {"lon_dims": ["longitude", "lon", "rlon"],
-                     "lat_dims": ["latitude", "lat", "rlat"]} 
+    known_geodims = {
+        "lon_dims": ["longitude", "lon", "rlon"],
+        "lat_dims": ["latitude", "lat", "rlat"],
+    }
 
-    def __init__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, dims: List[str]):
+    def __init__(
+        self, data_fcst: xr.DataArray, data_ref: xr.DataArray, dims: List[str]
+    ):
         """
         :param data_fcst: forecast data to evaluate
         :param data_ref: reference or ground truth data
         """
-        self.metrics_dict = {"mse": self.calc_mse, "rmse": self.calc_rmse, "bias": self.calc_bias,
-                             "grad_amplitude": self.calc_spatial_variability, "psnr": self.calc_psnr, 
-                             "acc": self.calc_acc, "mae": self.calc_mae, "l1": self.calc_l1, "l2": self.calc_l2,
-                             "ets": self.calc_ets, "fbi": self.calc_fbi, "pss": self.calc_pss, 
-                             "me_std": self.calc_mestd, "ralsd": self.calc_ralsd, "seeps": self.calc_seeps,
+        self.metrics_dict = {
+            "mse": self.calc_mse,
+            "rmse": self.calc_rmse,
+            "bias": self.calc_bias,
+            "grad_amplitude": self.calc_spatial_variability,
+            "psnr": self.calc_psnr,
+            "acc": self.calc_acc,
+            "mae": self.calc_mae,
+            "l1": self.calc_l1,
+            "l2": self.calc_l2,
+            "ets": self.calc_ets,
+            "fbi": self.calc_fbi,
+            "pss": self.calc_pss,
+            "me_std": self.calc_mestd,
+            "ralsd": self.calc_ralsd,
+            "seeps": self.calc_seeps,
             "iqd": self.calc_iqd,
             "fss": self.calc_fss,
             "rmse_relative": self.calc_rmse,
@@ -48,14 +64,21 @@ class Scores:
         self.data_dims = list(self.data_fcst.dims)
         self.data_ref = data_ref
         self.avg_dims = dims
-        self.knwon_geodims = {"lat_dims": ["rlat", "lat", "latitude"], "lon_dims": ["rlon", "lon", "longitude"]}
+        self.knwon_geodims = {
+            "lat_dims": ["rlat", "lat", "latitude"],
+            "lon_dims": ["rlon", "lon", "longitude"],
+        }
 
     def __call__(self, score_name, **kwargs):
         try:
             score_func = self.metrics_dict[score_name]
         except:
-            raise ValueError(f"{score_name} is not an implemented score." +
-                             "Choose one of the following: {0}".format(", ".join(self.metrics_dict.keys())))
+            raise ValueError(
+                f"{score_name} is not an implemented score."
+                + "Choose one of the following: {0}".format(
+                    ", ".join(self.metrics_dict.keys())
+                )
+            )
 
         return score_func(**kwargs)
 
@@ -80,9 +103,12 @@ class Scores:
             raise ValueError("data_fcst must be a xarray DataArray.")
 
         if not list(da_ref.dims) == self.data_dims:
-            raise ValueError("Dimensions of data_fcst and data_ref must match, but got:" +
-                             "[{0}] vs. [{1}]".format(", ".join(list(da_ref.dims)),
-                                                      ", ".join(self.data_dims)))
+            raise ValueError(
+                "Dimensions of data_fcst and data_ref must match, but got:"
+                + "[{0}] vs. [{1}]".format(
+                    ", ".join(list(da_ref.dims)), ", ".join(self.data_dims)
+                )
+            )
 
         self._data_ref = da_ref
 
@@ -99,8 +125,10 @@ class Scores:
             dim_stat = [avg_dim in self.data_dims for avg_dim in dims]
             if not all(dim_stat):
                 ind_bad = [i for i, x in enumerate(dim_stat) if not x]
-                raise ValueError("The following dimensions for score-averaging are not " +
-                                 "part of the data: {0}".format(", ".join(np.array(dims)[ind_bad])))
+                raise ValueError(
+                    "The following dimensions for score-averaging are not "
+                    + "part of the data: {0}".format(", ".join(np.array(dims)[ind_bad]))
+                )
 
             self._avg_dims = dims
 
@@ -110,10 +138,18 @@ class Scores:
         :param thres: threshold to define events
         :return: (a, b, c, d)-tuple of 2x2 contingency table
         """
-        a = ((self.data_fcst >= thresh) & (self.data_ref >= thresh)).sum(dim=self.avg_dims)
-        b = ((self.data_fcst >= thresh) & (self.data_ref < thresh)).sum(dim=self.avg_dims)
-        c = ((self.data_fcst < thresh) & (self.data_ref >= thresh)).sum(dim=self.avg_dims)
-        d = ((self.data_fcst < thresh) & (self.data_ref < thresh)).sum(dim=self.avg_dims)
+        a = ((self.data_fcst >= thresh) & (self.data_ref >= thresh)).sum(
+            dim=self.avg_dims
+        )
+        b = ((self.data_fcst >= thresh) & (self.data_ref < thresh)).sum(
+            dim=self.avg_dims
+        )
+        c = ((self.data_fcst < thresh) & (self.data_ref >= thresh)).sum(
+            dim=self.avg_dims
+        )
+        d = ((self.data_fcst < thresh) & (self.data_ref < thresh)).sum(
+            dim=self.avg_dims
+        )
 
         return a, b, c, d
 
@@ -125,15 +161,15 @@ class Scores:
         """
         a, b, c, d = self.get_2x2_event_counts(thresh)
         n = a + b + c + d
-        ar = (a + b)*(a + c)/n      # random reference forecast
-        
-        denom = (a + b + c - ar)
+        ar = (a + b) * (a + c) / n  # random reference forecast
 
-        ets = (a - ar)/denom
+        denom = a + b + c - ar
+
+        ets = (a - ar) / denom
         ets = ets.where(denom > 0, np.nan)
 
         return ets
-    
+
     def calc_fbi(self, thresh=0.1):
         """
         Calculates Frequency bias (FBI) on data.
@@ -142,40 +178,42 @@ class Scores:
         """
         a, b, c, _ = self.get_2x2_event_counts(thresh)
 
-        denom = a+c
-        fbi = (a + b)/denom
+        denom = a + c
+        fbi = (a + b) / denom
 
         fbi = fbi.where(denom > 0, np.nan)
 
         return fbi
-    
+
     def calc_pss(self, thresh=0.1):
         """
         Calculates Peirce Skill Score (PSS) on data.
         :param thres: threshold to define events
         :return: pss-values
         """
-        a, b, c, d = self.get_2x2_event_counts(thresh)      
+        a, b, c, d = self.get_2x2_event_counts(thresh)
 
-        denom = (a + c)*(b + d)
-        pss = (a*d - b*c)/denom
+        denom = (a + c) * (b + d)
+        pss = (a * d - b * c) / denom
 
         pss = pss.where(denom > 0, np.nan)
 
-        return pss   
+        return pss
 
     def calc_l1(self, **kwargs):
         """
         Calculate the L1 error norm of forecast data w.r.t. reference data.
         L1 will be divided by the number of samples along the average dimensions.
         Similar to MAE, but provides just a number divided by number of samples along average dimensions.
-        :return: L1-error 
+        :return: L1-error
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
-        
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_l1.__name__}"
+        )
+
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_l1 are without effect.")   
+            func_logger.debug("Passed keyword arguments to calc_l1 are without effect.")
 
         l1 = np.sum(np.abs(self.data_fcst - self.data_ref))
 
@@ -183,18 +221,20 @@ class Scores:
         l1 /= np.prod(len_dims)
 
         return l1
-    
+
     def calc_l2(self, **kwargs):
         """
         Calculate the L2 error norm of forecast data w.r.t. reference data.
         Similar to RMSE, but provides just a number divided by number of samples along average dimensions.
-        :return: L2-error 
+        :return: L2-error
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_l1.__name__}")
-        
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_l1.__name__}"
+        )
+
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_l2 are without effect.")    
+            func_logger.debug("Passed keyword arguments to calc_l2 are without effect.")
 
         l2 = np.sum(np.square(self.data_fcst - self.data_ref))
 
@@ -202,17 +242,21 @@ class Scores:
         l2 /= np.prod(len_dims)
 
         return l2
-    
+
     def calc_mae(self, relative: bool = False, **kwargs):
         """
         Calculate mean absolute error (MAE) of forecast data w.r.t. reference data
         :return: MAE averaged over provided dimensions
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_mae.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_mae.__name__}"
+        )
 
         if kwargs:
-            func_logger.debug("Passed keyword arguments to calc_mae are without effect.")    
+            func_logger.debug(
+                "Passed keyword arguments to calc_mae are without effect."
+            )
 
         mae = np.abs(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
 
@@ -242,7 +286,7 @@ class Scores:
 
         # calculate mse
         mse = np.square(self.data_fcst - self.data_ref).mean(dim=self.avg_dims)
-        
+
         if relative:
             func_logger.info(f"kwarg {relative = } => calculating relative mse.")
             mse = mse / np.square(self.data_ref.mean(dim=self.avg_dims))
@@ -275,19 +319,21 @@ class Scores:
             rmse = np.sqrt(self.calc_mse(relative=relative))
 
         return rmse
-    
+
     def calc_acc(self, clim_mean: xr.DataArray, spatial_dims: List = ["lat", "lon"]):
         """
         Calculate anomaly correlation coefficient (ACC).
         :param clim_mean: climatological mean of the data
-        :param spatial_dims: names of spatial dimensions over which ACC are calculated. 
+        :param spatial_dims: names of spatial dimensions over which ACC are calculated.
                              Note: No averaging is possible over these dimensions.
         :return acc: Averaged ACC (except over spatial_dims)
         """
 
         fcst_ano, obs_ano = self.data_fcst - clim_mean, self.data_ref - clim_mean
 
-        acc = (fcst_ano*obs_ano).sum(spatial_dims)/np.sqrt(fcst_ano.sum(spatial_dims)*obs_ano.sum(spatial_dims))
+        acc = (fcst_ano * obs_ano).sum(spatial_dims) / np.sqrt(
+            fcst_ano.sum(spatial_dims) * obs_ano.sum(spatial_dims)
+        )
 
         mean_dims = [x for x in self.avg_dims if x not in spatial_dims]
         if len(mean_dims) > 0:
@@ -328,17 +374,17 @@ class Scores:
         :param kwargs: known keyword argument 'pixel_max' for maximum value of data
         :return: averaged PSNR
         """
-        pixel_max = kwargs.get("pixel_max", 1.)
+        pixel_max = kwargs.get("pixel_max", 1.0)
 
         mse = self.calc_mse()
         if np.count_nonzero(mse) == 0:
             psnr = mse
-            psnr[...] = 100.
+            psnr[...] = 100.0
         else:
-            psnr = 20. * np.log10(pixel_max / np.sqrt(mse))
+            psnr = 20.0 * np.log10(pixel_max / np.sqrt(mse))
 
         return psnr
-    
+
     def calc_mestd(self, downscaling_fac: int = 4, **kwargs):
         """
         Calculate the mean error of standard deviation of forecast data w.r.t. reference data
@@ -347,40 +393,61 @@ class Scores:
         :param downscaling_fac: downscaling factor (defines patching)
         :return: mean error of standard deviation
         """
-        xy_dims = [self.check_for_coords(self.data_dims, "lon"), self.check_for_coords(self.data_dims, "lat")]
+        xy_dims = [
+            self.check_for_coords(self.data_dims, "lon"),
+            self.check_for_coords(self.data_dims, "lat"),
+        ]
         dims_no_xy = [dim for dim in self.data_dims if dim not in xy_dims]
-    
+
         # ensure that spatial dimensions are the first two dimensions for later patching
-        data_fcst = self.data_fcst.transpose(*xy_dims, *dims_no_xy,).copy()
+        data_fcst = self.data_fcst.transpose(
+            *xy_dims,
+            *dims_no_xy,
+        ).copy()
         data_ref = self.data_ref.transpose(*xy_dims, *dims_no_xy).copy()
 
-        data_sh = data_fcst.shape    
+        data_sh = data_fcst.shape
 
-        # Patching forecast data, 
+        # Patching forecast data,
         # Note:
-        # view_as_blocks results into an array with shape: (np, nq, 1, nd, nd, ...) 
+        # view_as_blocks results into an array with shape: (np, nq, 1, nd, nd, ...)
         # where np and nq correspond to the number of patches in spatial directions and nd to the patch size (=downscaling_fac)
-        data_fcst_patches = np.squeeze(view_as_blocks(data_fcst.values, block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::])))
+        data_fcst_patches = np.squeeze(
+            view_as_blocks(
+                data_fcst.values,
+                block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::]),
+            )
+        )
         # Patching ground truth data
-        data_ref_patches = np.squeeze(view_as_blocks(data_ref.values, block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::])))
-        
+        data_ref_patches = np.squeeze(
+            view_as_blocks(
+                data_ref.values,
+                block_shape=(downscaling_fac, downscaling_fac, *data_sh[2::]),
+            )
+        )
+
         # Calculate standard deviation for each patch
         std_fcst_patches = np.std(data_fcst_patches, axis=(2, 3))
         std_ref_patches = np.std(data_ref_patches, axis=(2, 3))
-        
+
         # Calculate mean error of the standard deviation over all patches
-        mean_error_std = np.mean(np.abs(std_fcst_patches - std_ref_patches), axis=(0, 1))
+        mean_error_std = np.mean(
+            np.abs(std_fcst_patches - std_ref_patches), axis=(0, 1)
+        )
 
         # convert back to DataArray
-        mean_error_std = xr.DataArray(mean_error_std, coords={dim: data_fcst[dim] for dim in dims_no_xy}, dims=dims_no_xy)
+        mean_error_std = xr.DataArray(
+            mean_error_std,
+            coords={dim: data_fcst[dim] for dim in dims_no_xy},
+            dims=dims_no_xy,
+        )
 
         # apply further averaging if requested
         avg_dims = kwargs.get("non_spatial_avg_dims", None)
         if avg_dims is not None:
             mean_error_std = mean_error_std.mean(dim=avg_dims)
-        
-        return mean_error_std
 
+        return mean_error_std
 
     def calc_spatial_variability(self, **kwargs):
         """
@@ -396,13 +463,20 @@ class Scores:
         fcst_grad = self.calc_geo_spatial_diff(self.data_fcst, order=order)
         ref_grd = self.calc_geo_spatial_diff(self.data_ref, order=order)
 
-        ratio_spat_variability = (fcst_grad / ref_grd)
+        ratio_spat_variability = fcst_grad / ref_grd
         if avg_dims is not None:
             ratio_spat_variability = ratio_spat_variability.mean(dim=avg_dims)
 
         return ratio_spat_variability
 
-    def calc_seeps(self, seeps_weights: xr.DataArray, t1: xr.DataArray, t3: xr.DataArray, spatial_dims: List, **kwargs):
+    def calc_seeps(
+        self,
+        seeps_weights: xr.DataArray,
+        t1: xr.DataArray,
+        t3: xr.DataArray,
+        spatial_dims: List,
+        **kwargs,
+    ):
         """
         Calculates stable equitable error in probabiliyt space (SEEPS), see Rodwell et al., 2011
         :param seeps_weights: SEEPS-parameter matrix to weight contingency table elements
@@ -413,16 +487,29 @@ class Scores:
         """
 
         def seeps(data_ref, data_fcst, thr_light, thr_heavy, seeps_weights):
-            ob_ind = (data_ref > thr_light).astype(int) + (data_ref >= thr_heavy).astype(int)
-            fc_ind = (data_fcst > thr_light).astype(int) + (data_fcst >= thr_heavy).astype(int)
-            indices = fc_ind * 3 + ob_ind  # index of each data point in their local 3x3 matrices
-            seeps_val = seeps_weights[indices, np.arange(len(indices))]  # pick the right weight for each data point
-            
-            return 1.-seeps_val
-        
+            ob_ind = (data_ref > thr_light).astype(int) + (
+                data_ref >= thr_heavy
+            ).astype(int)
+            fc_ind = (data_fcst > thr_light).astype(int) + (
+                data_fcst >= thr_heavy
+            ).astype(int)
+            indices = (
+                fc_ind * 3 + ob_ind
+            )  # index of each data point in their local 3x3 matrices
+            seeps_val = seeps_weights[
+                indices, np.arange(len(indices))
+            ]  # pick the right weight for each data point
+
+            return 1.0 - seeps_val
+
         if self.data_fcst.ndim == 3:
-            assert len(spatial_dims) == 2, f"Provide two spatial dimensions for three-dimensional data."
-            data_fcst, data_ref = self.data_fcst.stack({"xy": spatial_dims}), self.data_ref.stack({"xy": spatial_dims})
+            assert len(spatial_dims) == 2, (
+                f"Provide two spatial dimensions for three-dimensional data."
+            )
+            data_fcst, data_ref = (
+                self.data_fcst.stack({"xy": spatial_dims}),
+                self.data_ref.stack({"xy": spatial_dims}),
+            )
             seeps_weights = seeps_weights.stack({"xy": spatial_dims})
             t3 = t3.stack({"xy": spatial_dims})
             lstack = True
@@ -433,12 +520,17 @@ class Scores:
             raise ValueError(f"Data must be a two-or-three-dimensional array.")
 
         # check dimensioning of data
-        assert data_fcst.ndim <= 2, f"Data must be one- or two-dimensional, but has {data_fcst.ndim} dimensions. Check if stacking with spatial_dims may help." 
+        assert data_fcst.ndim <= 2, (
+            f"Data must be one- or two-dimensional, but has {data_fcst.ndim} dimensions. Check if stacking with spatial_dims may help."
+        )
 
         if data_fcst.ndim == 1:
             seeps_values_all = seeps(data_ref, data_fcst, t1.values, t3, seeps_weights)
         else:
-            data_fcst, data_ref = data_fcst.transpose(..., "xy"), data_ref.transpose(..., "xy")
+            data_fcst, data_ref = (
+                data_fcst.transpose(..., "xy"),
+                data_ref.transpose(..., "xy"),
+            )
             seeps_values_all = xr.full_like(data_fcst, np.nan)
             seeps_values_all.name = "seeps"
             for it in range(data_ref.shape[0]):
@@ -447,7 +539,9 @@ class Scores:
                 if np.all(np.isnan(data_fcst_now)) or np.all(np.isnan(data_ref_now)):
                     continue
 
-                seeps_values_all[it,...] = seeps(data_ref_now, data_fcst_now, t1.values, t3, seeps_weights.values)
+                seeps_values_all[it, ...] = seeps(
+                    data_ref_now, data_fcst_now, t1.values, t3, seeps_weights.values
+                )
 
         if lstack:
             seeps_values_all = seeps_values_all.unstack()
@@ -455,8 +549,14 @@ class Scores:
         seeps_values = seeps_values_all.mean(dim=self.avg_dims)
 
         return seeps_values
-    
-    def calc_ralsd(self, lonlat_dims: List[str] = ["rlon", "rlat"], lcutoff: bool = True, re: float = 6371.e3, **kwargs):
+
+    def calc_ralsd(
+        self,
+        lonlat_dims: List[str] = ["rlon", "rlat"],
+        lcutoff: bool = True,
+        re: float = 6371.0e3,
+        **kwargs,
+    ):
         """
         Calculate radially averaged log-spectral distance (RALSD) between forecast and reference data (see Eq. 8 in Harris et al., 2022, DOI: 10.1029/2022MS003120).
         Note that no averaging over the spatial dimensions is possible since the spectral analysis is performed over these dimensions.
@@ -466,35 +566,48 @@ class Scores:
         :return: RALSD values
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_rmse.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
+        )
 
         # perform spectral analysis for reference and forecast data
-        ps_ref = get_spectrum(self.data_ref, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
-        ps_fcst = get_spectrum(self.data_fcst, lonlat_dims = lonlat_dims, lcutoff= lcutoff, re=re)
+        ps_ref = get_spectrum(
+            self.data_ref, lonlat_dims=lonlat_dims, lcutoff=lcutoff, re=re
+        )
+        ps_fcst = get_spectrum(
+            self.data_fcst, lonlat_dims=lonlat_dims, lcutoff=lcutoff, re=re
+        )
 
         # get number of bins...
         nbins = np.shape(ps_ref)[-1]
 
         # ...and calculate RALSD
-        ralsd = np.sqrt(np.sum(np.square(10.*np.log10(ps_ref/ps_fcst)), axis=-1)/nbins)
+        ralsd = np.sqrt(
+            np.sum(np.square(10.0 * np.log10(ps_ref / ps_fcst)), axis=-1) / nbins
+        )
 
         # convert to xarray DataArray
         dims = [dim for dim in self.data_dims if dim not in lonlat_dims]
-        ralsd = xr.DataArray(ralsd, coords={dim: self.data_fcst[dim] for dim in dims}, dims=dims)
+        ralsd = xr.DataArray(
+            ralsd, coords={dim: self.data_fcst[dim] for dim in dims}, dims=dims
+        )
 
         avg_dims = [dim for dim in self.avg_dims if dim not in lonlat_dims]
 
         if avg_dims != self.avg_dims:
-            func_logger.debug(f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}")
-
+            func_logger.debug(
+                f"Only apply avergaing over the follwoing dimensions: {', '.join(avg_dims)}"
+            )
 
         # apply further averaging if requested
         if len(avg_dims) > 0:
             ralsd = ralsd.mean(dim=avg_dims)
 
         return ralsd
-    
-    def calc_iqd(self, align_join: str = "exact", steps: int = 1000, **kwargs) -> xr.DataArray:
+
+    def calc_iqd(
+        self, align_join: str = "exact", steps: int = 1000, **kwargs
+    ) -> xr.DataArray:
         """
         Calculate the Integrated Quadratic Distance (IQD) between the forecast and reference data in CDF space.
 
@@ -502,41 +615,57 @@ class Scores:
         :return: The Integrated Quadratic Distance.
         """
         # get local logger
-        func_logger = logging.getLogger(f"{logger_module_name}.Scores.{self.calc_iqd.__name__}")
+        func_logger = logging.getLogger(
+            f"{logger_module_name}.Scores.{self.calc_iqd.__name__}"
+        )
 
         # IQD evaluates the marginal distribution of the data and thus collapes existing dimensions
         # There, averaging is not meaningful here
         if self.avg_dims and self.avg_dims != []:
-            func_logger.debug(f"Parsed averaging dimensions ({', '.join(self.avg_dims)}) are ignored.")
+            func_logger.debug(
+                f"Parsed averaging dimensions ({', '.join(self.avg_dims)}) are ignored."
+            )
 
         # Align the arrays and sort the data incl. falttening
         forecast, reference = xr.align(self.data_fcst, self.data_ref, join=align_join)
-        
-        forecast, reference = np.sort(forecast, axis=None), np.sort(reference, axis=None)
+
+        forecast, reference = (
+            np.sort(forecast, axis=None),
+            np.sort(reference, axis=None),
+        )
 
         # get empirical CDF-functions for forecast and reference data
         npoints = len(forecast)
-        cdf_val = 1. * np.arange(npoints)/ (npoints - 1)
+        cdf_val = 1.0 * np.arange(npoints) / (npoints - 1)
 
         cdf_fcst = self.get_cdf_of_x(forecast, cdf_val)
         cdf_ref = self.get_cdf_of_x(reference, cdf_val)
 
-        # get integration points        
-        min_val, max_val = min(reference[0], forecast[0]), max(reference[-1], forecast[-1])
-        
+        # get integration points
+        min_val, max_val = (
+            min(reference[0], forecast[0]),
+            max(reference[-1], forecast[-1]),
+        )
+
         xnodes = np.linspace(min_val, max_val, num=steps)
-        
+
         # calculate CDF at integration ponts...
         cdf_fcst_x = cdf_fcst(xnodes)
-        cdf_ref_x = cdf_ref(xnodes)  
+        cdf_ref_x = cdf_ref(xnodes)
 
         # ...and integrate squared difference for IQD
         iqd = np.trapz(np.square(cdf_ref_x - cdf_fcst_x), xnodes)
 
         return iqd
 
-
-    def calc_geo_spatial_diff(self, scalar_field: xr.DataArray, order: int = 1, r_e: float = 6371.e3, dom_avg: bool = True, **kwargs):
+    def calc_geo_spatial_diff(
+        self,
+        scalar_field: xr.DataArray,
+        order: int = 1,
+        r_e: float = 6371.0e3,
+        dom_avg: bool = True,
+        **kwargs,
+    ):
         """
         Calculates the amplitude of the gradient (order=1) or the Laplacian (order=2) of a scalar field given on a regular,
         geographical grid (i.e. dlambda = const. and dphi=const.)
@@ -548,25 +677,42 @@ class Scores:
         """
         method = Scores.calc_geo_spatial_diff.__name__
         # sanity checks
-        assert isinstance(scalar_field, xr.DataArray), f"Scalar_field of {method} must be a xarray DataArray."
+        assert isinstance(scalar_field, xr.DataArray), (
+            f"Scalar_field of {method} must be a xarray DataArray."
+        )
         assert order in [1, 2], f"Order for {method} must be either 1 or 2."
 
         dims = list(scalar_field.dims)
 
-        lat_name, lon_name = self.check_for_coords(dims, "lat"), self.check_for_coords(dims, "lon")
+        lat_name, lon_name = (
+            self.check_for_coords(dims, "lat"),
+            self.check_for_coords(dims, "lon"),
+        )
 
-        lat, lon = np.deg2rad(scalar_field[lat_name]), np.deg2rad(scalar_field[lon_name])
+        lat, lon = (
+            np.deg2rad(scalar_field[lat_name]),
+            np.deg2rad(scalar_field[lon_name]),
+        )
         dphi, dlambda = lat[1].values - lat[0].values, lon[1].values - lon[0].values
 
         if order == 1:
-            dvar_dlambda = 1. / (r_e * np.cos(lat) * dlambda) * scalar_field.differentiate(lon_name)
-            dvar_dphi = 1. / (r_e * dphi) * scalar_field.differentiate(lat_name)
-            dvar_dlambda = dvar_dlambda.transpose(*scalar_field.dims)  # ensure that dimension ordering is not changed
+            dvar_dlambda = (
+                1.0
+                / (r_e * np.cos(lat) * dlambda)
+                * scalar_field.differentiate(lon_name)
+            )
+            dvar_dphi = 1.0 / (r_e * dphi) * scalar_field.differentiate(lat_name)
+            dvar_dlambda = dvar_dlambda.transpose(
+                *scalar_field.dims
+            )  # ensure that dimension ordering is not changed
 
-            var_diff_amplitude = np.sqrt(dvar_dlambda ** 2 + dvar_dphi ** 2)
-            if dom_avg: var_diff_amplitude = var_diff_amplitude.mean(dim=[lat_name, lon_name])
+            var_diff_amplitude = np.sqrt(dvar_dlambda**2 + dvar_dphi**2)
+            if dom_avg:
+                var_diff_amplitude = var_diff_amplitude.mean(dim=[lat_name, lon_name])
         else:
-            raise ValueError(f"Second-order differentation is not implemenetd in {method} yet.")
+            raise ValueError(
+                f"Second-order differentation is not implemenetd in {method} yet."
+            )
 
         return var_diff_amplitude
 
@@ -588,6 +734,7 @@ class Scores:
         """
         # import inside function because it needs a specific env for postprocessing only
         from scores.spatial import fss_2d
+
         # get local logger
         func_logger = logging.getLogger(
             f"{logger_module_name}.Scores.{self.calc_rmse.__name__}"
@@ -614,7 +761,8 @@ class Scores:
         return fss
 
     def check_for_coords(
-        self, coord_names_data, dim_query: str, return_index: bool = False):
+        self, coord_names_data, dim_query: str, return_index: bool = False
+    ):
         """
         Check if one of the known geographical coordinates is part of the passed list.
         :param coord_names_data: list of coordinate names
@@ -637,7 +785,12 @@ class Scores:
             return_val = i if return_index else known_geodims[i]
             return return_val
         else:
-            raise ValueError("Could not find one of the following coordinates in the passed dictionary: {0}"
+            raise ValueError(
+                "Could not find one of the following coordinates in the passed dictionary: {0}".format(
+                    ",".join(known_geodims)
+                )
+            )
+
                                 .format(",".join(known_geodims)))
     @staticmethod
     def get_cdf_of_x(sample_in, prob_in):
@@ -648,5 +801,3 @@ class Scores:
         :return: lambda function converting arbitrary input values to corresponding CDF value
         """
         return lambda xin: np.interp(xin, sample_in, prob_in)
-    
-
