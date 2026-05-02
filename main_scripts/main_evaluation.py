@@ -42,7 +42,7 @@ def main(parser_args):
     # get some variables for convenience
     varname = conf_postprocess["varname"]
     unit = conf_postprocess["unit"]
- 
+
     # get data from inference or from data file
     if parser_args.mode == "inference":
         raise NotImplementedError("The inference mode of the postprocessing script is deprecated, use the dedicated inference script.")
@@ -51,7 +51,7 @@ def main(parser_args):
             plt_dir = os.path.dirname(parser_args.results_nc)
         else:
             plt_dir = plt_basedir
-        
+
         # create output-directory and initialze logger
         os.makedirs(plt_dir, exist_ok=True)
         log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
@@ -59,7 +59,7 @@ def main(parser_args):
         logger = config_logger(logger, log_file)
 
         # get results from file
-        ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)  
+        ds_out, model_info = results_from_file(parser_args.results_nc, varname, parser_args.model_name)
 
     plt_dir = os.path.join(plt_dir, "plots")
     os.makedirs(plt_dir, exist_ok=True)
@@ -73,9 +73,9 @@ def main(parser_args):
 
         temp_eval = TemporalEvaluation(varname, plt_dir_temporal, model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
         temp_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
-        
+
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
-        
+
     # run spatial evaluation if specified
     if conf_postprocess.get("do_evaluation_spatial", False):
         logger.info("Start spatial evaluation...")
@@ -83,7 +83,7 @@ def main(parser_args):
 
         plt_dir_spatial = os.path.join(plt_dir, "spatial_evaluation")
 
-        spat_eval = SpatialEvaluation(varname, plt_dir_spatial, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25), 
+        spat_eval = SpatialEvaluation(varname, plt_dir_spatial, model_info, proj=ccrs.RotatedPole(pole_longitude=-162.0, pole_latitude=39.25),
                                       eval_dict=conf_postprocess.get("config_evaluation_spatial", None))
         spat_eval(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"])
 
@@ -96,7 +96,7 @@ def main(parser_args):
 
         plt_dir_spec = os.path.join(plt_dir, "spectral_analysis")
 
-        run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_spec, [model_info["model_longname"], "COSMO-REA6"], varname, unit, 
+        run_spectral_analysis(ds_out, [f"{varname}_fcst", f"{varname}_ref"], plt_dir_spec, [model_info["model_longname"], "COSMO-REA6"], varname, unit,
                               **conf_postprocess.get("config_spectral_analysis", {}))
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
@@ -109,7 +109,7 @@ def main(parser_args):
         plt_dir_marg = os.path.join(plt_dir, "marginal_analysis")
         run_marginal_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_marg, [model_info["model_longname"], "COSMO-REA6"], varname, unit,
                               **conf_postprocess.get("config_marginal_analysis", {}))
-        
+
         logger.info(f"Marginal distribution analysis finished in {timer() - t0_marg:.2f}s.")
 
     # create comparison plots if specified
@@ -127,7 +127,7 @@ def main(parser_args):
 
         # Note that conf_cp is parsed to the plot_comparison_maps in run_comparison_plots
         conf_cp["titles"] = [f"{varname.capitalize()} COSMO-REA6", f"{varname.capitalize()} {model_info['model_longname']}"]
-        conf_cp["vars2plt"] = [f"{varname}_ref", f"{varname}_fcst"] 
+        conf_cp["vars2plt"] = [f"{varname}_ref", f"{varname}_fcst"]
 
         run_comparison_plots(ds_out, plt_dir_comp, score_name, model_info["model_type"], nsamples, offset, **conf_cp)
 
@@ -139,14 +139,14 @@ def main(parser_args):
         t0_cq = timer()
 
         plt_dir_condquant = os.path.join(plt_dir, "conditional_quantile_plots")
-    
+
         labels = [f"{varname.capitalize()} {model_info['model_longname']}", f"{varname.capitalize()} COSMO-REA6"]
-        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_condquant, labels, unit, 
-                                          **conf_postprocess.get("config_cond_quantile_analysis", {}))      
+        run_cond_quantile_analysis(ds_out[f"{varname}_fcst"], ds_out[f"{varname}_ref"], plt_dir_condquant, labels, unit,
+                                          **conf_postprocess.get("config_cond_quantile_analysis", {}))
 
-        logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")  
+        logger.info(f"Conditional quantile plots finished in {timer() - t0_cq:.2f}s.")
 
-    
+
     # aggregate scores
     if conf_postprocess.get("do_aggregate_scores", False):
         logger.info("Start scores aggregation...")
@@ -154,7 +154,7 @@ def main(parser_args):
 
         metric_dir_score_card = os.path.join(plt_dir, "aggregate_scores")
         metric_dir_score_card = metric_dir_score_card.replace("/plots/", "/metric_files/")
-        
+
         # creating an instance of the TemporalEvaluation class here is needed to access the evaluation_dict properly
         temp_eval = TemporalEvaluation(varname, os.path.join(plt_dir, "temporal_evaluation"), model_info, eval_dict=conf_postprocess.get("config_evaluation_time", None))
         metric_list=[*temp_eval.evaluation_dict]
@@ -172,7 +172,7 @@ def main(parser_args):
             **conf_postprocess.get("config_aggregate_scores", None),
         )
 
-        logger.info(f"Aggregate scores finished {timer() - t0_cq:.2f}s.")  
+        logger.info(f"Aggregate scores finished {timer() - t0_cq:.2f}s.")
 
     # clean-up to reduce memory footprint
     del ds_out
@@ -185,7 +185,7 @@ def main(parser_args):
 
 
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_base_directory", "-output_base_dir", dest="output_base_dir", type=str, required=True,
                         help="Directory where results in form of plots are stored.")
@@ -193,7 +193,7 @@ if __name__ == "__main__":
                         help="JSON-file to configure evaluation.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                                   help="Name of the experiment/trained model to postprocess.")
-    
+
     # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
     subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
 
@@ -205,6 +205,6 @@ if __name__ == "__main__":
     parser_results.add_argument("--derive_outdir_from_results", "-derive_output_dir", dest="derive_output_dir", default=False, action="store_true",
                                 help="Flag to derive output directory from the path of the netCDF-file providing the downscaling results. " +
                                      "Overwrites the output_base_directory argument.")
-    
+
     args = parser.parse_args()
     main(args)

@@ -57,11 +57,11 @@ def main(parser_args):
             plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
 
 
-        # create output-directory and initialze logger    
+        # create output-directory and initialze logger
         os.makedirs(plt_dir, exist_ok=True)
         log_file = os.path.join(plt_dir, f"postprocessing_{parser_args.exp_name}.log")
         logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
-        logger = config_logger(logger, log_file) 
+        logger = config_logger(logger, log_file)
 
         # get results from inference
         ds_out, test_info = results_from_inference(parser_args.model_base_dir, parser_args.exp_name, parser_args.data_dir, plt_dir,
@@ -76,7 +76,7 @@ def main(parser_args):
         if parser_args.ens_mem is not None:
             plt_dir = plt_dir.replace(f"epoch_{last_or_epoch}", f"epoch_{last_or_epoch}_ens{parser_args.ens_mem}")
 
-        # create output-directory and initialze logger    
+        # create output-directory and initialze logger
         os.makedirs(plt_dir, exist_ok=True)
         plt_dir_importance = os.path.join(plt_dir, "feature_importance")
 
@@ -88,19 +88,19 @@ def main(parser_args):
         varname_tar = list(test_info["all_predictands"].keys())[0]
         # Note: The feature_importance method cannot use the prepare_dataset-method, since single predictors get randomized.
         #       The data pipeline options for the make_tf_dataset_allmem-method must therefore be constructed manually.
-        data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"], 
-                            "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"], 
+        data_loader_opts = {"stream_mode": test_info["stream_mode"], "batch_size": 32, "predictands": test_info["all_predictands"],
+                            "predictors": test_info["predictors"], "static_predictors": test_info["static_predictors"],
                             "lrepeat": False, "drop_remainder": False,"lshuffle": False}
-                             
+
         all_predictors = test_info["predictors"] | test_info["static_predictors"] if test_info["static_predictors"] is not None else test_info["predictors"]
 
-        _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"], 
+        _ = run_feature_importance(ds_test, conf_fi.get("predictors", all_predictors), varname_tar, test_info["trained_model"],
                                    test_info["data_norm"], conf_fi["score_name"], data_loader_opts, plt_dir_importance, conf_fi.get("patch_size", (4, 4)), parser_args.model_type, varname)
-        
+
         logger.info(f"Feature importance analysis finished in {timer() - t0_fi:.2f}s.")
 
 if __name__ == "__main__":
-    
+
     def ens_mem_type(val: Any):
         """
         Check if parsed value is either None, a 'mean'-string or parseable as an integer.
@@ -120,7 +120,7 @@ if __name__ == "__main__":
                         help="JSON-file to configure inference.")
     parser.add_argument("--experiment_name", "-exp_name", dest="exp_name", type=str, required=True,
                                   help="Name of the experiment/trained model to postprocess.")
-    
+
     # parsing arguments depending on evaluation mode (either from inference of trained model or provided results)
     subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
 
@@ -136,7 +136,7 @@ if __name__ == "__main__":
                                        "implemented in get_model_info-function (see postprocess.py)")
     parser_inference.add_argument("--ensemble_member", "-ens_mem", dest="ens_mem", default=None, type=ens_mem_type,
                                   help="Ensemble member to evaluate. Only required for models with ensemble output during inference.")
-    
+
     group = parser_inference.add_mutually_exclusive_group()
     group.add_argument("--evaluate_last", "-last", dest="last", default=False, action="store_true",
                        help="Flag for evaluating last instead of best checkpointed model")
@@ -145,4 +145,3 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
-

@@ -54,7 +54,7 @@ def main():
                         help="Flag to upscale coarse-grained input data onto target grid when preprocessing.")
     parser.add_argument("--preprocess_method", "-method", dest="method", type=str, required=True,
                         help="Preprocessing method to generate dataset for training, validation and testing.")
-    parser.add_argument("--downscaling_factor", "-down_fac", dest="downscaling_fac", type=int, default=None, 
+    parser.add_argument("--downscaling_factor", "-down_fac", dest="downscaling_fac", type=int, default=None,
                         help="Downscaling factor for downscaling task.")
 
     args_dict = vars(parser.parse_args())
@@ -70,9 +70,9 @@ def main():
     if preprocess_method in known_methods:
         preproc_cls = known_methods[preprocess_method]
         preproc_instance = preproc_cls(**{k: v for k, v in args_dict.items() if v is not None})  # only parse valid args
-        
+
         print("Preprocessing starts at: {0}".format(time_str.replace("T", " ")))
-        preproc_instance(years, months, 
+        preproc_instance(years, months,
                          jobname = "{0}_{1}".format(preprocess_method, time_str.replace("-", "").replace(":", "")))
     else:
         raise ValueError("Preprocessing method '{0}' is unknown. Please choose a known method: {1}."

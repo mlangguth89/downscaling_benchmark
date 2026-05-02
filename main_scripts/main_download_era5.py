@@ -26,7 +26,7 @@ formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message
 def main(parser_args):
 
     data_dir = parser_args.data_dir
-    
+
     # read configuration files for model and dataset
     with parser_args.data_req_file as fdreq:
         req_dict = js.load(fdreq)
@@ -62,7 +62,7 @@ if __name__ == "__main__":
                         help="Directory where test dataset (netCDF-file) is stored.")
     parser.add_argument("--data_request_file", "-data_req_file", dest="data_req_file", type=argparse.FileType("r"), required=True,
                         help="File containing data request information for the CDS API.")
-    parser.add_argument("--year_start", "-start", dest="start", type=int, default=1995, 
+    parser.add_argument("--year_start", "-start", dest="start", type=int, default=1995,
                         help="Start year of ERA5-data request.")
     parser.add_argument("--year_end", "-end", dest="end", type=int, default=2019,
                         help="End year of ERA5-data request.")
