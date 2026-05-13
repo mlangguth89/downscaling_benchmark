@@ -428,8 +428,8 @@ class Scores:
         )
 
         # Calculate standard deviation for each patch
-        std_fcst_patches = np.std(data_fcst_patches, axis=(2, 3))
-        std_ref_patches = np.std(data_ref_patches, axis=(2, 3))
+        std_fcst_patches = np.nanstd(data_fcst_patches, axis=(2, 3))
+        std_ref_patches = np.nanstd(data_ref_patches, axis=(2, 3))
 
         # Calculate mean error of the standard deviation over all patches
         mean_error_std = np.mean(
