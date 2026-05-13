@@ -21,8 +21,9 @@ import cartopy.crs as ccrs
 # for plotting
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-import cartopy
-import cartopy.crs as ccrs
+import numpy as np
+import pandas as pd
+import xarray as xr
 
 # auxiliary variable for logger
 logger_module_name = f"main_postprocess.{__name__}"
@@ -878,7 +879,10 @@ def plot_cond_quantile(
         yticks=np.logspace(0, y2_max_power + 1, y2_max_power + 2),
     )
     y2_max_power = int(np.log10(ax2.get_ylim()[1]))
-    ax2.set(ylim=(1.e00, np.power(10, y2_max_power*4)), yticks=np.logspace(0, y2_max_power+1, y2_max_power+2))
+    ax2.set(
+        ylim=(1.0e00, np.power(10, y2_max_power * 4)),
+        yticks=np.logspace(0, y2_max_power + 1, y2_max_power + 2),
+    )
     ax2.set_title(title.upper(), fontsize=fs_title)
 
     ax.tick_params(axis="both", labelsize=fs_label)

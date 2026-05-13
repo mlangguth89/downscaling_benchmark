@@ -22,6 +22,7 @@ from skimage.util import view_as_blocks
 logger_module_name = f"__main__.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
+
 class Scores:
     """
     Class to calculate scores and skill scores.
@@ -791,7 +792,6 @@ class Scores:
                 )
             )
 
-                                .format(",".join(known_geodims)))
     @staticmethod
     def get_cdf_of_x(sample_in, prob_in):
         """

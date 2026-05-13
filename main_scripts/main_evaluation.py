@@ -13,24 +13,26 @@ __update__ = "2025-04-10"
 
 import argparse
 
-#import datetime as dt
+# import datetime as dt
+# import datetime as dt
 import gc
 import json as js
 import logging
+import os
+from timeit import default_timer as timer
+from typing import Any
 
-# import datetime as dt
-import gc
-import xarray as xr
 import cartopy.crs as ccrs
+import xarray as xr
 from evaluation import (
-    results_from_file,
-    TemporalEvaluation,
     SpatialEvaluation,
-    run_cond_quantile_analysis,
-    run_spectral_analysis,
-    run_marginal_analysis,
-    run_comparison_plots,
+    TemporalEvaluation,
+    results_from_file,
     run_aggregate_scores,
+    run_comparison_plots,
+    run_cond_quantile_analysis,
+    run_marginal_analysis,
+    run_spectral_analysis,
 )
 from evaluation_utils import config_logger
 
@@ -309,16 +311,6 @@ if __name__ == "__main__":
         help="Flag to derive output directory from the path of the netCDF-file providing the downscaling results. "
         + "Overwrites the output_base_directory argument.",
     )
-    subparsers = parser.add_subparsers(dest="mode", help="Provide mode")
-
-    parser_results = subparsers.add_parser("provided_results", help="Evaluate provided results.")
-    parser_results.add_argument("--results_netcdf", "-results_nc", dest="results_nc", type=str, required=True,
-                            help="NetCDF-file containing results to be evaluated.")
-    parser_results.add_argument("--model_name", "-model_name", dest="model_name", type=str, required=True,
-                                help="Name of the model for which results are provided.")
-    parser_results.add_argument("--derive_outdir_from_results", "-derive_output_dir", dest="derive_output_dir", default=False, action="store_true",
-                                help="Flag to derive output directory from the path of the netCDF-file providing the downscaling results. " +
-                                     "Overwrites the output_base_directory argument.")
 
     args = parser.parse_args()
     main(args)

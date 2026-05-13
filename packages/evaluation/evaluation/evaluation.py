@@ -27,25 +27,24 @@ import pandas as pd
 import xarray as xr
 from abstract_metric_evaluation_class import AbstractMetricEvaluation
 from evaluation_utils import (
-from evaluation_utils import (
     bootstrap_grouped_hourly,
-    get_spectrum_exps,
     calculate_cond_quantiles,
-    convert_to_xarray,
     check_str_in_list,
+    convert_to_xarray,
     finditem,
+    get_spectrum_exps,
     to_list,
 )
-
 from plotting import (
-    plot_metric_line,
-    plot_score_map,
-    plot_power_spectra,
-    plot_cond_quantile,
-    plot_comparison_maps,
-    plot_histograms,
     get_season_t2m_levels,
+    plot_comparison_maps,
+    plot_cond_quantile,
+    plot_histograms,
+    plot_metric_line,
+    plot_power_spectra,
+    plot_score_map,
 )
+from scores_class import Scores
 
 FSS_available = True
 # basic data types
@@ -1046,21 +1045,69 @@ class SpatialEvaluation(AbstractMetricEvaluation):
                     f"No default configuration available for variable {self.varname}. "
                     + "Parse custom eval_dict."
                 )
-            eval_dict = {"rmse": {"score_unit": "K", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False},
-                         "bias": {"score_unit": "K", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+        if self.varname == "t2m":
+            eval_dict = {
+                "rmse": {
+                    "score_unit": "K",
+                    "levels": lvl_rmse,
+                    "cmap_name": "afmhot_r",
+                    "relative": False,
+                },
+                "bias": {
+                    "score_unit": "K",
+                    "levels": lvl_bias,
+                    "cmap_name": "seismic",
+                    "relative": False,
+                },
+            }
         elif self.varname == "ws100m":
-            eval_dict = {"rmse": {"score_unit": "m/s", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False},
-                         "bias": {"score_unit": "m/s", "levels": lvl_bias, "cmap_name": "seismic", "relative": False}}
+            eval_dict = {
+                "rmse": {
+                    "score_unit": "m/s",
+                    "levels": lvl_rmse,
+                    "cmap_name": "afmhot_r",
+                    "relative": False,
+                },
+                "bias": {
+                    "score_unit": "m/s",
+                    "levels": lvl_bias,
+                    "cmap_name": "seismic",
+                    "relative": False,
+                },
+            }
         elif self.varname == "glob_rad":
-            eval_dict = {"rmse": {"score_unit": "W/m^2", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": False},
-                         "bias": {"score_unit": "W/m^2", "levels": lvl_bias, "cmap_name": "seismic", "relative": False},
-                         "rmse_relative": {"score_unit": "1", "levels": lvl_rmse, "cmap_name": "afmhot_r", "relative": True},
-                         "bias_relative": {"score_unit": "1", "levels": lvl_bias, "cmap_name": "seismic", "relative": True}
-                        }
+            eval_dict = {
+                "rmse": {
+                    "score_unit": "W/m^2",
+                    "levels": lvl_rmse,
+                    "cmap_name": "afmhot_r",
+                    "relative": False,
+                },
+                "bias": {
+                    "score_unit": "W/m^2",
+                    "levels": lvl_bias,
+                    "cmap_name": "seismic",
+                    "relative": False,
+                },
+                "rmse_relative": {
+                    "score_unit": "1",
+                    "levels": lvl_rmse,
+                    "cmap_name": "afmhot_r",
+                    "relative": True,
+                },
+                "bias_relative": {
+                    "score_unit": "1",
+                    "levels": lvl_bias,
+                    "cmap_name": "seismic",
+                    "relative": True,
+                },
+            }
         else:
             if eval_dict is None:
-                raise ValueError(f"No default configuration available for variable {self.varname}. " + \
-                                 "Parse custom eval_dict.")
+                raise ValueError(
+                    f"No default configuration available for variable {self.varname}. "
+                    + "Parse custom eval_dict."
+                )
 
         return eval_dict
 

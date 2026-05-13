@@ -14,6 +14,7 @@ from typing import Dict, List
 
 from evaluation_utils import merge_dicts
 
+
 class AbstractMetricEvaluation(ABC):
     def __init__(
         self,
@@ -94,7 +95,5 @@ class AbstractMetricEvaluation(ABC):
                     eval_dict[metric] = merge_dicts(
                         default[metric], metric_config, recursive=False
                     )
-                else:
-                    eval_dict[metric] = merge_dicts(default[metric], metric_config, recursive=False)
 
         self._evaluation_dict = eval_dict
