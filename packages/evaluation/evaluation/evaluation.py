@@ -695,9 +695,9 @@ def run_comparison_plots(
         )
         if varname == "t2m" and seasonal_levels:
             kwargs_now["levels"] = get_season_t2m_levels(t.values)
-            kwargs_now["suptitle"] = (
-                f"{date_str} {score_name.upper()} q{quantile_now.replace('p', '.')}"
-            )
+        kwargs_now["suptitle"] = (
+            f"{date_str} {score_name.upper()} q{quantile_now.replace('p', '.')}"
+        )
         pool.apply_async(
             plot_comparison_maps,
             (ds.sel({"time": t}) + offset, fname),
@@ -836,7 +836,7 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                 },
                 "me_std": {
                     "score_unit": "K",
-                    "value_range": (0.1, 0.3),
+                    "value_range": (0.1, 0.4),
                     "ref_line": None,
                 },
                 "ralsd": {
@@ -861,17 +861,17 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                 },
                 "grad_amplitude": {
                     "score_unit": "1",
-                    "value_range": (0.7, 1.2),
+                    "value_range": (0.5, 1.3),
                     "ref_line": 1.0,
                 },
                 "me_std": {
                     "score_unit": "m/s",
-                    "value_range": (0.1, 0.3),
+                    "value_range": (0.1, 0.5),
                     "ref_line": None,
                 },
                 "ralsd": {
                     "score_unit": "dB",
-                    "value_range": (0.0, 9.0),
+                    "value_range": (0.0, 10.0),
                     "ref_line": None,
                 },
             }
@@ -879,13 +879,13 @@ class TemporalEvaluation(AbstractMetricEvaluation):
             eval_dict = {
                 "rmse": {
                     "score_unit": "W/m^2",
-                    "value_range": (50.0, 250.0),
+                    "value_range": (25.0, 250.0),
                     "ref_line": None,
                     "relative": False,
                 },
                 "bias": {
                     "score_unit": "W/m^2",
-                    "value_range": (-20.0, 35.0),
+                    "value_range": (-30.0, 50.0),
                     "ref_line": 0,
                     "relative": False,
                 },
@@ -903,24 +903,24 @@ class TemporalEvaluation(AbstractMetricEvaluation):
                 },
                 "grad_amplitude": {
                     "score_unit": "1",
-                    "value_range": (0.3, 1.2),
+                    "value_range": (0.2, 1.4),
                     "ref_line": 1.0,
                 },
                 "me_std": {
                     "score_unit": "W/m^2",
-                    "value_range": (0.0, 70.0),
+                    "value_range": (0.0, 80.0),
                     "ref_line": None,
                 },
                 "ralsd": {
                     "score_unit": "dB",
-                    "value_range": (0.0, 22.0),
+                    "value_range": (0.0, 25.0),
                     "ref_line": None,
                 },
             }
             if FSS_available:
                 eval_dict["fss"] = {
                     "score_unit": "1",
-                    "value_range": (0, 1.0),
+                    "value_range": (0, 1.2),
                     "ref_line": 0.5,
                     "window": (4, 4),
                     "thres": [50, 100, 300, 500],
@@ -1016,13 +1016,13 @@ class SpatialEvaluation(AbstractMetricEvaluation):
             eval_dict = {
                 "rmse": {
                     "score_unit": "W/m^2",
-                    "levels": lvl_rmse,
+                    "levels": np.arange(0, 71, 7),
                     "cmap_name": "afmhot_r",
                     "relative": False,
                 },
                 "bias": {
                     "score_unit": "W/m^2",
-                    "levels": lvl_bias,
+                    "levels": np.arange(-30, 31, 6),
                     "cmap_name": "seismic",
                     "relative": False,
                 },
