@@ -30,6 +30,7 @@ list_or_str = Union[List[str], str]
 logger_module_name = f"main_postprocess.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
+
 def calculate_cond_quantiles(
     data_fcst: xr.DataArray,
     data_ref: xr.DataArray,
@@ -781,7 +782,7 @@ def config_logger(
         os.remove(logfile)
 
     formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s: %(message)s")
 
     fh = logging.FileHandler(logfile)
     ch = logging.StreamHandler(sys.stdout)
