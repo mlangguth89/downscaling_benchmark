@@ -777,7 +777,39 @@ class TemporalEvaluation(AbstractMetricEvaluation):
 
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
 
+        call_logger = logging.getLogger(
+            f"{logger_module_name}.{TemporalEvaluation.__name__}"
+        )
         # get score engine
+        if self.model_info["model_type"] == "samos":
+            call_logger.info(
+                "samos model detected, using custom score engine for samos..."
+            )
+            # check if any of the data is nan
+            assert data_fcst.dims[0] == "time", (
+                "First dimension of forecast data must be 'time'"
+            )
+            assert data_ref.dims[0] == "time", (
+                "First dimension of reference data must be 'time'"
+            )
+            if np.any(np.isnan(data_fcst)):
+                call_logger.info(
+                    "Warning: NaN values found in forecast data. Subselecting domain iteratively.."
+                )
+                call_logger.info(
+                    "Assuming NaN values are located at the borders of the domain"
+                )
+                call_logger.info("Set subdomain at -2 grid points and check for NaNs")
+                data_fcst = data_fcst[:, 2:-2, 2:-2]
+                data_ref = data_ref[:, 2:-2, 2:-2]
+                if np.any(np.isnan(data_fcst)):
+                    call_logger.info(
+                        "NaN values still found in forecast data. Please check the data."
+                    )
+                else:
+                    call_logger.info(
+                        "No NaN values found in forecast data after subselecting domain. Continuing..."
+                    )
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
 
         # add varname to plotting kwargs
