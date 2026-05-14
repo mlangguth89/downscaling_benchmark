@@ -210,7 +210,7 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
     # perform plotting
     for i, ax in enumerate(axs):
         if i < nplots:
-            data = np.squeeze(ds[vars2plt[i]])
+            data = np.squeeze(ds[vars2plt[i]].transpose(dims[0], dims[1]))
 
             plt_data = ax.pcolormesh(
                 lon_e,
@@ -223,7 +223,10 @@ def plot_comparison_maps(ds: xr.Dataset, plt_fname: str, **kwargs):
             )
             ax.set_title(titles[i], size=fs)
         else:
-            diff = np.squeeze(ds[vars2plt[1]] - ds[vars2plt[0]])
+            diff = np.squeeze(
+                ds[vars2plt[1]].transpose(dims[0], dims[1])
+                - ds[vars2plt[0]].transpose(dims[0], dims[1])
+            )
             plt_diff = ax.pcolormesh(
                 lon_e,
                 lat_e,
@@ -333,7 +336,7 @@ def plot_score_map(
     plt1 = ax.pcolormesh(
         lon_e,
         lat_e,
-        np.squeeze(score.values),
+        np.squeeze(score.transpose(dims[0], dims[1]).values),
         cmap=cmap,
         norm=norm,
         transform=proj_data,
