@@ -203,6 +203,7 @@ def main(parser_args):
             plt_dir_condquant,
             labels,
             unit,
+            model_info["model_type"],
             **conf_postprocess.get("config_cond_quantile_analysis", {}),
         )
 

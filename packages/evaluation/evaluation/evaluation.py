@@ -33,6 +33,7 @@ from evaluation_utils import (
     convert_to_xarray,
     finditem,
     get_spectrum_exps,
+    nan_data_subsetting,
     to_list,
 )
 from plotting import (
@@ -355,7 +356,7 @@ def run_evaluation_spatial(
 
 
 def run_cond_quantile_analysis(
-    data_fcst, data_ref, plot_dir, varname_lables, unit, **plt_kwargs: dict
+    data_fcst, data_ref, plot_dir, varname_lables, unit, model_type, **plt_kwargs: dict
 ):
     """
     Create conditional quantile plots for given variables.
@@ -364,6 +365,7 @@ def run_cond_quantile_analysis(
     :param plot_dir: Directory to save plot files
     :param varname_lables: List of variable names
     :param unit: Unit of variable
+    :param model_type: Type of model
     :param plt_kwargs: Dictionary with configuration options
                 Valid keys are:
                 - factorization: Factorization of conditional quantile plots, i.e. "calibration_refinement" (default) or "likelihood-base_rate"
@@ -378,6 +380,7 @@ def run_cond_quantile_analysis(
     func_logger = logging.getLogger(
         f"{logger_module_name}.{run_cond_quantile_analysis.__name__}"
     )
+    data_fcst, data_ref = nan_data_subsetting(data_fcst, data_ref, model_type)
 
     factorization = plt_kwargs.pop("factorization", "calibration_refinement")
     quantiles = plt_kwargs.pop("quantiles", [0.05, 0.5, 0.95])
@@ -449,6 +452,7 @@ def run_marginal_analysis(
     func_logger = logging.getLogger(
         f"{logger_module_name}.{run_marginal_analysis.__name__}"
     )
+    data_fcst, data_ref = nan_data_subsetting(data_fcst, data_ref, labels[0].lower())
 
     # calculate IQD-score
     func_logger.info(f"Start marginal analysis for {varname}...")
@@ -537,6 +541,15 @@ def run_spectral_analysis(
     func_logger = logging.getLogger(
         f"{logger_module_name}.{run_spectral_analysis.__name__}"
     )
+    if labels[0].lower() == "samos":
+        func_logger.info("samos model detected, subsetting data...")
+        data_fcst, data_ref = nan_data_subsetting(
+            ds[data_vars[0]], ds[data_vars[1]], labels[0].lower()
+        )
+        attrs = ds.attrs
+        ds = xr.Dataset({data_vars[0]: data_fcst, data_vars[1]: data_ref})
+        ds.attrs = attrs
+        ds = ds.transpose("time", "rlon", "rlat")
 
     metric_dir = plot_dir.replace("/plots/", "/metric_files/")
     os.makedirs(metric_dir, exist_ok=True)
@@ -569,7 +582,7 @@ def run_spectral_analysis(
     }
 
     # get power spectrum for complete dataset
-    func_logger.info(f"Start spectral analysis for all data...")
+    func_logger.info("Start spectral analysis for all data...")
 
     ds_ps = get_spectrum_exps(ds, ds_vars, info, lcutoff=lcutoff, re=re)
 
@@ -777,39 +790,9 @@ class TemporalEvaluation(AbstractMetricEvaluation):
 
     def __call__(self, data_fcst: xr.DataArray, data_ref: xr.DataArray, **plt_kwargs):
 
-        call_logger = logging.getLogger(
-            f"{logger_module_name}.{TemporalEvaluation.__name__}"
+        data_fcst, data_ref = nan_data_subsetting(
+            data_fcst, data_ref, self.model_info["model_type"]
         )
-        # get score engine
-        if self.model_info["model_type"] == "samos":
-            call_logger.info(
-                "samos model detected, using custom score engine for samos..."
-            )
-            # check if any of the data is nan
-            assert data_fcst.dims[0] == "time", (
-                "First dimension of forecast data must be 'time'"
-            )
-            assert data_ref.dims[0] == "time", (
-                "First dimension of reference data must be 'time'"
-            )
-            if np.any(np.isnan(data_fcst)):
-                call_logger.info(
-                    "Warning: NaN values found in forecast data. Subselecting domain iteratively.."
-                )
-                call_logger.info(
-                    "Assuming NaN values are located at the borders of the domain"
-                )
-                call_logger.info("Set subdomain at -2 grid points and check for NaNs")
-                data_fcst = data_fcst[:, 2:-2, 2:-2]
-                data_ref = data_ref[:, 2:-2, 2:-2]
-                if np.any(np.isnan(data_fcst)):
-                    call_logger.info(
-                        "NaN values still found in forecast data. Please check the data."
-                    )
-                else:
-                    call_logger.info(
-                        "No NaN values found in forecast data after subselecting domain. Continuing..."
-                    )
         score_engine = Scores(data_fcst, data_ref, self.avg_dims)
 
         # add varname to plotting kwargs

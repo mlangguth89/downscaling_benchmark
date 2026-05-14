@@ -770,6 +770,55 @@ def finditem(d, key, default=None):
         raise KeyError(f"Key {key} has not been found in dictionary")
 
 
+def nan_data_subsetting(
+    da_fcst: xr.DataArray, da_ref: xr.DataArray, model_type: str
+) -> xr.DataArray:
+    """
+    Subset data array along given dimension to nmax non-NaN values.
+    :param da_fcst: forecast data array
+    :param da_ref: reference data array
+    :param model_type: Type of model
+    :return: subsetted data array
+    """
+    # get local logger
+    func_logger = logging.getLogger(
+        f"{logger_module_name}.{nan_data_subsetting.__name__}"
+    )
+    if model_type == "samos":
+        func_logger.info("samos model detected, using custom score engine for samos...")
+        # check if any of the data is nan
+        assert da_fcst.dims[0] == "time", (
+            "First dimension of forecast data must be 'time'"
+        )
+        assert da_ref.dims[0] == "time", (
+            "First dimension of reference data must be 'time'"
+        )
+        if np.any(np.isnan(da_fcst)):
+            func_logger.info(
+                "Warning: NaN values found in forecast data. Subselecting domain iteratively.."
+            )
+            func_logger.info(
+                "Assuming NaN values are located at the borders of the domain"
+            )
+            func_logger.info(
+                "Set subdomain at -2 grid points and check for NaNs (empirically found)"
+            )
+            da_fcst = da_fcst[:, 2:-2, 2:-2]
+            da_ref = da_ref[:, 2:-2, 2:-2]
+            if np.any(np.isnan(da_fcst)):
+                func_logger.info(
+                    "NaN values still found in forecast data. Please check the data."
+                )
+                raise ValueError(
+                    "NaN values still found in forecast data after subselecting domain."
+                )
+            else:
+                func_logger.info(
+                    "No NaN values found in forecast data after subselecting domain. Continuing..."
+                )
+    return da_fcst, da_ref
+
+
 def config_logger(
     logger,
     logfile: str,
