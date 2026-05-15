@@ -33,7 +33,6 @@ def visualise_scorecard(scores: pd.DataFrame, ref_model: str, variable: str, sav
                 pivot.drop(ref_model),
             ]
         )
-        print(pivot)
         labeldata = pivot.values
         heatmapdata = (
             (pivot - pivot.loc[ref_model])
