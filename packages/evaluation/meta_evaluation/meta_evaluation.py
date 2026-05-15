@@ -1,10 +1,17 @@
+import logging
+from pathlib import Path
+
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+# auxiliary variable for logger
+logger_module_name = f"main_meta_evaluation.{__name__}"
+module_logger = logging.getLogger(logger_module_name)
 
-def visualise_scorecard(scores: pd.DataFrame, variable: str, savepath: str = None):
+
+def visualise_scorecard(scores: pd.DataFrame, ref_model: str, variable: str, savepath: str = None):
     metrics = scores.score_name.unique()
     nmetrics = len(metrics)
     fig, axes = plt.subplots(
@@ -19,10 +26,18 @@ def visualise_scorecard(scores: pd.DataFrame, variable: str, savepath: str = Non
             columns="time", index="model", values="value"
         )
         pivot = pivot[col_order]
+        # reference as first row
+        pivot = pd.concat(
+            [
+                pivot.loc[[ref_model]],
+                pivot.drop(ref_model),
+            ]
+        )
+        print(pivot)
         labeldata = pivot.values
         heatmapdata = (
-            (pivot - pivot.loc[config["ref_model"]])
-            / pivot.loc[config["ref_model"]]
+            (pivot - pivot.loc[ref_model])
+            / pivot.loc[ref_model]
             * 100
         )  # *100 to make it percentages
 
@@ -38,16 +53,16 @@ def visualise_scorecard(scores: pd.DataFrame, variable: str, savepath: str = Non
             ),
             alpha=0.85,
         )
-        texts = annotate_heatmap(im, data=labeldata, valfmt="{x:.2f}", threshold=10)
+        texts = annotate_heatmap(im, labels=labeldata, valfmt="{x:.2f}")
 
-    cbar_ax = fig.add_axes([0.3, 0.02, 0.4, 0.04])
+    cbar_ax = fig.add_axes([0.3, -0.01, 0.4, 0.04])
     cbar = fig.colorbar(
         im,
         cax=cbar_ax,
         orientation="horizontal",
         extend="both",
         ticks=cbar_bounds,
-        label=f"Better <--    % difference vs reference model: {config['ref_model']}    --> Worse",
+        label=f"Better <--    % difference vs reference model: {ref_model}    --> Worse",
     )
     plt.suptitle(variable.upper())
     if savepath is None:
@@ -131,13 +146,12 @@ def annotate_heatmap(im, labels=None, valfmt="{x:.2f}"):
     return texts
 
 
-def load_aggregate_scores(config: dict):
+def load_aggregate_scores(config: dict, basedir: str) -> pd.DataFrame:
     scores = []
-    for model in config["models"]:
+    for modelname, modelpath in config["models"].items():
         scores_file = Path(
-            config["base_folder"],
-            config["variable"],
-            model,
+            basedir,
+            modelpath,
             "metric_files",
             "aggregate_scores",
             "scores.csv",
