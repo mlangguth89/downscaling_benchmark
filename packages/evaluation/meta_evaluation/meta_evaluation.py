@@ -13,6 +13,51 @@ logger_module_name = f"main_meta_evaluation.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
 
+def calculate_score_percentage(
+    scores: pd.DataFrame, ref_model: str, metric: str
+) -> pd.DataFrame:
+    """
+    Calculate percentage difference of scores compared to reference model.
+    :param scores: DataFrame containing scores for all models and metrics
+    :param ref_model: Name of reference model
+    :param metric: Name of metric
+    :return: DataFrame containing percentage difference of scores compared to reference model
+    """
+    if metric == "rmse":
+        score_percentage = (
+            (scores - scores.loc[ref_model]) / scores.loc[ref_model] * 100
+        )
+    elif metric == "bias":
+        scores_iter = scores.copy()
+        scores_iter = scores_iter.abs()
+        score_percentage = (
+            (scores_iter - scores_iter.loc[ref_model])
+            / scores_iter.loc[ref_model]
+            * 100
+        )
+    elif metric == "grad_amplitude":
+        scores_iter = scores.copy()
+        scores_iter = (scores_iter - 1).abs()
+        score_percentage = (
+            (scores_iter - scores_iter.loc[ref_model])
+            / scores_iter.loc[ref_model]
+            * 100
+        )
+    elif metric == "me_std":
+        score_percentage = (
+            (scores - scores.loc[ref_model]) / scores.loc[ref_model] * 100
+        )
+    elif metric == "ralsd":
+        score_percentage = (
+            (scores - scores.loc[ref_model]) / scores.loc[ref_model] * 100
+        )
+    else:
+        raise NotImplementedError(
+            f"Percentage difference calculation for metric {metric} not implemented."
+        )
+    return score_percentage
+
+
 def visualise_scorecard(
     scores: pd.DataFrame, ref_model: str, variable: str, savepath: str = None
 ):
@@ -38,9 +83,9 @@ def visualise_scorecard(
             ]
         )
         labeldata = pivot.values
-        heatmapdata = (
-            (pivot - pivot.loc[ref_model]) / pivot.loc[ref_model] * 100
-        )  # *100 to make it percentages
+        heatmapdata = calculate_score_percentage(
+            scores=pivot, ref_model=ref_model, metric=metric
+        )
 
         im = heatmap(
             heatmapdata,
