@@ -26,7 +26,9 @@ import xarray as xr
 from meta_evaluation import (
     load_aggregate_scores,
     load_metric_time_series,
+    load_spectral_analysis,
     plot_multimodel_metric_line,
+    plot_multimodel_power_spectra,
     visualise_scorecard,
 )
 
@@ -55,6 +57,7 @@ def main(parser_args):
     if conf_postprocess.get("do_time_analysis", False):
         logger.info("Start temporal evaluation...")
         t0_tplot = timer()
+
         for metric in conf_postprocess["config_time_analysis"]["metrics"]:
             for time_agg in ["year", "DJF", "MAM", "JJA", "SON"]:
                 xda = load_metric_time_series(
@@ -72,6 +75,7 @@ def main(parser_args):
                     value_range=conf_postprocess["config_time_analysis"][
                         "value_ranges"
                     ][metric],
+                    title=f"{metric} {varname.upper()} ({time_agg})",
                 )
 
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
@@ -80,6 +84,26 @@ def main(parser_args):
     if conf_postprocess.get("do_spectral_analysis", False):
         logger.info("Start spectral analysis...")
         t0_spec = timer()
+
+        for time_agg in ["year", "DJF", "MAM", "JJA", "SON"]:
+            if time_agg == "year":
+                fname_suffix = "all"
+            else:
+                fname_suffix = time_agg
+            xda = load_spectral_analysis(
+                config=conf_postprocess,
+                basedir=out_basedir,
+                varname=varname,
+                fname=f"{varname}_power_spectrum_{fname_suffix}.nc",
+            )
+            plot_multimodel_power_spectra(
+                da_ps=xda,
+                var_info={varname: unit},
+                labels=list(xda.model.values),
+                plt_fname=f"{plt_basedir}/spectral_analysis_{varname}_{time_agg}.png",
+                x_coord="wavenumber",
+                title=f"Power spectrum of {varname.upper()} ({time_agg})",
+            )
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
 

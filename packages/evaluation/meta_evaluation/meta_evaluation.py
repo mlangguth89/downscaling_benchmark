@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+from typing import List
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -234,7 +235,10 @@ def plot_multimodel_metric_line(
             **kwargs,
         )
     # make legend
-    ax.legend(data.model.values, loc="upper right")
+    ax.legend(
+        [str_.upper().replace("_", " ") for str_ in data.model.values],
+        loc="upper right",
+    )
 
     if ref_line is not None:
         nval = np.shape(data[x_coord].values)[0]
@@ -255,6 +259,94 @@ def plot_multimodel_metric_line(
     # save plot and close figure
     plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
     fig.savefig(plt_fname, bbox_inches="tight")
+    plt.tight_layout()
+    fig.savefig(plt_fname)
+    plt.close(fig)
+    return None
+
+
+def load_spectral_analysis(
+    config: dict, basedir: str, varname: str, fname: str
+) -> xr.DataArray:
+    model_list = []
+    for idx, (modelname, modelpath) in enumerate(config["models"].items()):
+        metric_file = Path(
+            basedir,
+            modelpath,
+            "metric_files",
+            "spectral_analysis",
+            fname,
+        )
+        if idx == 0:
+            ref = xr.open_dataset(metric_file)[f"{varname}_ref"]
+            ref = ref.assign_coords(model="COSMO-REA6")
+            model_list.append(ref)
+        model_iter = xr.open_dataset(metric_file)[f"{varname}_fcst"]
+        model_iter = model_iter.assign_coords(model=modelname)
+        model_list.append(model_iter)
+    return xr.concat(model_list, dim="model")
+
+
+def plot_multimodel_power_spectra(
+    da_ps: xr.DataArray,
+    var_info: dict,
+    labels: List[str],
+    plt_fname: str,
+    x_coord: str = "wavenumber",
+    **kwargs,
+):
+    """
+    Plots power spectrum.
+    :param ds_ps: DataArray providing power spectrum of models in the model dimension
+    :param var_info: Dictionary providing name of variable and unit for which spectrum/spectra is/are poltted
+    :param labels: List of labels for experiments
+    :param plt_fname: File name of plot
+    :param x_coord: Name of coordinate along which spectrum is plotted
+    :param kwargs: Keyword arguments for plotting
+                   Valid keys are:
+                     - title: title of the plot
+                     - linestyle: linestyle of plot, default: "-"
+                     - linewidth: linewidth of plot, default: 2.
+                     - colors: list of colors for each experiment, default: nexps*["blue"]
+                     - fs: font size of labels, default: 16
+                     - other valid arguments of ax.plot
+    """
+    # get some plot parameters
+    title = kwargs.pop("title", "Power spectrum")
+    fs = kwargs.pop("fs", 16)
+    # linestyles = ["k-", "C0-d", "C1-x", "C2-o", "C3-d", "C4-x", "C5-o"]
+    # lw = kwargs.pop("linewidth", 0.8)
+    linestyles = ["k-", "C0-", "C1-", "C2-", "C3-", "C4-", "C5-"]
+    lw = kwargs.pop("linewidth", 1.3)
+
+    fig, (ax) = plt.subplots(1, 1)  # , figsize=(12, 8))
+    for i, model in enumerate(da_ps.model.values):
+        da = da_ps.sel(model=model)
+        ax.plot(
+            da[x_coord].values,
+            da.values,
+            linestyles[i],
+            label=model.upper().replace("_", " "),
+            lw=lw,
+            markersize=5,
+            **kwargs,
+        )
+
+    # set axis limits
+    ax.set_yscale("log")
+    ax.set_title(title)
+    # label axis
+    ax.set_xlabel("Wavenumber", fontsize=fs)
+    var_name, spectrum_unit = list(var_info.keys())[0], list(var_info.values())[0]
+    ax.set_ylabel(f"Spectral power {var_name} [{spectrum_unit}]", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs - 2)
+    ax.legend(fontsize=fs - 2)
+    ax.set_title(title, size=fs)
+    ax.grid(True, linewidth=0.5, color="gray", alpha=0.75)
+    ax.grid(True, which="minor", linewidth=0.25, color="gray", alpha=0.75)
+
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
     plt.tight_layout()
     fig.savefig(plt_fname)
     plt.close(fig)
