@@ -23,7 +23,12 @@ from typing import Any
 
 import cartopy.crs as ccrs
 import xarray as xr
-from meta_evaluation import load_aggregate_scores, visualise_scorecard
+from meta_evaluation import (
+    load_aggregate_scores,
+    load_metric_time_series,
+    plot_multimodel_metric_line,
+    visualise_scorecard,
+)
 
 # get logger
 logger = logging.getLogger(os.path.basename(__file__).rstrip(".py"))
@@ -35,7 +40,9 @@ def main(parser_args):
     ### Preparation ###
     t0 = timer()
     # set up basic output directory
-    plt_basedir = os.path.join(parser_args.output_base_dir)
+    out_basedir = os.path.join(parser_args.output_base_dir)
+    plt_basedir = os.path.join(parser_args.output_base_dir, "meta_evaluation")
+    os.makedirs(plt_basedir, exist_ok=True)
 
     # load configuration for evaluation
     conf_postprocess = js.load(parser_args.conf_evaluation)
@@ -48,6 +55,24 @@ def main(parser_args):
     if conf_postprocess.get("do_time_analysis", False):
         logger.info("Start temporal evaluation...")
         t0_tplot = timer()
+        for metric in conf_postprocess["config_time_analysis"]["metrics"]:
+            for time_agg in ["year", "DJF", "MAM", "JJA", "SON"]:
+                xda = load_metric_time_series(
+                    config=conf_postprocess,
+                    basedir=out_basedir,
+                    metric=metric,
+                    fname=f"eval_{metric}_{time_agg}.nc",
+                )
+                plot_multimodel_metric_line(
+                    xda,
+                    metric={metric: unit},
+                    time_period=time_agg,
+                    plt_fname=f"{plt_basedir}/temporal_evaluation_{metric}_{time_agg}.png",
+                    x_coord="hour",
+                    value_range=conf_postprocess["config_time_analysis"][
+                        "value_ranges"
+                    ][metric],
+                )
 
         logger.info(f"Temporal evalutaion finished in {timer() - t0_tplot:.2f}s.")
 
@@ -63,7 +88,7 @@ def main(parser_args):
         logger.info("Start aggregate score evaluation...")
         t0_agg = timer()
 
-        scores = load_aggregate_scores(config=conf_postprocess, basedir=plt_basedir)
+        scores = load_aggregate_scores(config=conf_postprocess, basedir=out_basedir)
         visualise_scorecard(
             scores=scores,
             ref_model=conf_postprocess["reference"].upper(),

@@ -5,13 +5,16 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import xarray as xr
 
 # auxiliary variable for logger
 logger_module_name = f"main_meta_evaluation.{__name__}"
 module_logger = logging.getLogger(logger_module_name)
 
 
-def visualise_scorecard(scores: pd.DataFrame, ref_model: str, variable: str, savepath: str = None):
+def visualise_scorecard(
+    scores: pd.DataFrame, ref_model: str, variable: str, savepath: str = None
+):
     metrics = scores.score_name.unique()
     nmetrics = len(metrics)
     fig, axes = plt.subplots(
@@ -35,9 +38,7 @@ def visualise_scorecard(scores: pd.DataFrame, ref_model: str, variable: str, sav
         )
         labeldata = pivot.values
         heatmapdata = (
-            (pivot - pivot.loc[ref_model])
-            / pivot.loc[ref_model]
-            * 100
+            (pivot - pivot.loc[ref_model]) / pivot.loc[ref_model] * 100
         )  # *100 to make it percentages
 
         im = heatmap(
@@ -147,7 +148,7 @@ def annotate_heatmap(im, labels=None, valfmt="{x:.2f}"):
 
 def load_aggregate_scores(config: dict, basedir: str) -> pd.DataFrame:
     scores = []
-    for modelname, modelpath in config["models"].items():
+    for _, modelpath in config["models"].items():
         scores_file = Path(
             basedir,
             modelpath,
@@ -158,3 +159,103 @@ def load_aggregate_scores(config: dict, basedir: str) -> pd.DataFrame:
         scores_iter = pd.read_csv(scores_file, index_col=0)
         scores.append(scores_iter)
     return pd.concat(scores)
+
+
+def load_metric_time_series(
+    config: dict, basedir: str, metric: str, fname: str
+) -> xr.DataArray:
+    metric_list = []
+    for modelname, modelpath in config["models"].items():
+        metric_file = Path(
+            basedir,
+            modelpath,
+            "metric_files",
+            "temporal_evaluation",
+            fname,
+        )
+        metric_iter = xr.open_dataset(metric_file)[f"{metric}_mean"]
+        metric_iter = metric_iter.assign_coords(model=modelname)
+        metric_list.append(metric_iter)
+    return xr.concat(metric_list, dim="model")
+
+
+def plot_multimodel_metric_line(
+    data: xr.DataArray,
+    metric: dict,
+    time_period: str,
+    plt_fname: str,
+    varname: str = "T2m",
+    x_coord: str = "hour",
+    value_range: tuple = (0.0, 3.0),
+    **kwargs,
+):
+    """
+    Create line plots of 2D-metric data (e.g. metric plotted against time)
+    :param data: DataArray containing the mean values
+    :param data_up: DataArray containing the upper error bounds
+    :param data_down: DataArray containing the lower error bounds
+    :param model_name: Name of model
+    :param metric: Dictionary containing metric name and unit
+    :param plt_fname: File name of plot
+    :param varname: Name of variable that was evaluated
+    :param x_coord: Name of coordinate along which metric is plotted
+    :param kwargs: Keyword arguments for plotting
+                   Valid keys are:
+                    - title: title of the plot
+                    - "linestyle": linestyle of plot, default: "k-"
+                    - "error_color": color of error bounds, default: "blue"
+                    - "value_range": range of y-axis, default: (0., 4.)
+                    - "fs": font size of labels, default: 16
+                    - "ref_line": reference line to be plotted, default: None
+                    - "ref_linestyle": linestyle of reference line, default: "k--"
+                    - other valid arguments of ax.plot
+    """
+
+    # get some plot parameters
+    title = time_period
+    fs = kwargs.pop("fs", 16)
+    ref_line = kwargs.pop("ref_line", None)
+    ref_linestyle = kwargs.pop("ref_linestyle", "k--")
+
+    fig, (ax) = plt.subplots(1, 1)
+
+    linestyles = ["C0-d", "C1-x", "C2-o", "C3-d", "C4-x", "C5-o"]
+
+    # plot data
+    for i, model in enumerate(data.model.values):
+        model_data = data.sel(model=model)
+        metric_name, metric_unit = list(metric.keys())[0], list(metric.values())[0]
+        ax.plot(
+            model_data[x_coord].values,
+            model_data.values,
+            linestyles[i],
+            lw=0.8,
+            markersize=5,
+            **kwargs,
+        )
+    # make legend
+    ax.legend(data.model.values, loc="upper right")
+
+    if ref_line is not None:
+        nval = np.shape(data[x_coord].values)[0]
+        ax.plot(data[x_coord].values, np.full(nval, ref_line), ref_linestyle)
+    ax.set_ylim(*value_range)
+    ax.set_xlim(0, 23)
+
+    # label axis
+    ax.set_xlabel("daytime [UTC]", fontsize=fs)
+    ax.set_ylabel(f"{metric_name} {varname} [{metric_unit}]", fontsize=fs)
+    ax.tick_params(axis="both", which="both", direction="out", labelsize=fs - 2)
+
+    ax.set_title(title.upper(), size=fs)
+
+    # enable grid
+    ax.grid(alpha=0.5)
+
+    # save plot and close figure
+    plt_fname = plt_fname + ".png" if not plt_fname.endswith(".png") else plt_fname
+    fig.savefig(plt_fname, bbox_inches="tight")
+    plt.tight_layout()
+    fig.savefig(plt_fname)
+    plt.close(fig)
+    return None
