@@ -213,7 +213,7 @@ def plot_multimodel_metric_line(
     """
 
     # get some plot parameters
-    title = time_period
+    title = kwargs.pop("title", f"{metric} {varname} ({time_period})")
     fs = kwargs.pop("fs", 16)
     ref_line = kwargs.pop("ref_line", None)
     ref_linestyle = kwargs.pop("ref_linestyle", "k--")
