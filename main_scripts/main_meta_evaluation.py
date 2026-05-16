@@ -102,7 +102,7 @@ def main(parser_args):
                 labels=list(xda.model.values),
                 plt_fname=f"{plt_basedir}/spectral_analysis_{varname}_{time_agg}.png",
                 x_coord="wavenumber",
-                title=f"Power spectrum of {varname.upper()} ({time_agg})",
+                title=f"Power spectrum of {varname.upper()} ({time_agg.upper()})",
             )
 
         logger.info(f"Spectral analysis finished in {timer() - t0_spec:.2f}s.")
