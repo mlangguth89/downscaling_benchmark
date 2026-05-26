@@ -1,0 +1,8 @@
+{
+    "varname": "glob_rad",
+    "unit": "W m**-2",
+    "do_feature_importance": true,
+    "config_feature_importance": {
+        "score_name": "rmse_relative"
+    }
+}

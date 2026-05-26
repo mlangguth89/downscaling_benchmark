@@ -25,4 +25,3 @@ echo $PYTHONPATH
 export PMIX_SECURITY_MODE="native"     # default would include munge which is unavailable
 
 $@
-

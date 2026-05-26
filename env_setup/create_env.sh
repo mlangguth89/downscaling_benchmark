@@ -6,7 +6,7 @@
 #
 # **************** Description ****************
 # This script can be used for setting up the virtual environment needed for downscaling with the U-net architecture
-# as being implemented for the Tier-1 dataset in MAELSTROM (see https://www.maelstrom-eurohpc.eu/content/docs/uploads/doc6.pdf) 
+# as being implemented for the Tier-1 dataset in MAELSTROM (see https://www.maelstrom-eurohpc.eu/content/docs/uploads/doc6.pdf)
 # **************** Description ****************
 #
 ### auxiliary-function S ###
@@ -19,7 +19,7 @@ check_argin() {
         #  exp_id=${argin#"-exp_id="}
         if [[ $argin == *"-lcontainer"* ]]; then
 	        bool_container=1
-        fi  
+        fi
     done
     if [[ -z "${bool_container}" ]]; then
         bool_container=0
@@ -98,8 +98,8 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   echo "${SCR_SETUP}Entering virtual environment ${VENV_DIR} to install required Python modules..."
   source "${activate_virt_env}"
- 
-  # handle systematic issues with Stages/2022 
+
+  # handle systematic issues with Stages/2022
   MACHINE=$(hostname -f | cut -d. -f2)
   if [[ "${HOST}" == jwlogin2[2-4] ]]; then
      MACHINE="juwelsbooster"
@@ -115,21 +115,21 @@ if [[ "$ENV_EXIST" == 0 ]]; then
 
   # expand PYTHONPATH
   export PYTHONPATH=${BASE_DIR}:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/utils:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/handle_data:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/models:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/postprocess:$PYTHONPATH >> "${activate_virt_env}"
-  export PYTHONPATH=${BASE_DIR}/preprocess:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/utils:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/handle_data:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/models:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/preprocess:$PYTHONPATH >> "${activate_virt_env}"
+  export PYTHONPATH=${BASE_DIR}/packages/modelling/inference:$PYTHONPATH >> "${activate_virt_env}"
 
   # ...and ensure that this also done when the
   echo "" >> "${activate_virt_env}"
   echo "# Expand PYTHONPATH..." >> "${activate_virt_env}"
   echo "export PYTHONPATH=${BASE_DIR}:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/utils/:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/models:\$PYTHONPATH " >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/handle_data:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/postprocess:\$PYTHONPATH" >> "${activate_virt_env}"
-  echo "export PYTHONPATH=${BASE_DIR}/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/utils:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/models:\$PYTHONPATH " >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/handle_data:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/preprocess:\$PYTHONPATH" >> "${activate_virt_env}"
+  echo "export PYTHONPATH=${BASE_DIR}/packages/modelling/inference:\$PYTHONPATH" >> "${activate_virt_env}"
 
   info_str="Virtual environment ${VENV_DIR} has been set up successfully."
   deactivate

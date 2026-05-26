@@ -1,7 +1,7 @@
 {
-  "nepochs": 70,
-  "named_targets": true,
-  "z_branch": true,
-  "lr_decay": true,
-  "lcheckpointing": true
+    "nepochs": 70,
+    "named_targets": true,
+    "z_branch": true,
+    "lr_decay": true,
+    "lcheckpointing": true
 }

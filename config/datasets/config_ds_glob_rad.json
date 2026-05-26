@@ -1,11 +1,27 @@
 {
-  "num_files": 1,
-  "norm_dims": ["time", "rlat", "rlon"],
-  "batch_size": 32,
-  "varname_z": {"hsurf_tar": "zscore"},
-  "predictands": {"glob_rad_pp_ratio_tar": "logit_1e-06"},
-  "predictors": {"ssrd_ratio_in": "logit_1e-06", "tclw_in": "log_1plus", "tciw_in": "log_1plus", "tp_in": "log_1plus",
-                 "msl_in": "zscore", "z_in": "zscore", "lsm_in": "zscore", "lcc_in": "", "mcc_in": "", "hcc_in": ""
-                },
-  "static_predictors": {"hsurf_tar": "zscore", "fr_land_tar": "zscore"}
+    "num_files": 1,
+    "norm_dims": ["time", "rlat", "rlon"],
+    "batch_size": 32,
+    "varname_z": {
+        "hsurf_tar": "zscore"
+    },
+    "predictands": {
+        "glob_rad_pp_ratio_tar": "logit_1e-06"
+    },
+    "predictors": {
+        "ssrd_ratio_in": "logit_1e-06",
+        "tclw_in": "log_1plus",
+        "tciw_in": "log_1plus",
+        "tp_in": "log_1plus",
+        "msl_in": "zscore",
+        "z_in": "zscore",
+        "lsm_in": "zscore",
+        "lcc_in": "",
+        "mcc_in": "",
+        "hcc_in": ""
+    },
+    "static_predictors": {
+        "hsurf_tar": "zscore",
+        "fr_land_tar": "zscore"
+    }
 }

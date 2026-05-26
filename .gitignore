@@ -112,7 +112,7 @@ downscaling_ap5/jube/ap5_dataloader/*
 
 *.DS_Store
 
-# Ignore log- and errorfiles 
+# Ignore log- and errorfiles
 *-err*.[0-9]*
 *-out*.[0-9]*
 
@@ -149,4 +149,3 @@ downscaling_ap5/jube/ap5_dataloader/*
 
 # Ignore netCDF-files
 *.nc
-

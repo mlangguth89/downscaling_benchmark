@@ -1,0 +1,47 @@
+{
+    "varname": "t2m",
+    "unit": "K",
+    "reference": "samos",
+    "models": {
+        "samos": "samos",
+        "deepru": "deepru_t2m_hres_1",
+        "harris_wgan": "harris_wgan_benchmark_cs256_4gpus_layernorm_added_norm_det",
+        "sha_unet": "sha_unet_t2m_hres_3",
+        "sha_wgan": "sha_wgan_t2m_hres_3",
+        "swinir": "swinir_latest"
+    },
+    "do_time_analysis": true,
+    "config_time_analysis": {
+        "metrics": [
+            "rmse",
+            "bias",
+            "ralsd",
+            "me_std",
+            "grad_amplitude"
+        ],
+        "value_ranges": {
+            "rmse": [
+                0.0,
+                2.5
+            ],
+            "bias": [
+                -1.0,
+                1.0
+            ],
+            "ralsd": [
+                0.0,
+                6.0
+            ],
+            "me_std": [
+                0.1,
+                0.4
+            ],
+            "grad_amplitude": [
+                0.7,
+                1.2
+            ]
+        }
+    },
+    "do_spectral_analysis": true,
+    "do_aggregate_scores": true
+}
