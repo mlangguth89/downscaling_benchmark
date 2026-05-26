@@ -12,18 +12,13 @@ __date__ = "2022-12-08"
 __update__ = "2025-04-10"
 
 import argparse
-
-# import datetime as dt
-# import datetime as dt
 import gc
 import json as js
 import logging
 import os
 from timeit import default_timer as timer
-from typing import Any
 
 import cartopy.crs as ccrs
-import xarray as xr
 from evaluation import (
     SpatialEvaluation,
     TemporalEvaluation,
