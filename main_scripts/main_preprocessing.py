@@ -1,31 +1,70 @@
 # SPDX-FileCopyrightText: 2025 Earth System Data Exploration (ESDE), Jülich Supercomputing Center (JSC); Gesosphere Austria (GSA)
 #
 # SPDX-License-Identifier: MIT
-
-__author__ = "Michael Langguth"
-__email__ = "m.langguth@fz-juelich.de"
-__date__ = "2021-08-01"
-__update__ = "2024-03-07"
-
 """
 Main script to preprocess data for downscaling applications in MAELSTROM.
 """
+
+__author__ = "Michael Langguth, Sebastian Lehner"
+__email__ = "m.langguth@fz-juelich.de, sebastian.lehner@geosphere.at"
+__date__ = "2021-08-01"
+__update__ = "2026-05-18"
 
 import argparse
 import datetime as dt
 import json as js
 
 from preprocess_data_era5_to_crea6 import PreprocessERA5toCREA6
-from preprocess_data_era5_to_ifs import PreprocessERA5toIFS
 
 known_methods = {
-    "ERA5_to_IFS": PreprocessERA5toIFS,
     "ERA5_to_CREA6": PreprocessERA5toCREA6,
 }
 
 
-def main():
+def main(parser_args):
     # NOTE: Only arguments whose value is not None are actually parsed!
+
+    # get and remove arguments that are not parsed when instancing preprocessing class
+    preprocess_method = parser_args.pop("method")
+    years = parser_args.pop("years")
+    months = parser_args.pop("months")
+
+    time_str = dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+
+    if preprocess_method in known_methods:
+        preproc_cls = known_methods[preprocess_method]
+        preproc_instance = preproc_cls(
+            **{k: v for k, v in parser_args.items() if v is not None}
+        )  # only parse valid args
+
+        print("Preprocessing starts at: {0}".format(time_str.replace("T", " ")))
+        preproc_instance(
+            years,
+            months,
+            jobname="{0}_{1}".format(
+                preprocess_method, time_str.replace("-", "").replace(":", "")
+            ),
+        )
+    else:
+        raise ValueError(
+            "Preprocessing method '{0}' is unknown. Please choose a known method: {1}.".format(
+                preprocess_method, ", ".join(known_methods.keys())
+            )
+        )
+
+
+# enable arguments that are either a string "all" or a list of integers
+def maybe_str_or_intlist(arg):
+    try:
+        return int(arg)  # try convert to int
+    except ValueError:
+        pass
+    if arg == "all":
+        return arg
+    raise argparse.ArgumentTypeError("--months/-m must be an int or 'all'")
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_datadir",
@@ -142,45 +181,4 @@ def main():
 
     args_dict = vars(parser.parse_args())
 
-    # get and remove arguments that are not parsed when instancing preprocessing class
-    preprocess_method = args_dict.pop("method")
-    years = args_dict.pop("years")
-    months = args_dict.pop("months")
-
-    time_str = dt.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-    if preprocess_method in known_methods:
-        preproc_cls = known_methods[preprocess_method]
-        preproc_instance = preproc_cls(
-            **{k: v for k, v in args_dict.items() if v is not None}
-        )  # only parse valid args
-
-        print("Preprocessing starts at: {0}".format(time_str.replace("T", " ")))
-        preproc_instance(
-            years,
-            months,
-            jobname="{0}_{1}".format(
-                preprocess_method, time_str.replace("-", "").replace(":", "")
-            ),
-        )
-    else:
-        raise ValueError(
-            "Preprocessing method '{0}' is unknown. Please choose a known method: {1}.".format(
-                preprocess_method, ", ".join(known_methods.keys())
-            )
-        )
-
-
-# enable arguments that are either a string "all" or a list of integers
-def maybe_str_or_intlist(arg):
-    try:
-        return int(arg)  # try convert to int
-    except ValueError:
-        pass
-    if arg == "all":
-        return arg
-    raise argparse.ArgumentTypeError("--months/-m must be an int or 'all'")
-
-
-if __name__ == "__main__":
-    main()
+    main(args_dict)
