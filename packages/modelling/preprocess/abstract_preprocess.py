@@ -7,25 +7,35 @@ __email__ = "m.langguth@fz-juelich.de"
 __date__ = "2022-03-16"
 __update__ = "2024-07-26"
 
-import os, glob
-from abc import ABC
-from typing import List, Tuple, Dict
-from collections import OrderedDict
+import glob
 import logging
+import os
+from abc import ABC
+from collections import OrderedDict
+from typing import Dict, List, Tuple
+
 import numpy as np
 import xarray as xr
+from other_utils import get_func_kwargs, remove_files, remove_key_from_dict
 from tools_utils import NCRENAME
-from other_utils import get_func_kwargs, remove_key_from_dict, remove_files
 
 
 class AbstractPreprocessing(ABC):
-   
     ncrename = NCRENAME()
     """
     Abstract class for preprocessing
     """
-    def __init__(self, name_preprocess: str, source_dir_in: str, source_dir_out: str, predictors: dict,
-                 predictands: dict, target_dir: str, upscale_source: bool = True):
+
+    def __init__(
+        self,
+        name_preprocess: str,
+        source_dir_in: str,
+        source_dir_out: str,
+        predictors: dict,
+        predictands: dict,
+        target_dir: str,
+        upscale_source: bool = True,
+    ):
         """
         Basic initialization.
         :param name_preprocess: name of preprocessing chain for easy identification
@@ -35,24 +45,40 @@ class AbstractPreprocessing(ABC):
         :param predictors: dictionary defining predictors for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param predictands: dictionary defining predictands for downscaling, e.g. {"sf": {"2t": None}} for T2m from ERA5
         :param target_dir: directory to store preprocessed data
-        :param upscale_source: boolean to upscale (bi-linearly) coarse-grained input data on target grid 
+        :param upscale_source: boolean to upscale (bi-linearly) coarse-grained input data on target grid
         """
         method = AbstractPreprocessing.__init__.__name__
         # sanity check
-        assert isinstance(name_preprocess, str), "%{0}: name_preprocess must be a string.".format(method)
-        assert os.path.isdir(source_dir_in), "%{0}: Parsed directory for downscaling input '{1}' does not exist."\
-                                             .format(method, source_dir_in)
+        assert isinstance(name_preprocess, str), (
+            "%{0}: name_preprocess must be a string.".format(method)
+        )
+        assert os.path.isdir(source_dir_in), (
+            "%{0}: Parsed directory for downscaling input '{1}' does not exist.".format(
+                method, source_dir_in
+            )
+        )
         if source_dir_out is not None:
-            assert os.path.isdir(source_dir_out), "%{0}: Parsed directory for downscaling target '{1}' does not exist."\
-                                                  .format(method, source_dir_out)
-        assert isinstance(predictors, dict), '%{0}: Predictors must be a dictionary, e.g {{"sf": {{"2t": None}}}}'\
-                                             .format(method)
-        assert isinstance(predictands, dict), '%{0}: Predictands must be a dictionary, e.g {{"sf": {{"2t": None}}}}'\
-                                             .format(method)
+            assert os.path.isdir(source_dir_out), (
+                "%{0}: Parsed directory for downscaling target '{1}' does not exist.".format(
+                    method, source_dir_out
+                )
+            )
+        assert isinstance(predictors, dict), (
+            '%{0}: Predictors must be a dictionary, e.g {{"sf": {{"2t": None}}}}'.format(
+                method
+            )
+        )
+        assert isinstance(predictands, dict), (
+            '%{0}: Predictands must be a dictionary, e.g {{"sf": {{"2t": None}}}}'.format(
+                method
+            )
+        )
 
         self.name_preprocess = name_preprocess
         self.source_dir_in = source_dir_in
-        self.source_dir_out = source_dir_out if source_dir_out is not None else source_dir_in
+        self.source_dir_out = (
+            source_dir_out if source_dir_out is not None else source_dir_in
+        )
         self.target_dir = AbstractPreprocessing.check_target_dir(target_dir)
         self.predictors, self.predictands = predictors, predictands
         self.upscale_source = upscale_source
@@ -70,8 +96,11 @@ class AbstractPreprocessing(ABC):
         prepare_kwargs = get_func_kwargs(self.prepare_worker, kwargs)
         pystager_instance, run_dict = self.prepare_worker(*args, **prepare_kwargs)
 
-        assert pystager_instance.is_setup, "%{0}: PyStager was not set up by prepare_worker-method. Cannot continue."\
-                                           .format(method)
+        assert pystager_instance.is_setup, (
+            "%{0}: PyStager was not set up by prepare_worker-method. Cannot continue.".format(
+                method
+            )
+        )
 
         # get keyword-arguments to run PyStager and run it
         run_kwargs = get_func_kwargs(self.preprocess_worker, kwargs)
@@ -82,18 +111,28 @@ class AbstractPreprocessing(ABC):
         Method to prepare worker, i.e. required work to run parallelized preprocessing (see also __call__-method).
         :return: Initialized PyStager-instance as well as arguments and keyword arguments to set-up PyStager
         """
-        raise NotImplementedError(self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__))
+        raise NotImplementedError(
+            self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__)
+        )
 
     def preprocess_worker(self):
         """
         Worker task to perform (parallelized) preprocessing.
         :return: -
         """
-        raise NotImplementedError(self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__))
+        raise NotImplementedError(
+            self.print_implement_err(AbstractPreprocessing.prepare_worker.__name__)
+        )
 
     @staticmethod
-    def run_preproc_func(preproc_func: callable, args: List, kwargs: dict, logger: logging.Logger, nwarns: int,
-                         max_warns: int) -> Tuple[int, str]:
+    def run_preproc_func(
+        preproc_func: callable,
+        args: List,
+        kwargs: dict,
+        logger: logging.Logger,
+        nwarns: int,
+        max_warns: int,
+    ) -> Tuple[int, str]:
         """
         Run a function where arguments are parsed from list. Counts failures as warnings unless max_warns is exceeded
         or the error is not a Runtime-Error
@@ -105,7 +144,9 @@ class AbstractPreprocessing(ABC):
         :param max_warns: maximum allowed number of warnings
         :return: updated nwarns and outfile
         """
-        assert callable(preproc_func), "func is not a callable, but of type '{0}'".format(type(preproc_func))
+        assert callable(preproc_func), (
+            "func is not a callable, but of type '{0}'".format(type(preproc_func))
+        )
 
         try:
             outfile = preproc_func(*args, **kwargs)
@@ -119,8 +160,11 @@ class AbstractPreprocessing(ABC):
                 logger.error(mess), logger.error(str(err))
                 outfile = None
         except BaseException as err:
-            logger.fatal("Something unexpected happened when handling data from '{0}'. See error-message"
-                         .format(args[0]))
+            logger.fatal(
+                "Something unexpected happened when handling data from '{0}'. See error-message".format(
+                    args[0]
+                )
+            )
             raise err
 
         return nwarns, outfile
@@ -134,7 +178,11 @@ class AbstractPreprocessing(ABC):
                 print("%{0}: Create target directory '{1}'.".format(method, target_dir))
                 os.makedirs(target_dir)
             except Exception as err:
-                print("%{0}: Problem creating target directory '{1}'. Inspect raised error.".format(method, target_dir))
+                print(
+                    "%{0}: Problem creating target directory '{1}'. Inspect raised error.".format(
+                        method, target_dir
+                    )
+                )
                 raise err
         else:
             pass
@@ -144,41 +192,43 @@ class AbstractPreprocessing(ABC):
     @staticmethod
     def merge_multiple_netcdf(nc_files: list, nc_tar: str, merge_dim: str = "time"):
         """
-        Merge datasets from multiple netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in 
+        Merge datasets from multiple netCDF-files. Different than cdo's merge- or mergetime-operator, the datums in
         all datasets must not coincide, but can overlap. The data will then be merged for the intersection of all datums.
-        
+
         :param nc_files: list of paths to netCDF-files to merge; each dataset must include dimension merge_dim
         :param nc_tar: path to netCDF-file of merged dataset
         :param merge_dim: name of dimension along which datasets will be merged
         :return stat: status if merging was successful
         """
         datasets = [xr.open_dataset(nc) for nc in nc_files]
-        
+
         # Collect the intersection of all time dimensions
         joint_times = set(datasets[0][merge_dim].values)
         for ds in datasets[1:]:
             joint_times &= set(ds[merge_dim].values)
-        
+
         joint_times = sorted(list(joint_times))
 
         if not joint_times:
-            raise ValueError(f"No intersection on dimension {merge_dim} found for datasets.")
-        
+            raise ValueError(
+                f"No intersection on dimension {merge_dim} found for datasets."
+            )
+
         # Select the intersection of the datasets
         ds_merged = xr.merge([ds.sel({merge_dim: joint_times}) for ds in datasets])
-        
+
         # Save the merged dataset to a new netCDF file
         ds_merged.to_netcdf(nc_tar)
-        
+
         return True
-    
+
     @staticmethod
     def rename_variables(nc_file, rename_dict: Dict):
         """
         Rename variables in netCDf-file.
-        Can also be used for coordinate variables since their renaming with NCO's ncrename is notoriously buggy, 
-        see also: https://nco.sourceforge.net/nco.html#bug_nc4_rename. 
-        Note that variables can also be 
+        Can also be used for coordinate variables since their renaming with NCO's ncrename is notoriously buggy,
+        see also: https://nco.sourceforge.net/nco.html#bug_nc4_rename.
+        Note that variables can also be
         :param nc_file: path to netCDF-file
         :param rename_dict: dictionary for renaming coordinates/variables (cf. xarray's rename-method)
         """
@@ -190,9 +240,10 @@ class AbstractPreprocessing(ABC):
         os.remove(nc_file)
         ds.to_netcdf(nc_file)
 
-
     @staticmethod
-    def manage_filemerge(filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"):
+    def manage_filemerge(
+        filelist: List, file2merge: str, tmp_dir: str, search_patt: str = "*.nc"
+    ):
         """
         Add file2merge to list of files or clean-up temp-dirctory if file2merge is None
         :param filelist: list of files to be updated
@@ -208,7 +259,7 @@ class AbstractPreprocessing(ABC):
             remove_files(remove_list, lbreak=True)
             filelist = []
         return filelist
-    
+
     @staticmethod
     def add_varname_suffix(nc_file: str, varnames: List, suffix: str):
         """
@@ -221,12 +272,17 @@ class AbstractPreprocessing(ABC):
         ncrename = AbstractPreprocessing.ncrename
 
         varnames_new = [varname + suffix for varname in varnames]
-        varnames_pair = ["{0},{1}".format(varnames[i], varnames_new[i].lower()) for i in range(len(varnames))]
+        varnames_pair = [
+            "{0},{1}".format(varnames[i], varnames_new[i].lower())
+            for i in range(len(varnames))
+        ]
 
         try:
             ncrename.run([nc_file], OrderedDict([("-v", varnames_pair)]))
         except RuntimeError as err:
-            print("Could not rename all parsed variables: {0}".format(",".join(varnames)))
+            print(
+                "Could not rename all parsed variables: {0}".format(",".join(varnames))
+            )
             raise err
 
         return True
@@ -238,7 +294,9 @@ class AbstractPreprocessing(ABC):
         :param method: Name of method
         :return: error-string
         """
-        err_str = "%{0}: Method {1} not implemented yet. Cannot continue.".format(cls.__name__, method)
+        err_str = "%{0}: Method {1} not implemented yet. Cannot continue.".format(
+            cls.__name__, method
+        )
 
         return err_str
 
@@ -247,11 +305,34 @@ class CDOGridDes(ABC):
     """
     Abstract class to handle grid description files for CDO
     """
+
     # valid CDO grd description keys, see section 1.5.2.4 on CDO grids in documentation
     # (https://code.mpimet.mpg.de/projects/cdo/embedded/index.html#x1-220001.5.2)
-    valid_keys = ["gridtype", "gridsize", "xsize", "ysize", "xvals", "yvals", "nvertx", "xbounds", "ybounds", "xfirst",
-                  "xinc", "yfirst", "yinc", "xunits", "yunits", "xname", "yname", "xlongname", "ylongname",
-                  "grid_mapping", "grid_mapping_name", "grid_north_pole_latitude", "grid_north_pole_longitude"]
+    valid_keys = [
+        "gridtype",
+        "gridsize",
+        "xsize",
+        "ysize",
+        "xvals",
+        "yvals",
+        "nvertx",
+        "xbounds",
+        "ybounds",
+        "xfirst",
+        "xinc",
+        "yfirst",
+        "yinc",
+        "xunits",
+        "yunits",
+        "xname",
+        "yname",
+        "xlongname",
+        "ylongname",
+        "grid_mapping",
+        "grid_mapping_name",
+        "grid_north_pole_latitude",
+        "grid_north_pole_longitude",
+    ]
 
     def __init__(self, gdes_file: str = None, gdes_dict: dict = None):
         """
@@ -263,19 +344,27 @@ class CDOGridDes(ABC):
 
         # checks
         if gdes_file and gdes_dict:
-            print("%{0}: Path to grid decription file and grid description dictionary passed. "
-                  "The file from the data is ignored.")
+            print(
+                "%{0}: Path to grid decription file and grid description dictionary passed. "
+                "The file from the data is ignored."
+            )
         elif gdes_file:
             self.grid_des_dict = CDOGridDes.read_grid_des(gdes_file)
             self.file = gdes_file
         elif gdes_dict:
             self.grid_des_dict = gdes_dict
         else:
-            raise ValueError("%{0}: Either pass gdes_fiel (path to grid descrition file)".format(method) +
-                             " or gdes_dict (grid description dictionary).")
-        
-        # use dictionary comprehension to remove 
-        CDOGridDes.check_gdes_dict(remove_key_from_dict(self.grid_des_dict, "file") , lbreak=True)
+            raise ValueError(
+                "%{0}: Either pass gdes_fiel (path to grid descrition file)".format(
+                    method
+                )
+                + " or gdes_dict (grid description dictionary)."
+            )
+
+        # use dictionary comprehension to remove
+        CDOGridDes.check_gdes_dict(
+            remove_key_from_dict(self.grid_des_dict, "file"), lbreak=True
+        )
 
     def write_grid_des_from_dict(self, filename: str, other_dict: dict = None):
         """
@@ -287,10 +376,14 @@ class CDOGridDes(ABC):
 
         # sanity checks
         if os.path.isfile(filename):
-            "%{0}: Grid description file '{1}' already exists. Please remove it first.".format(method, filename)
+            "%{0}: Grid description file '{1}' already exists. Please remove it first.".format(
+                method, filename
+            )
 
-        if other_dict:                      # overwrite grid description dictionary to write to file
-            CDOGridDes.check_gdes_dict(other_dict)          # check if parsed dictionary is proper
+        if other_dict:  # overwrite grid description dictionary to write to file
+            CDOGridDes.check_gdes_dict(
+                other_dict
+            )  # check if parsed dictionary is proper
             dict2write = other_dict
         else:
             dict2write = self.grid_des_dict
@@ -299,10 +392,20 @@ class CDOGridDes(ABC):
             for key, value in dict2write.items():
                 grid_des_file.write("{0} = {1} \n".format(key, value))
 
-        print("%{0}: Grid description file '{1}' was created successfully.".format(method, filename))
+        print(
+            "%{0}: Grid description file '{1}' was created successfully.".format(
+                method, filename
+            )
+        )
 
-    def create_coarsened_grid_des(self, target_dir: str, downscaling_fac: int, rank: int = None,
-                                  lextrapolate: bool = False, name_base: str = ""):
+    def create_coarsened_grid_des(
+        self,
+        target_dir: str,
+        downscaling_fac: int,
+        rank: int = None,
+        lextrapolate: bool = False,
+        name_base: str = "",
+    ):
         """
         Create grid description for coarsening data (to be used for remapping).
         :param target_dir: Directory to save the grid description file
@@ -315,42 +418,77 @@ class CDOGridDes(ABC):
         """
         method = CDOGridDes.create_coarsened_grid_des.__name__
 
-        required_keys = ["xfirst", "yfirst", "xsize", "ysize", "xinc", "yinc", "gridtype"]
+        required_keys = [
+            "xfirst",
+            "yfirst",
+            "xsize",
+            "ysize",
+            "xinc",
+            "yinc",
+            "gridtype",
+        ]
 
         if not all(req_key in self.grid_des_dict for req_key in required_keys):
-            raise ValueError("%{0}: Not all required keys ({1}) found in grid description dictionary."
-                             .format(method, ", ".join(required_keys)))
+            raise ValueError(
+                "%{0}: Not all required keys ({1}) found in grid description dictionary.".format(
+                    method, ", ".join(required_keys)
+                )
+            )
         else:
-            nxy_in = (int(self.grid_des_dict["xsize"]), int(self.grid_des_dict["ysize"]))
-            dx_in = (np.around(float(self.grid_des_dict["xinc"]), 3), np.around(float(self.grid_des_dict["yinc"]), 3))
-            xyf_in = (np.around(float(self.grid_des_dict["xfirst"]), 3), np.around(float(self.grid_des_dict["yfirst"]), 3))
+            nxy_in = (
+                int(self.grid_des_dict["xsize"]),
+                int(self.grid_des_dict["ysize"]),
+            )
+            dx_in = (
+                np.around(float(self.grid_des_dict["xinc"]), 3),
+                np.around(float(self.grid_des_dict["yinc"]), 3),
+            )
+            xyf_in = (
+                np.around(float(self.grid_des_dict["xfirst"]), 3),
+                np.around(float(self.grid_des_dict["yfirst"]), 3),
+            )
             gtype = self.grid_des_dict["gridtype"]
 
         downscaling_fac = int(downscaling_fac)
         nxy_coarse = [np.divmod(n, downscaling_fac) for n in nxy_in]
         # sanity check
         if not all([n_c[1] == 0 for n_c in nxy_coarse]):
-            raise ValueError("%{0}: Element of passed nxy ({1}) must be dividable by {2:d}."
-                             .format(method, ", ".join(map(str, nxy_in)), downscaling_fac))
+            raise ValueError(
+                "%{0}: Element of passed nxy ({1}) must be dividable by {2:d}.".format(
+                    method, ", ".join(map(str, nxy_in)), downscaling_fac
+                )
+            )
 
         # get parameters for auxiliary grid description files
-        if lextrapolate:       # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
-            add_n, prefac_first = 2, -(downscaling_fac+1)/2.
+        if lextrapolate:  # enlarge coarsened grid to allow for bilinear interpolation without extrapolation later
+            add_n, prefac_first = 2, -(downscaling_fac + 1) / 2.0
         else:
-            add_n, prefac_first = 0, (downscaling_fac-1)/2.
+            add_n, prefac_first = 0, (downscaling_fac - 1) / 2.0
         dx_coarse = [d * int(downscaling_fac) for d in dx_in]
         nxy_coarse = [n[0] + add_n for n in nxy_coarse]
 
         # create data for auxiliary grid description file
-        coarse_grid_des_dict = {"gridtype": gtype, "xsize": nxy_coarse[0], "ysize": nxy_coarse[1],
-                                "xfirst": xyf_in[0] + prefac_first * dx_in[0], "xinc": dx_coarse[0],
-                                "yfirst": xyf_in[1] + prefac_first * dx_in[1], "yinc": dx_coarse[1]}
-        coarse_grid_des_dict = CDOGridDes.merge_dicts(coarse_grid_des_dict, self.grid_des_dict, create_copy=True)
+        coarse_grid_des_dict = {
+            "gridtype": gtype,
+            "xsize": nxy_coarse[0],
+            "ysize": nxy_coarse[1],
+            "xfirst": xyf_in[0] + prefac_first * dx_in[0],
+            "xinc": dx_coarse[0],
+            "yfirst": xyf_in[1] + prefac_first * dx_in[1],
+            "yinc": dx_coarse[1],
+        }
+        coarse_grid_des_dict = CDOGridDes.merge_dicts(
+            coarse_grid_des_dict, self.grid_des_dict, create_copy=True
+        )
         if "gridsize" in coarse_grid_des_dict.keys():
-            coarse_grid_des_dict["gridsize"] = coarse_grid_des_dict["xsize"]*coarse_grid_des_dict["ysize"]
-        
+            coarse_grid_des_dict["gridsize"] = (
+                coarse_grid_des_dict["xsize"] * coarse_grid_des_dict["ysize"]
+            )
+
         # construct filename
-        coarse_grid_des = os.path.join(target_dir, "{0}coarsened_grid".format(name_base))
+        coarse_grid_des = os.path.join(
+            target_dir, "{0}coarsened_grid".format(name_base)
+        )
         # write data to CDO's grid description files
         if rank == 0 or rank is None:
             self.write_grid_des_from_dict(coarse_grid_des, coarse_grid_des_dict)
@@ -361,12 +499,22 @@ class CDOGridDes(ABC):
             nxy_base = [n + 2 * downscaling_fac for n in nxy_in]
 
             # create data for auxiliary grid description file
-            base_grid_des_dict = {"gridtype": gtype, "xsize": nxy_base[0], "ysize": nxy_base[1],
-                                  "xfirst": xyf_in[0] - dx_coarse[0], "xinc": dx_in[0],
-                                  "yfirst": xyf_in[1] - dx_coarse[1], "yinc": dx_in[1]}
-            base_grid_des_dict = CDOGridDes.merge_dicts(base_grid_des_dict, self.grid_des_dict, create_copy=True)
+            base_grid_des_dict = {
+                "gridtype": gtype,
+                "xsize": nxy_base[0],
+                "ysize": nxy_base[1],
+                "xfirst": xyf_in[0] - dx_coarse[0],
+                "xinc": dx_in[0],
+                "yfirst": xyf_in[1] - dx_coarse[1],
+                "yinc": dx_in[1],
+            }
+            base_grid_des_dict = CDOGridDes.merge_dicts(
+                base_grid_des_dict, self.grid_des_dict, create_copy=True
+            )
             if "gridsize" in base_grid_des_dict.keys():
-                base_grid_des_dict["gridsize"] = base_grid_des_dict["xsize"] * base_grid_des_dict["ysize"]
+                base_grid_des_dict["gridsize"] = (
+                    base_grid_des_dict["xsize"] * base_grid_des_dict["ysize"]
+                )
             # construct filename and ...
             base_grid_des = os.path.join(target_dir, "{0}grid_base".format(name_base))
             if rank == 0 or rank is None:
@@ -389,14 +537,20 @@ class CDOGridDes(ABC):
 
         method = CDOGridDes.check_gdes_dict.__name__
 
-        assert isinstance(grid_des_dict, dict), "%{0}: Grid description must be a dictionary.".format(method)
+        assert isinstance(grid_des_dict, dict), (
+            "%{0}: Grid description must be a dictionary.".format(method)
+        )
 
         gdes_keys = list(grid_des_dict.keys())
         gdes_keys_stat = [key_req in CDOGridDes.valid_keys for key_req in gdes_keys]
 
         if not all(gdes_keys_stat):
-            invalid_keys = [gdes_keys[i] for i in range(len(gdes_keys)) if not gdes_keys_stat[i]]
-            err_str = "%{0}: The following keys are not valid: {1}".format(method, ", ".join(invalid_keys))
+            invalid_keys = [
+                gdes_keys[i] for i in range(len(gdes_keys)) if not gdes_keys_stat[i]
+            ]
+            err_str = "%{0}: The following keys are not valid: {1}".format(
+                method, ", ".join(invalid_keys)
+            )
             if lbreak:
                 raise ValueError(err_str)
             else:
@@ -413,7 +567,11 @@ class CDOGridDes(ABC):
         method = CDOGridDes.read_grid_des.__name__
 
         if not os.path.isfile(grid_des_file):
-            raise FileNotFoundError("%{0}: Cannot find grid description file '{1}'.".format(method, grid_des_file))
+            raise FileNotFoundError(
+                "%{0}: Cannot find grid description file '{1}'.".format(
+                    method, grid_des_file
+                )
+            )
 
         # read the file ...
         with open(grid_des_file, "r") as fgdes:
@@ -423,8 +581,11 @@ class CDOGridDes(ABC):
         grid_des_dict = CDOGridDes.griddes_lines_to_dict(lines)
 
         if not grid_des_file:
-            raise ValueError("%{0}: Dictionary from grid description file '{1}' is empty. Please check input."
-                             .format(method, grid_des_file))
+            raise ValueError(
+                "%{0}: Dictionary from grid description file '{1}' is empty. Please check input.".format(
+                    method, grid_des_file
+                )
+            )
         else:
             grid_des_dict["file"] = grid_des_file
 
@@ -470,6 +631,8 @@ class CDOGridDes(ABC):
         Small helper to get coords for slicing
         """
         coord0 = np.float(coord0)
-        coords = (np.round(coord0, decimals=d), np.round(coord0 + (np.int(n) - .5) * np.float(dx), decimals=d))
+        coords = (
+            np.round(coord0, decimals=d),
+            np.round(coord0 + (np.int(n) - 0.5) * np.float(dx), decimals=d),
+        )
         return np.amin(coords), np.amax(coords)
-
